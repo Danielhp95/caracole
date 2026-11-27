@@ -12,8 +12,9 @@
   sessions after the last bad one (a block or a failing song, which holds the gate until a later day's clean session
   on mobile data clears it: ``_Standing``); a session the network lost (every run an error of a timeout's or a
   transport's) and a song it failed counted for nothing, and listed; and
-  ``terms``, the owner's terms as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, for the
-  runs of a report without ``lifted``: one whose budget says it, the owner's word of 2026-11-27, has its busiest 24
+  ``terms``, the owner's terms as the sessions kept them (the day's runs of any 24 hours by the runs' own stamps, at
+  most the cap each report's budget says it kept, its ``of``, for the runs of a report without ``lifted``: one whose
+  budget says it, the owner's word of 2026-11-27, has its busiest 24
   hours said, never failed for them; nothing after a block, no session observing every host but on Wi-Fi, a kill
   check that spent none, no host reached outside YouTube's under enforce, no gate-shaped proxy address or bare
   user:secret pair anywhere). A run's ``uid_bytes`` count loopback too (``uid_counts``; a report without it counted
@@ -49,10 +50,13 @@ YOUTUBE_JSON = Path(__file__).resolve().parents[1] / "conformance" / "data" / "c
 FORMAT = 1  # BenchReport.FORMAT
 
 # The owner's terms (AGENTS.md, "The one exception is YouTube"; the plan's Global Constraints).
-RUNS_A_DAY = 6  # yt-dlp runs in any 24 hours on the phone, every session counted
+# yt-dlp runs in any 24 hours on the phone, every session counted: the provider's budget, config.py's `youtube` (50
+# since the owner's choice of 2026-11-27; 6 before). A capped report is held to the cap it kept, its budget's ``of``
+# (an old report's 6), never to today's.
+RUNS_A_DAY = 50
 # The owner's word of 2026-11-27, "ignore the run limits while developing this feature. as connection is patchy": the
-# debug bench's six lifted while the feature is developed, its runs still counted. A report says it in its budget's
-# ``lifted`` (DbLedger.DAY_CAP_LIFTED); one without it (the bench before that day) is bound by the six as ever.
+# debug bench's cap lifted while the feature is developed, its runs still counted. A report says it in its budget's
+# ``lifted`` (DbLedger.DAY_CAP_LIFTED); one without it (the bench before that day) is bound by its cap as ever.
 CAP_LIFTED_ON = "2026-11-27"
 DAY = timedelta(hours=24)
 
@@ -341,29 +345,31 @@ def _days_said(reports: Sequence[dict[str, Any]]) -> tuple[dict[str, Any], str]:
 
 
 def lifted(report: dict[str, Any]) -> bool:
-    """Whether the bench that wrote ``report`` had the six-run cap lifted (the owner's word of 2026-11-27)."""
+    """Whether the bench that wrote ``report`` had the day's cap lifted (the owner's word of 2026-11-27)."""
     return report["budget"].get("lifted") is True
 
 
 def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     broken: list[str] = []
-    runs = sorted((_stamp(run["started_at"], "a run"), lifted(r)) for r in reports for run in r["runs"])
-    stamps = [at for at, _ in runs]
+    runs = sorted((_stamp(run["started_at"], "a run"), lifted(r), r["budget"]["of"])
+                  for r in reports for run in r["runs"])
+    stamps = [at for at, _, _ in runs]
     most = 0
     for i, at in enumerate(stamps):
         most = max(most, sum(1 for later in stamps[i:] if later - at < DAY))
     # The cap binds each run a capped bench sent: with the runs of the 24 hours up to it, every report's, no more than
-    # six (the capped bench counted them all before it ran one). A lifted bench's runs are bound by none.
+    # the cap its report kept, its ``of`` (the capped bench counted them all before it ran one). A lifted bench's runs
+    # are bound by none.
     # Every run at or before it counts, whatever sorts first at one stamp: a run of the same second is in its window.
-    for at, its_cap_lifted in runs:
+    for at, its_cap_lifted, cap in runs:
         if its_cap_lifted:
             continue
         window = [earlier for earlier in stamps if earlier <= at and at - earlier < DAY]
         within = len(window)
-        if within > RUNS_A_DAY:
+        if within > cap:
             first = window[0]
             broken.append(f"{within} runs within 24 hours from {first:%Y-%m-%dT%H:%M:%SZ}: the day's runs are "
-                          f"{RUNS_A_DAY}")
+                          f"{cap}")
             break
     for r in reports:
         label = _label(r)
@@ -396,7 +402,7 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     numbers = {"runs": len(stamps), "most_in_24h": most, "sessions": len(reports), "lifted": n_lifted}
     if broken:
         return Verdict(False, numbers, "; ".join(broken))
-    count = (f"{most} runs in the busiest 24 hours, the six-run cap lifted at the owner's word ({CAP_LIFTED_ON}) "
+    count = (f"{most} runs in the busiest 24 hours, the day's cap lifted at the owner's word ({CAP_LIFTED_ON}) "
              f"for {n_lifted} of {len(reports)} session(s), the capped ones' runs within it" if n_lifted else
              f"at most {most} runs in any 24 hours")
     return Verdict(True, numbers, f"{count}, nothing after a block, no observing but on Wi-Fi, "

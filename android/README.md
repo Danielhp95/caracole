@@ -1176,10 +1176,11 @@ emulator the bench reaches a loopback clip alone (`YouTubeBenchTest`, `device-te
 It keeps the owner's terms by itself, on the phone's own records. Every run of the phone's counted (kv `ytbench:runs`
 and the `events` rows of provider `youtube` of the last 24 hours, the larger): each run reserves its slot in the main
 process before its gate opens, so it counts whatever ends it, and only a run that never started gives its slot back; a
-clock set back only counts more runs, never fewer. Its cap of 6 runs in any 24 hours is lifted while the feature is
+clock set back only counts more runs, never fewer. Its cap, YouTube's budget (50 runs in any 24 hours since
+2026-11-27, 6 before), is lifted while the feature is
 developed, the owner's word of 2026-11-27 ("ignore the run limits while developing this feature. as connection is
 patchy"): no count refuses a session, the screen says the count and that there is no daily limit, and the report's
-`budget` says `lifted`; `DbLedger.DAY_CAP_LIFTED = false` puts it back (a session that would pass the six then refused,
+`budget` says `lifted`; `DbLedger.DAY_CAP_LIFTED = false` puts it back (a session that would pass the cap then refused,
 saying how many runs are left). The computer's pause between runs (3.75–7.5 s, and after the phone's last run, kv
 `http:last_request:youtube`). One run at a time (the client's lock, across the app's processes) and one session at a
 time. A block honoured: recorded as the runner records one, the session stops, and none starts until the cooldown
@@ -1246,7 +1247,7 @@ gate needs now (the controller's ruling of 2026-11-27, after the owner chose sev
   measured.
 - Every run counted, any session's, and the optional Termux smoke test's (Y0.0, the design's §4.0) too, which the bench
   can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27, above); a report written
-  before it, which says no `lifted`, is still held to six in any 24 hours.
+  before it, which says no `lifted`, is still held to the cap it kept (its budget's `of`: six) in any 24 hours.
 - Each session by a tap on Start, the app otherwise idle (no sync, no library page open).
 
 Then pull the reports (step 5, the same folder) and, from the repository's root, give the checker all of them:
@@ -1254,8 +1255,9 @@ Then pull the reports (step 5, the same folder) and, from the repository's root,
     nix develop -c python -m tests.helpers.ytbench_gate [--apk-growth-mb N] ~/ytbench/caracole-ytbench-*.json
 
 It says the sessions and days given, each row of §4.4 (Y0-W works … Y0-C start; a run's error said with its reason, a
-session lost to the network apart from a block) and the owner's terms (six runs in any 24 hours by the runs' own
-stamps for a report without `lifted`, the busiest 24 hours said where the cap was lifted, nothing after a block, no
+session lost to the network apart from a block) and the owner's terms (the cap a report kept, its `of`, in any 24
+hours by the runs' own stamps for a report without `lifted`, the busiest 24 hours said where the cap was lifted,
+nothing after a block, no
 session observing every host but on Wi-Fi, a kill check that spent none, no host outside YouTube's reached, no proxy
 secret in a report): PASS, FAIL or UNDECIDED, the numbers and what is missing or what to run next, then how often an
 observed session asked `youtubei.googleapis.com` (the controller decides it), then the whole verdict. It exits 0 only

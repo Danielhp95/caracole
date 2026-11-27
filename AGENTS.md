@@ -3120,7 +3120,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the network (an intent's `go` under loopback only, never from Recents); its session `BenchRun` drives
     `YtDlpClient` itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback
     targets), and holds the terms on the runner's records through the main process's `YouTubeBenchLedger`
-    (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under 6 in 24 h by kv
+    (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under its budget, 50,
+    in 24 h by kv
     `ytbench:runs` and `events` unless `DbLedger.DAY_CAP_LIFTED`, the owner's word of 2026-11-27 (Politeness), its
     stamp kept; given back only for a run that never started), its `events` row
     written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
@@ -3128,7 +3129,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `OPEN_LOOPBACK`: LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the
     day's runs spent; a line read less its quotes (`BenchRun.unquoted`), a search no video fits said with the artist
     and title it looked for (`noFitWords`), no second search; its report `BenchReport.of`/`summary` (BenchReportTest,
-    YouTubeBenchTest: its `budget`'s `lifted` the switch's, a report without it held to six in any 24 hours; its
+    YouTubeBenchTest: its `budget`'s `lifted` the switch's, a report without it held to the cap it kept, its `of`; its
     `uid_counts` "loopback too", TrafficStats' uid bytes counting yt-dlp's loopback legs to the gate twice and the
     gate's network leg once, about 3.1 x the gate's bytes), Gate Y0's verdict of the owner's reports `python -m
     tests.helpers.ytbench_gate` (test_ytbench_gate.py: the controller's ruling of 2026-11-27, three songs on mobile data
@@ -5143,7 +5144,8 @@ picks one).
   - a bot check, an HTTP 429 or 403, a rate limit or a captcha is `ProviderBlocked`, honoured like any block
     (tests/test_youtube.py).
 - The debug build's YouTube bench (android/README.md, "The YouTube bench"), a few songs by hand on the owner's phone,
-  keeps these terms on the phone's records, but for one: its cap of 6 yt-dlp runs in any 24 hours is lifted while the
+  keeps these terms on the phone's records, but for one: its cap of YouTube's budget (50 yt-dlp runs in any 24 hours,
+  6 before 2026-11-27) is lifted while the
   feature is developed, the owner's choice of 2026-11-27 ("ignore the run limits while developing this feature. as
   connection is patchy"; `DbLedger.DAY_CAP_LIFTED`, `false` puts it back): the run count alone, every run still
   reserved, counted and reported; the pause, one run and one session at a time, a block and its cooldown, no retry,

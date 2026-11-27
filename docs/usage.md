@@ -1490,7 +1490,7 @@ does (see [Audio from YouTube](#audio-from-youtube)). The chords come next, from
 `caracole autochords`.
 
     Radiohead - Creep: downloaded Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…
-    YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 6).
+    YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 50).
 
 | Option | What it does |
 |---|---|

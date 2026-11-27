@@ -200,14 +200,15 @@ class YouTubeBenchTest {
         }
     }
 
-    /** The day's cap lifted (DbLedger.DAY_CAP_LIFTED, the owner's word of 2026-11-27): with seven runs of the phone's
-     * already in the last 24 hours, a session still goes, its runs counted and its report saying the cap lifted. */
+    /** The day's cap lifted (DbLedger.DAY_CAP_LIFTED, the owner's word of 2026-11-27): with one run more than the day's
+     * budget (50) of the phone's already in the last 24 hours, a session still goes, its runs counted and its report
+     * saying the cap lifted. */
     @Test
-    fun aSessionGoesPastSixRunsAlreadyCountedWhileTheCapIsLifted() {
+    fun aSessionGoesPastTheDaysRunsAlreadyCountedWhileTheCapIsLifted() {
         assertTrue(DbLedger.DAY_CAP_LIFTED)
         val hourAgo = io.github.danielhp95.caracole.youtube.utc(java.time.Instant.now().minusSeconds(3_600))
         database.writeBlocking { db ->
-            repeat(7) {
+            repeat(51) {
                 db.execute("INSERT INTO events (run, at, provider, url, status, decision, message) VALUES " +
                            "('youtube-sheet:x', ?, 'youtube', 'u', NULL, 'ok', NULL)", hourAgo)
             }
@@ -217,12 +218,12 @@ class YouTubeBenchTest {
         val report = Json.parseToJsonElement(reports.listFiles()!!.single { it.name.endsWith(".json") }.readText())
             .jsonObject
         val budget = report["budget"]!!.jsonObject
-        assertEquals(budget.toString(), 7, budget["before"]!!.jsonPrimitive.content.toInt())
-        assertEquals(budget.toString(), 9, budget["after"]!!.jsonPrimitive.content.toInt())
-        assertEquals(budget.toString(), 6, budget["of"]!!.jsonPrimitive.content.toInt())
+        assertEquals(budget.toString(), 51, budget["before"]!!.jsonPrimitive.content.toInt())
+        assertEquals(budget.toString(), 53, budget["after"]!!.jsonPrimitive.content.toInt())
+        assertEquals(budget.toString(), 50, budget["of"]!!.jsonPrimitive.content.toInt())
         assertTrue(budget.toString(), budget["lifted"]!!.jsonPrimitive.boolean)
         assertEquals(listOf("ok", "ok"), report["runs"]!!.jsonArray.map { it.jsonObject["outcome"]!!.jsonPrimitive.content })
-        assertEquals(9L, count("SELECT COUNT(*) FROM events WHERE provider = 'youtube'"))
+        assertEquals(53L, count("SELECT COUNT(*) FROM events WHERE provider = 'youtube'"))
         waitFor(30_000, "the count on the screen") { "no daily limit while this is developed" in screen() }
     }
 

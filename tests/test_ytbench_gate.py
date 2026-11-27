@@ -627,7 +627,7 @@ def test_lifted_sessions_past_six_runs_in_24_hours_keep_the_terms_and_say_the_co
     assert v.passed is True, v.why
     assert v.numbers["most_in_24h"] == 12 and v.numbers["lifted"] == 2
     assert "12 runs in the busiest 24 hours" in v.why
-    assert "the six-run cap lifted at the owner's word (2026-11-27)" in v.why
+    assert "the day's cap lifted at the owner's word (2026-11-27)" in v.why
 
 
 def test_a_capped_report_is_still_bound_by_the_six_even_beside_a_lifted_one():
@@ -641,6 +641,23 @@ def test_a_capped_report_is_still_bound_by_the_six_even_beside_a_lifted_one():
     late = json.loads(json.dumps(session("2026-11-28", "cellular", "enforce")).replace("2026-11-28T18:",
                                                                                       "2026-11-28T23:"))
     assert gate([early, late])["terms"].passed is True
+
+
+def test_a_capped_report_is_held_to_the_cap_it_kept_its_of_never_todays():
+    """The day's cap is 50 since 2026-11-27 (6 before): a capped report is judged by its own budget's ``of``."""
+    assert yg.RUNS_A_DAY == 50
+    one = capped(session("2026-11-28", "wifi", "observe"))
+    two = capped(session("2026-11-28", "cellular", "enforce"))
+    two = json.loads(json.dumps(two).replace("2026-11-28T18:", "2026-11-28T23:"))
+    for r in (one, two):
+        r["budget"]["of"] = 50
+    two["budget"].update(before=6, after=12)
+    v = gate([one, two])["terms"]
+    assert v.passed is True, v.why
+    assert v.numbers["most_in_24h"] == 12
+    two["budget"]["of"] = 6  # the later session's bench of the old cap: its runs bound by its six, twelve over it
+    v = gate([one, two])["terms"]
+    assert v.passed is False and "the day's runs are 6" in v.why
 
 
 def test_a_lifted_reports_count_past_its_of_is_no_fail_a_capped_ones_is():

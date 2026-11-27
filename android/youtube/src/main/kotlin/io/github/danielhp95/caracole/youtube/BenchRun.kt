@@ -52,8 +52,8 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  *
  * - the day's runs: every yt-dlp run the phone sent counted ([DbLedger]: kv `ytbench:runs` and `events`' sent runs
  *   of provider `youtube` of the last 24 hours, the larger); at most the provider's budget (PhoneConfig's `youtube`,
- *   6) in any 24 hours, the session refused when it would pass them, unless the cap is lifted
- *   ([DbLedger.DAY_CAP_LIFTED], the owner's word of 2026-11-27, said in [State.capLifted] and the report's
+ *   50 since 2026-11-27, 6 before) in any 24 hours, the session refused when it would pass them, unless the cap is
+ *   lifted ([DbLedger.DAY_CAP_LIFTED], the owner's word of 2026-11-27, said in [State.capLifted] and the report's
  *   `budget.lifted`): then no count refuses a session or a run, and the count is said all the same; and each run
  *   RESERVED before its gate opens ([Ledger.reserve]: in one
  *   write of the main process, the provider on, no cooldown, fewer than the budget (unless lifted), and its stamp
@@ -630,7 +630,8 @@ object DbLedger {
     const val RUNS = "ytbench:runs"
 
     /**
-     * The debug bench's cap of the provider's budget (6) yt-dlp runs in any 24 hours, lifted while the feature is
+     * The debug bench's cap of the provider's budget (50 since 2026-11-27, 6 before) yt-dlp runs in any 24 hours,
+     * lifted while the feature is
      * developed: the owner's word of 2026-11-27, "ignore the run limits while developing this feature. as connection
      * is patchy". No count of runs refuses a session or a reservation; every run is still reserved before its gate
      * opens, counted ([runs]) and reported (the report's `budget`: `before`, `after`, `of` and `lifted`). Everything
