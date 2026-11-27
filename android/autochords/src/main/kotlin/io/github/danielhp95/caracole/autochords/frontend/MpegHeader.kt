@@ -7,8 +7,9 @@ import java.io.RandomAccessFile
  * The length an MP3's first frame states, as mutagen reads it (music.py `read_audio`'s; mutagen 1.48's `MPEGFrame`
  * `_parse_vbr_header`), or none where it states none:
  *
- * - its first frame: after any ID3v2 tags (stacked, a footer by its flag), zero bytes passed over (mpeg_frames.py's
- *   `_first` for a file with no tag) or, after tags, the first frame within [FIRST_WITHIN] that another follows;
+ * - its first frame: after any ID3v2 tags (stacked, a footer by its flag, passed over by their sizes, whatever their
+ *   pictures weigh), zero bytes passed over (mpeg_frames.py's `_first` for a file with no tag) or, after tags, the
+ *   first frame within [FIRST_WITHIN] that another follows;
  *   Layer III alone, as mutagen reads a VBR header of no other layer;
  * - a Xing or Info header at mutagen's offset (36 or 21 bytes for MPEG-1, stereo or mono; 21 or 13 for MPEG-2 and
  *   2.5) with its frame count: that many frames of 1,152 samples (MPEG-1) or 576 (MPEG-2, 2.5), less a LAME tag's
@@ -24,6 +25,9 @@ import java.io.RandomAccessFile
 object MpegHeader {
     const val FIRST_WITHIN = 64 * 1024
 
+    /** The bytes read after the tags: the first frame within [FIRST_WITHIN], and its Xing or VBRI header after it. */
+    const val WINDOW = FIRST_WITHIN * 2 + 64 * 1024
+
     private val RATES = mapOf(3 to intArrayOf(44100, 48000, 32000), 2 to intArrayOf(22050, 24000, 16000),
         0 to intArrayOf(11025, 12000, 8000))
     private val KBPS_MPEG1 = intArrayOf(32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320)
@@ -37,11 +41,26 @@ object MpegHeader {
 
     /** The length in seconds [file]'s first frame states, as mutagen reads it, or null. */
     fun statedLength(file: File): Double? {
+        var tagged = false
         val bytes = RandomAccessFile(file, "r").use { f ->
-            val n = minOf(f.length(), (FIRST_WITHIN * 2 + 1024 * 1024).toLong()).toInt()
-            ByteArray(n).also { f.readFully(it) }
+            // Past the ID3v2 tags by their sizes, as mutagen seeks past them (a cover's picture may be megabytes),
+            // then a bounded window: the first frame within FIRST_WITHIN, and its header.
+            var start = 0L
+            val head = ByteArray(10)
+            while (start + 10 <= f.length()) {
+                f.seek(start)
+                f.readFully(head)
+                if (!has(head, 0, "ID3")) break
+                val size = ((head[6].toLong() and 0x7F) shl 21) or ((head[7].toLong() and 0x7F) shl 14) or
+                    ((head[8].toLong() and 0x7F) shl 7) or (head[9].toLong() and 0x7F)
+                start += 10 + size + (if (head[5].toInt() and 0x10 != 0) 10 else 0)
+                tagged = true
+            }
+            if (start >= f.length()) return null
+            f.seek(start)
+            ByteArray(minOf(f.length() - start, WINDOW.toLong()).toInt()).also { f.readFully(it) }
         }
-        val frame = first(bytes) ?: return null
+        val frame = first(bytes, tagged) ?: return null
         val xing = frame.at + frame.xingOffset
         if (has(bytes, xing, "Xing") || has(bytes, xing, "Info")) return xingLength(bytes, xing, frame)
         return vbriLength(bytes, frame.at + 36, frame)
@@ -104,14 +123,10 @@ object MpegHeader {
 
     private fun digit(b: Byte): Int? = (b - '0'.code.toByte()).takeIf { it in 0..9 }
 
-    private fun first(b: ByteArray): Frame? {
-        var start = 0
-        while (start + 10 <= b.size && has(b, start, "ID3")) {
-            val size = ((b[start + 6].toInt() and 0x7F) shl 21) or ((b[start + 7].toInt() and 0x7F) shl 14) or
-                ((b[start + 8].toInt() and 0x7F) shl 7) or (b[start + 9].toInt() and 0x7F)
-            start += 10 + size + (if (b[start + 5].toInt() and 0x10 != 0) 10 else 0)
-        }
-        if (start == 0) {
+    /** The first frame of [b], which begins where the ID3v2 tags end (after some, [tagged]). */
+    private fun first(b: ByteArray, tagged: Boolean): Frame? {
+        val start = 0
+        if (!tagged) {
             var at = 0
             while (at < minOf(b.size, FIRST_WITHIN) && b[at].toInt() == 0) at++
             return frame(b, at)?.takeIf { followed(b, it) }

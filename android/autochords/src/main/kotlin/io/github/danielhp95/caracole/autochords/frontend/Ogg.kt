@@ -30,7 +30,8 @@ object Ogg {
         val payload = 27 + segments
         val (rate, preSkip) = when {
             has(head, payload, "OpusHead") && payload + 12 <= head.size ->
-                48000 to (ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).getShort(payload + 10).toInt() and 0xFFFF)
+                48000 to (ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).getShort(payload + 10).toInt() and
+                    0xFFFF)
             has(head, payload + 1, "vorbis") && payload + 16 <= head.size && head[payload].toInt() == 1 ->
                 ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).getInt(payload + 12) to 0
             else -> return null

@@ -31,15 +31,17 @@ object Mp4 {
         /** mutagen's length: `float(duration) / timescale`, 0 for a timescale of 0. */
         val seconds: Double get() = if (timescale == 0L) 0.0 else duration.toDouble() / timescale
 
-        /** The one media edit (empty ones aside), or none: no list, or several media edits, which are not trimmed
-         * exactly here. */
+        /** The one media edit (empty ones aside), or none: no list, several media edits, which are not trimmed
+         * exactly here, or numbers that lead nowhere (a timescale of 0, a negative segment). */
         fun edit(): Edit? = edits.filter { it.mediaTime >= 0 }.singleOrNull()
+            ?.takeIf { it.segment >= 0 && timescale > 0 && movieTimescale > 0 }
 
         /** The samples FFmpeg keeps of [edit]: its segment rescaled to the media's timescale (av_rescale). */
         fun keptFrames(edit: Edit): Long = rescale(edit.segment, timescale, movieTimescale)
     }
 
-    /** `a * b / c`, rounded to the nearest, halves away from zero, as FFmpeg's `av_rescale` rounds (a, b ≥ 0, c > 0). */
+    /** `a * b / c`, rounded to the nearest, halves away from zero, as FFmpeg's `av_rescale` rounds (a, b ≥ 0,
+     * c > 0). */
     fun rescale(a: Long, b: Long, c: Long): Long {
         require(a >= 0 && b >= 0 && c > 0) { "rescale($a, $b, $c)" }
         val product = BigInteger.valueOf(a).multiply(BigInteger.valueOf(b))
@@ -103,7 +105,7 @@ object Mp4 {
             } else if (size == 0L) {
                 size = length - at
             }
-            if (size < headerSize || at + size > length) return null
+            if (size < headerSize || size > length - at) return null  // never past the file, never by overflow
             if (named(ByteBuffer.wrap(head), 4, name)) {
                 if (size - headerSize > MOOV_MOST) return null
                 val body = ByteArray((size - headerSize).toInt())
@@ -127,7 +129,7 @@ object Mp4 {
                 0L -> (parent.remaining() - at).toLong()
                 else -> size
             }
-            if (whole < headerSize || at + whole > parent.remaining()) return out
+            if (whole < headerSize || whole > parent.remaining() - at) return out
             if (named(parent, at + 4, name)) {
                 val body = parent.duplicate()
                 body.position(at + headerSize).limit((at + whole).toInt())

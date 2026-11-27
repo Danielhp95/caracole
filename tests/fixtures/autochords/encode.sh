@@ -6,8 +6,8 @@
 #
 # - decode.mp3: LAME VBR, 22,050 Hz mono (MPEG-2, 576 samples a frame), with LAME's Xing header: its length and its
 #   encoder delay and padding, which a reader trims.
-# - decode-lame.mp3: the clip's first 3 s by the lame program itself, whose Xing header's LAME tag ("LAME3.100", which FFmpeg's
-#   bitexact "Lavf" is not) mutagen reads: its length is the frames' less the encoder's delay and padding.
+# - decode-lame.mp3: the clip's first 3 s by the lame program itself, whose Xing header's LAME tag ("LAME4.0", nixpkgs' lame, which
+#   FFmpeg's bitexact "Lavf" is not) mutagen reads: its length is the frames' less the encoder's delay and padding.
 # - decode-headerless.mp3: LAME VBR with no Xing/Info or VBRI header, 0.05 s of loud noise first, so that its first
 #   frame's bitrate is far above the file's mean (tests/fixtures/audio/make.sh's short-guess.mp3 on this clip):
 #   libsndfile decodes only as far as it guesses from that frame, and the computer reads it again through FFmpeg

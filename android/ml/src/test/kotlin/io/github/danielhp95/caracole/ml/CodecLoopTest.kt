@@ -58,9 +58,16 @@ class CodecLoopTest {
     private fun shorts(vararg s: Int): ByteArray = ByteBuffer.allocate(2 * s.size).order(ByteOrder.nativeOrder())
         .apply { s.forEach { putShort(it.toShort()) } }.array()
 
-    private fun run(codec: CodecPort, skip: Long = 0, nanos: () -> Long = { 0L }): Pair<CodecLoop.Result, FloatArray> {
+    private fun run(codec: CodecPort, skip: Long = 0, nanos: () -> Long = { 0L }): Pair<CodecLoop.Result, FloatArray> =
+        run(codec, Trim(skip), nanos)
+
+    private fun run(codec: CodecPort, trim: Trim, nanos: () -> Long = { 0L }): Pair<CodecLoop.Result, FloatArray> {
         val file = tmp.newFile()
-        val result = FloatWriter(file).use { CodecLoop(nanos).run(codec, Samples(3), it, skip, null) }
+        val result = FloatWriter(file).use { out ->
+            CodecLoop(nanos).run(codec, Samples(3), out, { rate -> trim.at(rate).skip }, null).also { r ->
+                out.cut(trim.at(r.rate).frames(out.samples / r.channels) * r.channels)
+            }
+        }
         val b = ByteBuffer.wrap(file.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
         return result to FloatArray(b.remaining()).also { b.get(it) }
     }
@@ -96,20 +103,51 @@ class CodecLoopTest {
         assertEquals(2, run(early).first.channels)
     }
 
-    @Test fun aCodecThatNeverEndsItsStreamIsGivenUpAfterTheInputEnds() {
+    @Test(timeout = 10_000) fun aCodecThatNeverEndsItsStreamIsGivenUpAfterTheInputEnds() {
         val codec = FakeCodec(listOf(Answer.Buffer(shorts(1))))
         val e = assertThrows(UndecodableAudio::class.java) { run(codec) }
         assertTrue(e.message!!, e.message!!.contains("stopped giving audio"))
         assertTrue(codec.inputEnded)
     }
 
-    @Test fun aCodecThatTakesNothingAndGivesNothingIsGivenUpByTheClock() {
+    @Test(timeout = 10_000) fun aCodecThatTakesNothingAndGivesNothingIsGivenUpByTheClock() {
         val stuck = object : CodecPort by FakeCodec(emptyList()) {
             override fun dequeueInput(timeoutUs: Long) = -1
         }
         var now = 0L
         val e = assertThrows(UndecodableAudio::class.java) { run(stuck) { now += 1_000_000_000L; now } }
         assertTrue(e.message!!, e.message!!.contains("nothing for a while"))
+    }
+
+    @Test fun anEditIsAppliedAtTheOutputsRateRescaledExactlyElseTheStatedDelayAlone() {
+        val edit = Trim.edit(mediaTime = 1024, kept = 132_300, rate = 22050, fallback = Trim.stated(2112, 0))
+        assertEquals(Trim(skip = 1024, keep = 132_300), edit.at(22050))
+        // A decoder that doubles the rate (implicit SBR): the edit's samples twice as many, exactly.
+        assertEquals(Trim(skip = 2048, keep = 264_600), edit.at(44100))
+        // A rate the edit can't be rescaled to exactly: the stated delay, never a count of another rate.
+        assertEquals(Trim.stated(2112, 0), edit.at(32000))
+        assertEquals(Trim(skip = 0), Trim.edit(1024, 33_075, rate = 11025).at(16000))
+    }
+
+    @Test fun aCodecThatDoublesTheRateGetsTheEditAtItsOwnRateNothingPastTheDeclaredPaddingCut() {
+        // The extractor names 22,050 Hz; the codec gives 44,100. The edit, in 22,050 Hz samples: 1 from 2, 4 kept, so
+        // 4 skipped and 8 kept of the 14 given (2 past them, the declared padding).
+        val codec = FakeCodec(listOf(Answer.Format(OutFormat(44100, 1, null)),
+            Answer.Buffer(shorts(*IntArray(7) { 100 * it })), Answer.Buffer(shorts(*IntArray(7) { 700 + 100 * it }),
+            end = true)))
+        val trim = Trim.edit(mediaTime = 2, kept = 4, rate = 22050)
+        val (result, samples) = run(codec, trim)
+        assertEquals(44100, result.rate)
+        assertArrayEquals(FloatArray(8) { (400 + 100 * it) / 32768f }, samples, 0f)
+    }
+
+    @Test fun aContainerReadersFailureIsUndecodableInWords() {
+        val io = assertThrows(UndecodableAudio::class.java) {
+            readContainer("its MP4 boxes") { throw java.io.IOException("seek past the end") }
+        }
+        assertEquals("its MP4 boxes can't be read: seek past the end", io.message)
+        assertThrows(UndecodableAudio::class.java) { readContainer("its Ogg pages") { require(false) { "x" } } }
+        assertEquals(3, readContainer("anything") { 3 })
     }
 
     @Test fun anMp4IsTrimmedToItsEditListExactlyWhateverItsPadding() {

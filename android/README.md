@@ -824,8 +824,10 @@ is laid over) the computer's `read_audio`'s to the bit. What a plain MediaCodec 
 - a decoder that stops, or changes its rate or channels partway, fails the decode in words.
 
 Not covered by these files, and so not shown to match: an MPEG-1 MP3 at 44.1 kHz (the fixtures are MPEG-2, to keep
-the corpus small), Ogg FLAC, HE-AAC (whose `mdhd` timescale isn't its output rate: it is trimmed by the format's
-stated delay alone), an AAC with perceptual noise substitution (each decoder fills those bands with noise of its own,
+the corpus small), Ogg FLAC, HE-AAC (a decoder that doubles the rate, its SBR implicit, gets the edit list's samples
+rescaled to its output's rate, exactly where they can be, else the format's stated delay and padding: shown on the
+JVM through a fake codec alone), an MP4 with no edit list (iTunSMPB alone: trimmed by the extractor's stated delay and
+padding), a non-AAC MP4 such as ALAC (its length the decoded seconds, not its `mdhd`), an AAC with perceptual noise substitution (each decoder fills those bands with noise of its own,
 so no two agree; the fixtures are encoded without it), an AAC with loudness metadata (its normalization is asked off,
 untested), a 24-bit FLAC to the bit (Android gives 16), an MP4 of several edits, a VBRI header mutagen refuses, an Ogg
 stream that begins past granule 0, and any file of several audio tracks (the first is taken, where FFmpeg takes its

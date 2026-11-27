@@ -66,27 +66,61 @@ interface SamplePort {
 
 /**
  * How the decoded samples are trimmed to the computer's: [skip] frames off the start (the encoder's delay), then
- * [keep] frames at most (an MP4's edit list, exactly, as FFmpeg trims it), or, with no [keep], [cutEnd] frames off the
- * end (the padding a header states). Nothing is cut to a length a container merely states: a length a little short (an
- * extractor's guess) would cut real audio.
+ * [keep] frames at most (an MP4's edit list, an Ogg's last granule, exactly, as FFmpeg and libsndfile trim them), or,
+ * with no [keep], [cutEnd] frames off the end (the padding a header states). Nothing is cut to a length a container
+ * merely states: a length a little short (an extractor's guess) would cut real audio.
+ *
+ * Its counts are in [rate]'s samples (an MP4's `mdhd` timescale, an Ogg's rate), or the output's where it names none.
+ * Applied to a decoder's output, they are first made the output's ([at]): the same where the rates agree, rescaled
+ * where the output's rate is a whole multiple of the samples (a decoder that doubles an AAC's rate, its SBR implicit,
+ * gives twice as many), and else [fallback], the format's stated delay and padding: never a count of one rate applied
+ * to samples of another.
  */
-data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0) {
-    /** The frames kept of [afterSkip], those the decoder gave after [skip]. */
+data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0, val rate: Int? = null,
+                val fallback: Trim? = null) {
+    /** The frames kept of [afterSkip], those the decoder gave after [skip] (this Trim being the output's: [at]). */
     fun frames(afterSkip: Long): Long = maxOf(0L, keep?.let { minOf(it, afterSkip) } ?: (afterSkip - cutEnd))
 
+    /** This Trim in samples of [outRate]: rescaled exactly, else [fallback]'s (none: no trim). */
+    fun at(outRate: Int): Trim {
+        if (rate == null || rate == outRate) return Trim(skip, keep, cutEnd)
+        fun scaled(n: Long): Long? = try {
+            Math.multiplyExact(n, outRate.toLong()).takeIf { it % rate == 0L }?.div(rate)
+        } catch (e: ArithmeticException) {
+            null
+        }
+        val s = scaled(skip)
+        val k = keep?.let(::scaled)
+        val c = scaled(cutEnd)
+        if (s != null && c != null && (keep == null || k != null)) return Trim(s, k, c)
+        return (fallback ?: Trim(0)).at(outRate)
+    }
+
     companion object {
-        /** An MP4's one media edit: from [mediaTime] in the media's samples, [kept] of them. */
-        fun edit(mediaTime: Long, kept: Long) = Trim(skip = mediaTime, keep = kept)
+        /** An MP4's one media edit: from [mediaTime] in the media's samples (of [rate]), [kept] of them. */
+        fun edit(mediaTime: Long, kept: Long, rate: Int? = null, fallback: Trim? = null) =
+            Trim(skip = mediaTime, keep = kept, rate = rate, fallback = fallback)
 
         /** A delay and a padding the format states (a LAME tag's, an MP4 with no edit list's, else none). */
         fun stated(delay: Int, padding: Int) = Trim(skip = delay.toLong(), cutEnd = padding.toLong())
     }
 }
 
+/** [block]'s answer, a container's boxes or pages read; any failure there (a field that leads nowhere, an I/O error)
+ * [UndecodableAudio], naming [what]. */
+fun <T> readContainer(what: String, block: () -> T): T = try {
+    block()
+} catch (e: IOException) {
+    throw UndecodableAudio("$what can't be read: ${e.message}", e)
+} catch (e: RuntimeException) {
+    throw UndecodableAudio("$what can't be read: ${e.message}", e)
+}
+
 /**
  * MediaCodec's loop over a track, its decisions plain code: the input fed (a [first] buffer before the track's, where
- * given), every output buffer read in its encoding ([PcmEncoding]) to float32 and written, the first [skip] frames
- * passed over; it ends at the codec's end of stream. It never hangs and never mixes layouts:
+ * given), every output buffer read in its encoding ([PcmEncoding]) to float32 and written, the first frames [skip]
+ * says for the output's rate passed over (decided at the output's first format, before any sample is written); it ends
+ * at the codec's end of stream. It never hangs and never mixes layouts:
  *
  * - after the input's end, [IDLE_MOST] answers in a row with no output and no end of stream is a decoder that stopped
  *   ([UndecodableAudio]), and so is [STALL_NS] of the clock with neither an input taken nor an output given;
@@ -96,13 +130,14 @@ data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0) {
 class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
     class Result(val rate: Int, val channels: Int, val encoding: PcmEncoding)
 
-    fun run(codec: CodecPort, source: SamplePort, out: FloatWriter, skip: Long, first: ByteArray?): Result {
+    fun run(codec: CodecPort, source: SamplePort, out: FloatWriter, skip: (rate: Int) -> Long, first: ByteArray?):
+        Result {
         val info = OutBuffer()
         var inputDone = false
         var primed = first == null
         var format: OutFormat? = null
         var encoding = PcmEncoding.PCM_16
-        var toSkip = skip
+        var toSkip = -1L
         var idle = 0
         var progress = nanos()
         while (true) {
@@ -133,6 +168,7 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
                     val f = codec.outputFormat()
                     format = settled(format, f, out.samples)
                     encoding = PcmEncoding.of(f.encoding)
+                    if (toSkip < 0) toSkip = skip(f.rate)
                 }
                 o >= 0 -> {
                     if (format == null) {
@@ -140,6 +176,7 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
                         format = settled(null, f, out.samples)
                         encoding = PcmEncoding.of(f.encoding)
                     }
+                    if (toSkip < 0) toSkip = skip(format.rate)
                     val buffer = codec.outputBuffer(o).duplicate().order(ByteOrder.nativeOrder())
                     buffer.position(info.offset).limit(info.offset + info.size)
                     val frameBytes = encoding.bytes * format.channels
@@ -200,7 +237,8 @@ class FloatWriter(file: File) : AutoCloseable {
         when (encoding) {
             PcmEncoding.FLOAT -> while (buffer.remaining() >= 4) put(buffer.float)
             PcmEncoding.PCM_16 -> while (buffer.remaining() >= 2) put(buffer.short * (1f / 32768f))
-            PcmEncoding.PCM_8 -> while (buffer.hasRemaining()) put(((buffer.get().toInt() and 0xFF) - 128) * (1f / 128f))
+            PcmEncoding.PCM_8 ->
+                while (buffer.hasRemaining()) put(((buffer.get().toInt() and 0xFF) - 128) * (1f / 128f))
             PcmEncoding.PCM_32 -> while (buffer.remaining() >= 4) put(buffer.int.toFloat() * (1f / 2147483648f))
             PcmEncoding.PCM_24_PACKED -> {
                 val little = buffer.order() == ByteOrder.LITTLE_ENDIAN

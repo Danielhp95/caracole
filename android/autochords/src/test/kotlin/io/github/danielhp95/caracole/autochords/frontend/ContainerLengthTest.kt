@@ -91,6 +91,30 @@ class ContainerLengthTest {
         }
     }
 
+    @Test fun aBoxSizeThatWouldOverflowPastTheFileIsNoBoxNeverASeekPastIt() {
+        val b = ByteBuffer.allocate(40)
+        b.putInt(16).put("ftyp".toByteArray()).put("M4A ".toByteArray()).putInt(0)
+        b.putInt(1).put("moov".toByteArray()).putLong(Long.MAX_VALUE - 3).putLong(0)
+        assertNull(Mp4.audioTrack(tmp.newFile("huge.m4a").apply { writeBytes(b.array()) }))
+    }
+
+    @Test fun anEditOfNoMovieTimescaleOrANegativeSegmentIsNoEditToTrimBy() {
+        assertNull(Mp4.Track(22050, 10, 0, listOf(Mp4.Edit(5, 1024))).edit())
+        assertNull(Mp4.Track(22050, 10, 22050, listOf(Mp4.Edit(-5, 1024))).edit())
+        assertNull(Mp4.Track(0, 10, 22050, listOf(Mp4.Edit(5, 1024))).edit())
+    }
+
+    @Test fun anMp3sXingFrameIsFoundPastAnId3v2TagOfAnySize() {
+        val r = records.first { name(it).endsWith("/decode.mp3") }
+        val tag = ByteArray(10 + 2_000_000)
+        "ID3".toByteArray().copyInto(tag)
+        tag[3] = 4
+        val size = tag.size - 10
+        for (i in 0..3) tag[6 + i] = ((size shr (21 - 7 * i)) and 0x7F).toByte()  // syncsafe
+        val tagged = tmp.newFile("tagged.mp3").apply { writeBytes(tag + Corpus.fixture(name(r))) }
+        assertEquals(r["duration"]!!.jsonPrimitive.double, MpegHeader.statedLength(tagged)!!, 0.0)
+    }
+
     @Test fun aFileNoContainerOfTheseHoldsGivesNone() {
         val wav = file(records.first { it.str("format") == "WAV" })
         assertNull(Mp4.audioTrack(wav))

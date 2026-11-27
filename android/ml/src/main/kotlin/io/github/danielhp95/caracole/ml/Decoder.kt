@@ -53,9 +53,12 @@ data class Decoded(
  *   padding (`encoder-delay`, `encoder-padding`), the framework's codecs may trim them themselves (this emulator's
  *   do), so caracole takes both keys out of the codec's format and trims here:
  *   - an MP4 with one media edit: from the edit's media time, exactly as many samples as its length, as FFmpeg
- *     trims it, whatever the last frame's padding ([Mp4]);
+ *     trims it, whatever the last frame's padding ([Mp4]), counted in the `mdhd` timescale and made the output's
+ *     ([Trim.at]: a decoder that doubles the rate gives twice as many; a rate they can't be rescaled to exactly
+ *     falls to the stated delay and padding);
  *   - an MP3: Android's MP3 decoder ([DROPS_MP3_DELAY], the decoders measured; any other refused) always drops its
- *     own delay, the first [MP3_DECODER_DELAY] samples it decodes, and pads as many silent ones at the end. A LAME tag's
+ *     own delay, the first [MP3_DECODER_DELAY] samples it decodes, and pads as many silent ones at the end. A LAME
+ *     tag's
  *     delay and padding are trimmed after it (libsndfile's trim with those 529 already gone); a file whose first frame
  *     states none FFmpeg keeps whole, those 529 first, so the decoder is given a frame of digital silence first
  *     ([silentFrame]), whose samples it drops, and the silence it pads is cut;
@@ -118,19 +121,25 @@ object Decoder {
                 format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_FLOAT)
             }
             if (mime == MediaFormat.MIMETYPE_AUDIO_AAC) aacAsDecoded(format)
-            val mp4 = if (mime == MediaFormat.MIMETYPE_AUDIO_AAC) Mp4.audioTrack(file) else null
+            val mp4 = if (mime == MediaFormat.MIMETYPE_AUDIO_AAC) {
+                readContainer("its MP4 boxes") { Mp4.audioTrack(file) }
+            } else null
             val mp3 = mime == MediaFormat.MIMETYPE_AUDIO_MPEG
             if (mp3 && name !in DROPS_MP3_DELAY) {
                 throw UndecodableAudio("$name is an MP3 decoder caracole hasn't measured")
             }
             val silence = if (mp3 && delay == 0 && padding == 0) silentFrame(extractor) else null
-            val edit = mp4?.edit()?.takeIf { mp4.timescale == rate.toLong() }
+            // The edit's and the granule's counts are in their own timescale's samples: [Trim.at] makes them the
+            // output's, whose rate a decoder may double (an AAC's implicit SBR), never applied as they are.
+            val edit = mp4?.edit()?.takeIf { mp4.timescale in 1..Int.MAX_VALUE }
             val ogg = if (mime == MediaFormat.MIMETYPE_AUDIO_OPUS || mime == MediaFormat.MIMETYPE_AUDIO_VORBIS) {
-                Ogg.stream(file)?.takeIf { it.rate == rate }
+                readContainer("its Ogg pages") { Ogg.stream(file) }
             } else null
             val trim = when {
-                edit != null -> Trim.edit(edit.mediaTime, mp4.keptFrames(edit))
-                ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames)
+                edit != null -> Trim.edit(edit.mediaTime, mp4.keptFrames(edit), mp4.timescale.toInt(),
+                    fallback = Trim.stated(delay, padding))
+                ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames, rate = ogg.rate,
+                    fallback = Trim.stated(delay, padding))
                 silence != null -> Trim(skip = (silence.second - MP3_DECODER_DELAY).toLong(),
                     cutEnd = MP3_DECODER_DELAY.toLong())
                 else -> Trim.stated(delay, padding)
@@ -150,17 +159,19 @@ object Decoder {
                 }
                 codec.start()
                 return FloatWriter(into).use { out ->
-                    val result = CodecLoop().run(Port(codec), Source(extractor), out, trim.skip, silence?.first)
+                    val result = CodecLoop().run(Port(codec), Source(extractor), out, { r -> trim.at(r).skip },
+                        silence?.first)
+                    val applied = trim.at(result.rate)
                     val given = out.samples / result.channels
-                    val frames = trim.frames(given)
+                    val frames = applied.frames(given)
                     out.cut(frames * result.channels)
                     val seconds = frames.toDouble() / result.rate
                     val stated = when {
                         mp4 != null -> mp4.seconds
-                        mp3 -> MpegHeader.statedLength(file) ?: seconds
+                        mp3 -> readContainer("its first MPEG frame") { MpegHeader.statedLength(file) } ?: seconds
                         else -> seconds
                     }
-                    Decoded(result.rate, frames, result.channels, stated, name, trim.skip, given - frames,
+                    Decoded(result.rate, frames, result.channels, stated, name, applied.skip, given - frames,
                         result.encoding.words)
                 }
             } catch (e: MediaCodec.CodecException) {
