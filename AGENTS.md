@@ -2900,7 +2900,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     gate's network leg once, about 3.1 x the gate's bytes), Gate Y0's verdict of the owner's reports `python -m
     tests.helpers.ytbench_gate` (test_ytbench_gate.py: the controller's ruling of 2026-11-27, three songs on mobile data
     with Start and a warm download, no observed session or second day needed, a session lost to the network counted
-    for nothing, the uid's bytes explained by the gate's three legs; its one shape tests/fixtures/ytbench/sample.json,
+    for nothing and a song the network failed listed for nothing, a block or a failing song holding the gate until a
+    later day's clean session on mobile data clears it (§3.8's trigger on Wi-Fi on two days uncleared), the warm
+    download one on mobile data, the uid's bytes explained by the gate's three legs over the idle sessions alone, a
+    session not idle set aside from them and named; its one shape tests/fixtures/ytbench/sample.json,
     which BenchReportTest holds to `BenchReport.of`); an observing gate only for an
     ask naming `:ytbench` and never under loopback (GateService
     `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the

@@ -8,8 +8,10 @@
 - ``gate(reports, *, apk_growth_mb=None) -> dict[str, Verdict]``: a verdict for each row of §4.4, by the row's name
   (``Y0-W`` … ``Y0-C``), as the controller ruled on 2026-11-27 (the owner runs by hand, several short sessions a day):
   ``sessions``, the sessions and days given, reported, one on mobile data with Start (enforce) needed, an observed one
-  wanted but not needed, two days not needed; ``Y0-W`` three songs downloaded on mobile data with Start over any
-  sessions; a session the network lost (every run an error of a timeout's or a transport's) counted for nothing; and
+  wanted but not needed, two days not needed; ``Y0-W`` three songs downloaded on mobile data with Start over the
+  sessions after the last bad one (a block or a failing song, which holds the gate until a later day's clean session
+  on mobile data clears it: ``_Standing``); a session the network lost (every run an error of a timeout's or a
+  transport's) and a song it failed counted for nothing, and listed; and
   ``terms``, the owner's terms as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, for the
   runs of a report without ``lifted``: one whose budget says it, the owner's word of 2026-11-27, has its busiest 24
   hours said, never failed for them; nothing after a block, no session observing every host but on Wi-Fi, a kill
@@ -412,37 +414,100 @@ def _secrets(value: Any, where: str = "$") -> list[str]:
     return []
 
 
+def _failing(r: dict[str, Any]) -> list[str]:
+    """The songs of ``r`` that failed, not for the network's sake and not blocked, each with its last run's reason."""
+    return [f"“{song}” {end}" + "".join(f" ({run['reason']})" for run in runs[-1:] if run["reason"])
+            for song, runs in _songs(r)
+            if (end := _song_end(runs)) not in SONG_ENDS_WELL and end not in ("no fit", "network", "blocked")]
+
+
+def _network_songs(r: dict[str, Any]) -> list[tuple[str, str]]:
+    """The songs of ``r`` its network failed (their last run an error of a timeout's or a transport's), with why."""
+    return [(f"{_label(r)} “{song}”", runs[-1]["reason"] or "") for song, runs in _songs(r)
+            if _song_end(runs) == "network"]
+
+
+def _mobile_enforced(r: dict[str, Any]) -> bool:
+    return r["network"]["transport"] == "cellular" and r["gate"] == "enforce" and not lost_to_the_network(r)
+
+
+def _bad(r: dict[str, Any]) -> str | None:
+    """Why ``r`` holds the gate (a block, or a song failing), else None; a session the network lost holds nothing."""
+    if lost_to_the_network(r):
+        return None
+    blocked = [run for run in r["runs"] if run["outcome"] == "blocked"]
+    if blocked:
+        songs = len(_songs(r))
+        return f"blocked after {songs} song(s)" + (f" ({blocked[0]['reason']})" if blocked[0]["reason"] else "")
+    failing = _failing(r)
+    return f"failing: {', '.join(failing)}" if failing else None
+
+
+def _clean(r: dict[str, Any]) -> bool:
+    """A session that clears an earlier bad one: on mobile data with Start, a song downloaded, no block, none failing."""
+    return _mobile_enforced(r) and bool(_ok_downloads(r)) and _bad(r) is None
+
+
+@dataclass(frozen=True)
+class _Standing:
+    """The controller's ruling of 2026-11-27 on bad sessions: one holds the gate until a later session, on a later UTC
+    day (so after any cooldown), is clean; then it is cleared, and the songs and the warm download are counted from
+    the sessions after the last bad one (``since``, an index in the sorted reports)."""
+    cleared: list[tuple[dict[str, Any], str]]
+    uncleared: list[tuple[dict[str, Any], str]]
+    since: int
+    last_bad: dict[str, Any] | None
+
+
+def _standing(reports: Sequence[dict[str, Any]]) -> _Standing:
+    cleared, uncleared = [], []
+    last = None
+    for i, r in enumerate(reports):
+        why = _bad(r)
+        if why is None:
+            continue
+        last = i
+        later = any(_clean(after) and _day(after) > _day(r) for after in reports[i + 1:])
+        (cleared if later else uncleared).append((r, why))
+    return _Standing(cleared, uncleared, 0 if last is None else last + 1,
+                     None if last is None else reports[last])
+
+
 def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
     """Y0-W, the controller's ruling of 2026-11-27: on mobile data with Start (enforce), at least ``W_SONGS`` songs
-    downloaded ok over any number of sessions; a block or a song failing (not for the network's sake) on one UTC day
-    waits for another day, on two days is §3.8's trigger; a session the network lost counts for nothing."""
+    downloaded ok, over any number of sessions after the last bad one; a block or a song failing (not for the network's
+    sake) holds the gate until a later day's clean session on mobile data clears it; on Wi-Fi on two days uncleared it
+    is §3.8's trigger; a session the network lost, and a song it failed, count for nothing."""
     def session(r: dict[str, Any]) -> dict[str, Any]:
         ends = {song: _song_end(runs) for song, runs in _songs(r)}
         decoded = sum(1 for run in _ok_downloads(r) if run["decoded"] is not None)
         errors = [f"{run['kind']} of “{run['song']}”: error: {run['reason'] or 'no reason given'}"
                   for run in r["runs"] if run["outcome"] == "error"]
-        failing = [f"“{song}” {end}" + "".join(f" ({run['reason']})" for run in runs[-1:] if run["reason"])
-                   for (song, runs), end in zip(_songs(r), ends.values())
-                   if end not in SONG_ENDS_WELL and end not in ("no fit", "network", "blocked")]
         return {"session": _label(r), "day": _day(r), "songs": len(ends), "ends": list(ends.values()), "errors": errors,
-                "failing": failing, "decoded": decoded, "ok": sum(1 for e in ends.values() if e == "ok"),
+                "failing": _failing(r), "decoded": decoded, "ok": sum(1 for e in ends.values() if e == "ok"),
                 "downloads_ok": len(_ok_downloads(r)),
                 "blocked": sum(1 for run in r["runs"] if run["outcome"] == "blocked"), "stopped": r["stopped"],
                 "lost": lost_to_the_network(r)}
 
     every = [session(r) for r in reports]
-    wifi = [w for w, r in zip(every, reports) if r["network"]["transport"] == "wifi"]
-    mobile = [w for w, r in zip(every, reports) if r["network"]["transport"] == "cellular"]
+    standing = _standing(reports)
     counted = [w for w in every if not w["lost"]]
-    enforced = [w for w, r in zip(every, reports)
-                if r["network"]["transport"] == "cellular" and r["gate"] == "enforce" and not w["lost"]]
+    enforced = [w for i, (w, r) in enumerate(zip(every, reports)) if i >= standing.since and _mobile_enforced(r)]
     lost = [w["session"] for w in every if w["lost"]]
-    numbers: dict[str, Any] = {"wifi": wifi, "mobile": mobile, "lost": lost, "days": [w["day"] for w in every],
-                               "mobile_downloads_ok": sum(w["ok"] for w in enforced)}
+    network = [song for r in reports if not lost_to_the_network(r) for song in _network_songs(r)]
+    numbers: dict[str, Any] = {
+        "wifi": [w for w, r in zip(every, reports) if r["network"]["transport"] == "wifi"],
+        "mobile": [w for w, r in zip(every, reports) if r["network"]["transport"] == "cellular"],
+        "lost": lost, "network_songs": [name for name, _ in network], "days": [w["day"] for w in every],
+        "cleared": [_label(r) for r, _ in standing.cleared], "uncleared": [_label(r) for r, _ in standing.uncleared],
+        "mobile_downloads_ok": sum(w["ok"] for w in enforced)}
     notes = []
     if lost:
         notes.append("lost to the network, counted for nothing: " + "; ".join(
             f"{w['session']} ({'; '.join(w['errors'])})" for w in every if w["lost"]))
+    if network:
+        notes.append("songs the network failed, counted for nothing: " + "; ".join(
+            f"{name} ({why})" for name, why in network))
     unfit = [f"{w['session']} {n} song(s)" for w in counted if (n := w["ends"].count("no fit"))]
     if unfit:
         notes.append(f"a search no video fitted ({', '.join(unfit)}): type “Artist - Title”, the artist first")
@@ -450,31 +515,40 @@ def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
              if e in w["ends"]]
     if other:
         notes.append(f"songs YouTube has no download of, counted as none ({', '.join(other)})")
-    stops = [f"{w['session']} stopped: {w['stopped']}" for w in counted if w["stopped"] and not w["blocked"]]
-    notes += stops
+    notes += [f"{w['session']} stopped: {w['stopped']}" for w in counted if w["stopped"] and not w["blocked"]]
+    if standing.cleared:
+        notes.append("cleared by a later day's clean session on mobile data: " + "; ".join(
+            f"cleared: {_label(r)} ({why})" for r, why in standing.cleared))
     note = "".join(f"; {n}" for n in notes)
 
-    bad = [w for w in counted if w["blocked"] or w["failing"]]
-    if bad:
-        said = "; ".join(f"{w['session']}: " + (f"blocked after {w['songs']} song(s)" if w["blocked"] else
-                                                 f"failing: {', '.join(w['failing'])}") for w in bad)
-        if len({w["day"] for w in bad}) >= 2:
-            return Verdict(False, numbers, f"{said}: blocked or failing on two days: §3.8's trigger (Y0.7) if the "
-                                           "computer's yt-dlp worked on the same network the same hour, which no "
-                                           f"report says{note}")
-        return Verdict(None, numbers, f"Gate Y0 waits: {said}: run again another day after any cooldown{note}")
+    if standing.uncleared:
+        said = "; ".join(f"{_label(r)}: {why}" for r, why in standing.uncleared)
+        wifi_days = {_day(r) for r, _ in standing.uncleared if r["network"]["transport"] == "wifi"}
+        if len(wifi_days) >= 2:
+            return Verdict(False, numbers, f"{said}: blocked or failing on Wi-Fi on two days, after any cooldown, with "
+                                           "no clean day after: §3.8's trigger (Y0.7), if the computer's yt-dlp "
+                                           "worked on the same Wi-Fi the same hour (no report says: check it before "
+                                           f"NewPipe is taken){note}")
+        return Verdict(None, numbers, f"Gate Y0 waits: {said}: run a session on mobile data with Start on a later day, "
+                                      "after any cooldown: its songs downloaded with no block and none failing clear "
+                                      f"it{note}")
+    since = (f", counted from the sessions after {_label(standing.last_bad)}" if standing.last_bad is not None
+             else "")
     ok = numbers["mobile_downloads_ok"]
     if ok >= W_SONGS:
         return Verdict(True, numbers, f"{ok} songs downloaded on mobile data with Start over {len(enforced)} "
-                                      f"session(s), none failing, none blocked{note}")
+                                      f"session(s){since}, none failing, none blocked{note}")
     more = W_SONGS - ok
-    return Verdict(None, numbers, f"{ok} of {W_SONGS} songs downloaded on mobile data with Start: run {more} more "
-                                  f"on mobile data with Start, two or three songs in one session{note}")
+    return Verdict(None, numbers, f"{ok} of {W_SONGS} songs downloaded on mobile data with Start{since}: run {more} "
+                                  f"more on mobile data with Start, two or three songs in one session{note}")
 
 
 def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
+    """Y0-T: each cold and warm limit wherever measured; the warm download it needs is one ended ok in an enforced
+    mobile-data session after the last bad one (``_Standing``)."""
     sessions = []
-    for r in reports:
+    since = _standing(reports).since
+    for i, r in enumerate(reports):
         if lost_to_the_network(r):
             continue
         downloads = [run for run in r["runs"] if run["kind"] == "download"]
@@ -485,6 +559,7 @@ def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
         warm = [run for run in downloads if run["cache"] == "warm" and run["outcome"] == "ok"]
         sessions.append({
             "session": _label(r), "wifi": r["network"]["transport"] == "wifi", "day": _day(r),
+            "counts_warm": i >= since and _mobile_enforced(r),
             "cold_challenge_s": cold["challenge"]["seconds"] if cold["challenge"] else None,
             "cold_whole_s_less_sleeps": round(sum(_less_sleeps(run) for run in song), 3),
             "cold_whole_s": round(sum(run["seconds"] for run in song), 3),
@@ -510,10 +585,10 @@ def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
         for w in s["warm_s_less_sleeps"]:
             if w > T_WARM_S:
                 over.append(f"{s['session']}: a warm download {w} s less sleeps > {T_WARM_S:g} s")
-    if not over and not any(s["warm_s_less_sleeps"] for s in sessions):
-        return Verdict(None, numbers, f"no warm download ended ok, so each warm download <= {T_WARM_S:g} s is "
-                                      "unmeasured: run two or three songs in one session (the second song's download "
-                                      "is the warm one)")
+    if not over and not any(s["warm_s_less_sleeps"] for s in sessions if s["counts_warm"]):
+        return Verdict(None, numbers, "no warm download ended ok on mobile data with Start, so each warm download <= "
+                                      f"{T_WARM_S:g} s is unmeasured: run two or three songs in one session on mobile "
+                                      "data with Start (the second song's download is the warm one)")
     if not over:
         warm_said = "each warm download"
         return Verdict(True, numbers, f"over {len(sessions)} session(s), each cold challenge <= "

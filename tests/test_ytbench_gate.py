@@ -125,20 +125,26 @@ def test_without_the_apks_growth_size_and_so_the_whole_gate_are_undecided():
 
 def test_works_waits_on_one_block_and_says_run_again_another_day():
     wifi, mobile = pair()
-    run_of(wifi, 2, "download")["outcome"] = "blocked"
+    run_of(mobile, 2, "download")["outcome"] = "blocked"
     v = gate([wifi, mobile])["Y0-W"]
-    assert v.passed is None and "Gate Y0 waits" in v.why and "run again another day" in v.why
+    assert v.passed is None and "Gate Y0 waits" in v.why and "on a later day" in v.why
 
 
-def test_works_on_songs_failing_two_days_names_the_fallbacks_trigger():
-    one = session("2026-11-28", "cellular", "enforce")
-    two = session("2026-11-30", "cellular", "enforce")
+def test_works_on_songs_failing_on_wifi_two_days_is_section_3_8s_trigger_and_on_mobile_data_waits():
+    one = session("2026-11-28", "wifi", "observe")
+    two = session("2026-11-30", "wifi", "observe")
     for r in (one, two):
         run_of(r, 2, "download").update(outcome="error", reason="ERROR: [youtube] x: Requested format is not available")
         run_of(r, 1, "download")["outcome"] = "gate_refused"
     v = gate([one, two])["Y0-W"]
-    assert v.passed is False and "§3.8's trigger (Y0.7)" in v.why
+    assert v.passed is False and "§3.8's trigger (Y0.7)" in v.why and "on Wi-Fi on two days" in v.why
+    assert "the computer's yt-dlp worked on the same Wi-Fi the same hour" in v.why
     assert "Requested format is not available" in v.why
+    for r in (one, two):
+        r["network"]["transport"] = "cellular"
+        r["gate"] = "enforce"
+    v = gate([one, two])["Y0-W"]
+    assert v.passed is None and "Gate Y0 waits" in v.why and "§3.8" not in v.why
 
 
 def test_works_waits_on_songs_failing_one_day_saying_why():
@@ -469,33 +475,38 @@ def _blocked_at(report: dict, run: int) -> dict:
 
 @pytest.mark.parametrize("run", [0, 1, 3])
 def test_one_wifi_session_a_block_cut_short_leaves_gate_y0_waiting_never_too_few_songs(run):
-    wifi, mobile = pair()
-    verdicts = gate([_blocked_at(wifi, run), mobile], apk_growth_mb=30)
+    mobile = session("2026-11-28", "cellular", "enforce", first_after_install=True)
+    wifi = session("2026-11-29", "wifi", "observe")
+    verdicts = gate([mobile, _blocked_at(wifi, run)], apk_growth_mb=30)
     v = verdicts["Y0-W"]
     assert v.passed is None and "Gate Y0 waits" in v.why
-    assert "run again another day after any cooldown" in v.why and "not 3" not in v.why
+    assert "on a later day, after any cooldown" in v.why and "not 3" not in v.why
     assert whole(verdicts) is None
 
 
 def test_the_command_waits_on_one_blocked_wifi_day_and_fails_on_two(tmp_path, capsys):
-    wifi, mobile = pair()
-    assert main([*write(tmp_path, [_blocked_at(wifi, 0), mobile]), "--apk-growth-mb", "30"]) == 2
+    mobile = session("2026-11-28", "cellular", "enforce", first_after_install=True)
+    wifi = session("2026-11-29", "wifi", "observe")
+    assert main([*write(tmp_path, [mobile, _blocked_at(wifi, 0)]), "--apk-growth-mb", "30"]) == 2
     assert capsys.readouterr().out.splitlines()[-1] == "Gate Y0: UNDECIDED"
     one = _blocked_at(session("2026-11-28", "wifi", "observe", first_after_install=True), 0)
     two = _blocked_at(session("2026-11-30", "wifi", "observe"), 1)
     other = tmp_path / "two"
     other.mkdir()
-    assert main([*write(other, [one, two, session("2026-11-29", "cellular", "enforce")]),
+    assert main([*write(other, [one, two, session("2026-11-27", "cellular", "enforce")]),
                  "--apk-growth-mb", "30"]) == 1
     out = capsys.readouterr().out
     assert "§3.8's trigger (Y0.7)" in out and out.splitlines()[-1] == "Gate Y0: FAIL"
 
 
-def test_two_wifi_days_cut_short_by_a_block_name_the_fallbacks_trigger():
+def test_two_wifi_days_cut_short_by_a_block_with_no_clean_day_after_are_section_3_8s_trigger():
     one = _blocked_at(session("2026-11-28", "wifi", "observe"), 0)
     two = _blocked_at(session("2026-11-30", "wifi", "observe"), 1)
-    v = gate([one, two, session("2026-11-29", "cellular", "enforce")])["Y0-W"]
+    v = gate([one, two, session("2026-11-27", "cellular", "enforce")])["Y0-W"]
     assert v.passed is False and "§3.8's trigger (Y0.7)" in v.why
+    # A clean day between them clears the first: the second alone waits.
+    v = gate([one, two, session("2026-11-29", "cellular", "enforce")])["Y0-W"]
+    assert v.passed is None and "Gate Y0 waits" in v.why and "cleared" in v.why
 
 
 def test_a_session_stopped_without_a_block_is_undecided_in_its_stops_words():
@@ -722,7 +733,7 @@ def test_the_uids_bytes_are_explained_by_the_gates_three_legs_and_a_leak_past_th
     assert gate([mobile])["Y0-H"].passed is True
     download = run_of(mobile, 0, "download")
     g = sum(u["bytes_up"] + u["bytes_down"] for u in download["hosts"].values())
-    # A bypass: bytes yt-dlp sent the network outside the gate, counted once, a fifth of the gate's on top.
+    # A bypass: bytes yt-dlp sent the network outside the gate, counted once, a quarter of the gate's on top.
     download["uid_bytes"] = round(3.08 * g + 0.25 * g)
     v = gate([mobile])["Y0-H"]
     assert v.passed is False and "the uid's bytes past the gate's three legs" in v.why
@@ -793,3 +804,70 @@ def test_an_idle_sessions_bytes_unexplained_still_fail_and_a_host_outside_youtub
     del run_of(busy, 0, "search")["hosts"]["example.com"]
     v = gate([idle, busy])["Y0-H"]
     assert v.passed is False and "the uid's bytes past the gate's three legs" in v.why
+
+
+# -- the review's fixes: bad sessions cleared, songs the network failed, the warm download on mobile data --------
+
+
+def test_a_bad_day_then_a_clean_later_day_passes_naming_the_bad_one_as_cleared():
+    bad = session("2026-11-28", "cellular", "enforce", first_after_install=True)
+    _blocked_at(bad, 1)
+    clean = session("2026-11-30", "cellular", "enforce")
+    verdicts = gate([bad, clean], apk_growth_mb=30)
+    v = verdicts["Y0-W"]
+    assert v.passed is True, v.why
+    assert f"cleared: {yg._label(bad)}" in v.why and "Sign in to confirm" in v.why
+    assert f"counted from the sessions after {yg._label(bad)}" in v.why
+    assert v.numbers["cleared"] == [yg._label(bad)]
+    assert verdicts["Y0-T"].passed is True
+
+
+def test_a_bad_day_then_a_clean_session_the_same_day_still_waits():
+    bad = _blocked_at(session("2026-11-28", "cellular", "enforce"), 1)
+    clean = json.loads(json.dumps(session("2026-11-28", "cellular", "enforce"))
+                       .replace("2026-11-28T18:0", "2026-11-28T21:0"))
+    v = gate([bad, clean])["Y0-W"]
+    assert v.passed is None and "Gate Y0 waits" in v.why and "on a later day" in v.why
+
+
+def test_the_songs_before_a_cleared_bad_session_are_not_counted():
+    early = session("2026-11-27", "cellular", "enforce")
+    bad = _blocked_at(session("2026-11-28", "cellular", "enforce"), 0)
+    clean = session("2026-11-29", "cellular", "enforce")
+    clean["runs"] = clean["runs"][:4]
+    v = gate([early, bad, clean])["Y0-W"]
+    assert v.passed is None and "2 of 3 songs downloaded" in v.why
+
+
+def test_a_song_the_network_failed_in_a_counted_session_is_listed_by_session_and_song():
+    mobile = session("2026-11-28", "cellular", "enforce")
+    run_of(mobile, 2, "download").update(outcome="error", file=None, decoded=None,
+                                         reason="ERROR: unable to download video data: Read timed out")
+    other = session("2026-11-29", "cellular", "enforce")
+    v = gate([mobile, other])["Y0-W"]
+    assert v.passed is True
+    song = run_of(mobile, 2, "download")["song"]
+    assert f"songs the network failed, counted for nothing: {yg._label(mobile)} “{song}”" in v.why
+    assert "Read timed out" in v.why
+    assert v.numbers["network_songs"] == [f"{yg._label(mobile)} “{song}”"]
+
+
+def test_time_needs_its_warm_download_in_an_enforced_mobile_data_session():
+    mobile = session("2026-11-28", "cellular", "enforce")
+    mobile["runs"] = mobile["runs"][:2]
+    wifi = session("2026-11-29", "wifi", "enforce")
+    v = gate([mobile, wifi])["Y0-T"]
+    assert v.passed is None and "no warm download ended ok on mobile data with Start" in v.why
+    # A warm download over the limit on Wi-Fi is still checked.
+    run_of(wifi, 1, "download")["seconds"] = 40.0
+    assert "a warm download" in gate([mobile, wifi])["Y0-T"].why
+
+
+@pytest.mark.parametrize(("leak", "passed"), [(0.17, False), (0.14, True)])
+def test_the_stated_slip_a_leak_of_about_a_sixth_of_the_gates_bytes_and_64_kb_a_run(leak, passed):
+    mobile = phone_session("2026-11-27T15:1", "cellular", 3)
+    download = run_of(mobile, 0, "download")
+    g = sum(u["bytes_up"] + u["bytes_down"] for u in download["hosts"].values())
+    download["uid_bytes"] = round(3.08 * g + leak * g) + yg.H_UID_SLACK
+    assert gate([mobile])["Y0-H"].passed is passed
+

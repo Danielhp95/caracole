@@ -1079,8 +1079,15 @@ gate needs now (the controller's ruling of 2026-11-27, after the owner chose sev
   every host asked and every refusal. Enforcing on Wi-Fi is fine too. Two days aren't needed either: the days are
   reported, and what one day can't show is what YouTube does after days of a phone asking.
 - A session the network lost (every run an error of a timeout's or a transport's, no block) counts for nothing: run it
-  again. A block, or a song failing for another reason, waits for another day after the cooldown; on two days it is
-  §3.8's trigger.
+  again. So does a song the network failed inside a session; the checker lists it by session and song, with its
+  reason.
+- A block, or a song failing for another reason, holds the gate until a later session, on a later day after any
+  cooldown, on mobile data with Start, downloads its songs with no block and none failing: that clears it (the checker
+  names it as cleared), and the three songs and the warm download are counted from the sessions after it. Blocked or
+  failing on Wi-Fi on two days with no clean day after is §3.8's trigger, if the computer's yt-dlp worked on the same
+  Wi-Fi the same hour (no report says: check it).
+- The warm download must be one on mobile data with Start; each cold and warm limit is still checked wherever it was
+  measured.
 - Every run counted, any session's, and the optional Termux smoke test's (Y0.0, the design's §4.0) too, which the bench
   can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27, above); a report written
   before it, which says no `lifted`, is still held to six in any 24 hours.
