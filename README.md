@@ -16,7 +16,8 @@ browser, in the Android app, or on paper. There is no account and no cloud.
 - [Shows each sheet](docs/sheets.md) with transpose, capo, chord shapes for several instruments, and sound.
 - [Searches](docs/search.md) your songs and the sites' catalogues as you type, offline.
 - [Makes PDFs and songbooks](docs/songbooks.md).
-- Optional: [works out chords from the audio](docs/autochords.md) when no site has them.
+- Optional: [works out chords from the audio](docs/autochords.md) when no site has them, on the computer or,
+  from a file you give it, [on the phone](docs/autochords.md#on-the-phone).
 - [Syncs with an Android app](docs/phone.md).
 
 ## Computer and phone
@@ -31,7 +32,8 @@ The computer does the nightly work. The phone keeps a copy and syncs with it.
 | Fetch one song now | Yes | Yes |
 | Read sheets, songbooks, Guitar Pro | Yes | Yes |
 | PDFs | Yes | Print only |
-| Chords from audio, YouTube | Yes | No |
+| Chords from audio | Yes | From a file (debug build for now) |
+| YouTube, words heard from the audio | Yes | No |
 | Share a song or file from another app | No | Yes |
 
 ## Install

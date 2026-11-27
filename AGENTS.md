@@ -23,6 +23,10 @@ For a song nobody has charted, `caracole autochords` writes a sheet from audio w
 - or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
   into the song's sheet at once (audio_sheet.py).
 
+The Android app's debug build (the `./android#ml` shell's) makes such a sheet from an audio file too, chords and beats
+heard on the phone with no words (android/: `:autochords`, `:ml`, AudioRunner, ModelsRunner; docs/autochords.md, "On
+the phone").
+
 The design lives in three files:
 
 - `plan.md`: design v2.1, and why. Its code sketches are older than the code: its module runs
@@ -4569,7 +4573,9 @@ helpers/corpus.py.
   regenerated in `.#autochords` alone (`CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m
   autochords tests/test_conformance_autochords_models.py`); the default shell checks its clips and skips the rest.
   Its model outputs are bit for bit on a CPU of its meta's `cpu_capability`, and elsewhere within the gates its
-  models.jsonl's meta holds.
+  models.jsonl's meta holds. On the device it runs in the ml shell alone (`device-test.sh --area autochords`, whose
+  libsoxr is `:ml`'s). The other chords-from-audio areas, `autochords-sheet`, `audio-store`, `audio-sheet` and
+  `lyrics-search`, are the default shell's on both sides.
 - What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
   `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
   inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).

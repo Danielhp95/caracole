@@ -101,12 +101,32 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 | `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
-None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).
+Details: [Audio from YouTube](usage.md#audio-from-youtube).
+
+## On the phone
+
+The Android app makes a sheet from an audio file too, on the phone itself, with no computer. For now only the debug
+build has it ([android/README.md](../android/README.md#chords-from-audio-a-sheet-from-a-file-debug-build)); the
+F-Droid release doesn't yet.
+
+1. In Settings › **Chords from audio**, tap **Download**. The two models, about 56 MB, come once: beat_this's from
+   this repository's `models` release on GitHub, BTC's from its authors' own repository. On mobile data it asks
+   first. **Remove** deletes them; the sheets you made stay.
+2. Tap the **+** on the library page, or a song's Sheet from an audio file…, or share an audio file to caracole from
+   another app (one at a time). Check the artist and title, then **Make sheet**.
+
+As on the computer, it asks the lyrics sites first, then works out the chords and the beats, and lays the chords over
+the words. The phone hears no words: where every lyrics site missed, the sheet is chords only, and the card says that
+the computer can hear them from its own audio of the song. A song's card can look its lyrics up under another name on
+the phone too; picking one lays the sheet out again without the models.
+
+It needs Android 13 or later and 6 GB of memory. It won't start below 15 % of battery unless the phone is charging,
+and it waits while the phone is too hot. The audio is heard on the phone and stays in the app's own storage, never
+synced. The sheet, which names the file, is synced, and the computer keeps it as the phone made it (above).
 
 ## The models for the phone
 
-Chords on the phone are not built yet. A first step is in: `nix build .#chord-models` exports both
-models to ONNX, the format the phone will run them in.
+`nix build .#chord-models` exports both models to ONNX, the format the phone runs them in.
 
 | File | Size | What it is |
 |---|---|---|
