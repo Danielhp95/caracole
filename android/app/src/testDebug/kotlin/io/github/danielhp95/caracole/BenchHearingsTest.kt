@@ -30,4 +30,11 @@ class BenchHearingsTest {
         BenchHearings.leaveNothing(work) { throw ChordsUnavailable("still ending") }
         assertFalse(work.exists())
     }
+
+    @Test fun anyOtherFailureOfTheWaitLeavesTheFolderDeletedAndThrowsNothing() {
+        val work = File(tmp.root, BenchHearings.WORK).apply { mkdirs() }
+        File(work, "checkpoint").writeText("x")
+        BenchHearings.leaveNothing(work) { throw SecurityException("the running processes can't be read") }
+        assertFalse(work.exists())
+    }
 }

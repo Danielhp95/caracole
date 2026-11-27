@@ -66,6 +66,9 @@ object AutochordsReplay : AreaReplay {
                 "_beat_grid" -> check(misses, record, record.out!!) {
                     JsonArray(AutoSheet.beatGrid(times(a[0]), a[1].jsonPrimitive.double).map(::num))
                 }
+                "_bar_starts" -> check(misses, record, record.out!!) {
+                    JsonArray(AutoSheet.barStarts(times(a[0]), times(a[1]), times(a[2])).map(::num))
+                }
                 "youtube_credit" -> check(misses, record, record.out!!) {
                     JsonPrimitive(AutoSheet.youtubeCredit(str(a[0]), str(a[1]), str(a[2])))
                 }
@@ -85,7 +88,7 @@ object AutochordsReplay : AreaReplay {
                 else -> fail("an unknown record: ${record.fn}")
             }
         }
-        val kinds = setOf("parse_lrc_words", "snap_to_beats", "_beat_grid", "youtube_credit", "_word_start", "_on_words",
+        val kinds = setOf("parse_lrc_words", "snap_to_beats", "_beat_grid", "_bar_starts", "youtube_credit", "_word_start", "_on_words",
                           "_chord_line", "with_plain_lyrics", "build_sheet")
         assertTrue("records of every kind: $counts", counts.keys == kinds && counts.getValue("build_sheet") > 100)
         misses.assertNone()
@@ -117,12 +120,22 @@ object AutochordsReplay : AreaReplay {
                     val (text, offset) = record.args.let { str(it[0]) to it[1].jsonPrimitive.double }
                     raises(record, misses) { text(Align.shiftedLrc(text, offset), record.out!!) }
                 }
-                "lyrics_offset" -> check(misses, record, record.out!!) {
+                "lyrics_offset" -> {
                     val kw = record.kw
                     val lines = kw.getValue("lines").jsonArray.map { it.jsonArray[0].jsonPrimitive.double to str(it.jsonArray[1]) }
-                    alignment(Align.lyricsOffset(lines, segments(kw.getValue("segments")), times(kw.getValue("beats")),
-                                                 times(kw.getValue("downbeats")), kw.getValue("audio_s").jsonPrimitive.double,
-                                                 kw.getValue("lyrics_s").jsonPrimitive.double))
+                    val segments = segments(kw.getValue("segments"))
+                    val beats = times(kw.getValue("beats"))
+                    val downbeats = times(kw.getValue("downbeats"))
+                    val audioS = kw.getValue("audio_s").jsonPrimitive.double
+                    val lyricsS = kw.getValue("lyrics_s").jsonPrimitive.double
+                    check(misses, record, record.out!!) {
+                        alignment(Align.lyricsOffset(lines, segments, beats, downbeats, audioS, lyricsS))
+                    }
+                    // Every candidate's scores to the bit, before lyrics_offset rounds any (the record's `fits`).
+                    check(misses, record, record.extra.getValue("fits")) {
+                        val scored = Align.scored(lines, segments, beats, downbeats, audioS, lyricsS)
+                        if (scored.early != null) JsonNull else fitsDigest(scored.fits)
+                    }
                 }
                 "math.fsum" -> raises(record, misses) {
                     num(Py.mathFsum(record.args[0].jsonArray.map { it.jsonPrimitive.double }))
@@ -230,6 +243,14 @@ object AutochordsReplay : AreaReplay {
         if (want !is JsonObject) return JsonPrimitive(got)
         val sha = Canonical.sha256Hex(got.toByteArray(Charsets.UTF_8)).substring(0, 16)
         return JsonObject(mapOf("sha256" to JsonPrimitive(sha), "size" to JsonPrimitive(Py.len(got))))
+    }
+
+    /** The SHA-256 (16 hex digits) of every fit's offset, score, onsets and coverage as big-endian doubles. */
+    private fun fitsDigest(fits: List<Align.Fit>): JsonElement {
+        val bytes = java.nio.ByteBuffer.allocate(fits.size * 32)
+        for (f in fits) bytes.putDouble(f.offset).putDouble(f.score).putDouble(f.onsets).putDouble(f.coverage)
+        val sha = Canonical.sha256Hex(bytes.array()).substring(0, 16)
+        return JsonObject(mapOf("sha256" to JsonPrimitive(sha), "n" to JsonPrimitive(fits.size)))
     }
 
     private fun alignment(a: Alignment): JsonElement = JsonObject(mapOf(

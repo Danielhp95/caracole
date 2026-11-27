@@ -36,14 +36,17 @@ exception's class name):
   ``_on_words`` and ``_chord_line`` (each recorded as its test runs it); ``parse_lrc_words`` (``[time, text, words]``
   a line, ``words`` ``[[time, column], …]`` or null) over every string literal of ``MERGE_LITERALS`` and
   ``ALIGN_LITERALS`` and ``LRC_EDGES``; ``_word_start`` at every column of each literal of one line, and
-  ``_on_words`` and ``_chord_line`` over seeded chords on them; ``build_sheet`` over seeded hearings
+  ``_on_words`` and ``_chord_line`` over seeded chords on them (``ASTRAL_LINES`` among them: characters past the BMP
+  and combining marks, also as LRC with and without word stamps); ``_beat_grid``, ``_bar_starts`` and
+  ``build_sheet`` where round()'s half to even decides (``_tie_records``); ``build_sheet`` over seeded hearings
   (``_seeded_hearings``: segments, beats with gaps, doubles and jitter, downbeats in 4/4, in 3/4, missed, spurious or
   none) and lyrics of each kind (none, plain, timed by line, timed by word, CJK, a break, a long line, a source of one
   line or several), and over the literals as synced and plain lyrics; ``with_plain_lyrics`` over sheets of no lyrics
   and the literals.
 - ``vectors/autochords-sheet/align.jsonl``: every call test_autochords_align.py makes of ``lyrics_offset`` and
   ``shifted_lrc``, and ``lyrics_offset`` over seeded songs heard with something more at one end (or cut, or another
-  song's lines), ``shifted_lrc`` over the literals and ``LRC_EDGES`` at several offsets. An ``Alignment`` is its
+  song's lines), each with its candidates' scores to the bit (``fits``, ``_fits``); ``shifted_lrc`` over the
+  literals, ``LRC_EDGES`` and ``STAMP_EDGES`` (minutes past a Long) at several offsets; ``math.fsum``. An ``Alignment`` is its
   fields, a float that is no number written as the string Python's ``repr`` writes (``"-inf"``).
 
 A list of beats ``[s + k * step for k in range(n)]`` is written ``{"start": s, "step": step, "n": n}`` (where Python's
@@ -57,6 +60,7 @@ import hashlib
 import json
 import math
 import random
+import struct
 import types
 from contextlib import contextmanager
 
@@ -228,6 +232,30 @@ LRC_EDGES = (
     "[00:01.00]a non breaking　space\n",
     "[00:00.00]\n[00:00.00]same time\n[00:00.00]again\n",
 )
+# Characters past the BMP (CJK Extension B, emoji and a ZWJ sequence, mathematical letters and digits) and combining
+# marks: every column, length and slice above is in code points, never UTF-16 units.
+ASTRAL_LINES = (
+    "\u7b2c\U00020000\U00020001\u4e00\u884c\U00020002\u6b4c",
+    "I love \U0001f600 you \U0001f469\u200d\U0001f469\u200d\U0001f467 so much",
+    "corazo\u0301n esta\u0301 aqui\u0301 ya",
+    "\U0001d401\U0001d428\U0001d425\U0001d41d math letters \U0001d7cf\U0001d7d0",
+    "\U0001f600\U0001f600 x \U0001f600",
+    "(\U00020000\u6211) \U0001f600love\U00020001",
+)
+
+
+def _word_stamped(text: str, start: float) -> str:
+    """``text`` with a word stamp before each word (each character, in a line of no space)."""
+    parts = text.split(" ") if " " in text else list(text)
+    joiner = " " if " " in text else ""
+    return joiner.join(f"<00:{start + 0.4 * k:05.2f}>{part}" for k, part in enumerate(parts))
+
+
+LRC_EDGES += tuple(f"[00:01.00]{line}\n[00:05.00]{_word_stamped(line, 5.0)}\n[00:09.00]{line}\n"
+                   for line in ASTRAL_LINES)
+LRC_EDGES += ("[\U0001d7ce\U0001d7ce:\U0001d7cf\U0001d7d0.\U0001d7d3\U0001d7ce]mathematical digits\n",)
+# Stamps far past an hour: parsed and shifted, never laid out (a sheet of 10**20 minutes has no end).
+STAMP_EDGES = ("[100000000000000000000:00]x\n", "[99999999999999999999:59.999]<99999999999999999999:59.999>y\n")
 LRC_RAISING = (
     "[0" + "9" * 5000 + ":01.00]a minute past int()'s digits\n",
     "[" + "9" * 400 + ":01.00]a minute past a float\n",
@@ -237,6 +265,8 @@ SHIFTS = (12.0, -2.0, 0.0005)
 LABELS = ("G", "D", "Em", "C", "Am7", "F#m", "Bb", "Cmaj7", "E7", "Dsus4", "C/E", "Abm", "N", "N")
 WORDS = ("walking", "down", "the", "river", "road", "singing", "to", "morning", "light", "¿dónde",
          "estás?", "can't", "(oh)", "l'amour", "“hey,”", "yeah!", "corazón", "♪")
+ASTRAL_WORDS = ("\U0001f600", "\U0001f469\u200d\U0001f469\u200d\U0001f467", "\U00020000\U00020001",
+                "\U0001d401\U0001d428\U0001d425\U0001d41d", "corazo\u0301n", "e\u0301\u0301te\u0301")
 CJK = "第一行歌词在这里我你，再见君の名はラーメン사랑해요"
 
 
@@ -251,14 +281,14 @@ def autochords_json() -> str:
             "BEATS_PER_BAR": m.BEATS_PER_BAR, "BARS_PER_LINE": m.BARS_PER_LINE, "GAP_BARS": m.GAP_BARS,
             "EPS": m._EPS, "STAMP_RUN": m._STAMP_RUN.pattern, "STAMP": m._STAMP.pattern, "TAG": m._TAG.pattern,
             "WORD_TIME": m._WORD_TIME.pattern, "WORD_PIECE": m._WORD_PIECE.pattern, "UNSPACED": m._UNSPACED.pattern,
-            "APOSTROPHES": m._APOSTROPHES,
+            "APOSTROPHES": m._APOSTROPHES, "NO_CHORD_CELL": m._NO_CHORD_CELL,
         },
         "align": {
             "MAX_SHIFT": a.MAX_SHIFT, "STEPS_PER_BEAT": a.STEPS_PER_BEAT, "MIN_LINES": a.MIN_LINES,
             "WEIGHTS": a.WEIGHTS, "BAR_SHARE": a.BAR_SHARE, "EXTENT_COST": a.EXTENT_COST, "PRIOR": a.PRIOR,
             "MARGIN": a.MARGIN, "MIN_ONSETS": a.MIN_ONSETS, "MIN_COVERAGE": a.MIN_COVERAGE,
             "STEADY_BARS": a.STEADY_BARS, "REPEAT_CHARS": a.REPEAT_CHARS, "REPEATS_PER_LINE": a.REPEATS_PER_LINE,
-            "EPS": a._EPS,
+            "EPS": a._EPS, "WORD": a._WORD.pattern,
         },
     })
 
@@ -401,7 +431,29 @@ def _offset_record(lines, segments, beats, downbeats, *, audio_s, lyrics_s) -> d
     found = align.lyrics_offset(lines, segments, beats, downbeats, audio_s=float(audio_s), lyrics_s=float(lyrics_s))
     kw = {"lines": [list(line) for line in lines], "segments": _segs(segments), "beats": _series(beats),
           "downbeats": _series(downbeats), "audio_s": float(audio_s), "lyrics_s": float(lyrics_s)}
-    return {"fn": "lyrics_offset", "kw": kw, "out": _alignment(found)}
+    return {"fn": "lyrics_offset", "kw": kw, "out": _alignment(found),
+            "fits": _fits(lines, segments, beats, downbeats, audio_s=float(audio_s), lyrics_s=float(lyrics_s))}
+
+
+def _fits(lines, segments, beats, downbeats, *, audio_s, lyrics_s) -> dict | None:
+    """Every candidate's ``_Fit`` (offset, score, onsets, coverage), as ``lyrics_offset`` scores them before it rounds
+    any: the SHA-256 (16 hex digits) of their doubles' big-endian bytes, and how many; None where it scores none. So
+    a sum off in its last bit (``statistics.fmean``'s math.fsum, the builtin sum of the measures) shows. The steps
+    are lyrics_offset's own, called one by one."""
+    sung = align._sung(lines)
+    if len(sung) < align.MIN_LINES:
+        return None
+    audio = align._Audio(segments, beats, downbeats, until=max([audio_s] + [s.end for s in segments]))
+    if not audio.segs or audio.beat <= 0 or len(audio.bars) < 2:
+        return None
+    d = audio_s - lyrics_s
+    pairs = align._repeated(sung)
+    music = audio.music()
+    least = max(0.0, music[1] - music[0] - lyrics_s)
+    fits = [align._fit(o, sung, pairs, audio, d=d, music=music, lyrics_s=lyrics_s, least=least)
+            for o in align._candidates(d, audio.beat, audio.bar)]
+    data = b"".join(struct.pack(">dddd", f.offset, f.score, f.onsets, f.coverage) for f in fits)
+    return {"sha256": hashlib.sha256(data).hexdigest()[:16], "n": len(fits)}
 
 
 @contextmanager
@@ -451,7 +503,7 @@ def _once(records: list[dict]) -> list[dict]:
 
 def _one_line_texts() -> list[str]:
     return [t for t in literals(MERGE_LITERALS + ALIGN_LITERALS)
-            if "\n" not in t and 3 <= len(t) <= 80 and (" " in t or not t.isascii())]
+            if "\n" not in t and 3 <= len(t) <= 80 and (" " in t or not t.isascii())] + list(ASTRAL_LINES)
 
 
 def _seeded_beats(rng: random.Random, until: float) -> list[float]:
@@ -517,7 +569,7 @@ def _word_line(rng: random.Random, script: str) -> str:
     if script == "mixed":
         return rng.choice(CJK) + rng.choice(WORDS) + rng.choice(CJK) + "，" + rng.choice(WORDS)
     n = rng.randint(1, 14 if script == "long" else 7)
-    return " ".join(rng.choice(WORDS) for _ in range(n))
+    return " ".join(rng.choice(WORDS + ASTRAL_WORDS if script == "astral" else WORDS) for _ in range(n))
 
 
 def _stamp(t: float, brackets: str = "[]") -> str:
@@ -527,7 +579,7 @@ def _stamp(t: float, brackets: str = "[]") -> str:
 
 def _seeded_lrc(rng: random.Random, start: float, until: float, words: bool) -> str:
     """Timed lyrics: a line every bar or two, a break now and then, a word stamp before each word where ``words``."""
-    script = rng.choice(("latin", "latin", "cjk", "mixed", "long"))
+    script = rng.choice(("latin", "latin", "cjk", "mixed", "long", "astral"))
     lines, t = [], start
     while t < until:
         if rng.random() < 0.12:
@@ -565,7 +617,7 @@ def _seeded_hearings() -> list[dict]:
             if lyrics != "synced":
                 words = merge.parse_lrc_words(synced)
         if lyrics in ("plain", "both"):
-            plain = "\n".join(_word_line(rng, rng.choice(("latin", "cjk"))) for _ in range(rng.randint(1, 6)))
+            plain = "\n".join(_word_line(rng, rng.choice(("latin", "cjk", "astral"))) for _ in range(rng.randint(1, 6)))
             plain = rng.choice(("", "\n\n", "  ")) + plain + rng.choice(("", "\n", "\n\n  \n"))
         source = rng.choice((None, None, "", "  ", merge.youtube_credit("Some video", "A channel", "abc"),
                              "Audio from YouTube: X (Y)\nLyrics 12.00 s later than LRCLIB timed them\n"
@@ -647,7 +699,7 @@ def merge_records() -> list[dict]:
     records = _tests_calls(test_autochords_merge,
                            ("build_sheet", "parse_lrc", "parse_lrc_words", "snap_to_beats", "youtube_credit"),
                            ("_word_start", "_on_words", "_chord_line", "_beat_grid"))
-    texts = dict.fromkeys(literals(MERGE_LITERALS + ALIGN_LITERALS) + LRC_EDGES + LRC_RAISING)
+    texts = dict.fromkeys(literals(MERGE_LITERALS + ALIGN_LITERALS) + LRC_EDGES + STAMP_EDGES + LRC_RAISING)
     records += [_parse_record(t) for t in texts]
     for title, channel, video in (("", "", "id"), ("　Wide　title ", "\tChan\nnel", "x"), ("T", "  ", "y")):
         records.append({"fn": "youtube_credit", "args": [title, channel, video],
@@ -656,7 +708,28 @@ def merge_records() -> list[dict]:
     records += _edge_sheets()
     records += _literal_sheets()
     records += _seeded_hearings()
+    records += _tie_records()
     return _once(records)
+
+
+def _tie_records() -> list[dict]:
+    """Where Python's round() half to even decides: a gap of exactly 2.5 and 4.5 beat periods (``_beat_grid``'s
+    missing beats), downbeats whose spacings' median is 2.5 or 4.5 beats (``_bar_starts``' beats a bar), and a missed
+    downbeat 2.5 bars on (its missing bars, and where each falls)."""
+    out = []
+    for beats in ([0.0, 0.5, 1.0, 1.5, 2.75, 3.25, 3.75, 4.25, 4.75],
+                  [0.0, 0.5, 1.0, 1.5, 2.0, 4.25, 4.75, 5.25, 5.75, 6.25, 6.75]):
+        out.append({"fn": "_beat_grid", "args": [beats, 8.0], "out": merge._beat_grid(beats, until=8.0)})
+        segs = [ChordSegment(0.0, 2.6, "G"), ChordSegment(2.6, 4.3, "D"), ChordSegment(4.3, 8.0, "Em")]
+        out.append(_sheet_record(segs, title="T", artist="A", beats=beats))
+    grid = [k * 0.5 for k in range(41)]
+    segs = [ChordSegment(1.0 * k, 1.0 * k + 1.0, LABELS[k % 12]) for k in range(20)]
+    for marks in ([0, 2, 5], [0, 4, 9], [0, 2, 4, 9], [0, 4, 8, 18], [1, 3, 6, 8, 11], [3, 7, 12, 16, 21, 30]):
+        downbeats = [grid[i] for i in marks]
+        out.append({"fn": "_bar_starts", "args": [grid, [s.start for s in segs], downbeats],
+                    "out": merge._bar_starts(grid, [s.start for s in segs], downbeats)})
+        out.append(_sheet_record(segs, title="T", artist="A", beats=grid, downbeats=downbeats))
+    return out
 
 
 def _seeded_alignments() -> list[dict]:
@@ -698,7 +771,7 @@ def _seeded_alignments() -> list[dict]:
 def align_records() -> list[dict]:
     records = _tests_calls(test_autochords_align, ("lyrics_offset", "shifted_lrc", "parse_lrc", "parse_lrc_words"))
     records = [r for r in records if r["fn"] in ("lyrics_offset", "shifted_lrc")]
-    texts = dict.fromkeys(literals(ALIGN_LITERALS + MERGE_LITERALS) + LRC_EDGES)
+    texts = dict.fromkeys(literals(ALIGN_LITERALS + MERGE_LITERALS) + LRC_EDGES + STAMP_EDGES)
     for text in texts:
         try:
             timed = bool(merge.parse_lrc(text))

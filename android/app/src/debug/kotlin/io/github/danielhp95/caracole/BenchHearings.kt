@@ -7,7 +7,6 @@ import io.github.danielhp95.caracole.ml.HeardSong
 import io.github.danielhp95.caracole.ml.MlChordModels
 import io.github.danielhp95.caracole.ml.Pipeline
 import io.github.danielhp95.caracole.autochords.Checkpoints
-import io.github.danielhp95.caracole.autochords.ChordsUnavailable
 import java.io.File
 import kotlinx.serialization.json.JsonObject
 
@@ -38,15 +37,18 @@ internal object BenchHearings {
 
     /** Empties [work] once no `:ml` process can write there: one a Stop cancelled stops only at its next chunk, and
      * may write a checkpoint after its client gave up, so [gone] (MlChordModels.awaitEnded, bounded) is waited for
-     * first. After the last song nothing else waits for it; a process still ending after the wait leaves the folder
-     * deleted all the same. */
+     * first. After the last song nothing else waits for it. Whatever the wait ends in (a process still ending after
+     * it, or the running processes unreadable), the folder is deleted all the same and nothing is thrown, so no
+     * failure here hides the song's own: a process that outlived the wait may still write a late checkpoint, which
+     * recreates the folder until the next bench run empties it before its first song. */
     internal fun leaveNothing(work: File, gone: () -> Unit) {
         try {
             gone()
-        } catch (e: ChordsUnavailable) {
-            // Still ending after the wait: what it wrote until now goes all the same.
+        } catch (e: Exception) {
+            // Still ending after the wait, or no way to tell: what it wrote until now goes all the same.
+        } finally {
+            work.deleteRecursively()
         }
-        work.deleteRecursively()
     }
 
     fun isAudio(name: String) = name.substringAfterLast('.', "").lowercase() in AUDIO

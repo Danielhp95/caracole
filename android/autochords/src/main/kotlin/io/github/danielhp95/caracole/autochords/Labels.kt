@@ -1,13 +1,12 @@
 package io.github.danielhp95.caracole.autochords
 
+import io.github.danielhp95.caracole.core.py.Py
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.math.BigDecimal
-import java.math.RoundingMode
 
 /** A chord sounding from [start] to [end] seconds, merge.py's `ChordSegment`; the label "N" means no chord. Its one
  * home is `:viewer`'s `viewer.autochords` (merge.py's port, which lays the sheet out of it), as the design places it;
@@ -74,7 +73,7 @@ object Labels {
             if (at >= 0) weights[at] += s.end - s.start
         }
         if (weights.all { it == 0.0 }) return segments.toList()
-        fun fit(tonic: Int): Double = pySum(majorScale.map { weights[(tonic + it) % 12] })
+        fun fit(tonic: Int): Double = Py.fsum(majorScale.map { weights[(tonic + it) % 12] })
         var tonic = 0
         for (t in 1 until 12) if (fit(t) > fit(tonic)) tonic = t
         val names = if (tonic in flatKeys) flats else if (tonic == 0) cMajorSpelling else emptyMap()
@@ -112,43 +111,8 @@ object Labels {
     }
 
     /** Frame [frame]'s time, `round(frame * frameSeconds, 3)` as Python rounds a float: half to even on the exact
-     * binary value, then the nearest double (:core's Py.round, ported here, as :autochords depends on no :core). */
-    fun time(frame: Int, frameSeconds: Double): Double = pyRound(frame * frameSeconds, 3)
-
-    private fun pyRound(x: Double, digits: Int): Double {
-        if (x.isNaN() || x.isInfinite() || x == 0.0) return x
-        val rounded = BigDecimal(x).abs().setScale(digits, RoundingMode.HALF_EVEN)
-        return Math.copySign(nearestDouble(rounded), x)
-    }
-
-    private val EXACT_POWERS = DoubleArray(23) { var p = 1.0; repeat(it) { p *= 10.0 }; p }
-
-    /** The double nearest a decimal: one IEEE division where both are exact, else the shortest decimal parsed. */
-    private fun nearestDouble(d: BigDecimal): Double {
-        val unscaled = d.unscaledValue()
-        val scale = d.scale()
-        if (unscaled.bitLength() <= 52 && scale in -22..22) {
-            val u = unscaled.toLong().toDouble()
-            return if (scale >= 0) u / EXACT_POWERS[scale] else u * EXACT_POWERS[-scale]
-        }
-        return d.toString().toDouble()
-    }
-
-    /** Python 3.12+'s builtin sum() of floats (:core's Py.fsum): 0 + the first, then each Neumaier-compensated, the
-     * compensation added last when it is finite and not zero. */
-    private fun pySum(xs: List<Double>): Double {
-        if (xs.isEmpty()) return 0.0
-        var sum = 0.0 + xs[0]
-        var c = 0.0
-        for (k in 1 until xs.size) {
-            val x = xs[k]
-            val t = sum + x
-            c += if (Math.abs(sum) >= Math.abs(x)) (sum - t) + x else (x - t) + sum
-            sum = t
-        }
-        if (c != 0.0 && c.isFinite()) sum += c
-        return sum
-    }
+     * binary value, then the nearest double (:core's Py.round). */
+    fun time(frame: Int, frameSeconds: Double): Double = Py.round(frame * frameSeconds, 3)
 
     /** [s] up to the first [c] (all of it when there is none): Python's `split(c)[0]` and `partition(c)[0]`. */
     private fun before(s: String, c: Char): String {

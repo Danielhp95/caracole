@@ -40,6 +40,7 @@ object AutoSheet {
     private val GAP_BARS by lazy { merge.getValue("GAP_BARS").jsonPrimitive.int }
     private val EPS by lazy { merge.getValue("EPS").jsonPrimitive.double }
     private val UNSPACED by lazy { PyRegex.compile(merge.getValue("UNSPACED").jsonPrimitive.content) }
+    private val NO_CHORD_CELL by lazy { merge.getValue("NO_CHORD_CELL").jsonPrimitive.content }
     private val APOSTROPHES by lazy { Py.codePoints(merge.getValue("APOSTROPHES").jsonPrimitive.content).toSet() }
 
     /** snap_to_beats: every chord change moved to the nearest beat of the grid ([beatGrid]); a chord shorter than a
@@ -343,10 +344,9 @@ object AutoSheet {
         return out
     }
 
-    private const val NO_CHORD_CELL = "[ch]N.C.[/ch]"
 
     /** _chord_line: a chord line in UG markup, each chord at its display column, at least one space apart. */
-    fun chordLine(placed: List<Pair<Int, String>>): String {
+    internal fun chordLine(placed: List<Pair<Int, String>>): String {
         var visible = 0
         val out = StringBuilder()
         for ((at, name) in placed) {
@@ -361,7 +361,7 @@ object AutoSheet {
     /** _on_words: the chords of a lyric line, each moved to the start of the word nearest its column (a code point's
      * index in [text]), at that word's display column; in order, one a word: a chord whose word is the one before's,
      * or under its name, takes the first word start clear of that name and a space, else the column right after it. */
-    fun onWords(text: String, placed: List<Pair<Int, String>>): List<Pair<Int, String>> {
+    internal fun onWords(text: String, placed: List<Pair<Int, String>>): List<Pair<Int, String>> {
         val cps = Py.codePoints(text)
         val columns = ChordPro.displayColumns(text)
         fun shown(i: Int): Int = when {
@@ -386,7 +386,7 @@ object AutoSheet {
 
     /** _word_start: the code point index of the word start in [text] nearest [col], a tie to the earlier word; [col]
      * itself at or past the line's end, or in a line with no word. */
-    fun wordStart(text: String, col: Int): Int = wordStart(Py.codePoints(text), col)
+    internal fun wordStart(text: String, col: Int): Int = wordStart(Py.codePoints(text), col)
 
     private fun wordStart(cps: IntArray, col: Int): Int {
         val starts = wordStarts(cps)
@@ -435,7 +435,7 @@ object AutoSheet {
 
     /** _beat_grid: the beats (those from 0, each `round(b, 3)`, each once), sorted, with missing beats filled in and
      * the grid extended to 0 and [until] at their median spacing. */
-    fun beatGrid(beats: List<Double>, until: Double): List<Double> {
+    internal fun beatGrid(beats: List<Double>, until: Double): List<Double> {
         val found = pySortedSet(beats.filter { it >= 0.0 }.map { Py.round(it, 3) })
         if (found.size < 2) return found
         val period = median((1 until found.size).map { found[it] - found[it - 1] })

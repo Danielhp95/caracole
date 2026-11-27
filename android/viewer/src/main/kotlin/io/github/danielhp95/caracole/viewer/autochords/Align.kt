@@ -54,12 +54,17 @@ object Align {
     private val REPEATS_PER_LINE by lazy { count("REPEATS_PER_LINE") }
     private val EPS by lazy { number("EPS") }
 
-    /** _sung's `re.findall(r"\w+", …)`. */
-    private val WORD by lazy { PyRegex.compile("\\w+") }
+    /** align._WORD: a line's words, for its key. */
+    private val WORD by lazy { PyRegex.compile(align.getValue("WORD").jsonPrimitive.content) }
 
     private class Line(val start: Double, val end: Double, val key: String)
 
-    private class Fit(val offset: Double, val score: Double, val onsets: Double, val coverage: Double)
+    /** align._Fit: a candidate shift and what it scored, before anything is rounded. */
+    internal class Fit(val offset: Double, val score: Double, val onsets: Double, val coverage: Double)
+
+    /** What [lyricsOffset] weighs: every candidate's [Fit], in order, and the audio's beat; or, where it scores
+     * none, its answer ([early]). */
+    internal class Scored(val fits: List<Fit>, val beat: Double, val early: Alignment? = null)
 
     /** _Audio: the chords and bars of the audio, to look times up in. */
     private class Audio(segments: List<ChordSegment>, beats: List<Double>, downbeats: List<Double>, until: Double) {
@@ -101,22 +106,15 @@ object Align {
         lines: List<Pair<Double, String>>, heard: List<ChordSegment>, beats: List<Double>, downbeats: List<Double>,
         audioS: Double, lyricsS: Double,
     ): Alignment {
-        val sung = sung(lines)
-        if (sung.size < MIN_LINES) return Alignment(null, "${sung.size} sung lines, too few to place")
-        val audio = Audio(heard, beats, downbeats, (listOf(audioS) + heard.map { it.end }).reduce(::pyMax))
-        if (audio.segs.isEmpty() || audio.beat <= 0.0 || audio.bars.size < 2) {
-            return Alignment(null, "no chords or no beats to place the lines by")
-        }
-        val d = audioS - lyricsS
-        val pairs = repeated(sung)
-        val music = audio.music(STEADY_BARS * audio.bar)
-        val least = pyMax(0.0, music.second - music.first - lyricsS)  // the overhang no shift avoids
-        val fits = candidates(d, audio.beat, audio.bar).map { fit(it, sung, pairs, audio, d, music, lyricsS, least) }
+        val scored = scored(lines, heard, beats, downbeats, audioS, lyricsS)
+        scored.early?.let { return it }
+        val fits = scored.fits
+        val beat = scored.beat
         var best = fits[0]
         for (f in fits.drop(1)) {  // max by (score, -abs(offset)): the first of those tied
             if (f.score > best.score || (f.score == best.score && -Math.abs(f.offset) > -Math.abs(best.offset))) best = f
         }
-        val others = fits.filter { Math.abs(it.offset - best.offset) > audio.beat + EPS }.map { it.score }
+        val others = fits.filter { Math.abs(it.offset - best.offset) > beat + EPS }.map { it.score }
         val runnerUp = others.reduceOrNull(::pyMax) ?: Double.NEGATIVE_INFINITY
         fun found(offset: Double?, why: String) =
             Alignment(offset, why, Py.round(best.offset, 3), Py.round(best.score, 3), Py.round(runnerUp, 3))
@@ -130,8 +128,29 @@ object Align {
             return found(null, "no clear winner (${f3(best.score)} at ${signed(best.offset)} s, " +
                                    "${f3(runnerUp)} a beat or more away)")
         }
-        val offset = if (Math.abs(best.offset) <= audio.beat + EPS) 0.0 else Py.round(best.offset, 3)
+        val offset = if (Math.abs(best.offset) <= beat + EPS) 0.0 else Py.round(best.offset, 3)
         return found(offset, "${f3(best.score)} at ${signed(best.offset)} s, ${f3(runnerUp)} a beat or more away")
+    }
+
+    /** lyrics_offset up to its candidates scored (its answer, where it gives one before: too few lines, no chords
+     * or no beats). */
+    internal fun scored(
+        lines: List<Pair<Double, String>>, heard: List<ChordSegment>, beats: List<Double>, downbeats: List<Double>,
+        audioS: Double, lyricsS: Double,
+    ): Scored {
+        fun early(why: String) = Scored(emptyList(), 0.0, Alignment(null, why))
+        val sung = sung(lines)
+        if (sung.size < MIN_LINES) return early("${sung.size} sung lines, too few to place")
+        val audio = Audio(heard, beats, downbeats, (listOf(audioS) + heard.map { it.end }).reduce(::pyMax))
+        if (audio.segs.isEmpty() || audio.beat <= 0.0 || audio.bars.size < 2) {
+            return early("no chords or no beats to place the lines by")
+        }
+        val d = audioS - lyricsS
+        val pairs = repeated(sung)
+        val music = audio.music(STEADY_BARS * audio.bar)
+        val least = pyMax(0.0, music.second - music.first - lyricsS)  // the overhang no shift avoids
+        return Scored(candidates(d, audio.beat, audio.bar).map { fit(it, sung, pairs, audio, d, music, lyricsS, least) },
+                      audio.beat)
     }
 
     private fun f2(x: Double) = PyFormat.fixed(x, 2)
@@ -168,7 +187,8 @@ object Align {
     /** _stamp: an LRC stamp of [t] seconds (0 for before the start), `[mm:ss.xxx]`, from Python's float divmod. */
     private fun stamp(t: Double, open: Char, close: Char): String {
         val (minutes, seconds) = divmod(pyMax(0.0, Py.round(t, 3)), 60.0)
-        val m = minutes.toLong().toString().padStart(2, '0')
+        // int(minutes), unbounded: a float's whole value, never a Long's
+        val m = java.math.BigDecimal(minutes).toBigInteger().toString().padStart(2, '0')
         return "$open$m:${PyFormat.fixed(seconds, 3, 6, zero = true)}$close"
     }
 

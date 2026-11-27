@@ -13,7 +13,8 @@
   "WORD_TIME": "<(\\d+):(\\d{1,2})(?:[.:](\\d+))?>",
   "WORD_PIECE": "(<\\d+:\\d{1,2}(?:[.:]\\d+)?>)|(\\s+)|((?:(?!<\\d+:\\d{1,2}(?:[.:]\\d+)?>)\\S)+)",
   "UNSPACED": "[぀-ヿ㐀-䶿一-鿿豈-﫿𠀀-𮯯]",
-  "APOSTROPHES": "'’"
+  "APOSTROPHES": "'’",
+  "NO_CHORD_CELL": "[ch]N.C.[/ch]"
  },
  "align": {
   "MAX_SHIFT": 30.0,
@@ -33,6 +34,7 @@
   "STEADY_BARS": 2,
   "REPEAT_CHARS": 8,
   "REPEATS_PER_LINE": 6,
-  "EPS": 1e-06
+  "EPS": 1e-06,
+  "WORD": "\\w+"
  }
 }

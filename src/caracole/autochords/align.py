@@ -74,6 +74,7 @@ STEADY_BARS = 2  # the music starts with the first chord of a stretch this long 
 REPEAT_CHARS = 8  # a line sung again counts when its words are at least this long
 REPEATS_PER_LINE = 6  # occurrences of one line compared, at most
 _EPS = 1e-6
+_WORD = re.compile(r"\w+")  # a line's words, for its key: repeats
 
 
 @dataclass(frozen=True)
@@ -218,7 +219,7 @@ def _sung(lines: Sequence[tuple[float, str]]) -> list[_Line]:
             continue
         end = min(nexts.get(j, math.inf), t + typical)
         if end > t:
-            out.append(_Line(t, end, " ".join(re.findall(r"\w+", text.casefold()))))
+            out.append(_Line(t, end, " ".join(_WORD.findall(text.casefold()))))
     return out
 
 
