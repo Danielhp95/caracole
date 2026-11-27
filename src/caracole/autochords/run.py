@@ -513,11 +513,12 @@ def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides
         return False
     if reason == RELAID:  # its words alone changed (its words heard just now, say): laid out again, no model
         bugs: list[str] = []
-        if relay_onto_sheets(conn, cfg, overrides, only={song.id}, errors=bugs):
+        relaid = relay_onto_sheets(conn, cfg, overrides, only={song.id}, errors=bugs)
+        stats.errors.extend(bugs)  # a bug laying it out, or writing its info.json: the run's errors (exit 1)
+        if relaid:
             stats.relaid += 1
-        elif bugs:  # a bug laying it out: one of the run's errors (exit 1), as a hearing's is
+        elif bugs:  # a bug laying it out, as a hearing's is
             stats.failed += 1
-            stats.errors.extend(bugs)
         else:  # logged where it failed: the next render tries again
             stats.skipped += 1
         return False

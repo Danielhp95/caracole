@@ -167,7 +167,8 @@ def relay_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Override
     (``relay_reason``), with no model and no audio (sheet.py ``relay``), and return the songs re-laid: of ``only``
     when given, not ignored, with no human sheet. Each song is read as it is just before its re-lay (a lookup let in
     ``between`` two may have changed it; overrides.toml is read again then too). The version's raw and the sheet are
-    written in one savepoint, info.json after (its failure said as its own: the sheet is re-laid); one that can't be
+    written in one savepoint, info.json after (its failure said as its own: the sheet is re-laid; a bug there logged
+    with its traceback and, given ``errors``, one of them, the others going on); one that can't be
     laid out or written is logged and left as it is, stopping no other, never a miss; a bug laying one out is logged
     with its traceback and, given ``errors``, one of them ("Artist - Title: …"). render.py's ``render_all`` runs this
     right after ``lyrics_onto_sheets``."""
@@ -219,5 +220,10 @@ def relay_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Override
         except (OSError, SharedFolder) as e:  # the sheet is re-laid all the same
             log.warning("%s: its auto sheet was laid out again, but its info.json couldn't be written: %s",
                         song.display, e)
+        except Exception as e:  # noqa: BLE001 - a bug writing it must cost the others nothing: the sheet is re-laid
+            log.error("%s: its auto sheet was laid out again, but writing its info.json failed: %s: %s",
+                      song.display, type(e).__name__, e, exc_info=True)
+            if errors is not None:
+                errors.append(f"{song.display}: info.json: {type(e).__name__}: {e}")
         done.append(get_song(conn, song_id))
     return done

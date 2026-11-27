@@ -624,3 +624,26 @@ def test_a_render_of_one_song_reads_only_its_record(conn, cfg, tmp_path):
     conn.set_trace_callback(None)
     assert _relay_candidates(conn, None) == [one.id, two.id] and _relay_candidates(conn, set()) == []
     assert any("f.song_id IN (" in q and str(two.id) in q for q in asked)
+
+
+def test_a_bug_writing_info_json_after_a_re_lay_stops_no_other_song(conn, cfg, tmp_path, monkeypatch, caplog):
+    # info.json raising anything but OSError (a bug) is logged with its traceback, one of the errors, and the other
+    # songs are re-laid all the same: the sheet itself was re-laid.
+    from caracole.autochords import sheet_lyrics
+
+    one = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    two = _heard_sheet(conn, cfg, tmp_path, "no lyrics", title="Hill Song")
+    one, two = _words(conn, one, "plain"), _words(conn, two, "plain")
+    written = sheet_lyrics.write_info
+
+    def broken(conn, library_dir, song):
+        if song.id == one.id:
+            raise KeyError("a bug")
+        return written(conn, library_dir, song)
+
+    monkeypatch.setattr(sheet_lyrics, "write_info", broken)
+    errors: list[str] = []
+    assert [s.id for s in relay_onto_sheets(conn, cfg, errors=errors)] == [one.id, two.id]
+    assert raw(conn, one)["lyrics"] == "plain" and raw(conn, two)["lyrics"] == "plain"
+    assert errors == ["Nobody - River Road: info.json: KeyError: 'a bug'"]
+    assert "Traceback" in caplog.text and "KeyError: 'a bug'" in caplog.text
