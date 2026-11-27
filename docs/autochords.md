@@ -72,6 +72,9 @@ When caracole gets it wrong, the card lets you say otherwise. A song in which no
 anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
 that audio again (a new file is heard once more).
 
+A file moved, renamed or touched is the same audio: what was heard of it, and these verdicts, follow its bytes. Only
+other bytes are a new file.
+
 ## Install
 
 ```sh

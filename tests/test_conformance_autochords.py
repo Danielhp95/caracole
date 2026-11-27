@@ -1328,6 +1328,25 @@ def _library(w) -> list[dict]:
     _sheet_of(w, made["other_silence"], four)
     kv_set_json(w.conn, f"transcribe:none:{made['other_silence'].id}",
                 {**other, "at": "2026-11-20T01:00:00Z", "why": "sung 6.2 s", "by": "you"})
+    # A purchase heard here, then the same bytes given as an upload, whose kept name holds their digest: its
+    # transcript follows them (transcript.py ``of_audio``, by the name alone: no file read), so the sheet of none is
+    # laid out over it; a transcript of another upload's bytes is other audio's.
+    given = {"audio_path": "/state/audio/1-0123456789abcdef.m4a", "audio_mtime": AUDIO_AT, "autochords_mtime": AUDIO_AT}
+    heard_then = {"lrc": TRANSCRIPT_FOUR, "audio": here["audio_path"], "audio_mtime": AUDIO_AT - 60.0,
+                  "audio_size": 5, "model": "whisper-large-v3", "language": "en", "device": "cpu", "words_dropped": 0,
+                  "made_at": "2026-11-20T01:00:00Z"}
+    made["given_same"] = song("Given The Bytes Heard", **given)
+    _sheet_of(w, made["given_same"], four, source=PURCHASE)
+    kv_set_json(w.conn, f"transcript:{made['given_same'].id}",
+                {**heard_then, "audio_sha256": "0123456789abcdef" + "5a" * 24})
+    made["given_other"] = song("Given Other Bytes", **given)
+    _sheet_of(w, made["given_other"], four, source=PURCHASE)
+    kv_set_json(w.conn, f"transcript:{made['given_other'].id}",
+                {**heard_then, "audio_sha256": "fedcba9876543210" + "5a" * 24})
+    kv_set_json(w.conn, f"transcribe:none:{made['given_other'].id}",
+                {"audio": here["audio_path"], "audio_mtime": AUDIO_AT - 60.0, "audio_size": 5,
+                 "audio_sha256": "fedcba9876543210", "at": "2026-11-20T01:00:00Z", "why": "sung 6.2 s",
+                 "by": "caracole"})
     made["bad_transcript"] = song("Transcript Of No Shape", **here)
     _sheet_of(w, made["bad_transcript"], four)
     kv_set_json(w.conn, f"transcript:{made['bad_transcript'].id}", {

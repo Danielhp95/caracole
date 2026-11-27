@@ -734,3 +734,12 @@ def test_sweep_leaves_a_marker_a_job_holds_and_drops_one_with_neither_file_nor_d
     assert markers(cfg) == [f".upload-{up.id}.kept"]
     sweep(cfg, ())
     assert markers(cfg) == [] and names(cfg) == []
+
+
+def test_a_given_files_digits_are_read_from_its_kept_name_alone():
+    from caracole.audio_store import given_sha16
+
+    assert given_sha16("/var/lib/caracole/audio/12-0123456789abcdef.m4a") == "0123456789abcdef"
+    for other in (None, "", "/music/12-0123456789abcdef.m4a", "/state/audio/12-0123456789abcdeg.m4a",
+                  "/state/audio/12-0123456789abcdef.mkv", "/state/audio/.upload-0123456789abcdef.mp3"):
+        assert given_sha16(other) is None, other

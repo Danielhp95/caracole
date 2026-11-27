@@ -377,3 +377,50 @@ def test_the_scan_counts_a_headerless_mp3s_frames_once_until_the_file_changes(co
     make_wav(music / "x.wav")
     scan_music(conn, music)
     assert json.loads(kv_get(conn, "music:frames")) == {}  # a file gone leaves the record
+
+
+# --- a purchase moved keeps what was heard of it ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("to", ["renamed", "another folder", "touched"])
+def test_a_purchase_relinked_where_it_moved_takes_its_transcript_and_verdicts_with_it(conn, tmp_path, to):
+    from caracole.autochords import transcript as tr
+    from caracole.db import kv_get_json
+
+    music = tmp_path / "music"
+    s, path = linked_purchase(conn, music)
+    song = get_song(conn, s.id)
+    tr.keep_transcript(conn, song, tr.Transcript("[00:01.00]hola\n", song.audio_path, song.audio_mtime, tr.MODEL,
+                                                 "es", "cpu", 0, "2026-11-20T00:00:00Z"))
+    tr.note_hearing_failed(conn, song, "2026-11-20T00:00:00Z", "the GPU")
+    old = Path(path)
+    new = {"renamed": old.with_name("01 Soda Stereo - Persiana Americana.wav"),
+           "another folder": music / "Old" / old.name, "touched": old}[to]
+    new.parent.mkdir(parents=True, exist_ok=True)
+    os.rename(old, new)
+    if to == "touched":
+        os.utime(new, (song.audio_mtime + 60, song.audio_mtime + 60))
+    scan_music(conn, music)
+    after = get_song(conn, s.id)
+    assert after.audio_path == str(new)
+    for prefix in (tr.TRANSCRIPT, tr.HEARING_FAILED):
+        record = kv_get_json(conn, f"{prefix}{s.id}")
+        assert (record["audio"], record["audio_mtime"]) == (after.audio_path, after.audio_mtime), prefix
+
+
+def test_a_purchase_replaced_by_other_bytes_leaves_its_transcript_unpointed(conn, tmp_path):
+    from caracole.autochords import transcript as tr
+    from caracole.db import kv_get_json
+
+    music = tmp_path / "music"
+    s, path = linked_purchase(conn, music)
+    song = get_song(conn, s.id)
+    tr.keep_transcript(conn, song, tr.Transcript("[00:01.00]hola\n", song.audio_path, song.audio_mtime, tr.MODEL,
+                                                 "es", "cpu", 0, "2026-11-20T00:00:00Z"))
+    Path(path).unlink()
+    make_wav(music / "Persiana Americana (live).wav", 2.0, artist="Soda Stereo", title="Persiana Americana")
+    scan_music(conn, music)
+    after = get_song(conn, s.id)
+    assert after.audio_path != path
+    assert kv_get_json(conn, f"{tr.TRANSCRIPT}{s.id}")["audio"] == path
+    assert tr.transcript_of(conn, after) is None

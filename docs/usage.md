@@ -1848,7 +1848,8 @@ lyrics missing at every lyrics site you have switched on, and not transcribed ye
   dropped.
 - The sheet says `Lyrics transcribed from the audio (Whisper), unverified`.
 - The words are kept as the song's transcript. Its lyrics stay missing, and lyrics a site has
-  later win.
+  later win. The transcript, and what caracole noted of the audio (nothing sung, unreadable),
+  follow the file's bytes: a file moved, renamed or touched keeps them; other bytes don't.
 - When nothing sung was heard, the auto sheet says `Instrumental: nothing sung was heard in the audio`
   and is made again once to say so; lyrics a site has later replace it.
 - It takes a couple of minutes on a GPU and up to half an hour on a CPU (`[autochords]

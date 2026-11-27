@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.viewer.autochords
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -144,7 +145,7 @@ object Relay {
         if (song.audioPath.isNullOrEmpty() || madeElsewhere(db, raw) || !relaysHere(song)) return notedIn(raw)
         val transcript = transcriptOf(db, song)
         val nothing = db.kvGet("${SheetHalf.HEARD_NOTHING_KV}${song.id}")?.let(PyJson::loads) as? JsonObject
-        val silent = transcript == null && nothing != null && ownAudio(song, nothing["audio"], nothing["audio_mtime"])
+        val silent = transcript == null && nothing != null && ownAudio(song, nothing)
         return Noted(transcript, silent, silent && nothing?.let { SheetHalf.text(it, "by") } == "you")
     }
 
@@ -159,18 +160,28 @@ object Relay {
         val dropped = kept["words_dropped"]
         if (!(dropped is JsonPrimitive && dropped !is JsonNull && !dropped.isString && !bool(dropped) &&
                 dropped.content.none { it == '.' || it == 'e' || it == 'E' || it == 'N' || it == 'I' })) return null
-        if (!ownAudio(song, kept["audio"], mtime)) return null
+        if (!ownAudio(song, kept)) return null
         return Transcript(texts[0]!!, texts[5]!!)
     }
 
     private fun bool(p: JsonPrimitive) = p.content == "true" || p.content == "false"
 
-    /** transcript._own_audio: `audio == song.audio_path and audio_mtime == song.audio_mtime`, Python's `==`. */
-    private fun ownAudio(song: SongRow, audio: JsonElement?, mtime: JsonElement?): Boolean {
+    /** transcript.of_audio, as far as the phone reads it: the record's `audio` and `audio_mtime` the song's (Python's
+     * `==`), else its content key (`audio_sha256`) agreeing with the digits a file given the song keeps in its name
+     * (AudioStore.givenSha16: no file read). Another file's bytes, which Python hashes, the phone never reads: it keeps
+     * no transcript or verdict of its own (it hears no words), and none crosses at a sync, so a record of a purchase
+     * moved is the computer's alone to follow. */
+    private fun ownAudio(song: SongRow, record: JsonObject): Boolean {
+        val audio = record["audio"]
+        val mtime = record["audio_mtime"]
         val sameAudio = song.audioPath?.let { sameText(audio, it) } ?: (audio == null || audio is JsonNull)
         val sameMtime = song.audioMtime?.let { mtime != null && PyJson.equal(mtime, PyJson.float(it)) }
             ?: (mtime == null || mtime is JsonNull)
-        return sameAudio && sameMtime
+        if (sameAudio && sameMtime) return true
+        val sha = (record["audio_sha256"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return false
+        if (sha.length !in 16..64 || sha.any { it !in '0'..'9' && it !in 'a'..'f' }) return false
+        val given = AudioStore.givenSha16(song.audioPath) ?: return false
+        return sha.take(16) == given
     }
 
     /** sheet_lyrics._relay_candidates: the songs (of [only]) whose kept auto sheet keeps what was heard: one query, no

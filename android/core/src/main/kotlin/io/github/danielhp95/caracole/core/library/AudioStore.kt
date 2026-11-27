@@ -718,6 +718,18 @@ class AudioStore(
             return KEPT.matches(file.name) && file.parentFile?.name == FOLDER && regular(file)
         }
 
+        /**
+         * audio_store.given_sha16: the first 16 hex digits of the SHA-256 of the file the owner gave a song that
+         * [audioPath] names, read from its kept name (a kept file's name in a folder named as the store is), or null
+         * for any other path: no file is read.
+         */
+        fun givenSha16(audioPath: String?): String? {
+            if (audioPath.isNullOrEmpty()) return null
+            val file = File(audioPath)
+            if (!KEPT.matches(file.name) || file.parentFile?.name != FOLDER) return null
+            return file.name.substringAfter('-').take(16)
+        }
+
         /** audio_store.kept_in: the kept file [audioPath] names in the folder [store], as [store] spells it: a regular
          * file of that folder by a kept file's name, however the path spells the folder; null for any other. */
         fun keptIn(store: File, audioPath: String?): File? {

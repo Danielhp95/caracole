@@ -74,9 +74,9 @@ class PhoneRenderTest {
                          stats.failed[made.id])
             assertTrue(File(LibraryStore(library).folderOf(made), "sheet (auto).html").isFile)
             assertTrue(byTitle.getValue("Phone Made").id !in stats.failed)
-            // the auto sheets that took lyrics or were laid out again: nine re-laid (Made Here failed), and the one
+            // the auto sheets that took lyrics or were laid out again: ten re-laid (Made Here failed), and the one
             // that keeps no heard took plain lyrics
-            assertEquals(10, stats.given)
+            assertEquals(11, stats.given)
         }
     }
 
@@ -89,7 +89,7 @@ class PhoneRenderTest {
             val stats = render.renderStale({})
             val bug = database.read { db -> Songs.list(db).first { it.title == "Unlaid Bug" } }
             assertTrue(stats.failed.getValue(bug.id).startsWith("Nobody - Unlaid Bug: a bug in caracole: "))
-            assertEquals(11, stats.given) // ten re-laid, and the one that keeps no heard took plain lyrics
+            assertEquals(12, stats.given) // eleven re-laid, and the one that keeps no heard took plain lyrics
         }
     }
 

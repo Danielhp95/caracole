@@ -761,7 +761,7 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`); each song read again before its turn (`as_now`, `again`), and what a pass holds of overrides.toml after a hand-over (`Reread`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
-| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), an MP3's length its frames' where its first frame names none (mpeg_frames.py), the 30 minutes judged by it, a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
+| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`; its digits read from the name, `given_sha16`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), an MP3's length its frames' where its first frame names none (mpeg_frames.py), the 30 minutes judged by it, a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
 | staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its), transcribe_job.py's and lyrics_pick.py's (`_audio_length`, the song's audio's length, theirs) |
@@ -2552,7 +2552,23 @@ It is rows.js's, shared by both pages:
     another, or clear the pick" while missing, true whether its site answered it a miss or a record written by hand on
     a song missing under its own name waits its 30 days, `PICKED_UNREAD` while it is pending, the owner's rule of the
     databases first, as one record of one site is all that is asked; Not sung: chords only, which runs no Whisper, as
-    before it, `why_not_unsung` and `offers`' `transcribed` weighing no record, `without_picks`);
+    before it, `why_not_unsung` and `offers`' `transcribed` weighing no record, `without_picks`). Its four records of
+    a song's audio (`RECORDS`: the transcript, nothing sung, Whisper's refusal, a failed hearing) are "of its audio" by
+    one rule, `of_audio`, the owner's "yes" of 2026-11-27 (a file moved, renamed or touched keeps what was heard of
+    it): its path and mtime the song's, else the same bytes by its content key (`audio_key`: `audio_size`, and
+    `audio_sha256`, a given file's 16 hex digits from its kept name, audio_store.py `given_sha16`, no read; any other
+    file's SHA-256, read only once the sizes agree, once a process while its stat stays, `_HASHED`); one with no key
+    (kept before keys were) other audio once path or mtime differ. A read answers so and writes nothing (a page build,
+    `search`, the to-do page); `follow_audio`, where a write is allowed, re-points such a record (its path and mtime
+    the song's) and keys an unkeyed one of the song's path and mtime: music.py `scan_music` right after it links a
+    song's file again, and the nightly pass (`autochords_pending`) before each song. auto-chords' own
+    `autochords:failed:` stays by path and mtime (run.py drops it once the file changes: a moved file is tried once
+    more). A move rewrites no auto sheet's raw (its `audio` and the version's `file://` URL name the old path until
+    the sheet is made or re-laid again): `audio_path` is no column of a song unit (peer_sync.py `SONG_COLUMNS`), so a
+    move alone changes no digest; a rename keeps the mtime (`autochords_mtime` still its audio's: not due), a touch
+    makes the sheet the models' again (its transcript, by content, used: no Whisper). The phone's Relay reads the
+    path and mtime, else a given file's name against the key, never a purchase's bytes: it keeps none of these records
+    of its own;
   - separate.py: demucs-rs, a program run as a subprocess (`DemucsSeparator`; `SeparatorFailed` in its own words,
     its output read as UTF-8 with what isn't replaced; a wgpu demucs-rs that dies by a signal after "Done!" with the
     stem written, as it does from Python, has separated it, logged; on success, what it said of its device logged
@@ -2595,7 +2611,8 @@ It is rows.js's, shared by both pages:
     anything else Whisper raises is a bug, raised as it is, filing nothing; and nothing sung is noted.
 - Which words go under the chords (sheet.py `make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
-  transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
+  transcript of its current audio (transcript.py `transcript_of`: of its own audio by `of_audio`, its path and mtime
+  or, moved, its bytes), else none.
   - A transcript is used as timed lyrics whose duration is the audio's: no `synced_for`, no shift searched. The sheet
     says `transcript.NOTE` after the credit and the shift's line.
   - The version's `raw` gets `lyrics_source` "transcript", `transcript` (the LRC) and `transcript_made_at`, and none of

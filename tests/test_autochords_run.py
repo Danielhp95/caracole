@@ -2074,7 +2074,7 @@ def test_a_note_of_other_audio_says_nothing(conn, cfg, tmp_path):
 
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
     silent(conn, s)
-    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)
+    with_audio(conn, tmp_path, s, seconds=11.0, name="other.wav")  # other bytes
     run(conn, cfg)
     assert SILENT not in auto_sheet(cfg, conn, s) and "heard_nothing" not in auto_raw(conn, s)
 
@@ -2221,6 +2221,32 @@ def test_a_song_with_a_picked_record_and_no_lyrics_is_never_heard_and_spends_no_
     assert over_words(conn, older) and not over_words(conn, picked)
 
 
+def test_a_song_whose_file_moved_since_its_words_were_heard_is_never_heard_again_nor_made_again(conn, cfg, tmp_path,
+                                                                                                 loud):
+    # The owner's "yes" of 2026-11-27: a purchase moved (or renamed) keeps its transcript, which follows its bytes.
+    from caracole.autochords.transcript import TRANSCRIPT
+
+    song = offered_song(conn, cfg, tmp_path, "Moved")
+    first = hearing_of(cfg)
+    try:
+        assert run(conn, cfg, hearing=first, transcriptions=1).heard == 1
+    finally:
+        first.close()
+    moved = tmp_path / "music" / "Album" / "01 Moved.wav"
+    moved.parent.mkdir()
+    os.rename(song.audio_path, moved)
+    update_song(conn, song.id, audio_path=str(moved), audio_mtime=os.stat(moved).st_mtime)  # as scan_music links it
+    second, rec = hearing_of(cfg), FakeRecognizer()
+    try:
+        stats = run(conn, cfg, rec, hearing=second, transcriptions=1)
+    finally:
+        second.close()
+    assert heard_names(second) == [] and rec.calls == []
+    assert (stats.generated, stats.heard, stats.skipped) == (0, 0, 1)
+    assert kv_get_json(conn, f"{TRANSCRIPT}{song.id}")["audio"] == str(moved)  # the pass re-pointed it
+    assert over_words(conn, song)
+
+
 @pytest.mark.usefixtures("before_heard")
 def test_a_song_past_the_cap_gets_its_chords_now_and_its_words_a_run_later(conn, cfg, tmp_path, loud):
     older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
@@ -2365,7 +2391,7 @@ def test_audio_whisper_cant_load_gets_its_chords_and_is_never_heard_every_night(
     try:
         assert run(conn, cfg, hearing=again, transcriptions=3).skipped == 1
         assert again.separator.calls == []  # no separation, no slot spent
-        later = with_audio(conn, tmp_path, s, seconds=60.0, name="River Road.wav")  # a new file
+        later = with_audio(conn, tmp_path, s, seconds=61.0, name="River Road.wav")  # a new file, other bytes
         assert why_not_offered(conn, cfg, later, Overrides()) is None
         assert run(conn, cfg, hearing=again, transcriptions=3).heard == 1
     finally:
@@ -2391,7 +2417,7 @@ def test_a_song_said_not_sung_is_never_heard_at_night(conn, cfg, tmp_path, loud)
         assert NOT_SUNG in text and SILENT not in text
         assert auto_raw(conn, s)["heard_nothing"] is True and auto_raw(conn, s)["not_sung_by"] == "you"
         assert run(conn, cfg, hearing=hearing, transcriptions=3).skipped == 1 and hearing.separator.calls == []
-        later = with_audio(conn, tmp_path, s, seconds=60.0, name="River Road (2).wav")  # a new file
+        later = with_audio(conn, tmp_path, s, seconds=61.0, name="River Road (2).wav")  # a new file, other bytes
         assert why_not_offered(conn, cfg, later, Overrides()) is None
         again = run(conn, cfg, hearing=hearing, transcriptions=3)
         assert len(hearing.separator.calls) == 1 and (again.generated, again.heard) == (1, 1)
@@ -2568,7 +2594,7 @@ def test_a_hearing_that_failed_one_night_is_passed_over_the_next_so_another_song
     assert stats.heard == 1 and over_words(conn, older) and not over_words(conn, newer)
     assert hearing_failed(conn, newer, night + timedelta(days=29)) is not None
     assert hearing_failed(conn, newer, night + timedelta(days=31)) is None  # the 30 days gone by
-    moved = with_audio(conn, tmp_path, newer, seconds=60.0, name="Newer (2).wav")  # a new file: a new start
+    moved = with_audio(conn, tmp_path, newer, seconds=61.0, name="Newer (2).wav")  # other bytes: a new start
     assert hearing_failed(conn, moved, night + timedelta(days=2)) is None
     third = hearing_of(cfg)
     try:

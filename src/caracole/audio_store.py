@@ -658,6 +658,19 @@ def given_file(audio_path: str | None) -> bool:
     return bool(KEPT.fullmatch(path.name)) and path.parent.name == FOLDER and _regular(path)
 
 
+def given_sha16(audio_path: str | None) -> str | None:
+    """The first 16 hex digits of the SHA-256 of the file you gave a song that ``audio_path`` names, read from its kept
+    name (``<song id>-<sha256 16 hex><ext>`` in a folder named as the store is), or None for any other path: no file
+    is read, so a record of a given file's audio is known by its name alone (transcript.py ``audio_key``; the phone's
+    ``AudioStore.givenSha16`` alike)."""
+    if not audio_path:
+        return None
+    path = Path(audio_path)
+    if not KEPT.fullmatch(path.name) or path.parent.name != FOLDER:
+        return None
+    return path.name.split("-", 1)[1][:16]
+
+
 def uploaded(cfg: Config, song: Song) -> Path | None:
     """The file you gave the song, when its audio is one (a kept file of the folder), else None: a purchase,
     YouTube's audio, or none."""

@@ -139,6 +139,18 @@ def _staged(conn, cfg, song, recognizer, beats):
 NEW_MEMBERS = ("heard", "made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16")
 
 
+def _unkeyed(key: str, value: str, song) -> str:
+    """A record of the song's audio (transcript.py ``RECORDS``) as it was pinned before it named its audio's content
+    key (the owner's "yes" of 2026-11-27): the key checked to be the audio's, then taken out; any other kv as it is."""
+    from caracole.autochords.transcript import AUDIO_SHA256, AUDIO_SIZE, RECORDS, audio_key
+
+    if not key.startswith(RECORDS):
+        return value
+    record = json.loads(value)
+    assert {AUDIO_SIZE: record.pop(AUDIO_SIZE), AUDIO_SHA256: record.pop(AUDIO_SHA256)} == audio_key(song.audio_path)
+    return json.dumps(record, ensure_ascii=False)
+
+
 def _made(conn, cfg, tmp_path, song, new: dict | None = None) -> str:
     """Everything the sheet's making left, as one text: the sheet, info.json, its version and the kv, with the test's
     own folder and the audio's mtime written as names; the raw's ``NEW_MEMBERS`` taken out of it, into ``new``."""
@@ -154,7 +166,8 @@ def _made(conn, cfg, tmp_path, song, new: dict | None = None) -> str:
         "info": (folder / "info.json").read_text(encoding="utf-8"),
         "version": [version.provider, version.tab_id, version.slot, version.kind, version.url, version.raw],
         "song": [song.status, song.autochords_mtime == song.audio_mtime],
-        "kv": [list(row) for row in conn.execute("SELECT key, value FROM kv WHERE key != 'sync:id' ORDER BY key")],
+        "kv": [[key, _unkeyed(key, value, song)]
+               for key, value in conn.execute("SELECT key, value FROM kv WHERE key != 'sync:id' ORDER BY key")],
     }
     text = json.dumps(made, ensure_ascii=False, sort_keys=True)
     return text.replace(str(tmp_path), "<tmp>").replace(json.dumps(song.audio_mtime), "<mtime>")
