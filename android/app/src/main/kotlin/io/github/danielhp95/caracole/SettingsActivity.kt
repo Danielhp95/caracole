@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -19,6 +20,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.YouTubeRow
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
@@ -48,7 +50,7 @@ import java.time.Instant
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
  * its start tried again as the screen comes back. YouTube audio ([YouTubeRow], the phone-youtube design's §7) says
- * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs today", off, the chord
+ * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours", off, the chord
  * models needed, a cooldown, out of date), none in a build without yt-dlp. The library screen's bar has the same sync
  * button.
  * No item's text ends in "…".
@@ -142,21 +144,32 @@ class SettingsActivity : Activity() {
         showYouTube()
     }
 
-    /** Settings' YouTube audio row (YouTubeRow): its line read off the main thread, as the screen comes back; gone
-     * in a build that carries no yt-dlp, or while the phone's caracole can't start. */
+    /** Settings' YouTube audio row (YouTubeRow): its line read off the main thread, as the screen comes back; no row in
+     * a build that carries no yt-dlp (the phone's engine decides, before its problem is read), and none while the
+     * phone's caracole can't start (said under the catalogues' button). A read that fails is said in the row, and
+     * logged, as the catalogues' date says its failure. */
     private fun showYouTube() {
         scope.launch {
             val phone = phone() ?: return@launch
-            val line = withContext(Dispatchers.IO) {
+            val row = findViewById<View>(R.id.youtube_row)
+            if (phone.youtube == null) {
+                row.visibility = View.GONE
+                return@launch
+            }
+            val read = withContext(Dispatchers.IO) {
                 runCatching {
                     val problem = phone.youtubeProblem()
                     phone.parts.database.read { db ->
-                        YouTubeRow.line(YouTubeRow.of(db, phone.parts.config(), problem, BuildConfig.YTDLP_VERSION,
-                                                      Instant.now()))
+                        YouTubeRow.line(YouTubeRow.of(db, engine = true, problem = problem,
+                                                      version = BuildConfig.YTDLP_VERSION, now = Instant.now()))
                     }
-                }.getOrNull()
+                }
             }
-            findViewById<View>(R.id.youtube_row).visibility = if (line == null) View.GONE else View.VISIBLE
+            val line = read.getOrElse { e ->
+                Log.w("caracole", "Settings' YouTube audio row couldn't be read", e)
+                getString(R.string.youtube_failed, why(e))
+            }
+            row.visibility = if (line == null) View.GONE else View.VISIBLE
             findViewById<TextView>(R.id.youtube_line).text = line.orEmpty()
         }
     }

@@ -100,6 +100,7 @@
 
     <!-- YouTube audio (YouTubeRow): Settings' row; its line is YouTubeRow's. -->
     <string name="youtube_label">YouTube audio</string>
+    <string name="youtube_failed">Couldn\'t read YouTube\'s state · %1$s</string>
     <string name="youtube_hint">A sheet from a YouTube video you paste or share: its audio taken with yt-dlp once you press Make sheet, then let go</string>
 
     <!-- The site catalogues (SiteCatalogues, CataloguesRunner's job): Settings' row, the question a metered network
