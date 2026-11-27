@@ -28,6 +28,7 @@ import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.channels.OverlappingFileLockException
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
@@ -55,9 +56,9 @@ import java.util.concurrent.TimeUnit
  * files the hearing runs on ([OrtModels.BTC_GRAPH], [OrtModels.BTC_WEIGHTS] beside it, [OrtModels.BEATS_FP16]) in
  * [models], each of the size and SHA-256 models.json pins (`:ml`'s resource), each file's answer kept while its size
  * and time stay (the bench's folder, and `/data/local/tmp/caracole-models` that device-test.sh `--ml` pushes). [hear]
- * asks it first. [forgetHeard] (the app's): the song's checkpoints removed once it is heard whole and its answer read,
- * the process gone; a hearing that fails keeps them, for Try again to go on from, and [sweepOld] takes those a day old
- * at the app's start. [gauge] reads the battery ([Heat]).
+ * asks it first. [forgetHeard] (the app's): the song's checkpoints removed by [forget], once the job kept the sheet
+ * heard of it, the process gone; a hearing that fails, or a keep after it, keeps them, for Try again to go on from, and
+ * [sweepOld] takes those a day old at the app's start. [gauge] reads the battery ([Heat]).
  */
 class MlChordModels(
     context: Context, private val models: File, private val work: File, private val threads: Int = 0,
@@ -76,6 +77,9 @@ class MlChordModels(
      * in kB (null where the process gave none). */
     @Volatile var lastPeakSplitKb: Pair<Long, Long>? = null
         private set
+
+    /** The checkpoints' folder of each audio file heard whole here, by its path, until [forget] lets it go. */
+    private val heardIn = ConcurrentHashMap<String, File>()
 
     /** The last song's stages that ran, each with its time in ns, in their order (Pipeline's [Pipeline.STAGES]). */
     @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
@@ -140,7 +144,6 @@ class MlChordModels(
         var bound = false
         var service: Messenger? = null
         var answered = false
-        var heardIn: File? = null
         try {
             bound = app.bindService(Intent(app, MlService::class.java), connection,
                 Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
@@ -191,7 +194,9 @@ class MlChordModels(
                         val nanos = m.data.getLongArray(MlProtocol.STAGE_NANOS) ?: LongArray(0)
                         lastStagesNanos = names.zip(nanos.toList()).toMap()
                         val file = File(m.data.getString(MlProtocol.HEARD)!!)
-                        return Heard.read(file.readText(Charsets.UTF_8)).also { heardIn = file.parentFile }
+                        return Heard.read(file.readText(Charsets.UTF_8)).also {
+                            file.parentFile?.let { folder -> heardIn[audio.path] = folder }
+                        }
                     }
                     MlProtocol.FAILED -> {
                         answered = true
@@ -218,12 +223,14 @@ class MlChordModels(
             }
             if (bound) app.unbindService(connection)
             looper.quitSafely()
-            // Heard whole and read: its checkpoints go (the app's), once its process is gone, so nothing writes there
-            // after; a process still ending keeps them for the start's sweep.
-            heardIn?.takeIf { forgetHeard && it.parentFile?.canonicalFile == work.canonicalFile }?.let { folder ->
-                if (runCatching { awaitEnded() }.isSuccess) folder.deleteRecursively()
-            }
         }
+    }
+
+    /** [audio]'s checkpoints, heard whole here, deleted (the app's: [forgetHeard]) once the job kept its sheet and the
+     * process is gone, so nothing writes there after ([forgotten]). */
+    override fun forget(audio: File) {
+        val folder = heardIn.remove(audio.path) ?: return
+        if (forgetHeard) forgotten(folder, work, ::awaitEnded)
     }
 
     /** Waits, as a hearing does before it binds ([awaitGone], bounded by [PROCESS_GONE_MS]), for the `:ml` process of
@@ -351,13 +358,34 @@ class MlChordModels(
 
         const val DAY_MS = 24 * 60 * 60_000L
 
+        /** [folder], a song's checkpoints in [work], deleted once [ended] says the process is gone; kept for the
+         * start's sweep while it is still ending ([ChordsUnavailable]) or when the wait is interrupted (the thread's
+         * flag set again). Whether it went. */
+        internal fun forgotten(folder: File, work: File, ended: () -> Unit): Boolean {
+            if (folder.parentFile?.canonicalFile != work.canonicalFile) return false
+            try {
+                ended()
+            } catch (e: ChordsUnavailable) {
+                return false
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+            return folder.deleteRecursively()
+        }
+
         /** The songs' checkpoint folders in [work] a hearing last wrote to a day or more before [now] (a killed app's,
-         * or one whose job failed and was never tried again), deleted: called at the app's start. Their names. */
-        fun sweepOld(work: File, now: Long): List<String> {
-            val old = work.listFiles().orEmpty().filter { it.isDirectory && now - newest(it) >= DAY_MS }
-                .sortedBy { it.name }
-            for (folder in old) folder.deleteRecursively()
-            return old.map { it.name }
+         * or one whose job failed and was never tried again), deleted under the hearings' one turn ([turn] of
+         * [turnFile], so that no hearing of another process resumes one as it goes); none while a hearing holds it:
+         * called at the app's start. Their names. */
+        fun sweepOld(work: File, now: Long, turnFile: File): List<String> {
+            val held = turn(turnFile) ?: return emptyList()
+            held.use {
+                val old = work.listFiles().orEmpty().filter { it.isDirectory && now - newest(it) >= DAY_MS }
+                    .sortedBy { it.name }
+                for (folder in old) folder.deleteRecursively()
+                return old.map { it.name }
+            }
         }
 
         /** The newest time of [folder] and its files. */

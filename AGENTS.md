@@ -4316,8 +4316,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   a song never has two jobs running): it waits for the job's end. `ModelsRunner.USES` holds `audio:`, so the models'
   remove is refused while a sheet waits or runs; the hearing itself holds the files (`ModelsRunner.holding`, a read
   lock that `remove` must take for writing, AudioRunner's `hold`) and asks `Phone.audioProblem()` again under it, so
-  a remove after the job was queued fails its chords "the chord models aren't downloaded …". What `waiting` throws (the queue's stop) propagates through `hear` as itself, never as
-  `ChordsUnavailable`: the job ends as the queue's stop, its audio kept, no sheet.
+  a remove after the job was queued fails its chords "the chord models aren't downloaded …". What `waiting` throws
+  (the queue's stop) propagates through `hear` as itself, never as `ChordsUnavailable`: the job ends as the queue's
+  stop, its audio kept, no sheet. `ChordModels.forget(audio)`, once the sheet is kept and never before: `:ml`'s
+  checkpoints go then (MlChordModels, `forgetHeard`), so a keep that fails leaves them and Try again hears nothing
+  again; the start's sweep (`sweepOld`) takes those a day old under the hearings' one turn, none while it is held.
 - `ChordModels`, `AudioUnreadable` and `ChordsUnavailable` live in :viewer's viewer.autochords (`:autochords` names
   them by typealias): :server, which the release ships, never depends on `:autochords`, whose `caracole/autochords/`
   data release-check.sh keeps out of the release.
@@ -4328,8 +4331,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   folder the models' job installs, `forgetHeard`, the device's reasons; src/release's: null, so the release's main
   source set names nothing of `:ml`, a debugImplementation, and `audioProblem()` says auto-chords isn't on the phone,
   release-check.sh holding the APK to it); `PhoneDeps.models` is its default (`ModelFiles.carried()`: the debug's
-  pins). `PhoneChords.sweep` after `Phone.start`. A device test sets `Caracole.anyPhoneHearsForTests` (the emulator's
-  2 GB) and `Caracole.examinerForTests`. ChordsEndToEndTest (`device-test.sh --models --sites chords
+  pins). `PhoneChords.sweep` after `Phone.start`, a failure logged (`guarded`). A device test sets
+  `PhoneChords.anyPhoneHearsForTests` (src/debug's, the emulator's 2 GB) and `Caracole.examinerForTests`.
+  ChordsEndToEndTest (`device-test.sh --models --sites chords
   ChordsEndToEndTest`; `--models` pushes the models with none of `:ml`'s classes) installs the pushed models through
   the models' job (copied into `stateDir/models/.c1.kept/`, hashed again by `ModelsSource.fetch`, nothing asked, the
   real manifest written), stages hearing.mp3 through `Phone.audio`, queues its job on the real queue against

@@ -439,6 +439,10 @@ class AudioRunner(
                 throw e
             } catch (e: Exception) {  // a bug laying it out or keeping it: caracole's, never the file's
                 fail(Words.text("bug").replace("{error}", "${e::class.simpleName}: ${e.message.orEmpty()}"))
+            } finally {
+                // What the models kept to go on from goes once the sheet is kept, never before: a keep that failed
+                // leaves it, for Try again to lay the sheet out with no hearing.
+                if (sheetKept) chords.forget(audio)
             }
         }
 

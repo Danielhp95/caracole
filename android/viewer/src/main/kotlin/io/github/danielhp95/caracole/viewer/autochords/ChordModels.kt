@@ -19,11 +19,15 @@ import java.io.IOException
  *   low) [ChordsUnavailable], each in words. Whatever [waiting] throws (the queue's CancellationException, from
  *   its yield, when the queue stops mid-hearing) propagates as itself, never wrapped as [ChordsUnavailable]: a stop
  *   is no setup's failure.
+ * - [forget]: what [hear] kept of [audio] to go on from (its checkpoints, the design's §3.3) let go, called once the
+ *   sheet heard of it is kept, never before: a keep that fails leaves them, so that Try again hears nothing again.
+ *   Never throws; none to let go by default.
  * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.32.0"); null where it says none.
  */
 interface ChordModels {
     fun ready(): String?
     fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard
+    fun forget(audio: File) {}
     val runtime: String? get() = null
 }
 

@@ -119,8 +119,9 @@ class ModelsRunner(
      * The chord models removed (Settings' Remove): `stateDir/models/` whole (every contract's folder, the files kept
      * for a next try, what a fetch cut off left), no link followed, then kv [INSTALLED]; kv [NOT_BEFORE], GitHub's
      * time, kept. Null once removed (or nothing there); [IN_USE] while a job that uses the models ([USES]: their
-     * download, a sheet from an audio file) waits or runs, or a hearing holds them ([holding]), nothing deleted; [NOT_CARRIED] in a build that carries none; the storage's failure in
-     * words (what is left, and the record, kept).
+     * download, a sheet from an audio file) waits or runs, or a hearing holds them ([holding]), nothing deleted;
+     * [NOT_CARRIED] in a build that carries none; the storage's failure in words (what is left, and the record,
+     * kept).
      */
     fun remove(): String? {
         if (pins == null) return NOT_CARRIED

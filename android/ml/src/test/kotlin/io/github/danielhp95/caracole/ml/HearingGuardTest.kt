@@ -133,8 +133,68 @@ class HearingGuardTest {
         folder("fedcba9876543210-c1", MlChordModels.DAY_MS - 60_000)
         val newer = folder("00112233445566aa-c1", 2 * MlChordModels.DAY_MS)
         File(newer, "beats.json").apply { writeText("{}"); setLastModified(now - 1_000) }  // a step written lately
-        assertEquals(listOf("0123456789abcdef-c1"), MlChordModels.sweepOld(work, now))
+        val turn = tmp.newFile("turn")
+        // A hearing under way (its turn held) may be resuming a day-old folder: the sweep takes nothing then.
+        MlChordModels.turn(turn)!!.use { assertEquals(emptyList<String>(), MlChordModels.sweepOld(work, now, turn)) }
+        assertEquals(3, work.list()!!.size)
+        assertEquals(listOf("0123456789abcdef-c1"), MlChordModels.sweepOld(work, now, turn))
         assertEquals(setOf("fedcba9876543210-c1", "00112233445566aa-c1"), work.list()!!.toSet())
-        assertEquals(emptyList<String>(), MlChordModels.sweepOld(File(work, "none"), now))
+        assertEquals(emptyList<String>(), MlChordModels.sweepOld(File(work, "none"), now, turn))
+        assertNotNull("the turn given back", MlChordModels.turn(turn)?.also { it.close() })
+    }
+
+    /** A song's checkpoints go once its process is gone; kept while it is still ending, or when the wait is
+     * interrupted (the flag set again, never swallowed), and never a folder outside the checkpoints' own. */
+    @Test fun aSongsCheckpointsGoOnlyOnceItsProcessIsGone() {
+        val work = tmp.newFolder("autochords")
+        fun folder() = File(work, "0123456789abcdef-c1").apply { mkdirs(); File(this, "heard.json").writeText("{}") }
+        assertTrue(MlChordModels.forgotten(folder(), work) {})
+        assertFalse(File(work, "0123456789abcdef-c1").exists())
+        assertFalse(MlChordModels.forgotten(folder(), work) { throw ChordsUnavailable(MlChordModels.STILL_ENDING) })
+        assertTrue(File(work, "0123456789abcdef-c1/heard.json").isFile)
+        try {
+            assertFalse(MlChordModels.forgotten(folder(), work) { throw InterruptedException() })
+            assertTrue("the interrupt kept", Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+        assertTrue(File(work, "0123456789abcdef-c1/heard.json").isFile)
+        val elsewhere = tmp.newFolder("elsewhere")
+        assertFalse(MlChordModels.forgotten(elsewhere, work) {})
+        assertTrue(elsewhere.isDirectory)
+    }
+
+    /** The turn is the app's processes' one: a turn another PROCESS holds (an flock: the bench's, or the app's jobs
+     * while the bench asks) refuses a hearing here in [MlChordModels.BUSY]'s words, and is free once it ends. */
+    @Test fun aTurnAnotherProcessHoldsRefusesAHearingHere() {
+        val turn = tmp.newFile("turn")
+        val java = File(System.getProperty("java.home"), "bin/java").path
+        val child = ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), HoldsTheTurn::class.java.name,
+                                   turn.path).redirectErrorStream(true).start()
+        try {
+            assertEquals("held", child.inputStream.bufferedReader().readLine())
+            val wake = Wake()
+            val e = assertThrows(ChordsUnavailable::class.java) {
+                MlChordModels.guarded(charged, { MlChordModels.turn(turn) }, wake) { error("heard") }
+            }
+            assertEquals(MlChordModels.BUSY, e.message)
+            assertEquals(0, wake.holds)
+        } finally {
+            child.outputStream.close()  // its stdin closed: it lets go and ends
+            assertEquals(0, child.waitFor())
+        }
+        assertEquals("heard", MlChordModels.guarded(charged, { MlChordModels.turn(turn) }, Wake()) { "heard" })
+    }
+}
+
+/** The child process of [HearingGuardTest.aTurnAnotherProcessHoldsRefusesAHearingHere]: the turn of its argument's
+ * file taken, "held" said, then held until its stdin ends. */
+object HoldsTheTurn {
+    @JvmStatic fun main(args: Array<String>) {
+        val held = MlChordModels.turn(File(args[0])) ?: error("not free")
+        println("held")
+        System.out.flush()
+        while (System.`in`.read() >= 0) Unit
+        held.close()
     }
 }

@@ -324,6 +324,37 @@ class AudioRunnerTest {
         assertFalse(autoSheet(phone))
     }
 
+    /** The models' checkpoints (the design's §3.3) go once the sheet is kept, never before: a keep that fails leaves
+     * them, and the job tried again lays the sheet out from them with no hearing, then lets them go. */
+    @Test fun aKeepThatFailsLeavesTheCheckpointsAndTheNextJobHearsNothingAgain() {
+        val phone = phone()
+        val models = object : Models() {
+            val kept = HashMap<String, Heard>()
+            var heardWhole = 0
+            val forgotten = CopyOnWriteArrayList<File>()
+            override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard =
+                kept[audio.path] ?: super.hear(audio, onStep, waiting).also { heardWhole++; kept[audio.path] = it }
+            override fun forget(audio: File) {
+                forgotten += audio
+                kept.remove(audio.path)
+            }
+        }
+        var names: () -> Map<String, String> = { throw IllegalStateException("no names") }
+        val failed = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }, names = { names() }))
+        assertEquals(Job.FAILED to "a bug in caracole: IllegalStateException: no names", ends(failed)["chords"])
+        assertEquals(1, models.heardWhole)
+        assertTrue(models.forgotten.isEmpty())
+        assertEquals(1, models.kept.size)
+        names = { emptyMap() }
+        val again = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }, names = { names() }))
+        assertEquals(Job.DONE, again.state, "${ends(again)}")
+        assertEquals(1, models.heardWhole, "laid out from the checkpoints, never heard again")
+        assertTrue(autoSheet(phone))
+        val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
+        assertEquals(listOf(phone.store.uploaded(song)!!), models.forgotten)
+        assertTrue(models.kept.isEmpty())
+    }
+
     /** The models removed after the job was queued (Settings' Remove, before the job held them): the hearing holds
      * the models' files ([AudioRunner]'s `hold`, ModelsRunner.holding) and asks again under it, so the chords stage
      * fails in the one answer's words, Try again once they are downloaded, the models never asked and nothing kept

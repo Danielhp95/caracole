@@ -11,5 +11,5 @@ internal object PhoneChords {
     fun of(context: Context, stateDir: File): ChordModels? = null
 
     @Suppress("UNUSED_PARAMETER")
-    fun sweep(stateDir: File): List<String> = emptyList()
+    fun sweep(context: Context, stateDir: File): List<String> = emptyList()
 }

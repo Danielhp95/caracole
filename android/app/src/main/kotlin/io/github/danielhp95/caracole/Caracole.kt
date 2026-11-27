@@ -81,10 +81,6 @@ object Caracole {
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
 
-    /** A device test's: the chord models hear on this phone whatever its own reasons not to (the emulator's 2 GB),
-     * read each time the debug build's PhoneChords is asked. */
-    @Volatile var anyPhoneHearsForTests: Boolean = false
-
     /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none (every
      * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
@@ -175,7 +171,8 @@ object Caracole {
             this.working = working
             // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
             phone.start()
-            runCatching { PhoneChords.sweep(state) }  // a hearing's checkpoints a killed app left a day ago
+            // A hearing's checkpoints a killed app left a day ago; a failure logged, the start going on.
+            guarded("sweeping the chord models' old checkpoints") { PhoneChords.sweep(context, state) }
             return phone
         } catch (e: Throwable) {
             database.close()

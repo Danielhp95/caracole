@@ -105,7 +105,7 @@ class ChordsEndToEndTest {
     @After fun refuseAgain() {
         Caracole.sitesForTests = CaracoleTestRunner.REFUSING
         Caracole.examinerForTests = null
-        Caracole.anyPhoneHearsForTests = false
+        PhoneChords.anyPhoneHearsForTests = false
     }
 
     @Test fun aClipStagedAndQueuedGivesASheetWhoseChordsAreTheComputers() {
@@ -244,7 +244,7 @@ class ChordsEndToEndTest {
         assertNull(ModelFiles.installed(pins.folder(phone.parts.stateDir), pins))
         // This emulator's own reason not to hear (its memory) is the phone's answer, then passed over for the test.
         assertEquals(MlChordModels.deviceProblem(context), phone.audioProblem())
-        Caracole.anyPhoneHearsForTests = true
+        PhoneChords.anyPhoneHearsForTests = true
         assertNull(phone.audioProblem())
         return phone
     }

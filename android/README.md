@@ -923,7 +923,7 @@ job queued, LRCLIB the fake sites server's scenario `chords`, which times the cl
 
 It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's WCSR against the computer's hearing of
 the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
-the emulator (2026-11-27): queued to Ready in 4.9-6.1 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
+the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
 
 ### Gate B2 on your phone
 
