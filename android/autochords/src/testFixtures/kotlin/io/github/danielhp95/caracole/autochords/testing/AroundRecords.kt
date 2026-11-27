@@ -126,7 +126,15 @@ object PeaksRecords {
 
     fun replay(misses: Misses) {
         for (r in records) when (r.str("kind")) {
-            "meta" -> misses.check(r.whole("fps") == Peaks.FPS) { "FPS ${Peaks.FPS}, beat_this's ${r.whole("fps")}" }
+            "meta" -> {
+                val pool = r["pool"]!!.jsonObject
+                val ours = listOf(Peaks.FPS, 2 * Peaks.RADIUS + 1, 1, Peaks.RADIUS, Peaks.ABOVE.toInt(), Peaks.WIDTH)
+                val theirs = listOf(r.whole("fps"), pool.whole("kernel"), pool.whole("stride"), pool.whole("padding"),
+                                    r.whole("above"), r.whole("width"))
+                misses.check(ours == theirs && Peaks.ABOVE == r.whole("above").toFloat()) {
+                    "Peaks' fps, kernel, stride, padding, threshold and width $ours; beat_this's $theirs"
+                }
+            }
             "peaks" -> {
                 val (beats, downbeats) = Peaks.of(logits(r["beat"]!!.jsonObject), logits(r["downbeat"]!!.jsonObject))
                 val want = r.list("beats").doubles() to r.list("downbeats").doubles()
@@ -241,7 +249,10 @@ object ScoresRecords {
         val meta = records.first { it.str("kind") == "meta" }
         val trim = meta.num("trim")
         for (r in records) when (r.str("kind")) {
-            "meta" -> Unit
+            "meta" -> misses.check(r.num("window") == Scores.WINDOW && r.num("min_beat_time") == Scores.MIN_BEAT_TIME) {
+                "Scores' window ${Scores.WINDOW} and least beat time ${Scores.MIN_BEAT_TIME}; mir_eval's " +
+                    "${r.num("window")} and ${r.num("min_beat_time")}"
+            }
             "wcsr" -> {
                 val ref = segments(r.list("ref"))
                 val est = segments(r.list("est"))

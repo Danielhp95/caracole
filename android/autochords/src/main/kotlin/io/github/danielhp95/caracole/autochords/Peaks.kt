@@ -15,8 +15,18 @@ object Peaks {
     /** beat_this's frames a second (Postprocessor's `fps`). */
     const val FPS = 50
 
+    /** A peak is the largest logit within [RADIUS] frames either side (max_pool1d's kernel 2·RADIUS + 1, stride 1,
+     * padding RADIUS) and above [ABOVE]; peaks at most [WIDTH] frames apart are one. peaks.jsonl's meta holds each to
+     * beat_this's code. */
+    const val RADIUS = 3
+    const val ABOVE = 0f
+    const val WIDTH = 1
+
     /** The beats and downbeats, in seconds, of a piece's [beat] and [downbeat] logits, one a frame. */
     fun of(beat: FloatArray, downbeat: FloatArray): Pair<List<Double>, List<Double>> {
+        require(beat.size == downbeat.size) {
+            "beat and downbeat logits of ${beat.size} and ${downbeat.size} frames: one a frame of the same piece"
+        }
         val beats = deduplicated(maxima(beat)).map { it / FPS }
         val moved = deduplicated(maxima(downbeat)).map { it / FPS }.map { d ->
             if (beats.isEmpty()) d else {
@@ -30,14 +40,14 @@ object Peaks {
         return beats to downbeats
     }
 
-    /** The frames whose logit equals the largest within 3 frames either side and is above 0. */
+    /** The frames whose logit equals the largest within [RADIUS] frames either side and is above [ABOVE]. */
     private fun maxima(logits: FloatArray): List<Int> = logits.indices.filter { t ->
         var most = Float.NEGATIVE_INFINITY
-        for (u in max(0, t - 3)..min(logits.size - 1, t + 3)) most = max(most, logits[u])
-        logits[t] == most && logits[t] > 0f
+        for (u in max(0, t - RADIUS)..min(logits.size - 1, t + RADIUS)) most = max(most, logits[u])
+        logits[t] == most && logits[t] > ABOVE
     }
 
-    /** `deduplicate_peaks(width=1)`: peaks each at most a frame from the one before, their running mean. */
+    /** `deduplicate_peaks(width=1)`: peaks each at most [WIDTH] frames from the one before, their running mean. */
     private fun deduplicated(frames: List<Int>): List<Double> {
         if (frames.isEmpty()) return emptyList()
         val out = ArrayList<Double>()
@@ -45,7 +55,7 @@ object Peaks {
         var c = 1
         for (k in 1 until frames.size) {
             val p2 = frames[k]
-            if (p2 - p <= 1) {
+            if (p2 - p <= WIDTH) {
                 c += 1
                 p += (p2 - p) / c
             } else {

@@ -2778,8 +2778,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   start), `ORT_DISABLE_TELEMETRY` set before the first environment (the app's `NoTelemetryTest`); no arena and no
   memory pattern by default (beat_this's peak RSS halved on the emulator), ORT's own with `arena = true`. Its
   `ModelParityTest` (its own test APK) holds it to vectors/autochords/models.jsonl on the emulator, every threshold the
-  records' `gates`, beat_this's chunking, postprocessor and F-measure B0's tools (`BeatThis`, held to the computer's
-  beats over its own logits; E8's `autochords.Chunks` and `Peaks` are the app's), the models `.#chord-models`
+  records' `gates`, beat_this's chunking, postprocessor and F-measure through `BeatThis`, which keeps no copy: it
+  delegates to `:autochords`' `Chunks`, `Peaks` and `Scores` (`BeatThisTest`), the models `.#chord-models`
   (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test APK runs under
   AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries `caracole/autochords/`
   (BTC's graph, models.json), which `:core` leaves out.

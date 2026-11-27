@@ -16,8 +16,9 @@ What it writes:
   - ``spell``: segments (``[start, end, label]``) and the labels ``spell_for_key`` gives them: test_autochords_models.py's
     ``SPELLINGS`` and seeded songs (ties between keys, labels already flat, "N" and "X" alone, none at all);
   - ``frames``: predictions, a frame's length and a vocabulary's size, and the segments ``frames_to_segments`` makes
-    (``[start, end, label]``, each time Python's ``round(…, 3)``): test_autochords_models.py's ``FRAMES`` and seeded
-    runs at ``FRAME_SECONDS``;
+    (``[start, end, label]``, each time Python's ``round(…, 3)``): test_autochords_models.py's ``FRAMES``, seeded
+    runs at ``FRAME_SECONDS``, and a class a frame at ``TIE_FRAME_SECONDS``, where round's half to even on the exact
+    value shows;
   - ``round``: ``round(k * FRAME_SECONDS, 3)`` for every k of a range (``from``, ``to``, ``step``), the segments'
     times over the first 3,000 frames one by one and over four hours sparsely.
 """
@@ -38,6 +39,8 @@ SIZES = (25, 170)
 NOT_SIZES = (0, 24, 26, 169, 171)
 # Labels no BTC vocabulary has, which common_name still names as btc.py does.
 OTHER_LABELS = ("C:min/b3", "G/5", "C:weird", "", ":min", "Cb", "E#:maj", "N:min", "X:7", "Bb:min7/7")
+# Frame lengths at which Python's round(…, 3) and a naive half-up rounding disagree (frames records).
+TIE_FRAME_SECONDS = (1.0005, 0.0015, 0.0025, 2.0005)
 ROUNDED = ((0, 3000, 1), (3000, 155520, 149))  # four hours of frames at 10/108 s, sparsely past the first 3,000
 
 
@@ -131,6 +134,9 @@ def labels_records() -> list[dict]:
         records.append({"kind": "spell", "segments": _segments(song), "spelled": [s.label for s in btc.spell_for_key(song)]})
 
     cases = [(FRAMES[0], FRAMES[1], 25)] + [(p, btc.FRAME_SECONDS, 170) for p in _seeded_frames()]
+    # A class a frame at frame lengths whose times round otherwise half to even on the exact value than half up on
+    # the decimal (k · 1.0005 at k = 1, 7, 11…; k · 0.0015 at 5, 9, 13…), which 10/108 s never shows.
+    cases += [(list(range(25)), seconds, 25) for seconds in TIE_FRAME_SECONDS]
     for predictions, seconds, n in cases:
         segs = btc.frames_to_segments(predictions, seconds, btc.vocabulary(n))
         records.append({"kind": "frames", "predictions": list(predictions), "frame_seconds": seconds, "vocabulary": n,

@@ -808,6 +808,24 @@ def _hand_logits() -> list[tuple[str, list[float], list[float]]]:
     ]
 
 
+def _peak_settings() -> dict:
+    """The minimal postprocessor's window and threshold, read from beat_this's code: max_pool1d's kernel, stride and
+    padding, the logit a peak must pass, and deduplicate_peaks' width."""
+    import inspect
+
+    from beat_this.model import postprocessor
+
+    source = inspect.getsource(postprocessor.Postprocessor.postp_minimal)
+    pool = re.search(r"F\.max_pool1d\(pred_logits, (\d+), (\d+), (\d+)\)", source)
+    above = re.search(r"pred_peaks = pred_peaks > (\d+)", source)
+    width = re.search(r"deduplicate_peaks\(beat_frame, width=(\d+)\)",
+                      inspect.getsource(postprocessor.Postprocessor._postp_minimal_item))
+    assert pool and above and width, "beat_this's minimal postprocessor isn't written as it was"
+    kernel, stride, padding = (int(g) for g in pool.groups())
+    return {"pool": {"kernel": kernel, "stride": stride, "padding": padding}, "above": int(above.group(1)),
+            "width": int(width.group(1))}
+
+
 def peaks_records() -> list[dict]:
     """peaks.jsonl's records: beat_this's minimal postprocessor (``Postprocessor(type="minimal")``, as File2Beats runs
     it with dbn=False) over logits of no model."""
@@ -817,7 +835,7 @@ def peaks_records() -> list[dict]:
     from helpers.autochords_reference import array
 
     records: list[dict] = [{
-        "kind": "meta", "postprocessor": "minimal", "fps": beat_this_settings()["fps"],
+        "kind": "meta", "postprocessor": "minimal", "fps": beat_this_settings()["fps"], **_peak_settings(),
         "logits": "int8: base64 of a q a frame, the logit q * scale in float32; float32: base64 of little-endian values",
         "libraries": {"numpy": np.__version__, "torch": torch.__version__},
     }]
@@ -1041,12 +1059,22 @@ def _beat_cases() -> list[tuple[str, list[float], list[float], float]]:
         ("across 5 s", [4.0, 4.98, 5.0, 5.5], [4.0, 4.99, 5.01, 5.5], 0.07),
         ("at the window's edges", [6.0, 7.0, 8.0, 9.0, 10.0], [6.07, 6.93, 8.07000001, 9.0699999, 10.07], 0.07),
         ("duplicates", [6.0, 6.0, 7.0], [6.0, 7.0, 7.0, 7.0], 0.07),
-        ("a matching only an augmenting path finds", [6.0, 6.1, 6.2], [6.05, 6.15, 6.25], 0.07),
+        ("each estimate within reach of two beats", [6.0, 6.1, 6.2], [6.05, 6.15, 6.25], 0.07),
         ("the same", beats, beats, 0.07),
         ("a window of 0", beats, [6.0, 6.5000001, 7.0], 0.0),
         ("a window of half a second", beats, [5.6, 6.9], 0.5),
     ]
     return cases
+
+
+def _beat_defaults() -> dict:
+    """mir_eval's own defaults, which Scores' are held to: f_measure's window and trim_beats' least time."""
+    import inspect
+
+    from mir_eval import beat
+
+    return {"window": inspect.signature(beat.f_measure).parameters["f_measure_threshold"].default,
+            "min_beat_time": inspect.signature(beat.trim_beats).parameters["min_beat_time"].default}
 
 
 def scores_records() -> list[dict]:
@@ -1063,7 +1091,7 @@ def scores_records() -> list[dict]:
         a = rng.uniform(0.0, 1.0, n) ** 3 * 10.0 ** rng.uniform(-5.0, 5.0, n)
         assert numpy_sum(a.tolist()) == float(np.sum(a)), n
     records: list[dict] = [{
-        "kind": "meta", "rules": list(WCSR_RULES), "trim": BEAT_TRIM,
+        "kind": "meta", "rules": list(WCSR_RULES), "trim": BEAT_TRIM, **_beat_defaults(),
         "wcsr": "mir_eval.util.adjust_intervals of the estimate to the reference's span with N, "
                 "merge_labeled_intervals, intervals_to_durations, then chord.weighted_accuracy of chord.<rule>",
         "beat": "beat.f_measure(ref, est, window); f_trimmed: of beat.trim_beats of each, at trim",

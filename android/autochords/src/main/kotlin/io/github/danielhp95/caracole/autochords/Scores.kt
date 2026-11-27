@@ -39,6 +39,10 @@ object Scores {
     private val xChord: String by lazy { doc["x_chord"]!!.jsonPrimitive.content }
     private val maxTime: Double by lazy { doc["max_time"]!!.jsonPrimitive.double }
 
+    /** mir_eval's defaults: `f_measure`'s window and `trim_beats`' least time (scores.jsonl's meta holds both). */
+    const val WINDOW = 0.07
+    const val MIN_BEAT_TIME = 5.0
+
     /** `majmin` and `tetrads` compare a chord's first 8 semitones and all 12. */
     private const val TRIAD = 8
 
@@ -83,7 +87,8 @@ object Scores {
         return if (ref.root == est.root && equal(ref.semitones, est.semitones, 12)) 1.0 else 0.0
     }
 
-    /** The weighted chord symbol recall of [est] against [ref] by [rule], "majmin" or "tetrads". */
+    /** The weighted chord symbol recall of [est] against [ref] by [rule], "majmin" or "tetrads". Both read **Harte
+     * labels, not common names**: BTC's ("A:min7", "Bb"), before [Labels.commonName] ("Am7" is refused). */
     fun wcsr(ref: List<ChordSegment>, est: List<ChordSegment>, rule: String): Double {
         val compare: (Encoded, Encoded) -> Double = when (rule) {
             "majmin" -> ::majmin
@@ -197,11 +202,12 @@ object Scores {
     }
 
     /** `beat.trim_beats`: the beats at [minBeatTime] or after. */
-    fun trimBeats(beats: List<Double>, minBeatTime: Double = 5.0): List<Double> = beats.filter { it >= minBeatTime }
+    fun trimBeats(beats: List<Double>, minBeatTime: Double = MIN_BEAT_TIME): List<Double> =
+        beats.filter { it >= minBeatTime }
 
     /** `beat.f_measure(ref, est, window)`, after `beat.validate`: beats past MAX_TIME or out of order refused, an
      * empty side 0. */
-    fun beatF(ref: List<Double>, est: List<Double>, window: Double = 0.07): Double {
+    fun beatF(ref: List<Double>, est: List<Double>, window: Double = WINDOW): Double {
         for (beats in listOf(ref, est)) {
             require(beats.none { it > maxTime }) { "An event was found which is greater than $maxTime" }
             require((1 until beats.size).none { beats[it] < beats[it - 1] }) { "Events should be in increasing order." }

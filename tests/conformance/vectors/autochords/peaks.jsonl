@@ -1,5 +1,5 @@
 {"corpus":"autochords/peaks","header":true,"made_by":"tests/test_conformance_autochords_models.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
-{"fps":50,"kind":"meta","libraries":{"numpy":"2.5.2","torch":"2.13.0"},"logits":"int8: base64 of a q a frame, the logit q * scale in float32; float32: base64 of little-endian values","postprocessor":"minimal"}
+{"above":0,"fps":50,"kind":"meta","libraries":{"numpy":"2.5.2","torch":"2.13.0"},"logits":"int8: base64 of a q a frame, the logit q * scale in float32; float32: base64 of little-endian values","pool":{"kernel":7,"padding":3,"stride":1},"postprocessor":"minimal","width":1}
 {"beat":{"base64":"/w==","dtype":"int8","scale":0.125,"shape":[1]},"beats":[],"downbeat":{"base64":"9Q==","dtype":"int8","scale":0.125,"shape":[1]},"downbeats":[],"kind":"peaks","what":"quantized, seed 1"}
 {"beat":{"base64":"EfQ=","dtype":"int8","scale":0.125,"shape":[2]},"beats":[0.0],"downbeat":{"base64":"3uk=","dtype":"int8","scale":0.125,"shape":[2]},"downbeats":[],"kind":"peaks","what":"quantized, seed 2"}
 {"beat":{"base64":"D+zw","dtype":"int8","scale":0.125,"shape":[3]},"beats":[0.0],"downbeat":{"base64":"5eIF","dtype":"int8","scale":0.125,"shape":[3]},"downbeats":[0.0],"kind":"peaks","what":"quantized, seed 3"}

@@ -9,7 +9,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** A chord sounding from [start] to [end] seconds, merge.py's `ChordSegment`; the label "N" means no chord. */
+/** A chord sounding from [start] to [end] seconds, merge.py's `ChordSegment`; the label "N" means no chord. The design
+ * places it in `:viewer`'s `viewer.autochords` (a later task, merge.py's port): then one of the two becomes an alias of
+ * the other. */
 data class ChordSegment(val start: Double, val end: Double, val label: String)
 
 /**
