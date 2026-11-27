@@ -568,7 +568,10 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     by_name: set[str] = set()
     hosts: set[str] = set()
     bytes_over, unmeasured, per_run = [], [], []
+    # The controller's ruling of 2026-11-27: the uid's bytes are judged over the idle sessions alone (a session not
+    # idle counts another job's bytes too); one not idle is set aside from them, named, and counts everywhere else.
     not_idle = [_label(r) for r in reports if not r["idle"]]
+    idle = [r for r in reports if r["idle"]]
     for r in reports:
         for i, run in enumerate(r["runs"]):
             gate_bytes = sum(u["bytes_up"] + u["bytes_down"] for u in run["hosts"].values())
@@ -579,6 +582,8 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                     by_name.add(host)
                 elif not is_youtubes(host, gate):
                     outside[host] = outside.get(host, 0) + use["connects"] + use["refused"]
+            if not r["idle"]:
+                continue
             if run["uid_bytes"] is None:
                 unmeasured.append(f"{_label(r)} run {i + 1}")
             elif run["uid_bytes"] > _uid_bound(gate_bytes):
@@ -587,7 +592,8 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                                   f"{H_UID_SLACK} B")
     numbers = {"hosts": sorted(hosts), "outside_youtubes": outside, "refused_by_name_asked": sorted(by_name),
                "bytes": per_run, "idle": [r["idle"] for r in reports],
-               "uid_over": bytes_over, "uid_unmeasured": unmeasured, "not_idle": not_idle,
+               "uid_over": bytes_over, "uid_unmeasured": unmeasured, "not_idle": not_idle, "set_aside": not_idle,
+               "judged": [_label(r) for r in idle],
                "uid_counts": sorted({uid_counts(r) for r in reports}),
                "youtubei": youtubei(reports)}
     if not reports or not any(r["runs"] for r in reports):
@@ -611,15 +617,20 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     if YOUTUBEI in outside:
         return Verdict(None, numbers, f"{YOUTUBEI} asked for, whose use isn't decided: the controller's (Y0.4's "
                                       "rule, by a named commit), from the youtubei numbers")
-    if not_idle:
-        return Verdict(None, numbers, f"{', '.join(not_idle)} not idle: the uid's bytes compare only an idle app's; "
-                                      "another session with the app idle")
+    aside = (f"; set aside from the bytes, not idle: {', '.join(not_idle)} (its hosts still judged)"
+             if not_idle else "")
+    held = [r for r in idle if r["network"]["transport"] == "cellular" and r["gate"] == "enforce" and _ok_downloads(r)]
+    if not held:
+        return Verdict(None, numbers, "no idle session on mobile data with Start held a download, so the uid's bytes "
+                                      "of a download are unjudged: run one with the app idle (no sync, no library "
+                                      f"page open){aside}")
     if unmeasured:
-        return Verdict(None, numbers, f"the uid's bytes unmeasured: {', '.join(unmeasured)}")
+        return Verdict(None, numbers, f"the uid's bytes unmeasured: {', '.join(unmeasured)}{aside}")
     observed = sum(1 for r in reports if r["gate"] == "observe")
     return Verdict(True, numbers, "only YouTube's hosts asked, nothing refused by name asked for, each run's uid bytes "
                                   f"(loopback too) explained by the gate's: <= {H_UID_LEGS} legs x "
-                                  f"(1 + {H_UID_HEADERS:g}) + {H_UID_SLACK} B, the app idle"
+                                  f"(1 + {H_UID_HEADERS:g}) + {H_UID_SLACK} B, over {len(idle)} idle session(s) "
+                                  f"judged{aside}"
                                   + ("" if observed else "; no observed session: the enforcing gates' logs of every "
                                                          "host asked and refused answer it"))
 

@@ -1103,7 +1103,9 @@ A run's `uid_bytes` are TrafficStats' bytes of the app's uid, loopback too (the 
 to the gate on 127.0.0.1 are counted sent and received, and the gate's on the network once, so a run counts about 3.1
 times the gate's bytes (the phone's numbers; `YouTubeBenchTest` measures a loopback byte counted twice). Y0-H holds
 them to three legs of the gate's bytes, 8 % more for headers and retransmits, and 64 KB a run: a bypass of the gate
-would show as bytes the gate never saw, unless it stayed under about a sixth of the gate's bytes and 64 KB a run.
+would show as bytes the gate never saw, unless it stayed under about a sixth of the gate's bytes and 64 KB a run. The
+bytes are judged over the idle sessions alone (at least one on mobile data with Start holding a download); a session
+not idle is set aside from them, named, and counts everywhere else.
 
 Three songs show no rate: what they can't decide is UNDECIDED, and the answer is more songs and, in time, more days.
 

@@ -753,3 +753,43 @@ def test_a_capped_run_is_bound_by_every_run_of_its_second_even_a_lifted_one():
     other["runs"][0]["started_at"] = "2026-11-28T18:00:05Z"
     v = gate([capped_six, other])["terms"]
     assert v.passed is False and "7 runs within 24 hours" in v.why
+
+
+# -- Y0-H over the idle sessions alone (the controller's ruling of 2026-11-27) ---------------------------------------
+
+
+def test_a_session_not_idle_is_set_aside_from_the_bytes_and_named_and_the_idle_ones_pass():
+    day = [wifi_lost()] + [phone_session(f"2026-11-27T15:{m}", "cellular", 1) for m in (1, 2, 3, 4)] + \
+        [phone_session("2026-11-27T16:1", "cellular", 3)]
+    busy = phone_session("2026-11-27T15:5", "cellular", 1)
+    busy["idle"] = False
+    run_of(busy, 0, "download")["uid_bytes"] *= 2  # its bytes are another job's too: never judged
+    v = gate([*day, busy])["Y0-H"]
+    assert v.passed is True, v.why
+    assert yg._label(busy) in v.why and "set aside" in v.why
+    assert "6 idle session(s) judged" in v.why
+    assert v.numbers["set_aside"] == [yg._label(busy)]
+
+
+def test_bytes_are_undecided_only_with_no_idle_session_holding_a_download_on_mobile_data():
+    busy = phone_session("2026-11-27T15:1", "cellular", 3)
+    busy["idle"] = False
+    v = gate([busy])["Y0-H"]
+    assert v.passed is None and "no idle session on mobile data with Start held a download" in v.why
+    search_only = phone_session("2026-11-27T15:2", "cellular", 1)
+    search_only["runs"] = search_only["runs"][:1]
+    assert gate([busy, search_only])["Y0-H"].passed is None
+
+
+def test_an_idle_sessions_bytes_unexplained_still_fail_and_a_host_outside_youtubes_on_a_busy_one_too():
+    idle = phone_session("2026-11-27T15:1", "cellular", 3)
+    busy = phone_session("2026-11-27T15:2", "cellular", 1)
+    busy["idle"] = False
+    run_of(busy, 0, "search")["hosts"]["example.com"] = {"connects": 1, "bytes_up": 5, "bytes_down": 5,
+                                                         "refused": 0, "apart": False}
+    v = gate([idle, busy])["Y0-H"]
+    assert v.passed is False and "example.com" in v.why
+    run_of(idle, 0, "download")["uid_bytes"] *= 2
+    del run_of(busy, 0, "search")["hosts"]["example.com"]
+    v = gate([idle, busy])["Y0-H"]
+    assert v.passed is False and "the uid's bytes past the gate's three legs" in v.why
