@@ -231,6 +231,8 @@ internal class LyricsPickJob(
         context.yieldToQueued()
         return parts.database.writeBlocking { db ->
             val s = again(db)
+            overrides = LookupJobs.overrides(db)  // what the lookups that went first wrote: an `ignore`, say
+            AudioRunner.notOurs(db, s, overrides)?.let { throw Stop(it) }
             if (s.audioPath != audio.path) throw Stop(AudioRunner.AUDIO_CHANGED.replace("{display}", s.display))
             val (ended, info) = AudioRunner.keepAutoSheet(parts, store!!, models!!, names, db, s, heard, audio,
                                                           Stamps.of(now))

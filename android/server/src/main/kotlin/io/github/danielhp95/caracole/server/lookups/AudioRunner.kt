@@ -311,12 +311,7 @@ class AudioRunner(
         /** audio_sheet.py `_still_ours` (`_unsheeted`): not ignored, with no human sheet; and, once the audio stage
          * kept a file, the song's audio still that file (the design's §3.2). */
         private fun stillOurs(db: Db, s: SongRow) {
-            if (s.status == "ignored" || s.key in overrides.ignore) {
-                throw Stop(Words.text("ignored").replace("{display}", s.display))
-            }
-            if (Kept.keptFiles(db, s.id).any { it.name == Versions.SHEET_FILE_NAMES[0] }) {
-                throw Stop(Words.text("has_sheet").replace("{display}", s.display))
-            }
+            notOurs(db, s, overrides)?.let { throw Stop(it) }
             val kept = kept ?: return
             if (s.audioPath != kept.path) throw Stop(AUDIO_CHANGED.replace("{display}", s.display))
         }
@@ -590,6 +585,16 @@ class AudioRunner(
             chords.phoneProblem() != null -> chords.phoneProblem()
             modelsReady != null -> NOT_DOWNLOADED
             else -> chords.ready()
+        }
+
+        /** audio_sheet.py `_unsheeted`'s refusal: [s] ignored (its row, or [overrides]' `ignore`), or with a human
+         * sheet kept, in the audio job's words; null where an auto sheet may be kept over it. The audio job's and the
+         * lyrics pick's check before they keep what the models heard. */
+        fun notOurs(db: Db, s: SongRow, overrides: Overrides): String? = when {
+            s.status == "ignored" || s.key in overrides.ignore -> Words.text("ignored").replace("{display}", s.display)
+            Kept.keptFiles(db, s.id).any { it.name == Versions.SHEET_FILE_NAMES[0] } ->
+                Words.text("has_sheet").replace("{display}", s.display)
+            else -> null
         }
 
         /** youtube_sheet.holds: what the auto sheet's version (its [raw]) says the sheet holds. */

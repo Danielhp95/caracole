@@ -39,6 +39,7 @@ import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.Heard
 import kotlinx.serialization.json.Json
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.lookup.CommandContext
 import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
 import io.github.danielhp95.caracole.core.lookup.Pace
@@ -302,7 +303,55 @@ class LyricsRunnerTest {
 
     /** A song with audio of its own on the phone and no auto sheet: the pick's chords are heard by the chord models,
      * the lookups queued going first, and the sheet kept as the audio job keeps one, over the lyrics just picked. */
-    @Test fun aPickOverTheSongsOwnAudioHearsItsChordsByTheModels() {
+    @Test fun aPickOverTheSongsOwnAudioHearsItsChordsByTheModels() = pickOverOwnAudio { told, exit, database, heardFrom ->
+        val audio = heardFrom!!
+        assertEquals(0, exit)
+        assertEquals(JsonPrimitive("done"), told.states["lyrics"])
+        assertEquals(JsonPrimitive("done"), told.states["chords"], "${told.details}")
+        assertEquals(JsonPrimitive("chords over the lyrics"), told.details["chords"])
+        database.read { db ->
+            val raw = db.one("SELECT raw FROM versions WHERE provider = 'auto'") { it.text(0) }!!
+            val made = Json.parseToJsonElement(raw).jsonObject
+            assertEquals(JsonPrimitive("phone"), made["made_on"])
+            assertEquals(JsonPrimitive("synced"), made["lyrics"])
+            val stamps = db.query("SELECT fetched_at FROM versions WHERE provider = 'auto' UNION ALL SELECT " +
+                                      "created_at FROM files WHERE name = 'sheet (auto).txt'") { it.text(0)!! }
+            assertEquals(1, stamps.toSet().size, "$stamps")
+            assertEquals(db.one("SELECT lyrics_at FROM songs") { it.text(0) }, stamps.first())
+        }
+    }
+
+    /** The song ignored, or given a site's sheet, while its chords were heard (AudioRunner's stillOurs): no auto sheet
+     * kept over it, the job refused in the audio job's words (its song stage's, as staged.py `_refuse`). */
+    @Test fun aSongIgnoredOrGivenASheetWhileItsChordsWereHeardKeepsNoAutoSheet() {
+        pickOverOwnAudio({ database -> database.writeBlocking { db -> db.execute("UPDATE songs SET status = 'ignored'") } }) {
+                told, exit, database, heardFrom ->
+            assertTrue(heardFrom != null)
+            assertEquals(1, exit)
+            assertEquals(JsonPrimitive("done"), told.states["lyrics"])
+            assertEquals(JsonPrimitive("Nick Cani - Vikingos veganos is ignored (overrides.toml)"), told.details["song"])
+            assertEquals(JsonPrimitive("skipped"), told.states["chords"])
+            assertEquals(0L, database.read { db -> db.one("SELECT COUNT(*) FROM versions WHERE provider = 'auto'") { it.long(0) } })
+        }
+        pickOverOwnAudio({ database -> database.writeBlocking { db ->
+            val song = db.one("SELECT id FROM songs") { it.long(0)!! }!!
+            db.execute("INSERT INTO versions (song_id, provider, slot, kind, tab_id, url, fetched_at) VALUES " +
+                           "(?, 'ug', 'sheet', 'chords', '1', 'https://tabs.ultimate-guitar.com/tab/1', " +
+                           "'2026-01-01T00:00:00Z')", song)
+            val version = db.one("SELECT max(id) FROM versions") { it.long(0)!! }!!
+            db.execute("INSERT INTO files (song_id, version_id, name, path, sha256, kept_rank, created_at) VALUES " +
+                           "(?, ?, 'sheet.txt', 'Nick Cani/Vikingos veganos/sheet.txt', 'x', 1, " +
+                           "'2026-01-01T00:00:00Z')", song, version)
+        } }) { told, exit, database, _ ->
+            assertEquals(1, exit)
+            assertEquals(JsonPrimitive("Nick Cani - Vikingos veganos already has a sheet"), told.details["song"])
+            assertEquals(0L, database.read { db -> db.one("SELECT COUNT(*) FROM versions WHERE provider = 'auto'") { it.long(0) } })
+        }
+    }
+
+    /** A Megalobiz pick over a song with audio of its own on the phone and no auto sheet, the chord models hearing it
+     * ([meanwhile] run as they hear), then [check]ed: what was told, the exit, the database, the audio heard. */
+    private fun pickOverOwnAudio(meanwhile: (Database) -> Unit = {}, check: (Told, Int, Database, File?) -> Unit) {
         val mega = records.first { it.getValue("case").jsonPrimitive.content.startsWith("Megalobiz's record") }
         val heardRecord = records.first { it.getValue("case").jsonPrimitive.content.startsWith("LRCLIB's record") }
             .getValue("out").jsonObject.getValue("rows").jsonObject.getValue("versions").jsonArray
@@ -340,28 +389,21 @@ class LyricsRunnerTest {
                     override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
                         heardFrom = audio
                         onStep("hearing the chords")
+                        meanwhile(database)
                         return Heard.of(heardRecord)
                     }
                 }
                 val told = Told(object : Progress { override fun stage(name: String, state: String, detail: String) {} })
-                runBlocking {
-                    LyricsRunner(parts, chords, AudioStore(state, { _, _ -> error("no file examined") })).run(
-                        JobCommands.lyricsPickSteps("Nick Cani - Vikingos veganos", "megalobiz:5001").single().args, told)
+                val exit = try {
+                    runBlocking {
+                        LyricsRunner(parts, chords, AudioStore(state, { _, _ -> error("no file examined") })).run(
+                            JobCommands.lyricsPickSteps("Nick Cani - Vikingos veganos", "megalobiz:5001").single().args, told)
+                    }
+                    0
+                } catch (e: CommandExit) {
+                    e.code
                 }
-                assertEquals(audio, heardFrom)
-                assertEquals(JsonPrimitive("done"), told.states["lyrics"])
-                assertEquals(JsonPrimitive("done"), told.states["chords"], "${told.details}")
-                assertEquals(JsonPrimitive("chords over the lyrics"), told.details["chords"])
-                database.read { db ->
-                    val raw = db.one("SELECT raw FROM versions WHERE provider = 'auto'") { it.text(0) }!!
-                    val made = Json.parseToJsonElement(raw).jsonObject
-                    assertEquals(JsonPrimitive("phone"), made["made_on"])
-                    assertEquals(JsonPrimitive("synced"), made["lyrics"])
-                    val stamps = db.query("SELECT fetched_at FROM versions WHERE provider = 'auto' UNION ALL SELECT " +
-                                              "created_at FROM files WHERE name = 'sheet (auto).txt'") { it.text(0)!! }
-                    assertEquals(1, stamps.toSet().size, "$stamps")
-                    assertEquals(db.one("SELECT lyrics_at FROM songs") { it.text(0) }, stamps.first())
-                }
+                check(told, exit, database, heardFrom)
             }
         } finally {
             scope.cancel()
