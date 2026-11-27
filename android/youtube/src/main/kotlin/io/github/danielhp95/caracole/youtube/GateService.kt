@@ -30,8 +30,12 @@ import java.util.concurrent.atomic.AtomicLong
  * runner's, [HostGate.Mode.of]): `loopback` under the test runners, the network otherwise, given to the gate's
  * constructor (the gate reads no property); its rule YOUTUBE's.
  *
- * Over a [Messenger]: [OPEN] starts a gate and answers its id, port and `proxyArg` (which holds its secret, carried in
- * the answer alone, never logged); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
+ * Over a [Messenger]: [MODE] answers the gates' mode (a client of another process sends it to `:youtube`, the
+ * main process's, as its own has no test runner to set it); [OPEN] starts a gate and answers its id, port and
+ * `proxyArg` (which holds its secret, carried in the answer alone, never logged); [OPEN_OBSERVING] the same of an
+ * OBSERVE gate (the bench's every host logged), opened only for the bench's own process (`:ytbench`, by the pid the
+ * ask names, which the app's ActivityManager must list under that name) and only where the mode is the network's:
+ * under the tests' LOOPBACK it is never opened, so no test can ask one; the bench asks it from its button alone; [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
  * [CLOSE_ALL] a client's every gate (its close), each gate is closed too when the process that asked for it dies, and
  * every gate when the service ends. Nothing it is asked throws on its thread (where an uncaught
  * exception would end the main process, its server and queue with it): a gate that won't start is said in the answer,
@@ -94,10 +98,18 @@ class GateService : Service() {
         val answer = Bundle().apply { putLong(ASK, ask) }
         var opened = -1
         when (msg.what) {
-            OPEN -> {
+            MODE -> answer.putString(MODE_NAME, mode().name)
+            OPEN, OPEN_OBSERVING -> {
+                if (msg.what == OPEN_OBSERVING) {
+                    observeRefusal(msg.data.getInt(PID, -1))?.let { why ->
+                        answer.putString(FAILED, why)
+                        reply.trySend(msg.what, answer)
+                        return
+                    }
+                }
                 var gate: HostGate? = null
                 val open = try {
-                    makeGate(HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))).also { gate = it }.start()
+                    (if (msg.what == OPEN_OBSERVING) makeObserving else makeGate)(mode()).also { gate = it }.start()
                 } catch (e: Exception) {
                     // A gate that won't listen (no port, a socket refused): said to the asker, never thrown here,
                     // where an uncaught exception would end the main process.
@@ -156,6 +168,26 @@ class GateService : Service() {
         }
     }
 
+    private fun mode(): HostGate.Mode = HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))
+
+    /** Why an OBSERVE gate isn't opened for the asker of [pid], or null: the bench's own process asks, under the
+     * network's mode. */
+    private fun observeRefusal(pid: Int): String? {
+        val bench = "$packageName$BENCH_PROCESS"
+        val name = getSystemService(android.app.ActivityManager::class.java)?.runningAppProcesses
+            ?.firstOrNull { it.pid == pid }?.processName
+        if (name != bench) return OBSERVE_NOT_BENCH
+        if (mode() != HostGate.Mode.NETWORK) return OBSERVE_LOOPBACK
+        return null
+    }
+
+    private fun Messenger.trySend(what: Int, answer: Bundle) {
+        try {
+            send(Message.obtain(null, what).apply { data = answer })
+        } catch (_: RemoteException) {
+        }
+    }
+
     /** How many gates are open now. */
     internal fun openGates(): Int = gates.size
 
@@ -209,10 +241,16 @@ class GateService : Service() {
         }
 
         /** A fresh gate, listening. */
-        fun open(): Gate {
-            val answer = ask(OPEN, -1)
-            return Gate(this, answer.getInt(ID), answer.getInt(PORT), requireNotNull(answer.getString(PROXY)))
-        }
+        fun open(): Gate = gate(ask(OPEN, -1))
+
+        /** A fresh OBSERVE gate: every host logged; the bench's alone, its button's (refused otherwise, in words). */
+        fun openObserving(): Gate = gate(ask(OPEN_OBSERVING, -1) { putInt(PID, android.os.Process.myPid()) })
+
+        /** The gates' mode, the main process's. */
+        fun mode(): HostGate.Mode = HostGate.Mode.valueOf(requireNotNull(ask(MODE, -1).getString(MODE_NAME)))
+
+        private fun gate(answer: Bundle) =
+            Gate(this, answer.getInt(ID), answer.getInt(PORT), requireNotNull(answer.getString(PROXY)))
 
         internal fun log(id: Int): Pair<Map<String, HostGate.HostUse>, Boolean> {
             val answer = ask(LOG, id)
@@ -233,13 +271,14 @@ class GateService : Service() {
 
         /** One ask and its own answer: an answer of another (an earlier ask's, late) is passed over. */
         @Synchronized
-        private fun ask(what: Int, id: Int): Bundle {
+        private fun ask(what: Int, id: Int, fill: Bundle.() -> Unit = {}): Bundle {
             val ask = asks.incrementAndGet()
             service.send(Message.obtain(null, what).apply {
                 replyTo = incoming
                 data = Bundle().apply {
                     putInt(ID, id)
                     putLong(ASK, ask)
+                    fill()
                 }
             })
             val until = SystemClock.elapsedRealtime() + waitMs
@@ -278,6 +317,13 @@ class GateService : Service() {
         const val LOG = 2
         const val CLOSE = 3
         const val CLOSE_ALL = 4
+        const val MODE = 5
+        const val OPEN_OBSERVING = 6
+
+        /** The bench's process, after the package's name (the debug app's manifest). */
+        const val BENCH_PROCESS = ":ytbench"
+        const val OBSERVE_NOT_BENCH = "a gate that observes every host is the YouTube bench's alone"
+        const val OBSERVE_LOOPBACK = "a gate that observes every host is never opened under the tests' network"
 
         private const val ID = "id"
         private const val ASK = "ask"
@@ -286,15 +332,24 @@ class GateService : Service() {
         private const val PROXY = "proxy"
         private const val HOSTS = "hosts"
         private const val REFUSED_ANY = "refusedAny"
+        private const val PID = "pid"
+        private const val MODE_NAME = "mode"
         private const val WAIT_S = 10L
 
         /** How a gate is made: a test's seam (a gate that won't start). */
         @Volatile internal var makeGate: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.YOUTUBE) }
+
+        /** How an OBSERVE gate is made (only once [observeRefusal] passed: the network's mode). */
+        private val makeObserving: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.OBSERVE) }
 
         /** A test's seam: each answer held back that long, as a slow main process would. */
         @Volatile internal var answerDelayMs = 0L
 
         /** The service running in this process, for a test to count its gates. */
         @Volatile internal var running: GateService? = null
+
+        /** How many gates the service in this process has opened (0 for none running): the app's YouTubeBenchTest
+         * reads it ([running] being this module's own). */
+        val gatesOpened: Int get() = running?.newest() ?: 0
     }
 }

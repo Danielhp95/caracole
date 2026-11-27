@@ -5,6 +5,9 @@
      and each of its sessions in a fresh ":benchrun", so that what a session measures of memory is the models' and
      its own, never the phone's server or WebView or another session's; nothing else starts there (the app has no
      Application class: the phone's caracole starts at its first caller). -->
+<!-- And the YouTube bench (the phone-youtube design's §4.2), from Settings' YouTube bench row: its screen in a process
+     of its own, ":ytbench", which never starts Python (its runs are :youtube's, its gates the main process's
+     GateService's), and the record of its runs in the main process, where the phone's database is. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- The bench's runs go on with the screen off in a foreground service, which Android 14 types: a special use,
@@ -34,5 +37,15 @@
             android:name=".BenchWorkerService"
             android:exported="false"
             android:process=":benchrun" />
+
+        <activity
+            android:name=".YouTubeBenchActivity"
+            android:exported="false"
+            android:label="YouTube bench"
+            android:process=":ytbench" />
+
+        <service
+            android:name=".YouTubeBenchLedger"
+            android:exported="false" />
     </application>
 </manifest>

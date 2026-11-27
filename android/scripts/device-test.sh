@@ -26,7 +26,9 @@
 #                   yt-dlp pinned, `--version` alone; qjs from the native library folder, and yt-dlp's `-v` naming it
 #                   among its runtimes; one yt-dlp run in the :youtube process, through the test process's gate, over a
 #                   clip the test serves on 127.0.0.1 (HTTP and HTTPS), its refusals, a stop that leaves no
-#                   process, and one run at a time across two processes of the app; no request leaves the device
+#                   process, and one run at a time across two processes of the app; then the app's YouTubeBenchTest
+#                   (the debug build's YouTube bench), its query a clip served on the host as 10.0.2.2; no request
+#                   leaves the device
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
@@ -390,6 +392,21 @@ if [ "$want_youtube" = 1 ]; then
             failed=1
         fi
     done
+    # The debug build's YouTube bench (the app's YouTubeBenchTest), its query the tests' clip served on the host by
+    # Python's http.server on 127.0.0.1 (audio/mp4), which the emulator reaches as 10.0.2.2: the one host its runs ask.
+    clip_dir="$(mktemp -d "${TMPDIR:-/tmp}/caracole-ytbench-XXXXXX")"
+    cp "$android/youtube/src/androidTest/assets/youtube/clip.m4a" "$clip_dir/"
+    clip_port="$(free_port)"
+    while [ "$clip_port" = 8737 ]; do clip_port="$(free_port)"; done
+    (exec 9>&-; exec python3 -m http.server --bind 127.0.0.1 --directory "$clip_dir" "$clip_port") \
+        >"$logs/ytbench-clip-$clip_port.log" 2>&1 &
+    servers+=($!)
+    for _ in $(seq 1 100); do
+        python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 1).close()' \
+            "$clip_port" 2>/dev/null && break
+        sleep 0.2
+    done
+    run_class YouTubeBenchTest -e clip "http://10.0.2.2:$clip_port/clip.m4a"
 fi
 
 if [ "$want_app" = 1 ]; then

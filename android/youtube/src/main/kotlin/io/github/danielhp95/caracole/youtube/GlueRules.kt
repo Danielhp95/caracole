@@ -14,13 +14,14 @@ import kotlinx.serialization.json.jsonObject
  * `--proxy` shape and the loopback hosts ([HostGate]'s constants), and what only this process knows: the [mode]
  * (LOOPBACK or NETWORK, the main process's, as the request said it), the app's [qjs], and this run's own two folders
  * ([folders], as the client named them and [YtDlpService] checked them: in the app's storage, no link), the only
- * ones its argv may name.
+ * ones its argv may name; and [verbose], the bench's leave for yt-dlp's `-v` under NETWORK too (its request's
+ * `verbose`: the bench measures by `-v`'s lines, and the client redacts the gate's secret its proxy map prints).
  */
 object GlueRules {
     /** The two modes a request names, [HostGate.Mode]'s, by name. */
     val MODES: Set<String> = HostGate.Mode.entries.map { it.name }.toSet()
 
-    fun of(mode: HostGate.Mode, qjs: String, folders: RunFolders): String {
+    fun of(mode: HostGate.Mode, qjs: String, folders: RunFolders, verbose: Boolean = false): String {
         val data = YouTubeData.read()
         val runner = data.json.getValue("runner").jsonObject
         return JsonObject(mapOf(
@@ -35,6 +36,7 @@ object GlueRules {
             "search_results" to JsonPrimitive(data.searchResults),
             "cache_dir" to JsonPrimitive(folders.cache?.path),
             "into" to JsonPrimitive(folders.into?.path),
+            "verbose" to JsonPrimitive(verbose),
         )).toString()
     }
 }

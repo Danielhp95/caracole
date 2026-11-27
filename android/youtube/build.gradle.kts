@@ -159,6 +159,10 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") }.configureEach {
+    exclude(group = "androidx.sqlite", module = "sqlite-bundled-android")
+}
+
 dependencies {
     // GateService's HostGate and YouTubeData (the argv's template, its tests'), core.youtube.
     implementation(project(":core"))
@@ -167,6 +171,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // BenchReportTest's database (TestDb): the bench's record of runs over caracole's schema, on the JVM's bundled
+    // SQLite (its natives), never the Android library's variant this module's tests would otherwise resolve.
+    testImplementation(testFixtures(project(":core")))
+    testImplementation("androidx.sqlite:sqlite-bundled-jvm:2.7.1")
 
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

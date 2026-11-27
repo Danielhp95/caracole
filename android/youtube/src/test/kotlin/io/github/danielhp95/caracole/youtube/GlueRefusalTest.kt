@@ -218,6 +218,18 @@ class GlueRefusalTest {
     }
 
     @Test
+    fun `under the network -v runs only with the bench's leave, and no test form with it`() {
+        val verbose = with(download(), "-v")
+        refused(verbose, HostGate.Mode.NETWORK)
+        val leave = GlueRules.of(HostGate.Mode.NETWORK, qjs, RunFolders(File(cache), File(into)), verbose = true)
+        assertEquals(null, refusal(verbose, HostGate.Mode.NETWORK, leave))
+        assertEquals(null, refusal(with(search(), "-v"), HostGate.Mode.NETWORK, leave))
+        assertTrue(refusal(with(download(), "-v", "--no-check-certificates"), HostGate.Mode.NETWORK, leave) != null)
+        assertTrue(refusal(with(download(), "--exec", "before_dl:$qjs $script"), HostGate.Mode.NETWORK, leave) != null)
+        assertTrue(refusal(with(download(clip), "-v"), HostGate.Mode.NETWORK, leave) != null)
+    }
+
+    @Test
     fun `an argv yt-dlp can't read, or one that prints and exits, is refused`() {
         refusedInBoth(with(download(), "--no-such-option"))
         refusedInBoth(with(download(), "--help"))

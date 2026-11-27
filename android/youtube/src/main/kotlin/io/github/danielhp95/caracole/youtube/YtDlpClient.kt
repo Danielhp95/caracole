@@ -135,10 +135,12 @@ class YtDlpClient(
 
     /**
      * yt-dlp run once with [argv] (its arguments, no program name; its `--proxy` the gate's), stopped once it has run
-     * [timeoutS] seconds; each line of its stderr goes to [onLine] with the milliseconds since the bind, as it comes.
+     * [timeoutS] seconds; each line of its stderr goes to [onLine] with the milliseconds since the bind, as it comes;
+     * [folders] the run's own, the only ones its argv may name; [verbose] the bench's leave for `-v` (allowed under
+     * LOOPBACK anyway).
      */
     fun run(argv: List<String>, timeoutS: Double, onLine: (Long, String) -> Unit, waiting: () -> Unit,
-            folders: RunFolders = RunFolders()): Ran {
+            folders: RunFolders = RunFolders(), verbose: Boolean = false): Ran {
         check(Looper.myLooper() != Looper.getMainLooper()) { "YtDlpClient.run blocks: never on the main thread" }
         val run = Run(RANDOM.nextLong())
         synchronized(lock) {
@@ -153,7 +155,7 @@ class YtDlpClient(
             }
             try {
                 if (run.stopped || closed) return Ran(-1, "", "", true, false, -1, -1)
-                return acrossProcesses { runAlone(run, argv, folders, timeoutS, Redact(argv), onLine) }
+                return acrossProcesses { runAlone(run, argv, folders, verbose, timeoutS, Redact(argv), onLine) }
             } finally {
                 ONE_AT_A_TIME.release()
             }
@@ -198,8 +200,8 @@ class YtDlpClient(
         }
     }
 
-    private fun runAlone(run: Run, argv: List<String>, folders: RunFolders, timeoutS: Double, redact: Redact,
-                         onLine: (Long, String) -> Unit): Ran {
+    private fun runAlone(run: Run, argv: List<String>, folders: RunFolders, verbose: Boolean, timeoutS: Double,
+                         redact: Redact, onLine: (Long, String) -> Unit): Ran {
         youtubePid()?.let { kill(it) }
         val out = Env.out(context)
         val err = Env.err(context)
@@ -262,6 +264,7 @@ class YtDlpClient(
                                 putString(YtDlpService.Wire.NETWORK, mode.name)
                                 folders.cache?.let { putString(YtDlpService.Wire.CACHE, it.path) }
                                 folders.into?.let { putString(YtDlpService.Wire.INTO, it.path) }
+                                if (verbose) putBoolean(YtDlpService.Wire.VERBOSE, true)
                                 if (startedDelayMs > 0) putLong(YtDlpService.Wire.DELAY_STARTED, startedDelayMs)
                             }
                         }

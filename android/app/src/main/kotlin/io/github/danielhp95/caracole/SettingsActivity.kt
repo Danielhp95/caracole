@@ -123,6 +123,7 @@ class SettingsActivity : Activity() {
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
         if (BuildConfig.DEBUG) addChordsBench()
+        if (BuildConfig.DEBUG) addYouTubeBench()
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
         // The first start's Download (MainActivity), which queued the job and opened this screen: asked here, on top.
         if (savedInstanceState == null && intent.getBooleanExtra(ASK_TO_NOTIFY, false)) askToNotify()
@@ -372,6 +373,21 @@ class SettingsActivity : Activity() {
         rows.addView(button, rows.indexOfChild(backups) + 2)
     }
 
+    /** The debug build's YouTube bench (src/debug's YouTubeBenchActivity, the phone-youtube design's §4.2), a button
+     * after the Chords bench's, by its class's name alone (a main source names no debug class); a release has neither
+     * (BuildConfig.DEBUG is false there, and R8 drops this). */
+    private fun addYouTubeBench() {
+        val backups = findViewById<Button>(R.id.backups)
+        val rows = backups.parent as android.view.ViewGroup
+        val button = Button(this).apply {
+            text = YOUTUBE_BENCH
+            setOnClickListener {
+                startActivity(Intent().setClassName(this@SettingsActivity, "$PACKAGE.YouTubeBenchActivity"))
+            }
+        }
+        rows.addView(button, rows.indexOfChild(backups) + 3)
+    }
+
     private fun fitInsets() {
         val bar = findViewById<View>(R.id.bar)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { root, insets ->
@@ -388,6 +404,9 @@ class SettingsActivity : Activity() {
     companion object {
         /** The debug build's Chords bench row's words (ChordsBenchTest finds it by them). */
         const val CHORDS_BENCH = "Chords bench"
+
+        /** The debug build's YouTube bench row's words (YouTubeBenchTest finds it by them). */
+        const val YOUTUBE_BENCH = "YouTube bench"
         private const val PACKAGE = "io.github.danielhp95.caracole"
 
         /** An extra: ask to show notifications as the screen opens (the first start's Download of the catalogues). */

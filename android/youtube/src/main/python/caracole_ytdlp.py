@@ -25,8 +25,9 @@ Before a run, YtDlpService (its own process, one run each) asks two more:
   the phone's own count or a watch address on the network, an http or https address of a loopback host under
   LOOPBACK), and every other option at the parser's default (so `--no-plugin-dirs`, the cookies' `--no-…` and the
   rest as the templates give them). Under LOOPBACK alone, the tests' own forms, all in `_TEST_FORMS`: `--version`
-  with the gate, and beside a template `--no-check-certificates`, `-v` and KillTest's one `--exec`. Its words never
-  hold a value of the argv: the proxy's holds the gate's secret.
+  with the gate, and beside a template `--no-check-certificates`, `-v` and KillTest's one `--exec`; under NETWORK,
+  `-v` alone, where `rules` says `verbose` (the YouTube bench's request: its client redacts the secret `-v`'s proxy
+  map prints). Its words never hold a value of the argv: the proxy's holds the gate's secret.
 
 What it is not:
 
@@ -256,6 +257,8 @@ def refusal(argv, rules):
     if printed:
         return PRINTS
 
+    if not loopback and rules.get("verbose") and given.get("verbose") is True:
+        given.pop("verbose")
     if loopback:
         for name, check in _TEST_FORMS.items():
             if name in given:

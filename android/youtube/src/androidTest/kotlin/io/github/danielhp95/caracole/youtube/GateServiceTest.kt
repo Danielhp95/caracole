@@ -107,6 +107,54 @@ class GateServiceTest {
         assertEquals(0, running.linkedDeaths())
     }
 
+    /** An observing gate is the bench's alone, and never under the tests' network: refused to this (the main)
+     * process, and to a process named as the bench's while the mode is loopback; no gate opened either way. */
+    @Test
+    fun anObservingGateIsNeverOpenedHere() {
+        val running = { checkNotNull(GateService.running) }
+        GateService.Client(context).use { client ->
+            client.open().close()
+            val newest = running().newest()
+            val e = assertThrowsIo { client.openObserving() }
+            assertEquals(GateService.OBSERVE_NOT_BENCH, e.message)
+            assertEquals(newest, running().newest())
+            assertEquals(HostGate.Mode.LOOPBACK, client.mode())
+        }
+        val newest = running().newest()
+        val answers = LinkedBlockingQueue<Bundle>()
+        val replies = android.os.HandlerThread("observe-asks").apply { start() }
+        val bound = LinkedBlockingQueue<IBinder>()
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, service: IBinder) {
+                bound.put(service)
+            }
+
+            override fun onServiceDisconnected(name: ComponentName) = Unit
+        }
+        try {
+            assertTrue(context.bindService(Intent(context, BenchProcessAsker::class.java), connection,
+                                           Context.BIND_AUTO_CREATE))
+            val asker = Messenger(checkNotNull(bound.poll(30, TimeUnit.SECONDS)) { "the asker didn't bind" })
+            asker.send(Message.obtain(null, 1).apply {
+                replyTo = Messenger(android.os.Handler(replies.looper) { msg -> answers.put(Bundle(msg.data)); true })
+            })
+            val answer = checkNotNull(answers.poll(30, TimeUnit.SECONDS)) { "the asker never answered" }
+            assertEquals(GateService.OBSERVE_LOOPBACK, answer.getString("refused"))
+            assertEquals(newest, running().newest())
+        } finally {
+            context.unbindService(connection)
+            replies.quitSafely()
+        }
+    }
+
+    private fun assertThrowsIo(block: () -> Unit): IOException = try {
+        block()
+        fail("not refused")
+        throw IllegalStateException()
+    } catch (e: IOException) {
+        e
+    }
+
     @Test
     fun aGateThatWontStartIsSaidNotThrown() {
         // A gate started already: its start() throws, as one that can't listen would.

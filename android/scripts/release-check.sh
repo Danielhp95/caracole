@@ -22,6 +22,8 @@
 #   dex and no entry under assets/chaquopy/ (the standard library, yt-dlp, the glue);
 # - and of :youtube's own: no class under io/github/danielhp95/caracole/youtube/ in its dex, and its manifest no
 #   YtDlpService, GateService or ":youtube" process;
+# - and of the YouTube bench: no "YouTubeBench" or Settings' row's words ("YouTube bench") in its dex, and its manifest
+#   no YouTubeBenchActivity, YouTubeBenchLedger or ":ytbench" process;
 # - and of QuickJS-NG: no lib/*/libqjs.so; and its native libraries packaged as before the debug build's
 #   useLegacyPackaging (app/build.gradle.kts): every lib/*/*.so entry of the APK stored uncompressed and 16 KB aligned
 #   (zipalign -c -P 16's "(OK)", counted against the APK's own lib/*/*.so entries, so one zipalign leaves unsaid
@@ -72,12 +74,14 @@ model_file='\.(onnx|pt)$'
 weights_file='(^|/)(btc_model_large_voca\.pt|beat_this[^/]*\.onnx)$'
 
 # One APK's probes, a count each: "libs ortclasses mlclasses benchdex rowwords autochords assets models weights
-# provider benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest"
-# (providers, every provider the manifest declares: the dump read is a manifest's; ytclasses, classes of :youtube,
-# io/github/danielhp95/caracole/youtube/, in its dex; ytmanifest, the manifest's YtDlpService, GateService or
-# ":youtube" process).
+# provider benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest
+# ytbenchdex ytbenchmanifest" (providers, every provider the manifest declares: the dump read is a manifest's;
+# ytclasses, classes of :youtube, io/github/danielhp95/caracole/youtube/, in its dex; ytmanifest, the manifest's
+# YtDlpService, GateService or ":youtube" process; ytbenchdex, "YouTubeBench" or Settings' "YouTube bench" row's
+# words in its dex; ytbenchmanifest, the manifest's YouTubeBenchActivity, YouTubeBenchLedger or ":ytbench" process).
 probes() {
-    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 chaquoclasses=0 ytclasses=0 dex dump
+    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 chaquoclasses=0 ytclasses=0 ytbenchdex=0 dex
+    local dump
     rm -rf "$probe/dex" && mkdir "$probe/dex"
     unzip -q -o "$apk" 'classes*.dex' -d "$probe/dex"
     for dex in "$probe"/dex/classes*.dex; do
@@ -88,6 +92,7 @@ probes() {
             || true)))
         benchdex=$((benchdex + $({ grep -a -o -E 'ChordsBench|BenchService' "$dex" || true; } | wc -l)))
         rowwords=$((rowwords + $({ grep -a -o 'Chords bench' "$dex" || true; } | wc -l)))
+        ytbenchdex=$((ytbenchdex + $({ grep -a -o -E 'YouTubeBench|YouTube bench' "$dex" || true; } | wc -l)))
         chaquoclasses=$((chaquoclasses + $(grep -c "Class descriptor *: 'Lcom/chaquo/" <<<"$dump" || true)))
         ytclasses=$((ytclasses + $(grep -c "Class descriptor *: 'Lio/github/danielhp95/caracole/youtube/" <<<"$dump" \
             || true)))
@@ -112,7 +117,9 @@ probes() {
         "$chaquoclasses" \
         "$(grep -c '^assets/chaquopy/' "$probe/entries" || true)" \
         "$ytclasses" \
-        "$(grep -c -E 'YtDlpService|GateService|:youtube"' "$probe/manifest" || true)"
+        "$(grep -c -E 'YtDlpService|GateService|:youtube"' "$probe/manifest" || true)" \
+        "$ytbenchdex" \
+        "$(grep -c -E 'YouTubeBench(Activity|Ledger)|:ytbench"' "$probe/manifest" || true)"
 }
 
 # One APK's native libraries: "qjs stored compressed extracted total" (libqjs.so entries; lib/*/*.so stored
@@ -147,7 +154,7 @@ check "the control: the debug classpath names project :youtube" \
     "$(yes_if '[ "$(grep -c "project :youtube" <<<"$debug_classpath" || true)" -gt 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
-    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest \
+    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest ytbenchdex ytbenchmanifest \
     < <(probes "$release")
 echo "release APK $release: $libs libonnxruntime*, $ortclasses classes under ai/onnxruntime/, $mlclasses of :ml," \
     "$benchdex bench names and $rowwords of Settings' row's words in its dex, $autochords entries under" \
@@ -165,6 +172,12 @@ check "release APK holds nothing under assets/autochords/" "$(yes_if '[ "$assets
 check "release APK holds no model file (.onnx, .pt)" "$(yes_if '[ "$modelfiles" = 0 ]')"
 check "release APK's manifest declares no TelemetryInitializer" "$(yes_if '[ "$provider" = 0 ]')"
 check "release APK's manifest has no trace of the bench" "$(yes_if '[ "$benchmanifest" = 0 ]')"
+echo "release APK: $ytbenchdex YouTube bench names or Settings' row's words in its dex, $ytbenchmanifest YouTube" \
+    "bench entries of its manifest"
+check "release APK's dex names no YouTubeBench and holds no \"YouTube bench\" (Settings' row)" \
+    "$(yes_if '[ "$ytbenchdex" = 0 ]')"
+check "release APK's manifest has no YouTubeBenchActivity, YouTubeBenchLedger or :ytbench" \
+    "$(yes_if '[ "$ytbenchmanifest" = 0 ]')"
 echo "release APK: $pylibs libpython*, $chaquojni libchaquopy_java.so, $chaquolinked lib*_python.so or" \
     "lib*_chaquopy.so, $chaquoclasses classes under com/chaquo/, $chaquoassets entries under" \
     "assets/chaquopy/"
@@ -192,7 +205,7 @@ check "release APK's native libraries are every one stored uncompressed and 16 K
 check "release APK's manifest says no extractNativeLibs=true" "$(yes_if '[ "$extracted" = 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
-    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest \
+    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest ytbenchdex ytbenchmanifest \
     < <(probes "$debug")
 echo "debug APK (the control) $debug, $(stat -c %s "$debug") bytes: $libs libonnxruntime*, $ortclasses classes" \
     "under ai/onnxruntime/, $mlclasses of :ml, $benchdex bench names and $rowwords of Settings' row's words in its" \
@@ -209,6 +222,12 @@ check "the control: the debug APK holds assets/autochords/ (the clips)" "$(yes_i
 check "the control: the debug APK holds a model file (BTC's graph)" "$(yes_if '[ "$modelfiles" -gt 0 ]')"
 check "the debug APK holds none of the weights' files either" "$(yes_if '[ "$weights" = 0 ]')"
 check "the control: the debug APK's manifest declares the bench" "$(yes_if '[ "$benchmanifest" -gt 0 ]')"
+echo "debug APK (the control): $ytbenchdex YouTube bench names or Settings' row's words in its dex," \
+    "$ytbenchmanifest YouTube bench entries of its manifest"
+check "the control: the debug APK's dex names the YouTube bench and holds its row's words" \
+    "$(yes_if '[ "$ytbenchdex" -gt 0 ]')"
+check "the control: the debug APK's manifest declares the YouTube bench (its activity, its ledger, :ytbench)" \
+    "$(yes_if '[ "$ytbenchmanifest" -ge 3 ]')"
 check "the debug APK's manifest declares no TelemetryInitializer either" "$(yes_if '[ "$provider" = 0 ]')"
 echo "debug APK (the control): $pylibs libpython*, $chaquojni libchaquopy_java.so, $chaquolinked lib*_python.so" \
     "or lib*_chaquopy.so, $chaquoclasses classes under com/chaquo/, $chaquoassets entries" \

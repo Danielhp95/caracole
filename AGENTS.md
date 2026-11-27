@@ -2861,7 +2861,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     templates as that parser reads them (`GlueRules`: the templates, their placeholders and targets through
     `YouTubeData`, the search's one count `search_results`, the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from
     `HostGate`, and the run's own two folders, `RunFolders`, which the request names and the service checks: in the
-    app's storage, canonical, no link): each option a template sets with its value or a value its placeholder's check
+    app's storage, no link from there down): each option a template sets with its value or a value its placeholder's check
     passes, every other at the parser's default; under LOOPBACK the
     tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). It kills
     its process once unbound. `YtDlpClient(context, mode).run(argv, timeoutS, onLine, waiting, folders): Ran`
@@ -2881,6 +2881,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest`, `GateServiceTest` and
     `AcrossProcessesTest` (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
     in no logcat line, a stop of every kind that leaves no process of the uid but the main one.
+    The debug build's YouTube bench (android/README.md, "The YouTube bench"): `YouTubeBenchActivity` in `:ytbench`
+    (app/src/debug, never Python there), Settings' row by class name; its session `BenchRun` drives `YtDlpClient`
+    itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback targets), and holds
+    the terms on the runner's records (`DbLedger`, through the main process's `YouTubeBenchLedger`: 6 runs in 24 h by
+    kv `ytbench:runs` and `events`, the pause, a block's `events` row and strike and the session's stop, a cooldown
+    refused, the provider off); its report `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest); an
+    observing gate only for `:ytbench` and never under loopback (GateService `OPEN_OBSERVING`), `-v` under the
+    network only by the request's `verbose` leave.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

@@ -24,15 +24,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * computer runs a fresh `yt-dlp` each time, and yt-dlp keeps module state. Bound by [YtDlpClient] over a [Messenger]:
  *
  * - it takes one [Wire.RUN] (`run` its id, echoed in every answer; `argv`; `network`; the run's own folders, `cache`
- *   and `into`, each optional), answers [Wire.STARTED] (its pid
+ *   and `into`, each optional; `verbose`, the bench's leave for `-v`), answers [Wire.STARTED] (its pid
  *   and its process's start), then starts Python (Chaquopy's, in this process), makes the environment [Env]'s alone
  *   (the glue's `environ`), and asks the glue's `refusal` (an allowlist: the phone's own argv templates, through
  *   [GlueRules]; the glue's docstring says it): refused, [Wire.REFUSED] in words, never run; else [Wire.READY] and
  *   yt-dlp's run, its streams into [Env.out] and [Env.err], then [Wire.DONE] with its exit status; a failure
  *   [Wire.FAILED], `sent` false when nothing of yt-dlp ran (Python didn't start);
  * - the run's folders are the only ones its argv may name ([GlueRules]): each given must be an absolute folder inside
- *   the app's own storage (`filesDir` or `cacheDir`), its path its canonical one (no link on the way), else the run is
- *   refused ([BAD_FOLDER]) before Python starts;
+ *   the app's own storage (`filesDir` or `cacheDir`) with no link from there down (`/data/user/0`, itself a link, is
+ *   the app's storage), else the run is refused ([BAD_FOLDER]) before Python starts;
  * - `network` is the main process's mode, exactly `LOOPBACK` or `NETWORK` ([HostGate.Mode]'s names), which the client
  *   sends in each request: this process has no test runner to set it and reads no property; anything else, none
  *   included, is refused;
@@ -122,7 +122,7 @@ class YtDlpService : Service() {
             val env = Env.prepare(this)
             val had = glue.callAttr("environ", env.keys.toTypedArray(), env.values.toTypedArray()).asList()
             Log.i(TAG, "the environment made Env's alone; the process had ${had.joinToString(" ")}")
-            val rules = GlueRules.of(mode, Qjs.path(this).path, folders)
+            val rules = GlueRules.of(mode, Qjs.path(this).path, folders, data.getBoolean(Wire.VERBOSE))
             val why = glue.callAttr("refusal", argv, rules)?.toString()
             answer(reply, run, Wire.READY) { putLong(Wire.AT, SystemClock.elapsedRealtime()) }
             if (why != null) {
@@ -159,14 +159,30 @@ class YtDlpService : Service() {
     }
 
     /** A folder a request names, checked: none for none; else an absolute folder inside the app's `filesDir` or
-     * `cacheDir`, its path its canonical one (no link, no `..`); anything else an IllegalArgumentException. */
+     * `cacheDir` (as the app names them, or by their canonical paths: `/data/user/0` is itself a link to
+     * `/data/data`), with no link from there down (its canonical path that root's canonical path and the rest as
+     * given, no `..`); its canonical File. Anything else an IllegalArgumentException, said in the log (a folder's
+     * path is no secret). */
     private fun folder(path: String?): java.io.File? {
         if (path == null) return null
         val file = java.io.File(path)
-        require(file.isAbsolute && file.isDirectory && file.canonicalPath == path.trimEnd('/'))
-        val roots = listOf(filesDir, cacheDir).map { it.canonicalPath }
-        require(roots.any { file.canonicalPath.startsWith("$it/") })
-        return file
+        val why = run {
+            if (!file.isAbsolute) return@run "not absolute"
+            if (!file.isDirectory) return@run "not a folder"
+            for (root in listOf(filesDir, cacheDir)) {
+                val real = root.canonicalPath
+                val rest = listOf(root.path, root.absolutePath, real).firstNotNullOfOrNull { prefix ->
+                    path.trimEnd('/').takeIf { it.startsWith("$prefix/") }?.removePrefix("$prefix/")
+                } ?: continue
+                if (rest.split('/').any { it.isEmpty() || it == "." || it == ".." }) return@run "not a plain path"
+                val canonical = java.io.File(real, rest)
+                if (canonical.canonicalPath != canonical.path) return@run "a link on its way (${file.canonicalPath})"
+                return canonical
+            }
+            "outside the app's storage"
+        }
+        Log.i(TAG, "a run's folder $path refused: $why")
+        throw IllegalArgumentException(why)
     }
 
     private fun die() {
@@ -206,6 +222,7 @@ class YtDlpService : Service() {
         const val SENT = "sent"
         const val CACHE = "cache"
         const val INTO = "into"
+        const val VERBOSE = "verbose"
     }
 
     companion object {
@@ -220,6 +237,6 @@ class YtDlpService : Service() {
         const val ONE_RUN = "this :youtube process has taken a request already"
         const val NO_ARGV = "a request names its argv"
         const val BAD_MODE = "a request names its network mode, LOOPBACK or NETWORK"
-        const val BAD_FOLDER = "a run's folders are folders of the app's own storage, named by their canonical paths"
+        const val BAD_FOLDER = "a run's folders are folders of the app's own storage, with no link in them"
     }
 }

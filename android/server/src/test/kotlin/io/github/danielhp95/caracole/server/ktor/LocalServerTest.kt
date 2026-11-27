@@ -127,6 +127,19 @@ class LocalServerTest {
         }
     }
 
+    /** `served` counts every request sent, a refused one too (the YouTube bench's `idle`). */
+    @Test fun servedCountsEveryRequest() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                assertEquals(0, server.served)
+                get(port, "/echo/x")
+                get(port, "/echo/x", cookie = "caracole-launch=${test.secret}")
+                assertEquals(2, server.served)
+            }
+        }
+    }
+
     @Test fun theTargetReachesTheAppAsSentWithItsEscapes() {
         TestApp(tmp.root, { listOf(echo) }).use { test ->
             val (server, port) = server(test)
