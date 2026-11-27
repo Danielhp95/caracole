@@ -392,11 +392,16 @@ def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
                                       f"blocked, at least {W_WIFI_DECODED} decoded ({days_said}); {mobile_said}"
                                       + (f"; and failed: {'; '.join(failed)}" if failed else ""))
     if failed:
-        fail_days = len(fail_days)
-        then = ("blocked or failing on Wi-Fi on two days: §3.8's trigger (Y0.7) if the computer's yt-dlp worked on "
-                "the same Wi-Fi the same hour, which no report says" if fail_days >= 2 else
-                "run again another day after any cooldown")
-        return Verdict(False, numbers, f"{'; '.join(failed + short)}: {then}; {mobile_said}")
+        if len(fail_days) >= 2:
+            return Verdict(False, numbers, f"{'; '.join(failed + short)}: blocked or failing on Wi-Fi on two days: "
+                                           "§3.8's trigger (Y0.7) if the computer's yt-dlp worked on the same Wi-Fi "
+                                           f"the same hour, which no report says; {mobile_said}")
+        said = f"{'; '.join(failed + short)}: run again another day after any cooldown; {mobile_said}"
+        if all(w["blocked"] for w in wifi if w["day"] in fail_days):
+            # §4.4: "Not a trigger: … a single session's block (the session is run again another day after the
+            # cooldown, and Gate Y0 waits)".
+            return Verdict(None, numbers, f"Gate Y0 waits: {said}")
+        return Verdict(False, numbers, said)
     return Verdict(None, numbers, f"{'; '.join(short)}: another day with {W_SONGS} songs; {mobile_said}")
 
 
@@ -491,11 +496,12 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     outside: dict[str, int] = {}
     by_name: set[str] = set()
     hosts: set[str] = set()
-    bytes_over, unmeasured = [], []
+    bytes_over, unmeasured, per_run = [], [], []
     not_idle = [_label(r) for r in reports if not r["idle"]]
     for r in reports:
         for i, run in enumerate(r["runs"]):
             gate_bytes = sum(u["bytes_up"] + u["bytes_down"] for u in run["hosts"].values())
+            per_run.append({"uid": run["uid_bytes"], "gate": gate_bytes})
             for host, use in run["hosts"].items():
                 hosts.add(host)
                 if _refused_by_name(host, gate):
@@ -508,6 +514,7 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                 bytes_over.append(f"{_label(r)} run {i + 1}: uid {run['uid_bytes']} B > {H_UID_FACTOR:g} x gate "
                                   f"{gate_bytes} B + {H_UID_SLACK} B")
     numbers = {"hosts": sorted(hosts), "outside_youtubes": outside, "refused_by_name_asked": sorted(by_name),
+               "bytes": per_run, "idle": [r["idle"] for r in reports],
                "uid_over": bytes_over, "uid_unmeasured": unmeasured, "not_idle": not_idle,
                "youtubei": youtubei(reports)}
     if not reports or not any(r["runs"] for r in reports):
@@ -543,13 +550,14 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
 def _blocks(reports: Sequence[dict[str, Any]]) -> Verdict:
     unclassified = [f"{_label(r)} run {i + 1}: {run['outcome']!r}" for r in reports
                     for i, run in enumerate(r["runs"]) if run["outcome"] not in CLASSES]
-    after = {_label(r): r["after_block_requests"] for r in reports if r["after_block_requests"]}
+    after = {_label(r): r["after_block_requests"] for r in reports}
     blocked = sum(1 for r in reports for run in r["runs"] if run["outcome"] == "blocked")
     numbers = {"unclassified": unclassified, "after_block_requests": after, "blocked_runs": blocked}
-    if unclassified or after:
+    sent_after = {label: n for label, n in after.items() if n}
+    if unclassified or sent_after:
         return Verdict(False, numbers, "; ".join(
             ([f"unclassified: {', '.join(unclassified)}"] if unclassified else []) +
-            ([f"requests after a block: {after}"] if after else [])) + ": fix, run again")
+            ([f"requests after a block: {sent_after}"] if sent_after else [])) + ": fix, run again")
     return Verdict(True, numbers, "every run classified, nothing sent after a block (a gate refusal and a proxy 407 "
                                   "told apart is Y1.1's vectors', not a report's)")
 

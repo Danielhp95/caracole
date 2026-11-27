@@ -114,11 +114,11 @@ def test_without_the_apks_growth_size_and_so_the_whole_gate_are_undecided():
 # -- each gate: pass, fail, undecided -----------------------------------------------------------------------------
 
 
-def test_works_fails_on_a_wifi_block_and_says_run_again_another_day():
+def test_works_waits_on_one_wifi_block_and_says_run_again_another_day():
     wifi, mobile = pair()
     run_of(wifi, 2, "download")["outcome"] = "blocked"
     v = gate([wifi, mobile])["Y0-W"]
-    assert v.passed is False and "run again another day" in v.why
+    assert v.passed is None and "run again another day" in v.why
 
 
 def test_works_on_two_failing_wifi_days_names_the_fallbacks_trigger():
@@ -451,11 +451,27 @@ def _blocked_at(report: dict, run: int) -> dict:
 
 
 @pytest.mark.parametrize("run", [0, 1, 3])
-def test_a_wifi_session_a_block_cut_short_fails_works_never_too_few_songs(run):
+def test_one_wifi_session_a_block_cut_short_leaves_gate_y0_waiting_never_too_few_songs(run):
     wifi, mobile = pair()
-    v = gate([_blocked_at(wifi, run), mobile])["Y0-W"]
-    assert v.passed is False and "run again another day after any cooldown" in v.why
-    assert "not 3" not in v.why
+    verdicts = gate([_blocked_at(wifi, run), mobile], apk_growth_mb=30)
+    v = verdicts["Y0-W"]
+    assert v.passed is None and "Gate Y0 waits" in v.why
+    assert "run again another day after any cooldown" in v.why and "not 3" not in v.why
+    assert whole(verdicts) is None
+
+
+def test_the_command_waits_on_one_blocked_wifi_day_and_fails_on_two(tmp_path, capsys):
+    wifi, mobile = pair()
+    assert main([*write(tmp_path, [_blocked_at(wifi, 0), mobile]), "--apk-growth-mb", "30"]) == 2
+    assert capsys.readouterr().out.splitlines()[-1] == "Gate Y0: UNDECIDED"
+    one = _blocked_at(session("2026-11-28", "wifi", "observe", first_after_install=True), 0)
+    two = _blocked_at(session("2026-11-30", "wifi", "observe"), 1)
+    other = tmp_path / "two"
+    other.mkdir()
+    assert main([*write(other, [one, two, session("2026-11-29", "cellular", "enforce")]),
+                 "--apk-growth-mb", "30"]) == 1
+    out = capsys.readouterr().out
+    assert "§3.8's trigger (Y0.7)" in out and out.splitlines()[-1] == "Gate Y0: FAIL"
 
 
 def test_two_wifi_days_cut_short_by_a_block_name_the_fallbacks_trigger():
@@ -530,6 +546,19 @@ def test_the_checkers_numbers_are_the_benchs_summary_for_every_gate_both_compute
     assert v["Y0-M"].numbers["pss_peak_mb"] == s["M"]["pss_peak_mb"]
     assert v["Y0-C"].numbers["first_after_install_python_ready_ms"] == s["C"]["first_python_ready_ms"]
     assert v["Y0-C"].numbers["least_warm_python_ready_ms"] == s["C"]["least_later_python_ready_ms"]
+    assert v["Y0-H"].numbers["bytes"] == s["H"]["bytes"]
+    assert v["Y0-H"].numbers["idle"] == [s["H"]["idle"]]
+    assert list(v["Y0-B"].numbers["after_block_requests"].values()) == [s["B"]["after_block_requests"]]
+
+
+def test_a_runs_seconds_are_never_null_as_the_bench_writes_them_a_null_is_unreadable(tmp_path):
+    # BenchRunRecord.seconds is a Double, written always: a warm download with null seconds is no report of the bench's.
+    report = session()
+    run_of(report, 1, "download")["seconds"] = None
+    path = tmp_path / "r.json"
+    path.write_text(json.dumps(report))
+    with pytest.raises(ReportError, match="'seconds' is a null"):
+        read(path)
 
 
 def test_the_apks_growth_is_taken_anywhere_and_a_negative_or_nan_one_refused(tmp_path, capsys):
