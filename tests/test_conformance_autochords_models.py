@@ -48,6 +48,11 @@ row-major; every number in a record a float32's value or an int, written as JSON
   and, of a lossy file, those samples as 16-bit, ``pcm16``; of a lossless one, the SHA-256 of soundfile's float32
   channels interleaved, ``interleaved_sha256``, which the phone's must equal), and its length by music.py
   ``read_audio`` (its frames counted for an MP3 that names none). Needs no model and no CPU's kernels.
+- ``vectors/autochords/peaks.jsonl``, ``chunks.jsonl`` and ``scores.jsonl``, of no model file (its own section, below):
+  beat_this's minimal postprocessor over seeded and hand-made logits; ``split_piece`` and ``aggregate_prediction`` of
+  every piece of 0 to 4,000 frames, a table deflated; mir_eval's WCSR (``mir_eval_wcsr``) and beat F-measure
+  (``mir_eval_beat_f``) over seeded and hand-made edges; and ``data/caracole/autochords/scores.json``, mir_eval's
+  tables (``scores_json``).
 - ``data/caracole/autochords/btc-graph.onnx``: export.py's BTC graph, the APK's.
 - ``data/caracole/autochords/frontend.json``: what the phone's front ends apply (``frontend_json``): librosa's CQT as it
   ran over a chunk, step by step, its sparse bases and lengths, and beat_this's mel window, norm and filterbank.
@@ -751,6 +756,387 @@ def test_decode_vectors():
         pytest.skip("needs numpy, soundfile, librosa, torchaudio and mutagen: nix develop .#autochords")
     (text,) = _child_texts(_DECODE_TEXT, ("decode.jsonl",))
     check(AREA / "decode.jsonl", text)
+
+
+# --- around the models: beat_this's peaks and chunks, and the gates' scores (mir_eval) ---------------------------
+# Pure functions of their inputs: no model file and no CPU's kernels, so never skipped for them, and made in this
+# process (no beat_this model runs here).
+
+AROUND_LIBS = ("numpy", "torch", "beat_this", "mir_eval")
+# peaks.jsonl's seeded logits: quantized ones (an int8 q a frame, the logit q/8, exact in float32, so ties and
+# plateaus are common) of each length, and continuous ones (float32).
+PEAK_LENGTHS = (1, 2, 3, 4, 6, 7, 8, 13, 50, 333, 1500)
+PEAK_CONTINUOUS = (64, 700)
+# chunks.jsonl: every piece of 0 to CHUNK_FRAMES frames, its table in blocks of CHUNK_BLOCK lengths.
+CHUNK_FRAMES, CHUNK_BLOCK = 4000, 500
+# aggregate_prediction's input in chunks.jsonl: chunk i's frame j is i·CHUNK_TAG + j, so each frame of the piece says
+# which chunk's which frame it kept (exact in float32 for these lengths).
+CHUNK_TAG = 2048
+
+
+def _peaks_of(beat, downbeat) -> tuple[list[float], list[float]]:
+    import torch
+    from beat_this.model.postprocessor import Postprocessor
+
+    b, d = Postprocessor(type="minimal")(torch.from_numpy(beat), torch.from_numpy(downbeat))
+    return [float(t) for t in b], [float(t) for t in d]
+
+
+def _hand_logits() -> list[tuple[str, list[float], list[float]]]:
+    """Logits made by hand for the postprocessor's edges: [what, beat, downbeat]."""
+    lo = -2.0
+
+    def at(n: int, peaks: dict[int, float]) -> list[float]:
+        return [peaks.get(t, lo) for t in range(n)]
+
+    inf = float("inf")
+    return [
+        ("none above 0", [-1.0, -0.5, -3.0], [-1.0, -1.0, -1.0]),
+        ("exactly 0 is no peak", [0.0, 0.0, 0.0, 0.0], [0.0, -1.0, 0.0, -1.0]),
+        ("-1000 and a huge logit", [-1000.0, 1e30, -1000.0], [-1000.0, -1000.0, 1e30]),
+        ("+inf", [1.0, inf, 1.0, -1.0], [inf, -1.0, -1.0, inf]),
+        ("peaks at the edges", at(20, {0: 1.0, 19: 2.0}), at(20, {0: 1.0, 19: 1.0})),
+        ("twin peaks: their mean", at(30, {10: 1.5, 11: 1.5}), at(30, {10: 1.5, 11: 1.5})),
+        ("plateaus of 3, 4 and 5", at(60, {**{t: 1.0 for t in range(5, 8)}, **{t: 2.0 for t in range(20, 24)},
+                                         **{t: 3.0 for t in range(40, 45)}}), at(60, {})),
+        ("equal peaks 4 apart", at(20, {5: 1.0, 9: 1.0}), at(20, {9: 1.0})),
+        ("a smaller peak within 3 frames", at(20, {5: 1.0, 8: 0.5, 12: 0.5}), at(20, {})),
+        ("a downbeat halfway between two beats", at(30, {0: 1.0, 2: 1.0, 10: 1.0, 20: 1.0}), at(30, {1: 1.0, 15: 1.0})),
+        ("downbeats and no beat", at(20, {}), at(20, {3: 1.0, 12: 1.0})),
+        ("two downbeats moved to one beat", at(40, {10: 1.0, 30: 1.0}), at(40, {8: 1.0, 13: 1.0, 31: 1.0})),
+        ("a twin downbeat", at(40, {10: 1.0, 11: 1.0, 30: 1.0}), at(40, {10: 1.0, 11: 1.0})),
+    ]
+
+
+def peaks_records() -> list[dict]:
+    """peaks.jsonl's records: beat_this's minimal postprocessor (``Postprocessor(type="minimal")``, as File2Beats runs
+    it with dbn=False) over logits of no model."""
+    import numpy as np
+    import torch
+
+    from helpers.autochords_reference import array
+
+    records: list[dict] = [{
+        "kind": "meta", "postprocessor": "minimal", "fps": beat_this_settings()["fps"],
+        "logits": "int8: base64 of a q a frame, the logit q * scale in float32; float32: base64 of little-endian values",
+        "libraries": {"numpy": np.__version__, "torch": torch.__version__},
+    }]
+
+    def record(what: str, beat, downbeat, coded: tuple[dict, dict]) -> None:
+        beats, downbeats = _peaks_of(beat, downbeat)
+        records.append({"kind": "peaks", "what": what, "beat": coded[0], "downbeat": coded[1], "beats": beats,
+                        "downbeats": downbeats})
+
+    for n in PEAK_LENGTHS:
+        rng = np.random.default_rng(n)
+        qb = rng.integers(-24, 25, n).astype(np.int8)
+        qd = rng.integers(-40, 17, n).astype(np.int8)
+        beat, downbeat = (q.astype(np.float32) * np.float32(0.125) for q in (qb, qd))
+        record(f"quantized, seed {n}", beat, downbeat,
+               ({**array(qb, "int8"), "scale": 0.125}, {**array(qd, "int8"), "scale": 0.125}))
+    for n in PEAK_CONTINUOUS:
+        rng = np.random.default_rng(1000 + n)
+        beat = rng.normal(-1.0, 2.0, n).astype(np.float32)
+        downbeat = rng.normal(-2.0, 2.0, n).astype(np.float32)
+        record(f"continuous, seed {1000 + n}", beat, downbeat, (array(beat), array(downbeat)))
+    for what, b, d in _hand_logits():
+        beat, downbeat = np.array(b, np.float32), np.array(d, np.float32)
+        record(what, beat, downbeat, (array(beat), array(downbeat)))
+    return records
+
+
+def _chunk_answer(n: int, size: int, border: int) -> list[int]:
+    """One length's row of chunks.jsonl's table: [n, k, k starts, k lengths, m, m runs of 4]."""
+    import torch
+    from beat_this.inference import aggregate_prediction, split_piece
+
+    chunks, starts = split_piece(torch.zeros(n, 1), size, border_size=border, avoid_short_end=True)
+    lengths = [len(c) for c in chunks]
+    preds = [torch.arange(i * CHUNK_TAG, i * CHUNK_TAG + length, dtype=torch.float32)
+             for i, length in enumerate(lengths)]
+    beat, downbeat = aggregate_prediction([{"beat": p, "downbeat": p} for p in preds], starts, n, size, border,
+                                          "keep_first", "cpu")
+    assert torch.equal(beat, downbeat)
+    runs: list[list[int]] = []
+    for f, v in enumerate(int(x) for x in beat.tolist()):
+        chunk, at = (-1, -1) if v == -1000 else divmod(v, CHUNK_TAG)
+        last = runs[-1] if runs else None
+        if last and last[1] == f and last[2] == chunk and (chunk < 0 or last[3] + (f - last[0]) == at):
+            last[1] = f + 1
+        else:
+            runs.append([f, f + 1, chunk, at])
+    starts = [int(s) for s in starts]
+    return [n, len(starts), *starts, *lengths, len(runs), *(x for r in runs for x in r)]
+
+
+def chunks_records() -> list[dict]:
+    """chunks.jsonl's records: beat_this's ``split_piece`` (``avoid_short_end``) and ``aggregate_prediction``
+    (``keep_first``), as ``split_predict_aggregate`` runs them for Spect2Frames, over every piece of 0 to
+    ``CHUNK_FRAMES`` frames."""
+    import zlib
+
+    import numpy as np
+    import torch
+
+    from caracole.autochords.export import BEATS_CHUNK
+
+    border = beat_this_settings()["border"]
+    records: list[dict] = [{
+        "kind": "meta", "chunk": BEATS_CHUNK, "border": border, "avoid_short_end": True, "overlap_mode": "keep_first",
+        "tag": CHUNK_TAG,
+        "table": "int32 little-endian, deflated (zlib), in base64; a length's row: n, k, the k chunks' starts, their "
+                 "lengths, m, then m runs (from, until, chunk, frame): frames [from, until) of the piece keep that "
+                 "chunk's predictions from that frame on (chunk -1: none kept, -1000). aggregate_prediction was given "
+                 "chunk i's frame j as i * tag + j",
+        "libraries": {"numpy": np.__version__, "torch": torch.__version__},
+    }]
+    for first in range(0, CHUNK_FRAMES + 1, CHUNK_BLOCK):
+        last = min(first + CHUNK_BLOCK, CHUNK_FRAMES + 1)
+        table = [x for n in range(first, last) for x in _chunk_answer(n, BEATS_CHUNK, border)]
+        data = np.asarray(table, dtype="<i4").tobytes()
+        records.append({"kind": "lengths", "from": first, "until": last, "count": len(table),
+                        "table": base64.b64encode(zlib.compress(data, 9)).decode("ascii")})
+    return records
+
+
+# scores.jsonl's reference calls, mir_eval's own steps of ``mir_eval.chord.evaluate`` and ``mir_eval.beat.evaluate``
+# for the two scores the gates read: WCSR by a comparison rule, and beat F at a window (and after trim_beats, as
+# beat.evaluate trims, its 5 s: a record has both, Scores.beatF being f_measure alone).
+def mir_eval_wcsr(ref: list, est: list, rule: str) -> float:
+    import numpy as np
+    from mir_eval import chord, util
+
+    ref_intervals = np.array([[s, e] for s, e, _ in ref], dtype=float)
+    est_intervals = np.array([[s, e] for s, e, _ in est], dtype=float).reshape(-1, 2)
+    est_intervals, est_labels = util.adjust_intervals(est_intervals, [lab for *_, lab in est], ref_intervals.min(),
+                                                      ref_intervals.max(), chord.NO_CHORD, chord.NO_CHORD)
+    intervals, ref_labels, est_labels = util.merge_labeled_intervals(ref_intervals, [lab for *_, lab in ref],
+                                                                     est_intervals, est_labels)
+    durations = util.intervals_to_durations(intervals)
+    return float(chord.weighted_accuracy(getattr(chord, rule)(ref_labels, est_labels), durations))
+
+
+def mir_eval_beat_f(ref: list[float], est: list[float], window: float, trim: float | None = None) -> float:
+    import numpy as np
+    from mir_eval import beat
+
+    ref_beats, est_beats = np.array(ref, dtype=float), np.array(est, dtype=float)
+    if trim is not None:
+        ref_beats, est_beats = beat.trim_beats(ref_beats, trim), beat.trim_beats(est_beats, trim)
+    return float(beat.f_measure(ref_beats, est_beats, window))
+
+
+WCSR_RULES = ("majmin", "tetrads")
+BEAT_TRIM = 5.0
+
+
+def numpy_sum(values: list[float]) -> float:
+    """numpy's float64 ``np.sum`` of a contiguous array, as Scores ports it: 0.0 plus numpy's pairwise sum (blocks of
+    under 8 summed in turn, up to 128 by eight running sums, longer ones halved at a multiple of 8)."""
+
+    def pairwise(i: int, n: int) -> float:
+        if n < 8:
+            r = -0.0
+            for k in range(n):
+                r += values[i + k]
+            return r
+        if n <= 128:
+            r = [values[i + j] for j in range(8)]
+            k = 8
+            while k < n - n % 8:
+                for j in range(8):
+                    r[j] += values[i + k + j]
+                k += 8
+            s = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]))
+            while k < n:
+                s += values[i + k]
+                k += 1
+            return s
+        half = n // 2
+        half -= half % 8
+        return pairwise(i, half) + pairwise(i + half, n - half)
+
+    return 0.0 + pairwise(0, len(values))
+
+
+def _song(rng, n: int, names: list[str], start: float = 0.0) -> list[list]:
+    t, out = start, []
+    for _ in range(n):
+        d = round(float(rng.choice([0.093, 0.185, 0.5, 1.0, 1.852, 2.5, 4.0])), 3)
+        out.append([t, round(t + d, 3), str(rng.choice(names))])
+        t = round(t + d, 3)
+    return out
+
+
+def _estimate(rng, ref: list[list], names: list[str]) -> list[list]:
+    """ref heard otherwise: boundaries moved by up to two frames, a label in eight another."""
+    out = []
+    for s, e, lab in ref:
+        out.append([s, e, str(rng.choice(names)) if rng.random() < 0.125 else lab])
+    for k in range(1, len(out)):
+        moved = round(out[k][0] + float(rng.integers(-2, 3)) * 0.093, 3)
+        if out[k - 1][0] < moved < out[k][1]:
+            out[k - 1][1] = out[k][0] = moved
+    return out
+
+
+def _wcsr_cases() -> list[tuple[str, list, list]]:
+    import numpy as np
+
+    from caracole.autochords import btc
+
+    names = btc.vocabulary(170)
+    flats = [btc._FLATS.get(lab.partition(":")[0], "") + lab[2:] for lab in names if lab[1:2] == "#"]
+    cases: list[tuple[str, list, list]] = []
+    for seed, n in ((1, 4), (2, 30), (3, 30), (4, 200)):
+        rng = np.random.default_rng(seed)
+        ref = _song(rng, n, names)
+        cases.append((f"seed {seed}, {n} chords", ref, _estimate(rng, ref, names + flats)))
+    rng = np.random.default_rng(5)
+    ref = _song(rng, 12, ["C", "A:min", "F", "G", "N", "E:min7", "D:7"])
+    end = ref[-1][1]
+    cases += [
+        ("the same", ref, [list(s) for s in ref]),
+        ("an estimate that ends early", ref, [s for s in ref if s[1] <= end / 2]),
+        ("an estimate that starts late", ref, [s for s in ref if s[0] >= end / 3]),
+        ("an estimate longer either side", ref, [[0.0, 0.5, "G"]] + [[s + 0.5, e + 0.5, lab] for s, e, lab in ref]
+         + [[end + 0.5, end + 9.0, "C"]]),
+        ("an estimate wholly after the reference", ref, [[end + 1.0, end + 3.0, "C"]]),
+        ("an empty estimate", ref, []),
+        ("sharps against flats", [[0.0, 2.0, "A#"], [2.0, 4.0, "D#:min7"], [4.0, 5.0, "C#:maj7"]],
+         [[0.0, 2.0, "Bb"], [2.0, 4.0, "Eb:min7"], [4.0, 5.0, "Db:7"]]),
+        ("no chord on both sides", [[0.0, 1.0, "N"], [1.0, 3.0, "C"], [3.0, 4.0, "N"]],
+         [[0.0, 1.5, "N"], [1.5, 4.0, "C"]]),
+        ("X and chords outside major and minor", [[0.0, 1.0, "X"], [1.0, 2.0, "C:dim"], [2.0, 3.0, "C:sus4"],
+                                                  [3.0, 4.0, "C:aug"], [4.0, 5.0, "C:hdim7"], [5.0, 6.0, "C:7"],
+                                                  [6.0, 7.0, "C:maj6"], [7.0, 8.0, "C:min7"]],
+         [[0.0, 1.0, "X"], [1.0, 2.0, "C:dim"], [2.0, 3.0, "C"], [3.0, 4.0, "C"], [4.0, 5.0, "C:min"],
+          [5.0, 6.0, "C"], [6.0, 7.0, "C:maj7"], [7.0, 8.0, "C:minmaj7"]]),
+        ("nothing comparable", [[0.0, 1.0, "X"], [1.0, 2.0, "C:sus2"]], [[0.0, 2.0, "C"]]),
+        ("an estimate of X", [[0.0, 1.0, "C"], [1.0, 2.0, "N"]], [[0.0, 2.0, "X"]]),
+        ("zero-length intervals", [[0.0, 1.0, "C"], [1.0, 1.0, "G"], [1.0, 2.0, "A:min"], [2.0, 2.0, "F"]],
+         [[0.0, 0.0, "D"], [0.0, 1.0, "C"], [1.0, 1.0, "E"], [1.0, 2.0, "A:min"]]),
+        ("a reference of no length", [[3.0, 3.0, "C"]], [[0.0, 5.0, "C"]]),
+        ("not a chord label", [[0.0, 1.0, "C"]], [[0.0, 1.0, "Cm"]]),
+    ]
+    return cases
+
+
+def _beat_cases() -> list[tuple[str, list[float], list[float], float]]:
+    import numpy as np
+
+    cases: list[tuple[str, list[float], list[float], float]] = []
+    for seed in (1, 2, 3):
+        rng = np.random.default_rng(seed)
+        ref = [round(0.3 + 0.5 * k, 2) for k in range(60)]
+        est = sorted(round(t + float(rng.normal(0.0, 0.04)), 2) for t in ref if rng.random() > 0.1)
+        est += [round(float(t), 2) for t in rng.uniform(0.0, 30.0, 4)]
+        cases.append((f"seed {seed}", ref, sorted(est), 0.07))
+    beats = [6.0, 6.5, 7.0, 7.5]
+    cases += [
+        ("both empty", [], [], 0.07),
+        ("no reference beat", [], beats, 0.07),
+        ("no estimated beat", beats, [], 0.07),
+        ("before 5 s alone", [1.0, 2.0, 3.0], [1.0, 2.0, 3.05], 0.07),
+        ("across 5 s", [4.0, 4.98, 5.0, 5.5], [4.0, 4.99, 5.01, 5.5], 0.07),
+        ("at the window's edges", [6.0, 7.0, 8.0, 9.0, 10.0], [6.07, 6.93, 8.07000001, 9.0699999, 10.07], 0.07),
+        ("duplicates", [6.0, 6.0, 7.0], [6.0, 7.0, 7.0, 7.0], 0.07),
+        ("a matching only an augmenting path finds", [6.0, 6.1, 6.2], [6.05, 6.15, 6.25], 0.07),
+        ("the same", beats, beats, 0.07),
+        ("a window of 0", beats, [6.0, 6.5000001, 7.0], 0.0),
+        ("a window of half a second", beats, [5.6, 6.9], 0.5),
+    ]
+    return cases
+
+
+def scores_records() -> list[dict]:
+    """scores.jsonl's records: ``mir_eval_wcsr`` (each rule of ``WCSR_RULES``; where mir_eval.chord.evaluate takes
+    the case, its score the same) and ``mir_eval_beat_f`` (untrimmed, and trimmed at ``BEAT_TRIM``), each answer or
+    the name of what it raised; and ``numpy_sum`` held to np.sum on seeded arrays of every length to 300."""
+    import warnings
+
+    import mir_eval
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    for n in [*range(300), 1000, 5000]:
+        a = rng.uniform(0.0, 1.0, n) ** 3 * 10.0 ** rng.uniform(-5.0, 5.0, n)
+        assert numpy_sum(a.tolist()) == float(np.sum(a)), n
+    records: list[dict] = [{
+        "kind": "meta", "rules": list(WCSR_RULES), "trim": BEAT_TRIM,
+        "wcsr": "mir_eval.util.adjust_intervals of the estimate to the reference's span with N, "
+                "merge_labeled_intervals, intervals_to_durations, then chord.weighted_accuracy of chord.<rule>",
+        "beat": "beat.f_measure(ref, est, window); f_trimmed: of beat.trim_beats of each, at trim",
+        "libraries": {"mir_eval": mir_eval.__version__, "numpy": np.__version__},
+    }]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for what, ref, est in _wcsr_cases():
+            record: dict = {"kind": "wcsr", "what": what, "ref": ref, "est": est}
+            for rule in WCSR_RULES:
+                try:
+                    score = mir_eval_wcsr(ref, est, rule)
+                except Exception as e:  # noqa: BLE001 - its name is the answer
+                    record[rule] = {"raises": type(e).__name__}
+                    continue
+                record[rule] = score
+                try:
+                    evaluated = mir_eval.chord.evaluate(
+                        np.array([r[:2] for r in ref], float), [r[2] for r in ref],
+                        np.array([r[:2] for r in est], float).reshape(-1, 2), [r[2] for r in est])
+                except Exception:  # noqa: BLE001 - evaluate's segmentation scores refuse some of the edges
+                    continue
+                assert evaluated[rule] == score, (what, rule)
+            records.append(record)
+        for what, ref, est, window in _beat_cases():
+            records.append({"kind": "beat", "what": what, "ref": ref, "est": est, "window": window,
+                            "f": mir_eval_beat_f(ref, est, window),
+                            "f_trimmed": mir_eval_beat_f(ref, est, window, BEAT_TRIM)})
+        for what, ref, est in (("unsorted", [6.0, 5.5], [6.0]), ("past mir_eval's MAX_TIME", [6.0], [30000.5])):
+            try:
+                mir_eval_beat_f(ref, est, 0.07)
+            except ValueError as e:
+                records.append({"kind": "beat", "what": what, "ref": ref, "est": est, "window": 0.07,
+                                "raises": type(e).__name__})
+            else:
+                raise AssertionError(what)
+    return records
+
+
+def scores_json() -> str:
+    """scores.json: the tables Scores reads, mir_eval's own: its pitch classes, its qualities' bitmaps, its no-chord
+    and unknown labels, its beats' MAX_TIME."""
+    import mir_eval
+
+    doc = {"mir_eval": mir_eval.__version__, "no_chord": mir_eval.chord.NO_CHORD, "x_chord": mir_eval.chord.X_CHORD,
+           "pitch_classes": dict(mir_eval.chord.PITCH_CLASSES),
+           "qualities": {q: list(bits) for q, bits in mir_eval.chord.QUALITIES.items()},
+           "max_time": float(mir_eval.beat.MAX_TIME)}
+    return json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=1) + "\n"
+
+
+def _around() -> None:
+    if not _installed(*AROUND_LIBS) or not _imports(*AROUND_LIBS):
+        pytest.skip("needs numpy, torch, beat_this and mir_eval: nix develop .#autochords")
+
+
+@pytest.mark.autochords
+def test_peaks_vectors():
+    _around()
+    check(AREA / "peaks.jsonl", jsonl(peaks_records(), corpus="autochords/peaks", made_by=MADE_BY))
+
+
+@pytest.mark.autochords
+def test_chunks_vectors():
+    _around()
+    check(AREA / "chunks.jsonl", jsonl(chunks_records(), corpus="autochords/chunks", made_by=MADE_BY))
+
+
+@pytest.mark.autochords
+def test_scores_vectors_and_json():
+    _around()
+    check(AREA / "scores.jsonl", jsonl(scores_records(), corpus="autochords/scores", made_by=MADE_BY))
+    check(MODELS_DATA / "scores.json", scores_json())
 
 
 _TEXTS = """

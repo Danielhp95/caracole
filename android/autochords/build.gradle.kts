@@ -24,9 +24,10 @@ kotlin {
 
 sourceSets {
     main {
-        // frontend.json alone: the models' graph and pins beside it are :ml's.
+        // frontend.json, labels.json and scores.json alone: the models' graph and pins beside them are :ml's.
         resources.srcDir("../../tests/conformance/data")
-        resources.include("caracole/autochords/frontend.json")
+        resources.include("caracole/autochords/frontend.json", "caracole/autochords/labels.json",
+                          "caracole/autochords/scores.json")
     }
 }
 

@@ -2613,6 +2613,16 @@ It is rows.js's, shared by both pages:
     them there and holds this machine's ONNX Runtime to them;
   - the bytes hold on a CPU of the meta's `cpu_capability` (torch's kernels); on another the byte check is skipped,
     saying so, and the gates are the check.
+  - around the models, pure functions of no model file, made in the test's own process: `peaks.jsonl` (beat_this's
+    minimal postprocessor over seeded logits, int8 q·0.125 or float32, and hand-made edges), `chunks.jsonl`
+    (`split_piece` and `aggregate_prediction` of every piece of 0 to 4,000 frames, each length's chunk starts and
+    lengths and the runs each chunk fills, int32 deflated), `scores.jsonl` (mir_eval's WCSR by `majmin` and `tetrads`,
+    `mir_eval_wcsr`, evaluate()'s own steps, and `beat.f_measure` untrimmed and after `trim_beats`, with their edges
+    and refusals) and `data/caracole/autochords/scores.json` (mir_eval's pitch classes, qualities and MAX_TIME);
+- its default-shell half, tests/test_conformance_autochords.py: `labels.jsonl` (btc.py's vocabularies, common names,
+  `spell_for_key`, `frames_to_segments` and `round(k · FRAME_SECONDS, 3)`, over test_autochords_models.py's
+  `COMMON_NAMES`, `SPELLINGS` and `FRAMES` and seeded songs and frames) and `data/caracole/autochords/labels.json`
+  (btc.py's tables).
 
 #### `tests/`
 
@@ -2847,6 +2857,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `:ml`. `SoxrArm64Test` runs the NDK's static arm64 build of it (`arm64SoxrDriver`, soxr_driver.c) under
   qemu-aarch64 (the shell's `qemu-user`) over every record: NEON's cr32s the same bits as the vectors, the scalar cr32
   (`SOXR_USE_SIMD=0`) within 6e-7; skipped, saying why, without the NDK or qemu. No arm64 device is a test bed.
+  Around the models, exactly as the computer (E8): `Labels` (btc.py's `vocabulary`, `commonName`, `spellForKey`,
+  `framesToSegments`, `time`: `round(…, 3)` and the builtin sum ported, as `:autochords` depends on no `:core`; its
+  tables labels.json's), `ChordSegment`, `Peaks.of` (beat_this's minimal postprocessor), `Chunks.split` and
+  `aggregate` (1500 frames, border 6, `avoid_short_end`, `keep_first`) and `Scores` (`wcsr(ref, est, "majmin" |
+  "tetrads")` over BTC's Harte labels, never common names, its sums numpy's pairwise ones, so mir_eval's to the bit;
+  `beatF`, `f_measure` alone, and `trimBeats`; its tables scores.json's); `LabelsTest`, `PeaksTest`, `ChunksTest` and
+  `ScoresTest` replay labels, peaks, chunks and scores.jsonl, which the area's replay holds on the device too.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

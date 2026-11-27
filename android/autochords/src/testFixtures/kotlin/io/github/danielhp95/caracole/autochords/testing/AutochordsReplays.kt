@@ -14,7 +14,9 @@ object AutochordsReplays {
  * conversion by [Soxr] within its tolerance, of the same length (the design's B1 resample gate), and every
  * frontend.jsonl clip's and excerpt's log-CQT and every clip's log-mel by the Kotlin front ends within the B1 feature
  * gate (FrontendRecords). Each feature's score is told to [report] (the JVM's stdout; on the device, the
- * instrumentation's output), so a run says how close it came, not only that it passed.
+ * instrumentation's output), so a run says how close it came, not only that it passed. Then the pieces around the
+ * models, which replay exactly: btc.py's labels ([LabelsRecords]), beat_this's peaks and chunks ([PeaksRecords],
+ * [ChunksRecords]) and mir_eval's scores within 1e-12 ([ScoresRecords]).
  */
 object AutochordsReplay : AreaReplay {
     override val area = "autochords"
@@ -35,5 +37,10 @@ object AutochordsReplay : AreaReplay {
                 misses.check(score.passes(gate)) { "$score: under the gate" }
             }
         }
+        LabelsRecords.replay(misses)
+        PeaksRecords.replay(misses)
+        ChunksRecords.replay(misses)
+        ScoresRecords.replay(misses)
+        report("autochords: scores, ${ScoresRecords.exact} of ${ScoresRecords.scored} bit for bit")
     }
 }

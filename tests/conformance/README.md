@@ -39,6 +39,10 @@ phone's decoder is held to by its meta's `gates`) needs no model and no CPU's ke
 `vectors/autochords/frontend.jsonl`'s meta holds the gate the phone's front ends are held to (`gates`: equal frames, a
 cosine per frame), and `data/caracole/autochords/frontend.json` what those front ends apply: librosa's CQT as it ran,
 its sparse bases, and beat_this's mel filterbank, never recomputed on the phone.
+`vectors/autochords/peaks.jsonl`, `chunks.jsonl` and `scores.jsonl` (beat_this's postprocessor and chunking, mir_eval's
+WCSR and beat F, with `data/caracole/autochords/scores.json`) need no model file and no CPU's kernels, only torch,
+beat_this and mir_eval; `labels.jsonl` and `labels.json` (btc.py's labels) come from tests/test_conformance_autochords.py
+in the default shell, with the rest of the corpus.
 `data/caracole/autochords/` ships in the debug build alone, as android/ml's resources (frontend.json as
 android/autochords'): `:core`, whose resource root is `data/`, leaves it out, so the release carries none of it until
 the stage that ships the models.

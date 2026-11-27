@@ -149,66 +149,62 @@ def test_large_vocabulary_indices_name_harte_labels():
     assert vocabulary(25)[:2] == ["C", "C:min"] and vocabulary(25)[24] == "N"
 
 
+# The common name of each Harte label (tests/test_conformance_autochords.py reads these cases too).
+COMMON_NAMES = {
+    "C": "C",
+    "C:maj": "C",
+    "A:min": "Am",
+    "A:min7": "Am7",
+    "G:7": "G7",
+    "F#:min": "F#m",
+    "D:maj7": "Dmaj7",
+    "E:minmaj7": "EmMaj7",
+    "B:hdim7": "Bm7b5",
+    "C:dim": "Cdim",
+    "C:dim7": "Cdim7",
+    "C:aug": "Caug",
+    "C:maj6": "C6",
+    "A:min6": "Am6",
+    "D:sus2": "Dsus2",
+    "D:sus4": "Dsus4",
+    "N": "N",
+    "X": "N",
+}
+
+
 def test_harte_labels_become_common_names():
-    cases = {
-        "C": "C",
-        "C:maj": "C",
-        "A:min": "Am",
-        "A:min7": "Am7",
-        "G:7": "G7",
-        "F#:min": "F#m",
-        "D:maj7": "Dmaj7",
-        "E:minmaj7": "EmMaj7",
-        "B:hdim7": "Bm7b5",
-        "C:dim": "Cdim",
-        "C:dim7": "Cdim7",
-        "C:aug": "Caug",
-        "C:maj6": "C6",
-        "A:min6": "Am6",
-        "D:sus2": "Dsus2",
-        "D:sus4": "Dsus4",
-        "N": "N",
-        "X": "N",
-    }
-    assert {label: common_name(label) for label in cases} == cases
+    assert {label: common_name(label) for label in COMMON_NAMES} == COMMON_NAMES
+
+
+# The songs spell_for_key is tried on, each its labels a chord of 2 s, and what it spells them (the last song's last
+# two alone): tests/test_conformance_autochords.py reads these cases too.
+SPELLINGS = (
+    (("F", "A#", "C", "D:min"), ["F", "Bb", "C", "D:min"]),  # F major: A# is written Bb.
+    (("E", "B", "C#:min", "A"), ["E", "B", "C#:min", "A"]),  # E major keeps its sharps.
+    (("G#", "C#", "D#:7", "F:min"), ["Ab", "Db", "Eb:7", "F:min"]),  # Ab major: G#, C# and D# become Ab, Db and Eb.
+    (("C", "A#", "F", "C"), ["C", "Bb", "F", "C"]),  # C major with a borrowed bVII: Bb, not A#.
+    # Still C major (the B chord rules out the flat keys), with a borrowed bVI.
+    (("C", "C", "C", "C", "G", "G", "F", "F", "B:dim", "G#"), ["B:dim", "Ab"]),
+)
+
+
+def spelling_song(labels) -> list[ChordSegment]:
+    return [ChordSegment(2.0 * k, 2.0 * (k + 1), label) for k, label in enumerate(labels)]
 
 
 def test_black_key_roots_are_spelled_for_the_song_key():
-    def song(*labels: str) -> list[ChordSegment]:
-        return [ChordSegment(2.0 * k, 2.0 * (k + 1), label) for k, label in enumerate(labels)]
+    for labels, want in SPELLINGS:
+        got = [s.label for s in spell_for_key(spelling_song(labels))]
+        assert got[-len(want):] == want, labels
 
-    # F major: A# is written Bb.
-    assert [s.label for s in spell_for_key(song("F", "A#", "C", "D:min"))] == [
-        "F",
-        "Bb",
-        "C",
-        "D:min",
-    ]
-    # E major keeps its sharps.
-    assert [s.label for s in spell_for_key(song("E", "B", "C#:min", "A"))] == [
-        "E",
-        "B",
-        "C#:min",
-        "A",
-    ]
-    # Ab major: G#, C# and D# become Ab, Db and Eb.
-    assert [s.label for s in spell_for_key(song("G#", "C#", "D#:7", "F:min"))] == [
-        "Ab",
-        "Db",
-        "Eb:7",
-        "F:min",
-    ]
-    # C major with a borrowed bVII: Bb, not A#.
-    assert [s.label for s in spell_for_key(song("C", "A#", "F", "C"))] == ["C", "Bb", "F", "C"]
-    # Still C major (the B chord rules out the flat keys), with a borrowed bVI.
-    c_major = song("C", "C", "C", "C", "G", "G", "F", "F", "B:dim", "G#")
-    assert [s.label for s in spell_for_key(c_major)][-2:] == ["B:dim", "Ab"]
+
+# C, C, Am, Am, Am, N at 0.5 s per frame, in the 25-class vocabulary.
+FRAMES = ([0, 0, 19, 19, 19, 24], 0.5)
 
 
 def test_frames_become_segments():
     names = vocabulary(25)
-    # C, C, Am, Am, Am, N at 0.5 s per frame.
-    segs = frames_to_segments([0, 0, 19, 19, 19, 24], 0.5, names)
+    segs = frames_to_segments(*FRAMES, names)
     assert segs == [
         ChordSegment(0.0, 1.0, "C"),
         ChordSegment(1.0, 2.5, "A:min"),
