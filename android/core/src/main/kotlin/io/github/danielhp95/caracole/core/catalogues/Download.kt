@@ -28,11 +28,11 @@ class Fetched(val file: File, val raw: Long)
  * streamed: the bytes sent hashed as they come ([onProgress] told how many so far), unpacked through
  * [GZIPInputStream] (gzip's own check of its CRC and size) into [to], stopped past [capFor] the `.gz` size listed or
  * past that size itself, then the hash checked against [Listed.sha256]. With [gzip] false (the chord models, sent as
- * they are) the bytes go to [to] as they come, exactly [Listed.bytes] of them: refused at the first byte past it, and
- * a body that ends before it cut short. An answer but a 200 is [refused]'s error where it gives one, else a 404 the
- * file gone, else [refusal]'s. On any failure [to] is deleted and a [CatalogueError] (a [Limited] for GitHub's hourly
- * share spent) says why; under tests a host but loopback is refused (`RealTransport.refuseUnderTests`) before a
- * socket.
+ * they are) the bytes go to [to] as they come, exactly [Listed.bytes] of them: a Content-Length that says otherwise
+ * refused before the body is read, else refused at the first byte past it, and a body that ends before it cut short.
+ * An answer but a 200 is [refused]'s error where it gives one, else a 404 the file gone, else [refusal]'s. On any
+ * failure [to] is deleted and a [CatalogueError] (a [Limited] for GitHub's hourly share spent) says why; under tests a
+ * host but loopback is refused (`RealTransport.refuseUnderTests`) before a socket.
  */
 fun download(http: Http, file: Listed, to: File, hosts: Set<String>, gzip: Boolean = true,
              accept: String = "application/octet-stream", refused: (Http.Answer) -> CatalogueError? = { null },
@@ -47,7 +47,10 @@ fun download(http: Http, file: Listed, to: File, hosts: Set<String>, gzip: Boole
             if (answer.status != 200) refused(answer)?.let { throw it }
             if (answer.status == 404) throw CatalogueError("The file GitHub listed is gone. Try again.")
             if (answer.status != 200) throw refusal(answer)
-            if (gzip) unpack(answer.body, file, to, onProgress) else copy(answer.body, file, to, onProgress)
+            if (gzip) unpack(answer.body, file, to, onProgress) else {
+                if (answer.contentLength >= 0 && answer.contentLength != file.bytes) throw CatalogueError(OTHER_SIZE)
+                copy(answer.body, file, to, onProgress)
+            }
         }
     } catch (e: Throwable) {
         to.delete()
@@ -142,6 +145,8 @@ private fun copy(body: InputStream, file: Listed, to: File, onProgress: (Long) -
 }
 
 private const val CUT_SHORT = "The download was cut short. Try again."
+private const val OTHER_SIZE =
+    "GitHub is sending a file of another size than the one listed; nothing was downloaded. Try again."
 
 /** The most a file of [bytes] `.gz` bytes may unpack to: [Catalogues.CAP_FACTOR] times them, and never less than
  * [Catalogues.CAP_FLOOR], so that a small file that compresses well is no bomb. */

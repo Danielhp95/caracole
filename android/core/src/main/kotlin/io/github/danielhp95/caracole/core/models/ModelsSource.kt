@@ -7,7 +7,7 @@ import io.github.danielhp95.caracole.core.catalogues.Limited
 import io.github.danielhp95.caracole.core.catalogues.Listed
 import io.github.danielhp95.caracole.core.catalogues.NoRelease
 import io.github.danielhp95.caracole.core.catalogues.download
-import io.github.danielhp95.caracole.core.catalogues.refusal
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.mirror.Http
 import java.io.File
@@ -33,21 +33,26 @@ class Installed(val dir: File, val pins: Pins, val fetched: List<String>, val by
  * The chord models downloaded at a tap (the design's §6), on core.catalogues' code: GitHub's REST API at [base]
  * alone, caracole's user agent (the [Http] given), a redirect followed only to one of [redirects]
  * (`release-assets.githubusercontent.com`, an asset's bytes), a 403 or 429 with none of the hour's requests left a
- * [Limited]. [pins] are models.json's, [free] the room on a disk, [app] the app's own files (BTC's graph). No BTC
- * weights are re-hosted: BTC's authors' file is read from their repository, unchanged.
+ * [Limited]. [pins] are models.json's (by default this build's: [ModelFiles.read], which requires them, throwing
+ * [ModelsNotCarried] at the first [fetch] in a build that carries none: ask [ModelFiles.carried] first where the build
+ * may lack them), [free] the room on a disk, [app] the app's own files (BTC's graph). No BTC weights are re-hosted:
+ * BTC's authors' file is read from their repository, unchanged.
  */
 class ModelsSource(
     private val base: URI = URI("https://api.github.com"),
     private val redirects: Set<String> = Catalogues.API_REDIRECTS,
-    private val pins: () -> Pins = ModelFiles::read,
+    private val pins: () -> Pins = { ModelFiles.read() },
     private val free: (File) -> Long = File::getUsableSpace,
     private val app: (String) -> InputStream? = { ModelFiles.resource("caracole/autochords/$it") },
 ) {
     /**
      * [into] (a [Pins.folder]) made to hold every pinned file whole, [onProgress] told the bytes downloaded so far and
-     * of how many. What a fetch cut off left beside it goes first ([ModelFiles.sweep]); a folder already
-     * [ModelFiles.installed] asks nothing. Else each file already there whole (its SHA-256 hashed) is kept, the
-     * graph copied from the app, and only the files missing asked for:
+     * of how many. One fetch of [into] at a time is the caller's guarantee (the queue's one worker): a fetch deletes
+     * what a fetch cut off left beside [into] ([ModelFiles.sweep]: every `.c1-<16 hex>.part`, a live one's too), after
+     * putting back an install a kill left aside between its two renames (`.old`, whole, no [into]). A folder already
+     * [ModelFiles.installed] asks nothing. Else each file already there whole, or kept by a fetch that failed
+     * ([ModelFiles.KEPT]), its SHA-256 hashed again, is kept, the graph copied from the app, and only the files
+     * missing asked for:
      *
      * 1. beat_this's: `GET /repos/{REPO}/releases/tags/models` (the release listed), then its asset's API address
      *    with `Accept: application/octet-stream`, redirected once to `release-assets.githubusercontent.com`;
@@ -57,14 +62,22 @@ class ModelsSource(
      * Each downloaded exactly its pinned size and checked by its SHA-256 (the asset's as GitHub lists it too), into
      * a folder of its own beside [into], each file fsynced, the manifest last; then that folder renamed into place,
      * the old one put aside and deleted. Any refusal ([ModelsError], [Limited], a [CatalogueError] of the download's)
-     * leaves [into] as it was and the folder being written deleted; no room for twice the download and [MARGIN] asks
-     * nothing.
+     * leaves [into] as it was and the folder being written deleted, the files it had downloaded and checked kept
+     * beside it for the next try ([ModelFiles.KEPT]); no room for twice the download and [MARGIN] asks nothing.
      */
     fun fetch(http: Http, into: File, onProgress: (Long, Long) -> Unit): Installed {
         val pins = pins()
+        val kept = File(into.absoluteFile.parentFile, "." + into.name + ModelFiles.KEPT)
+        storage { putBack(into, pins) }
         ModelFiles.sweep(into)
-        if (ModelFiles.installed(into, pins) == null) return Installed(into, pins, emptyList(), 0)
-        val whole = pins.files.filter { pin -> there(into, pin) }.toSet()
+        if (ModelFiles.installed(into, pins) == null) {
+            kept.deleteRecursively()
+            return Installed(into, pins, emptyList(), 0)
+        }
+        val found = pins.files.mapNotNull { pin ->
+            listOf(into, kept).map { File(it, pin.name) }.firstOrNull { there(it, pin) }?.let { pin to it }
+        }.toMap()
+        val whole = found.keys
         // The release's first: one not published is said before BTC's 12 MB are asked for.
         val asked = pins.files.filter { it !in whole && it.from is From.Release } +
             pins.files.filter { it !in whole && it.from is From.Blob }
@@ -77,9 +90,10 @@ class ModelsSource(
             throw ModelsError(NO_ROOM.replace("{needs}", Sizes.size(needs)).replace("{has}", Sizes.size(room)))
         }
         val part = File(parent, "." + into.name + "-" + token() + ModelFiles.PART)
+        val checked = mutableListOf<Pin>()
         try {
             storage { Files.createDirectory(part.toPath()) }
-            for (pin in whole) storage { keep(File(into, pin.name), File(part, pin.name)) }
+            for ((pin, file) in found) storage { keep(file, File(part, pin.name)) }
             for (pin in pins.files.filter { it !in whole && it.from is From.App }) fromApp(pin, File(part, pin.name))
             var before = 0L
             for (pin in asked) {
@@ -90,6 +104,7 @@ class ModelsSource(
                     is From.Blob -> fromBlob(http, from, pin, to, progress)
                     From.App -> Unit
                 }
+                checked += pin
                 before += pin.bytes
             }
             storage {
@@ -99,15 +114,42 @@ class ModelsSource(
             check(ModelFiles.installed(part, pins) == null) { "the chord models' folder isn't whole as written" }
             place(part, into)
         } catch (e: Throwable) {
+            keepForNextTry(part, kept, checked)
             part.deleteRecursively()
             throw e
         }
+        kept.deleteRecursively()
         return Installed(into, pins, asked.map { it.name }, total)
     }
 
-    /** Whether [into] holds [pin]'s file whole: a regular file of its size and its SHA-256, hashed. */
-    private fun there(into: File, pin: Pin): Boolean {
-        val file = File(into, pin.name)
+    /** An install a kill left aside between [place]'s two renames (an `.old` beside no [into], whole by its manifest):
+     * renamed back, so that its files aren't downloaded again; the newest of several. */
+    private fun putBack(into: File, pins: Pins) {
+        if (into.exists()) return
+        val parent = into.absoluteFile.parentFile ?: return
+        val aside = parent.listFiles().orEmpty()
+            .filter { it.name.endsWith(ModelFiles.OLD) && ModelFiles.aside(into, it.name) }
+            .filter { ModelFiles.installed(it, pins) == null }
+            .maxByOrNull { it.lastModified() } ?: return
+        Files.move(aside.toPath(), into.toPath(), StandardCopyOption.ATOMIC_MOVE)
+    }
+
+    /** The files of [checked], downloaded into [part] and checked by their SHA-256, moved into [kept] for the next
+     * fetch, which hashes them again; what can't be moved is lost, as before (the refusal stands). */
+    private fun keepForNextTry(part: File, kept: File, checked: List<Pin>) {
+        for (pin in checked) {
+            try {
+                Files.createDirectories(kept.toPath())
+                Files.move(File(part, pin.name).toPath(), File(kept, pin.name).toPath(),
+                           StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+            } catch (e: IOException) {
+                // Downloaded again next time.
+            }
+        }
+    }
+
+    /** Whether [file] is [pin]'s whole: a regular file of its size and its SHA-256, hashed. */
+    private fun there(file: File, pin: Pin): Boolean {
         return try {
             ModelFiles.regular(file) && file.length() == pin.bytes && ModelFiles.sha256(file) == pin.sha256
         } catch (e: IOException) {
@@ -155,19 +197,20 @@ class ModelsSource(
         val asset = listed.firstOrNull { it.name == from.asset }
             ?: throw ModelsError(NOT_LISTED.replace("{tag}", tag).replace("{name}", from.asset))
         if (!asset.uploaded) throw ModelsError(NOT_UPLOADED.replace("{tag}", tag))
-        if (asset.bytes != pin.bytes || asset.sha256 != pin.sha256) throw ModelsError(OTHER_ASSET.replace("{tag}", tag))
+        if (asset.bytes != pin.bytes || Py.asciiLower(asset.sha256) != Py.asciiLower(pin.sha256)) {
+            throw ModelsError(OTHER_ASSET.replace("{tag}", tag))
+        }
         download(http, asset, to, redirects, gzip = false, onProgress = progress)
     }
 
-    /** BTC's authors' file, its git blob asked of GitHub's API as its raw bytes (one request); a 404, a 403 that isn't
-     * the hour's share spent, or a redirect (a repository renamed) is [BTC_GONE]. */
+    /** BTC's authors' file, its git blob asked of GitHub's API as its raw bytes (one request); a 404 (a repository
+     * gone or private) or a redirect (one renamed) is [BTC_GONE]; a 403, GitHub's secondary limit or a block, which
+     * passes, is the catalogues' refusal ("Try again later"), the hour's share spent a [Limited]. */
     private fun fromBlob(http: Http, from: From.Blob, pin: Pin, to: File, progress: (Long) -> Unit) {
         val url = base.toString().removeSuffix("/") + "/repos/${from.repository}/git/blobs/${from.blob}"
         val file = Listed(pin.name, pin.bytes, pin.sha256, true, url)
         download(http, file, to, emptySet(), gzip = false, accept = RAW, refused = { answer ->
-            val gone = answer.status == 404 || answer.status in 300..399 ||
-                (answer.status == 403 && refusal(answer) !is Limited)
-            if (gone) {
+            if (answer.status == 404 || answer.status in 300..399) {
                 ModelsError(BTC_GONE.replace("{repository}", from.repository).replace("{status}", "${answer.status}"))
             } else {
                 null

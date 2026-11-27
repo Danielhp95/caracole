@@ -3067,13 +3067,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   the phone starts (`CataloguesRunner.sweep`). The app's Settings row and first-start offer are native
   (`SiteCatalogues`), the shared library page untouched.
 - `core.models` (core/models/), the chord models on core.catalogues' code (`download(gzip = false)`, exact sizes;
-  `CatalogueSource.Api`'s `tag`): `ModelFiles.read()`, models.json's `Pins` (on the classpath of the debug build's
-  `:ml` alone, as BTC's graph: `:core` ships neither; its tests read both), `installed(dir)` (a stat of each file
+  `CatalogueSource.Api`'s `tag`): `ModelFiles.carried()`, models.json's `Pins` or null (on the classpath of the
+  debug build's `:ml` alone, as BTC's graph: `:core` ships neither; its tests read both), the one probe of a build
+  without them; `read()` (and every default of the pins) requires them, `ModelsNotCarried` else; `installed(dir)` (a stat of each file
   against the `manifest.json` written last: no hash), `verify(dir)` (every byte hashed), `sweep`;
   `ModelsSource.fetch(http, into, onProgress)`: `into` the `Pins.folder`, `stateDir/models/c<contract>/`, written beside it
   (`.c1-<16 hex>.part`, each file fsynced, the graph copied from the app) and renamed into place, the old one put
-  aside (`.old`) and deleted; every refusal a `ModelsError` (or `Limited`) leaving it as it was; no room for twice the
-  download and `MARGIN`, nothing asked. ModelsSourceTest over FakeGitHub; ModelFilesTest the authors' real file
+  aside (`.old`) and deleted (a lone `.old` a kill left is put back first); one fetch at a time, the caller's
+  guarantee; every refusal a `ModelsError` (or `Limited`) leaving it as it was, the files it had downloaded and
+  checked kept beside it (`.c1.kept`, hashed again by the next fetch); a Content-Length other than the pin's refused
+  before its body; no room for twice the download and `MARGIN`, nothing asked. ModelsSourceTest over FakeGitHub; ModelFilesTest the authors' real file
   (`CARACOLE_BTC_WEIGHTS`, android/flake.nix's), skipped without it.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
@@ -4773,7 +4776,8 @@ picks one).
   rule a redirect answered is a request sent, so four exchanges), and `/repos/jayg996/BTC-ISMIR19/git/blobs/<sha>`
   (`Accept: application/vnd.github.raw+json`, answered by the API itself, a redirect refused). A file already there
   whole is asked for again never; an install whole, nothing at all. A 403 or 429 with no requests left is the
-  catalogues' `Limited`, its time kept as kv `models:not-before`. Each file exactly its pinned size and SHA-256
+  catalogues' `Limited`, its time (`until`) handed back for the caller to keep; a plain 403 (GitHub's secondary
+  limit, a block) "Try again later", never a file gone. Each file exactly its pinned size and SHA-256
   (data/caracole/autochords/models.json), or nothing installed.
 - robots.txt, checked by hand on 2026-11-27: api.github.com and release-assets.githubusercontent.com answer 404, no
   rules (tests/fixtures/github/); github.com's, which closes `/*/releases/download/`, is never asked.

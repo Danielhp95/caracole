@@ -17,6 +17,10 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.security.MessageDigest
 
+/** This build carries no chord models (no models.json on its classpath: the release's, until stage S): never a bug,
+ * which [ModelFiles.carried] tells apart with no exception. */
+class ModelsNotCarried : RuntimeException("This build carries no chord models.")
+
 /** Where a pinned file comes from. */
 sealed interface From {
     /** The app's own: the debug build's `:ml` resource `caracole/autochords/<name>` (BTC's graph), no request. */
@@ -68,14 +72,21 @@ object ModelFiles {
     internal const val PART = ".part"
     internal const val OLD = ".old"
 
+    /** Beside a folder (`.c1.kept`): the files a fetch that failed had downloaded and checked, for the next one to
+     * hash again and keep, never to trust as they are; gone once a fetch installs. */
+    const val KEPT = ".kept"
+
     private const val MANIFEST_MOST = 64 * 1024
 
-    /** models.json's pins, from the classpath; an IllegalStateException in a build that carries none. */
-    fun read(): Pins {
-        val text = resource(RESOURCE)?.use { it.readBytes() }
-            ?: throw IllegalStateException("this build carries no chord models (no $RESOURCE)")
-        return read(text)
-    }
+    /** The one probe of whether this build has the chord models: models.json's pins from [loader]'s classpath (the
+     * debug build's `:ml` puts them there; `:core`, so the release, ships none), or null for a build that carries
+     * none. */
+    fun carried(loader: ClassLoader? = ModelFiles::class.java.classLoader): Pins? =
+        loader?.getResourceAsStream(RESOURCE)?.use { it.readBytes() }?.let(::read)
+
+    /** [carried]'s pins, for a caller that requires them: [ModelsNotCarried] in a build that carries none. */
+    fun read(loader: ClassLoader? = ModelFiles::class.java.classLoader): Pins =
+        carried(loader) ?: throw ModelsNotCarried()
 
     /** [text], models.json's bytes, as [Pins]: BTC's graph, BTC's weights and beat_this's float16 graph. */
     fun read(text: ByteArray): Pins {
@@ -104,7 +115,8 @@ object ModelFiles {
     /**
      * Null when [dir] holds every one of [pins]' files whole, as its [MANIFEST] says it was checked (each file a
      * regular file there of its pinned size and of the time the manifest gives it, the manifest's pins [pins]'
-     * own); else why not, in words.
+     * own); else why not, in words. Its default [pins] require the models in this build ([read]: [ModelsNotCarried]
+     * else; ask [carried] first where the build may lack them).
      */
     fun installed(dir: File, pins: Pins = read()): String? {
         if (!dir.isDirectory) return NOT_HERE
@@ -123,7 +135,8 @@ object ModelFiles {
         return null
     }
 
-    /** [installed], then every file hashed whole against its pin: null, or why not. */
+    /** [installed], then every file hashed whole against its pin: null, or why not. Its default [pins], as
+     * [installed]'s, require the models in this build. */
     fun verify(dir: File, pins: Pins = read()): String? {
         installed(dir, pins)?.let { return it }
         for (pin in pins.files) {

@@ -32,6 +32,15 @@ class ModelFilesTest {
         assertEquals(File("/state/models/c1"), pins.folder(File("/state")))
     }
 
+    @Test fun carriedIsTheOneProbeOfWhetherThisBuildHasTheModels() {
+        assertEquals(pins, ModelFiles.carried())
+        // A build whose classpath holds no models.json (the release's: :core ships none): null, never a throw.
+        val none = java.net.URLClassLoader(arrayOf(), null)
+        assertNull(ModelFiles.carried(none))
+        val e = kotlin.test.assertFailsWith<ModelsNotCarried> { ModelFiles.read(none) }
+        assertEquals("This build carries no chord models.", e.message)
+    }
+
     @Test fun theAppsGraphIsThePinnedOne() {
         val graph = pins.files[0]
         val bytes = ModelFiles.resource("caracole/autochords/${graph.name}")!!.use { it.readBytes() }
