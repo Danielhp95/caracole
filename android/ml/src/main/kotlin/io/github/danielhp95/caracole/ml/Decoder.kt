@@ -129,20 +129,21 @@ object Decoder {
                 throw UndecodableAudio("$name is an MP3 decoder caracole hasn't measured")
             }
             val silence = if (mp3 && delay == 0 && padding == 0) silentFrame(extractor) else null
-            // The edit's and the granule's counts are in their own timescale's samples: [Trim.at] makes them the
-            // output's, whose rate a decoder may double (an AAC's implicit SBR), never applied as they are.
+            // The edit's and the granule's counts are in their own timescale's samples, the stated delay and padding
+            // in the extractor's rate's: [Trim.at] makes each the output's, whose rate a decoder may double (an AAC's
+            // implicit SBR), or drops it where it can't be made so exactly, never applied as it is.
             val edit = mp4?.edit()?.takeIf { mp4.timescale in 1..Int.MAX_VALUE }
             val ogg = if (mime == MediaFormat.MIMETYPE_AUDIO_OPUS || mime == MediaFormat.MIMETYPE_AUDIO_VORBIS) {
                 readContainer("its Ogg pages") { Ogg.stream(file) }
             } else null
             val trim = when {
-                edit != null -> Trim.edit(edit.mediaTime, mp4.keptFrames(edit), mp4.timescale.toInt(),
-                    fallback = Trim.stated(delay, padding))
+                edit != null -> Trim.edit(edit.mediaTime, readContainer("its edit list") { mp4.keptFrames(edit) },
+                    mp4.timescale.toInt(), fallback = Trim.stated(delay, padding, rate))
                 ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames, rate = ogg.rate,
-                    fallback = Trim.stated(delay, padding))
+                    fallback = Trim.stated(delay, padding, rate))
                 silence != null -> Trim(skip = (silence.second - MP3_DECODER_DELAY).toLong(),
                     cutEnd = MP3_DECODER_DELAY.toLong())
-                else -> Trim.stated(delay, padding)
+                else -> Trim.stated(delay, padding, rate)
             }
             val codec = try {
                 MediaCodec.createByCodecName(name)

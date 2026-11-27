@@ -9,7 +9,9 @@ import io.github.danielhp95.caracole.autochords.Scores
  * computer's records, each :autochords' port (held to beat_this and mir_eval by the corpus, vectors/autochords/
  * chunks, peaks and scores.jsonl): the piece cut into chunks and the logits put together again ([logits],
  * [Chunks.split] and [Chunks.aggregate]), the minimal postprocessor ([peaks], [Peaks.of]) and the beats' F-measure
- * ([fMeasure], [Scores.beatF]; [trimmed], [Scores.trimBeats]). No copy of them is kept here.
+ * ([fMeasure], [Scores.beatF]; [trimmed], [Scores.trimBeats]). No copy of them is kept here, so their refusals are
+ * these: [fMeasure] refuses beats out of order or past mir_eval's MAX_TIME (`beat.validate`'s), and [peaks] any frame
+ * rate but beat_this's own, [Peaks.FPS] (50), each an [IllegalArgumentException].
  */
 internal object BeatThis {
     /** The beat and downbeat logits of a log-mel of [frames] × [bins], chunk by chunk through [model] (a chunk's

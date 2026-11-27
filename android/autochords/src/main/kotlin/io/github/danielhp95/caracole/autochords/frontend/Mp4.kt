@@ -41,11 +41,11 @@ object Mp4 {
     }
 
     /** `a * b / c`, rounded to the nearest, halves away from zero, as FFmpeg's `av_rescale` rounds (a, b ≥ 0,
-     * c > 0). */
+     * c > 0); an answer past a Long (a hostile segment) an [ArithmeticException], never wrapped. */
     fun rescale(a: Long, b: Long, c: Long): Long {
         require(a >= 0 && b >= 0 && c > 0) { "rescale($a, $b, $c)" }
         val product = BigInteger.valueOf(a).multiply(BigInteger.valueOf(b))
-        return product.add(BigInteger.valueOf(c / 2)).divide(BigInteger.valueOf(c)).toLong()
+        return product.add(BigInteger.valueOf(c / 2)).divide(BigInteger.valueOf(c)).longValueExact()
     }
 
     /** [file]'s sound track as mutagen and FFmpeg read it, or null: no MP4, no `moov`, or one mutagen refuses. */

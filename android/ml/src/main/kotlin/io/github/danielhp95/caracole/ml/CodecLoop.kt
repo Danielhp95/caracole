@@ -101,8 +101,10 @@ data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0, va
         fun edit(mediaTime: Long, kept: Long, rate: Int? = null, fallback: Trim? = null) =
             Trim(skip = mediaTime, keep = kept, rate = rate, fallback = fallback)
 
-        /** A delay and a padding the format states (a LAME tag's, an MP4 with no edit list's, else none). */
-        fun stated(delay: Int, padding: Int) = Trim(skip = delay.toLong(), cutEnd = padding.toLong())
+        /** A delay and a padding the format states (a LAME tag's, an MP4 with no edit list's, else none), in samples
+         * of [rate], the extractor's (none, or 0 where the format names none: the output's). */
+        fun stated(delay: Int, padding: Int, rate: Int? = null) =
+            Trim(skip = delay.toLong(), cutEnd = padding.toLong(), rate = rate?.takeIf { it > 0 })
     }
 }
 
@@ -119,13 +121,13 @@ fun <T> readContainer(what: String, block: () -> T): T = try {
 /**
  * MediaCodec's loop over a track, its decisions plain code: the input fed (a [first] buffer before the track's, where
  * given), every output buffer read in its encoding ([PcmEncoding]) to float32 and written, the first frames [skip]
- * says for the output's rate passed over (decided at the output's first format, before any sample is written); it ends
- * at the codec's end of stream. It never hangs and never mixes layouts:
+ * says for the output's rate passed over (decided at each of the output's formats until the codec gives a sample); it
+ * ends at the codec's end of stream. It never hangs and never mixes layouts:
  *
  * - after the input's end, [IDLE_MOST] answers in a row with no output and no end of stream is a decoder that stopped
  *   ([UndecodableAudio]), and so is [STALL_NS] of the clock with neither an input taken nor an output given;
- * - a rate or a channel count that changes once samples were written is refused (the samples before are of another
- *   layout); an encoding that changes is read in its own.
+ * - a rate or a channel count that changes once the codec gave samples (skipped or written) is refused (the samples
+ *   before are of another layout); an encoding that changes is read in its own.
  */
 class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
     class Result(val rate: Int, val channels: Int, val encoding: PcmEncoding)
@@ -138,6 +140,7 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
         var format: OutFormat? = null
         var encoding = PcmEncoding.PCM_16
         var toSkip = -1L
+        var given = 0L  // the frames the codec gave, skipped or written
         var idle = 0
         var progress = nanos()
         while (true) {
@@ -166,22 +169,26 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
             when {
                 o == CodecPort.FORMAT_CHANGED -> {
                     val f = codec.outputFormat()
-                    format = settled(format, f, out.samples)
+                    format = settled(format, f, given)
                     encoding = PcmEncoding.of(f.encoding)
-                    if (toSkip < 0) toSkip = skip(f.rate)
+                    // Decided again at each format before the first sample: the rate it is decided for is the one
+                    // the samples come at.
+                    if (given == 0L) toSkip = skip(f.rate)
                 }
                 o >= 0 -> {
                     if (format == null) {
                         val f = codec.outputFormat(o)
-                        format = settled(null, f, out.samples)
+                        format = settled(null, f, given)
                         encoding = PcmEncoding.of(f.encoding)
                     }
                     if (toSkip < 0) toSkip = skip(format.rate)
                     val buffer = codec.outputBuffer(o).duplicate().order(ByteOrder.nativeOrder())
                     buffer.position(info.offset).limit(info.offset + info.size)
                     val frameBytes = encoding.bytes * format.channels
-                    val passed = minOf(toSkip, (info.size / frameBytes).toLong()).toInt()
+                    val frames = (info.size / frameBytes).toLong()
+                    val passed = minOf(toSkip, frames).toInt()
                     toSkip -= passed
+                    given += frames
                     buffer.position(info.offset + passed * frameBytes)
                     out.write(buffer, encoding)
                     codec.releaseOutput(o)
@@ -199,10 +206,11 @@ class CodecLoop(private val nanos: () -> Long = System::nanoTime) {
         return Result(f.rate, f.channels, encoding)
     }
 
-    /** [now], the output's format, as the one settled: [before]'s, unless no sample was written yet. */
-    private fun settled(before: OutFormat?, now: OutFormat, written: Long): OutFormat {
+    /** [now], the output's format, as the one settled: [before]'s, unless the codec gave no sample yet (none
+     * skipped, none written: the skip, decided at a rate, is then decided again). */
+    private fun settled(before: OutFormat?, now: OutFormat, given: Long): OutFormat {
         if (now.rate <= 0 || now.channels <= 0) throw UndecodableAudio("the decoder named no rate or channels")
-        if (before != null && written > 0 && (before.rate != now.rate || before.channels != now.channels)) {
+        if (before != null && given > 0 && (before.rate != now.rate || before.channels != now.channels)) {
             throw UndecodableAudio("the decoder changed from ${before.rate} Hz, ${before.channels} channels to " +
                 "${now.rate} Hz, ${now.channels} channels partway")
         }

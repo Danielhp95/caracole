@@ -12,6 +12,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -54,6 +55,12 @@ class ContainerLengthTest {
         assertEquals(264_600L, track.keptFrames(track.edit()!!))
         assertEquals(22L, Mp4.rescale(1, 44100, 2000))
         assertEquals(23L, Mp4.rescale(1, 45, 2))  // 22.5 rounds away from zero, as FFmpeg's av_rescale does
+    }
+
+    @Test fun anEditsLengthPastALongIsRefusedNeverWrapped() {
+        // A hostile segment: Long.MAX_VALUE seconds of a movie of 1 a second, in a media of 44,100 a second.
+        val track = Mp4.Track(44100, 300_000, 1, listOf(Mp4.Edit(Long.MAX_VALUE, 0)))
+        assertFailsWith<ArithmeticException> { track.keptFrames(track.edit()!!) }
     }
 
     @Test fun moreThanOneMediaEditIsNoEditTrimmedExactly() {

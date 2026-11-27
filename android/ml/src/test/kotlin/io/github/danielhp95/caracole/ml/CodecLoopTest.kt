@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.ml
 
+import io.github.danielhp95.caracole.autochords.frontend.Mp4
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -120,13 +121,26 @@ class CodecLoopTest {
     }
 
     @Test fun anEditIsAppliedAtTheOutputsRateRescaledExactlyElseTheStatedDelayAlone() {
-        val edit = Trim.edit(mediaTime = 1024, kept = 132_300, rate = 22050, fallback = Trim.stated(2112, 0))
+        val edit = Trim.edit(mediaTime = 1024, kept = 132_300, rate = 22050,
+            fallback = Trim.stated(2112, 0, rate = 16000))
         assertEquals(Trim(skip = 1024, keep = 132_300), edit.at(22050))
         // A decoder that doubles the rate (implicit SBR): the edit's samples twice as many, exactly.
         assertEquals(Trim(skip = 2048, keep = 264_600), edit.at(44100))
-        // A rate the edit can't be rescaled to exactly: the stated delay, never a count of another rate.
-        assertEquals(Trim.stated(2112, 0), edit.at(32000))
+        // A rate the edit can't be rescaled to exactly: the stated delay, in its own rate's samples made the output's,
+        // never a count of another rate.
+        assertEquals(Trim(skip = 4224), edit.at(32000))
+        // Neither the edit nor the stated delay rescaled exactly: no trim.
+        assertEquals(Trim(skip = 0), edit.at(37800))
         assertEquals(Trim(skip = 0), Trim.edit(1024, 33_075, rate = 11025).at(16000))
+    }
+
+    @Test fun theStatedDelayAndPaddingAreInTheExtractorsRateAndMadeTheOutputsOrDropped() {
+        val stated = Trim.stated(2112, 960, rate = 22050)
+        assertEquals(Trim(skip = 2112, cutEnd = 960), stated.at(22050))
+        assertEquals(Trim(skip = 4224, cutEnd = 1920), stated.at(44100))
+        assertEquals(Trim(skip = 0), stated.at(32000))
+        // A format that names no rate: its numbers are the output's, as they are.
+        assertEquals(Trim(skip = 2112, cutEnd = 960), Trim.stated(2112, 960, rate = 0).at(32000))
     }
 
     @Test fun aCodecThatDoublesTheRateGetsTheEditAtItsOwnRateNothingPastTheDeclaredPaddingCut() {
@@ -141,6 +155,17 @@ class CodecLoopTest {
         assertArrayEquals(FloatArray(8) { (400 + 100 * it) / 32768f }, samples, 0f)
     }
 
+    @Test fun aSecondFormatOfAnotherRateBeforeAnySampleDecidesTheSkipAgain() {
+        // The codec first names the extractor's 22,050 Hz, then 44,100 before its first sample: the skip is the
+        // second rate's (4 of the edit's 2), as the keep is.
+        val codec = FakeCodec(listOf(Answer.Format(OutFormat(22050, 1, null)), Answer.Format(OutFormat(44100, 1, null)),
+            Answer.Buffer(shorts(*IntArray(7) { 100 * it })), Answer.Buffer(shorts(*IntArray(7) { 700 + 100 * it }),
+            end = true)))
+        val (result, samples) = run(codec, Trim.edit(mediaTime = 2, kept = 4, rate = 22050))
+        assertEquals(44100, result.rate)
+        assertArrayEquals(FloatArray(8) { (400 + 100 * it) / 32768f }, samples, 0f)
+    }
+
     @Test fun aContainerReadersFailureIsUndecodableInWords() {
         val io = assertThrows(UndecodableAudio::class.java) {
             readContainer("its MP4 boxes") { throw java.io.IOException("seek past the end") }
@@ -148,6 +173,10 @@ class CodecLoopTest {
         assertEquals("its MP4 boxes can't be read: seek past the end", io.message)
         assertThrows(UndecodableAudio::class.java) { readContainer("its Ogg pages") { require(false) { "x" } } }
         assertEquals(3, readContainer("anything") { 3 })
+        // An edit list's numbers past a Long: refused in words, never wrapped into an empty decode.
+        val edit = Mp4.Edit(Long.MAX_VALUE, 0)
+        val huge = Mp4.Track(44100, 1, 1, listOf(edit))
+        assertThrows(UndecodableAudio::class.java) { readContainer("its edit list") { huge.keptFrames(edit) } }
     }
 
     @Test fun anMp4IsTrimmedToItsEditListExactlyWhateverItsPadding() {

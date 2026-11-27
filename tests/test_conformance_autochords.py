@@ -39,7 +39,9 @@ SIZES = (25, 170)
 NOT_SIZES = (0, 24, 26, 169, 171)
 # Labels no BTC vocabulary has, which common_name still names as btc.py does.
 OTHER_LABELS = ("C:min/b3", "G/5", "C:weird", "", ":min", "Cb", "E#:maj", "N:min", "X:7", "Bb:min7/7")
-# Frame lengths at which Python's round(…, 3) and a naive half-up rounding disagree (frames records).
+# Frame lengths for the frames records: at the first three Python's round(…, 3) and a naive half-up rounding of the
+# decimal shown disagree at some of the 25 frames' times (round's half to even on the exact binary value); at 2.0005,
+# a control, they never do.
 TIE_FRAME_SECONDS = (1.0005, 0.0015, 0.0025, 2.0005)
 ROUNDED = ((0, 3000, 1), (3000, 155520, 149))  # four hours of frames at 10/108 s, sparsely past the first 3,000
 
