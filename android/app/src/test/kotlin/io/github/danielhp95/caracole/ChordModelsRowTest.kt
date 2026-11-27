@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 /** Settings' "Chords from audio" row (the chords-on-the-phone design's §8.3): its line for each state, and what it
  * offers, from the models' size, ModelsRunner.ready, what keeps the phone from chords, and the newest models job. */
 class ChordModelsRowTest {
-    private val size = 54_000_000L  // the design's 54 MB (this build's pins are 56,312,162 bytes: "56 MB")
+    private val size = 54_000_000L  // a size of its own (this build's download is 54,906,721 bytes: "55 MB")
     private val missing = "The chord models aren't on the phone."
 
     @Test fun `not downloaded says the size and offers Download`() {

@@ -125,12 +125,18 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
 
        nix develop ./android#ml -c gradle -p android :app:assembleRelease
 
-   Without those properties the release APK is built unsigned. Outside the `ml` shell `assembleRelease` refuses (the
-   app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
+   Without those properties the release APK is built unsigned. Outside the `ml` shell every packaging task of the
+   release (assemble, bundle, package, install) refuses before anything runs, so no `app-release.apk` without the chord
+   models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
    over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
    arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
    models for this phone's processor". `android/scripts/release-check.sh` checks all of it.
-3. Add it to the repository and sign the index (the repository's own key and its passwords are
+3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
+   that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
+   same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
+   release's R8 output and its arm64 libraries run nowhere else before it is published (the emulator takes debug
+   builds alone, the Chords bench is a debug build's).
+4. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
        cp android/app/build/outputs/apk/release/app-release.apk docs/fdroid/repo/io.github.danielhp95.caracole_<versionCode>.apk
@@ -139,11 +145,11 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    `docs/fdroid/config.yml` keeps the last four APKs in the repository (`archive_older: 4`, the older ones moved to
    `archive/`, which isn't published), so that at about 20 MB an APK the Pages site stays far under its 1 GB.
 
-4. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
+5. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
    app finds a file of its own schema: update the laptop's service, run `sudo caracole-admin index publish
    /var/lib/caracole/publish`, then `publish-indexes /var/lib/caracole/publish` (docs/deploy.md, "Publishing the site
    indexes"). Until then the app says the published catalogues are for an older version.
-5. Commit `docs/fdroid/` whole and push `main`: `git add docs/fdroid` (its `.gitignore` keeps the keys and `tmp/`
+6. Commit `docs/fdroid/` whole and push `main`: `git add docs/fdroid` (its `.gitignore` keeps the keys and `tmp/`
    out). That includes what `fdroid update` writes besides the APK and the index: `repo/diff/` and the app's icon
    under `repo/io.github.danielhp95.caracole/`. The index names them, and F-Droid fails to update from the last
    index when they're missing. The app's page in F-Droid (its description, screenshots) is `docs/fdroid/metadata/`.
@@ -988,8 +994,8 @@ It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's W
 the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
 the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
 
-**Settings › Chords from audio** (`ChordModelsRow`) says where the models stand: "Not downloaded · 56 MB",
-"Downloading · 21 of 56 MB", "Ready · 56 MB on the phone", "Not downloaded: why" (a phone that can't make chords, a
+**Settings › Chords from audio** (`ChordModelsRow`) says where the models stand: "Not downloaded · 55 MB",
+"Downloading · 21 of 55 MB", "Ready · 55 MB on the phone", "Not downloaded: why" (a phone that can't make chords, a
 download that failed), or "Waiting for your go-ahead (a metered network)". Download asks first (the size still to
 fetch: a file a failed download kept is none of it), then, on a metered network, again; then it queues the `models`
 job and follows its line. Remove asks, then deletes `files/state/models/` (refused while a sheet is being made from

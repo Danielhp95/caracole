@@ -12,8 +12,8 @@
     <application>
         <!-- The chord models' process (the design's §3.3): MlService alone runs in ":ml", bound by MlChordModels from
              the main process, so the models' memory, a crash or the low-memory killer never touch the app's server.
-             Not exported: only caracole's own processes bind it. :ml is the debug build's alone, so the release's
-             manifest has neither (release-check.sh). -->
+             Not exported: only caracole's own processes bind it. Both builds of the ml shell carry it, the release
+             too (release-check.sh). -->
         <service
             android:name="io.github.danielhp95.caracole.ml.MlService"
             android:exported="false"

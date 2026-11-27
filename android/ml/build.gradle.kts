@@ -1,7 +1,6 @@
-// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime 1.27.1 built from its source (the design's
-// §3.5, Gate R), an
-// Android library linked into the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries a
-// runtime before the owner chooses the one that ships. Its device test, ModelParityTest, holds the runtime's logits to
+// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime 1.27.1 built from its source (the
+// design's §3.5, Gate R), an Android library the app takes in both builds of flake.nix's ml shell (app/build.gradle.kts:
+// the release with its libraries for arm64-v8a alone). Its device test, ModelParityTest, holds the runtime's logits to
 // the computer's (tests/conformance/vectors/autochords/models.jsonl), DecoderTest its Decoder's PCM to the computer's
 // decode (decode.jsonl), and PipelineTest the whole hearing in the :ml process (Pipeline, MlService, MlChordModels) to
 // the computer's over the committed clips, each run by `android/scripts/device-test.sh --ml`.

@@ -45,8 +45,12 @@ data class Pins(val contract: Int, val release: String, val files: List<Pin>,
     /** The folder the files are installed in, `stateDir/models/c<contract>` (MlChordModels' `models`). */
     fun folder(stateDir: File): File = File(File(stateDir, ModelFiles.FOLDER), "c$contract")
 
-    /** The bytes of every file: what the Settings row says a download is. */
+    /** The bytes of every file, BTC's graph the app carries among them. */
     val bytes: Long get() = files.sumOf { it.bytes }
+
+    /** The bytes a download asks for, the files the app doesn't carry (BTC's weights, beat_this's graph: about
+     * 55 MB): what the Settings row and its question say. */
+    val downloaded: Long get() = files.filter { it.from !is From.App }.sumOf { it.bytes }
 }
 
 /**

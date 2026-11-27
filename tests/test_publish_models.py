@@ -31,7 +31,7 @@ class Rig:
 
     def __init__(self, tmp_path: Path):
         self.tmp = tmp_path
-        self.gh = FakeGh(tmp_path / "bin")
+        self.gh = FakeGh(tmp_path / "bin", tag="models")
         self.dir = tmp_path / "models"
         self.dir.mkdir()
         self.files = {FP32: b"the fp32 graph", FP16: b"the fp16 graph"}
@@ -146,6 +146,12 @@ def test_an_upload_github_holds_otherwise_is_deleted_and_fails(rig):
     assert done.returncode == 1
     assert f"GitHub holds {FP32} with another size or digest than the pins'" in done.stderr
     assert rig.gh.names() == []
+
+
+def test_another_repository_or_release_is_never_asked(rig):
+    done = rig.run(REPO="someone/else")
+    assert done.returncode == 1
+    assert rig.gh.names() == [] and rig.uploads() == []
 
 
 def test_nothing_but_the_two_graphs_is_touched(rig):

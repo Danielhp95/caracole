@@ -47,8 +47,8 @@ import java.time.Instant
  * network stopped is asked about ("52 MB on a metered network?") while the network is still metered, whoever queued
  * it (the Journal's Try again too), Download then the owner's go-ahead, the question kept for the next screen until it
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
- * Chords from audio (ChordModelsRow): the models' line ("Not downloaded · 54 MB", "Downloading · 21 of 54 MB",
- * "Ready · 54 MB on the phone", "Not downloaded: {why}", "Waiting for your go-ahead (a metered network)"), Download
+ * Chords from audio (ChordModelsRow): the models' line ("Not downloaded · 55 MB", "Downloading · 21 of 55 MB",
+ * "Ready · 55 MB on the phone", "Not downloaded: {why}", "Waiting for your go-ahead (a metered network)"), Download
  * (§6's question, then a metered network's, then ModelsRunner's job queued, its line followed) and Remove (its
  * question, then ModelsRunner.remove, its refusal said); in the debug build, the Chords bench after it. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
@@ -399,7 +399,7 @@ class SettingsActivity : Activity() {
         chordsRemove.visibility = if (row.remove) View.VISIBLE else View.GONE
     }
 
-    /** The row drawn now, then followed while the newest models job waits or runs ("Downloading · 21 of 54 MB"). */
+    /** The row drawn now, then followed while the newest models job waits or runs ("Downloading · 21 of 55 MB"). */
     private fun followChords() {
         followingChords?.cancel()
         followingChords = scope.launch {
@@ -432,7 +432,7 @@ class SettingsActivity : Activity() {
         }
     }
 
-    /** "You're on a metered network. Download 54 MB anyway?": Download, the go-ahead; Not now queues nothing. */
+    /** "You're on a metered network. Download 55 MB anyway?": Download, the go-ahead; Not now queues nothing. */
     private fun askMetered(size: String) {
         askChords(AlertDialog.Builder(this)
             .setMessage(getString(R.string.chords_metered, size))

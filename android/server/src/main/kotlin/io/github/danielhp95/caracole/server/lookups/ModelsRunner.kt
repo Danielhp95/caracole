@@ -49,20 +49,20 @@ import kotlin.concurrent.read
  * 1. a build that carries no models ([source] null: ModelFiles.carried() found no models.json, the release's until
  *    stage S): "Not downloaded: This build carries no chord models.", no request, nothing written;
  * 2. the folder already installed whole ([ModelFiles.installed], the judge: the files, never the record): "Chord models
- *    ready · 54 MB", no request (kv [INSTALLED] written where it was lost);
+ *    ready · 55 MB", no request (kv [INSTALLED] written where it was lost);
  * 3. a time GitHub said to ask again after (kv [NOT_BEFORE]) still to come, up to [Catalogues.MOST_AHEAD]
  *    ahead (further, a clock that was wrong, passed over): its [Limited]'s words, a wait (the kind's
  *    [PhoneKinds.Kind.pauses]), no request;
- * 4. on a metered network ([metered]) with no `--metered-ok`: "54 MB to download: waiting for your go-ahead in
+ * 4. on a metered network ([metered]) with no `--metered-ok`: "55 MB to download: waiting for your go-ahead in
  *    Settings (a metered network)", the catalogues' stop and words (the kind's [PhoneKinds.Kind.otherwise], a wait:
  *    nothing starts it again on Wi-Fi by itself); asked again with `--metered-ok` (the go-ahead, a job of its own
  *    key, [GO]), downloaded whatever the network;
  * 5. the lookups queued meanwhile let go first (JobContext.yieldToQueued, holding no write: the download takes a
  *    minute), then [ModelsSource.fetch], saying "Asking GitHub for the chord models…", "Downloading the chord models ·
- *    21 of 54 MB" (its done and total as the stage's progress too) and, its last byte in, "Checking the chord
+ *    21 of 55 MB" (its done and total as the stage's progress too) and, its last byte in, "Checking the chord
  *    models…", at most once a second of [ticks] within a step (Paced); then the lookups queued as it came let go
  *    first again (never between its requests: a connection held open while a lookup runs);
- * 6. the folder judged again ([ModelFiles.installed]), then kv [INSTALLED] written, and "Chord models ready · 54 MB".
+ * 6. the folder judged again ([ModelFiles.installed]), then kv [INSTALLED] written, and "Chord models ready · 55 MB".
  *
  * A [Limited] anywhere keeps its time in kv [NOT_BEFORE] (a database that fails there passed over, as the catalogues'
  * do: the wait is said all the same) and ends the job as a wait in its own words (where the catalogues' job fails). Any other
@@ -95,9 +95,10 @@ class ModelsRunner(
      * none: a sheet's maker (AudioRunner). */
     fun names(): Map<String, String> = pins?.models.orEmpty()
 
-    /** Every file's bytes in this build (what Settings' row says the models are: "Ready · 54 MB on the phone"), none
-     * in a build that carries none. */
-    fun bytes(): Long? = pins?.bytes
+    /** The bytes a download of this build's models asks for (Pins.downloaded: what Settings' row and its question
+     * say, "Not downloaded · 55 MB", "Ready · 55 MB on the phone"; BTC's graph, the app's own, never counted), none in
+     * a build that carries none. */
+    fun bytes(): Long? = pins?.downloaded
 
     /** The bytes a download would ask for now (ModelsSource.toDownload: a file a failed fetch kept whole, and the
      * app's own graph, never counted), what the metered wait and Settings' questions say; none in a build that
@@ -120,7 +121,7 @@ class ModelsRunner(
 
     /** What a download killed in its middle left beside the folder (ModelFiles.sweep), deleted: called as the phone
      * starts, while no job runs. With no folder there, nothing: an install a kill left aside between its two renames
-     * (`.old`) is the next download's to put back, never 54 MB to download again. */
+     * (`.old`) is the next download's to put back, never 55 MB to download again. */
     fun sweep() {
         val folder = folder() ?: return
         if (folder.isDirectory) ModelFiles.sweep(folder)
@@ -235,7 +236,7 @@ class ModelsRunner(
                 )))
             }
         }
-        context.stage(STAGE, "done", PhoneKinds.fill(PhoneKinds.MODELS.done, "size" to Sizes.size(pins.bytes)))
+        context.stage(STAGE, "done", PhoneKinds.fill(PhoneKinds.MODELS.done, "size" to Sizes.size(pins.downloaded)))
     }
 
     /** [block] run, a failure of it passed over, but a cancellation's (CataloguesRunner's). */
@@ -292,7 +293,7 @@ class ModelsRunner(
         /** The download's step, whatever its count says (Paced). */
         private const val DOWNLOADING = "downloading"
 
-        /** "Downloading the chord models · 21 of 54 MB". */
+        /** "Downloading the chord models · 21 of 55 MB". */
         fun downloading(got: Long, total: Long): String = "Downloading the chord models · " + Sizes.of(got, total)
 
         /** [root] and everything under it deleted, no link followed (a link deleted as itself); nothing for no

@@ -9,7 +9,10 @@
   ``size``, ``state``, ``digest``)
   and ``api -X DELETE repos/R/releases/assets/ID``.
 
-Every call is logged to ``calls.jsonl`` with ``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
+Every path checks the repository and the release's tag it is asked for against the fake's own (``FakeGh(root, tag=,
+repo=)``: ``indexes`` and ``o/r`` by default): another answers as GitHub would one it lacks (exit 1, "HTTP 404"), so a
+script that names the wrong release or repository fails its test. Every call is logged to ``calls.jsonl`` with
+``GH_TOKEN``. ``FAKE_GH_FAIL=<kind>:<n>`` makes the
 n-th call of that kind fail (exit 1, nothing changed); kinds: ``create``, ``edit``, ``upload``, and ``api`` for the
 changing api calls (DELETE) alone. A state's ``corrupt_upload`` makes an upload list a digest that is not the file's,
 ``no_digest`` none at all.
@@ -62,6 +65,26 @@ def option(flag):
 def remove(a):
     state["assets"].remove(a)
 
+def wrong(why):
+    save()
+    sys.stderr.write(f"HTTP 404: {why}\n")
+    sys.exit(1)
+
+# The repository and the tag every path names must be the fake's own.
+if argv[:1] == ["release"]:
+    if option("--repo") != state["repo"]:
+        wrong(f"no repository {option('--repo')}")
+    if argv[2] != state["tag"] and argv[1] != "create":
+        wrong(f"no release {argv[2]}")
+    if argv[1] == "create" and argv[2] != state["tag"]:
+        wrong(f"a release {argv[2]} isn't the one this test expects")
+elif argv[:1] == ["api"]:
+    route = next(x for x in argv[1:] if x.startswith("repos/"))
+    if not route.startswith("repos/" + state["repo"] + "/"):
+        wrong(f"no repository in {route}")
+    if "/releases/tags/" in route and route.rsplit("/", 1)[1] != state["tag"]:
+        wrong(f"no release in {route}")
+
 if argv[:2] == ["release", "view"]:
     sys.exit(0 if state["release"] else 1)
 if argv[:2] == ["release", "create"]:
@@ -109,7 +132,7 @@ elif argv[0] == "api":
             for n in range(0, max(len(shown), 1), 2):
                 print(json.dumps(shown[n:n + 2]))
         else:
-            print(json.dumps({"tag_name": "indexes", "id": 7,
+            print(json.dumps({"tag_name": state["tag"], "id": 7,
                               "prerelease": bool(state["release"].get("prerelease")), "assets": shown}))
         sys.exit(0)
     fails("api")
@@ -125,11 +148,12 @@ save()
 
 
 class FakeGh:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, tag: str = "indexes", repo: str = "o/r"):
         self.root = root
+        self.tag = tag
         root.mkdir(parents=True, exist_ok=True)
         self.state: dict[str, Any] = {"release": None, "assets": [], "next_id": 100, "counts": {},
-                                      "corrupt_upload": False}
+                                      "corrupt_upload": False, "tag": tag, "repo": repo}
         (root / "gh").write_text("#!" + sys.executable + "\n" + SCRIPT, encoding="utf-8")
         (root / "gh").chmod((root / "gh").stat().st_mode | stat.S_IXUSR)
         self.save()
@@ -142,7 +166,7 @@ class FakeGh:
 
     def release(self, *, prerelease: bool = True) -> FakeGh:
         """The release, made as the script makes it (a prerelease), or ``prerelease=False`` as it was made once."""
-        self.state["release"] = {"tag": "indexes", "args": [], "prerelease": prerelease}
+        self.state["release"] = {"tag": self.tag, "args": [], "prerelease": prerelease}
         self.save()
         return self
 
@@ -150,7 +174,7 @@ class FakeGh:
               digest: str | None = None, no_digest: bool = False) -> FakeGh:
         import base64
 
-        self.state["release"] = self.state["release"] or {"tag": "indexes", "args": [], "prerelease": True}
+        self.state["release"] = self.state["release"] or {"tag": self.tag, "args": [], "prerelease": True}
         self.state["next_id"] += 1
         self.state["assets"].append({
             "id": self.state["next_id"], "name": name, "size": len(data) if size is None else size,

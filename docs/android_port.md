@@ -419,7 +419,7 @@ heard on the phone, in a process of its own (`:ml`, on ONNX Runtime 1.27.1 built
 phones home), and the sheet laid out by the computer's own rules, ported byte for byte. The phone hears no words:
 vocals and Whisper stay the computer's.
 
-- The models, about 56 MB, are downloaded once from Settings › Chords from audio (`caracole models`, a job of the
+- The models, about 55 MB, are downloaded once from Settings › Chords from audio (`caracole models`, a job of the
   phone's own), beat_this's from this repository's `models` release, BTC's from its authors' repository unchanged.
 - Each auto sheet keeps what was heard (`raw["heard"]`), so either side lays it out again over new words with no
   model; a sheet made on the phone syncs, and the computer leaves it but where it hears words every site missed.

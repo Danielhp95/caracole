@@ -36,8 +36,8 @@ import kotlin.concurrent.thread
  *
  * GitHub is this test's own server on the device's loopback, at CaracoleTestRunner.MODELS_PORT, where the app's
  * `phone.models` asks (Caracole.modelsForTests): its release lists beat_this's file and answers it, and BTC's blob,
- * each the file device-test.sh pushed (`-e models`; skipped without). Settings says "Not downloaded · 56 MB";
- * Download asks §6's question, then queues the `models` job, its line followed to "Ready · 56 MB on the phone"; the
+ * each the file device-test.sh pushed (`-e models`; skipped without). Settings says "Not downloaded · 55 MB";
+ * Download asks §6's question, then queues the `models` job, its line followed to "Ready · 55 MB on the phone"; the
  * library page then shows the "+"; Remove asks first, then takes the models away, the row "Not downloaded" again and
  * the "+" gone. On a metered network, Download asks its second question, and Not now queues nothing.
  */

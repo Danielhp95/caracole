@@ -2922,8 +2922,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   E33), and only in the `./android#ml` shell, whose `CARACOLE_ONNXRUNTIME` names the runtime's Maven folder: without it
   settings.gradle.kts includes no `:ml`, and the app takes src/noMl's `PhoneChords` and `PhoneExaminer` (none) for
   src/ml's, no Chords bench (`BuildConfig.CHORDS_BENCH`), and leaves out src/debugMl, src/testDebugMl and
-  src/androidTestMl, so the other shells build and test the rest with no ONNX Runtime; `assembleRelease` refuses
-  there. The release carries the chord models' libraries for arm64-v8a alone (app/build.gradle.kts `releaseMlAbis`,
+  src/androidTestMl, so the other shells build and test the rest with no ONNX Runtime; any release packaging task
+  (assemble, bundle, package, install) refuses there as the task graph is ready, before anything runs. The release carries the chord models' libraries for arm64-v8a alone (app/build.gradle.kts `releaseMlAbis`,
   `BuildConfig.ML_ABIS`; SQLite's for both): `MlChordModels.deviceProblem(carried=)` says "no chord models for this
   phone's processor" on an x86_64 phone; `checkApkSize` (after every release build) fails an APK over 100 MiB.
   - The runtime: nix/onnxruntime-android.nix, with no network: nixpkgs' pin of the v1.27.1 source
@@ -3154,8 +3154,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   download as a job of PhoneKinds' `MODELS` kind (`spec()`, key `models:`, the go-ahead's `models:go`, `join` false:
   a request while one waits or runs answered by that one; the queue's one worker and nothing else calling `fetch`
   are its "one fetch at a time"), modelled on `CataloguesRunner`: its one stage says "Asking GitHub for the chord
-  models…", "Downloading the chord models · 21 of 54 MB" (its done and total the stage's progress too) and "Checking
-  the chord models…" through `Paced`, then "Chord models ready · 54 MB"; a folder installed whole asks nothing; the
+  models…", "Downloading the chord models · 21 of 55 MB" (its done and total the stage's progress too) and "Checking
+  the chord models…" through `Paced`, then "Chord models ready · 55 MB"; a folder installed whole asks nothing; the
   lookups queued meanwhile let go first before and after `fetch`, never between its requests; a metered network's
   stop the catalogues' own (`otherwise`, a wait), a `Limited` a wait too in its own words (the kind's `pauses`), kept
   in kv `models:not-before`; any other refusal "Not downloaded: WHY". `PhoneDeps.models` (a `ModelsSource`, this
@@ -3171,10 +3171,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Settings' questions'. ModelsRunnerTest over FakeGitHub, ModelsTest on the device.
 - The app's Settings › Chords from audio (`ChordModelsRow`, SettingsActivity's row): its line from `bytes()`,
   `ready()`, `Phone.chordsProblem()` (ChordModels.phoneProblem, MlChordModels' device check: what keeps the phone
-  from chords whatever the models' files) and the newest models job ("Not downloaded · 56 MB", "Downloading · 21 of 56 MB", "Ready · 56 MB on the phone", "Not
+  from chords whatever the models' files) and the newest models job ("Not downloaded · 55 MB", "Downloading · 21 of 55 MB", "Ready · 55 MB on the phone", "Not
   downloaded: why", "Waiting for your go-ahead (a metered network)", the job's own metered line, there being no
   `models:asking` record); Download asks §6's question with `toDownload()`, then a metered network's ("You're on a
-  metered network. Download 56 MB anyway?", `Caracole.metered` now), then queues `spec(meteredOk)`; Remove asks, then
+  metered network. Download 55 MB anyway?", `Caracole.metered` now), then queues `spec(meteredOk)`; Remove asks, then
   `remove()`, its refusal said under the row; the debug Chords bench the section's last button. ChordModelsRowTest on
   the JVM; SettingsChordsTest on the device, `phone.models` asking a GitHub on loopback (`Caracole.modelsForTests`,
   CaracoleTestRunner's `MODELS_PORT` 8746), the real files device-test.sh pushed (`--models`).

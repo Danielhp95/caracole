@@ -45,7 +45,7 @@ object PhoneKinds {
                                             "{size} to download: waiting for your go-ahead to use mobile data"))
 
     /** The chord models downloaded (the design's §8.4): its stage's words while it runs are what it is doing
-     * (`{doing}`: "Asking GitHub for the chord models…", "Downloading the chord models · 21 of 54 MB", "Checking the
+     * (`{doing}`: "Asking GitHub for the chord models…", "Downloading the chord models · 21 of 55 MB", "Checking the
      * chord models…"), {size} the bytes on the phone once done; its [Kind.otherwise] the catalogues' metered stop, in
      * the catalogues' words, and its other wait ([Kind.pauses]) GitHub's hour spent, core.catalogues' [LIMITED]
      * words, whose {time} is when it may be asked again. */

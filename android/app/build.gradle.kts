@@ -27,6 +27,9 @@ val chordsOnPhone = findProject(":ml") != null
  * processor" on the others (BuildConfig.ML_ABIS). */
 val releaseMlAbis = listOf("arm64-v8a")
 
+/** The app's ABIs (SQLite's library for both, and a debug build's chord models' too). */
+val appAbis = listOf("arm64-v8a", "x86_64")
+
 /** The largest release APK the self-hosted F-Droid repository takes (its Pages site: no file over 100 MB). */
 val apkMost = 100L * 1024 * 1024
 
@@ -50,7 +53,7 @@ android {
         // Sends no site a request: caracole.network=loopback and a refusing Caracole.sitesForTests, before the app starts.
         testInstrumentationRunner = "io.github.danielhp95.caracole.CaracoleTestRunner"
         // The bundled SQLite's native library, for phones and for the emulator.
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        ndk { abiFilters += appAbis }
         // The port the phone's own server asks for first (Caracole.PORT).
         buildConfigField("int", "SERVER_PORT", "8738")
         // Settings' Chords bench row: a debug build with :ml alone (below).
@@ -82,7 +85,7 @@ android {
             versionNameSuffix = "-debug" + (commit?.let { "+$it" } ?: "")
             buildConfigField("int", "SERVER_PORT", "8739")
             buildConfigField("boolean", "CHORDS_BENCH", chordsOnPhone.toString())
-            buildConfigField("String", "ML_ABIS", "\"arm64-v8a,x86_64\"")
+            buildConfigField("String", "ML_ABIS", "\"${appAbis.joinToString(",")}\"")
         }
         release {
             signingConfig = releaseSigning
@@ -165,7 +168,7 @@ kotlin {
 // out of its APK (SQLite's kept).
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
-        for (abi in listOf("x86_64").filter { it !in releaseMlAbis }) {
+        for (abi in appAbis.filter { it !in releaseMlAbis }) {
             variant.packaging.jniLibs.excludes.addAll(
                 "**/$abi/libonnxruntime.so", "**/$abi/libonnxruntime4j_jni.so", "**/$abi/libcaracole_soxr.so")
         }
@@ -173,13 +176,18 @@ androidComponents {
 }
 
 // A release carries the chord models: one made without :ml (outside the ml shell) would ship an app that says
-// auto-chords isn't on the phone, so it is refused.
-tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
-    doFirst {
-        if (!chordsOnPhone) {
-            throw GradleException("a release carries the chord models: build it in flake.nix's ml shell " +
-                "(nix develop ./android#ml), whose CARACOLE_ONNXRUNTIME brings :ml")
-        }
+// auto-chords isn't on the phone, so it is refused before anything runs, whichever of the release's packaging tasks
+// is asked for (assemble, bundle, package, install), so that no app-release.apk is ever written without them. Its
+// tests, lint and compiles still run in every shell (`gradle test`).
+gradle.taskGraph.whenReady {
+    // The tasks that make or install the release's APK or bundle (never its resources' or classes' jars, which
+    // `gradle test`'s release unit tests build too).
+    val packaging = setOf("assembleRelease", "bundleRelease", "packageRelease", "packageReleaseBundle",
+        "signReleaseBundle", "installRelease", "minifyReleaseWithR8")
+    val asked = allTasks.filter { it.project == project && it.name in packaging }.map { it.name }
+    if (!chordsOnPhone && asked.isNotEmpty()) {
+        throw GradleException("a release carries the chord models (asked: ${asked.joinToString()}): build it in " +
+            "flake.nix's ml shell (nix develop ./android#ml), whose CARACOLE_ONNXRUNTIME brings :ml")
     }
 }
 

@@ -282,8 +282,9 @@ class MlChordModels(
          * file in the app's files. */
         const val TURN = "chords.lock"
 
-        const val BUSY = "the chord models are hearing another song (a sheet being made, or the Chords bench's); " +
-            "try again once it's done"
+        /** Another hearing holds the turn: a sheet being made, or (a debug build's) the Chords bench's, which the
+         * words leave out, as the release has no bench. */
+        const val BUSY = "the chord models are hearing another song; try again once it's done"
 
         /**
          * [block], the hearing, run: refused first under the battery floor ([HeatRules.start] over [gauge]: nothing
