@@ -116,6 +116,17 @@ class PipelineCheckpointsTest {
         assertEquals(0, graphs.chords)
     }
 
+    @Test fun eachStageThatRunsIsTimedInItsOrder() {
+        val timed = mutableListOf<Pair<String, Long>>()
+        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted())
+        pipeline.hear(wav(12), tmp.newFolder(), { s, ns -> timed += s to ns }) {}
+        assertEquals(listOf(Pipeline.DECODE, Pipeline.CHORDS, Pipeline.BEATS), timed.map { it.first })
+        timed.clear()
+        pipeline.hear(stereo44k(4), tmp.newFolder(), { s, ns -> timed += s to ns }) {}
+        assertEquals(Pipeline.STAGES, timed.map { it.first })
+        assertTrue(timed.all { it.second > 0 })
+    }
+
     /** A cancel during the decode, the mixdown or the resample stops it there, never once the pcm is whole: a 44.1 kHz
      * stereo WAV, its samples mixed down and resampled, cancelled at the second time it is asked (the first is the
      * stage's start). */

@@ -883,6 +883,21 @@ stereo MP3 and a 48 kHz stereo M4A (`models.jsonl`'s `gates.end_to_end`) and kil
 `device-test.sh --ml` runs it. On the emulator (2026-11-26) every file's WCSR and F are 1.0 (to the last bit but one),
 each heard in 2-10 s, `:ml` at 300-410 MB at its peak.
 
+`ParityRunTest` runs the same gate over songs that stay outside the repository (your own): a folder of audio files
+with the computer's hearing of each beside it, made in the model shell from the repository's root,
+
+    nix develop .#autochords -c python -m tests.helpers.autochords_reference --hearings ~/some-songs ~/hearings
+
+(`meta.json`, the gates, and a few KB a song, `<name>.hearing.json`), then, with the songs and their hearings in one
+folder (links will do),
+
+    android/scripts/device-test.sh --data ~/songs-and-hearings
+
+pushes it to the emulator, hears each song whole through `:ml`, prints each one's WCSR, F, the lengths each model read
+against the computer's, where the chords part, its time stage by stage and `:ml`'s peak, then the whole over all, and
+removes the folder from the emulator however the run ends. Without `--data` the class is skipped. On x86_64 the
+emulator runs the phone's software decoders but not its CPU's kernels: only the phone's own bench says those.
+
 What bounds a song's length is the models' own memory, not the song's: every stage reads the samples from files (the
 pcm memory-mapped, the resampler streamed) in fixed blocks, and beat_this runs over 1500-frame chunks whatever the
 length, so a 30-minute song costs its peak what a 3-minute one does (the beat session, about 756 MB on the owner's
@@ -999,3 +1014,27 @@ What Gate B0 reads in it:
 Which beat file, how many threads and which memory setting ship are yours to choose from it (the design's §11). To
 free the room afterwards, delete the folder; the app's own copy of the models goes with the debug app's data
 (`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`, its library too).
+
+### Gate B1: your songs heard whole
+
+Gate B1 asks whether the phone's whole hearing (decode, mixdown, resample, the CQT and BTC, the mel and beat_this)
+gives your songs the computer's chords and beats: WCSR ≥ 0.99 (majmin) and ≥ 0.98 (tetrads), beats and downbeats F ≥
+0.99 within 0.07 s after the first 5 s, every threshold read from the hearings' `meta.json`. The bench's Hear the
+songs (B1) button runs it.
+
+1. **The computer's hearings**, from the repository's root, of the same songs you bring:
+
+       nix develop .#autochords -c python -m tests.helpers.autochords_reference --hearings ~/some-songs \
+           ~/caracole-bench/hearings
+
+   It writes `meta.json` and one `<name>.hearing.json` a song, a few KB each; one whose lengths disagree is not
+   written, and the command says which.
+2. **The folder**: put the songs themselves in `~/caracole-bench` beside the model files (any name: a song is found
+   by its bytes too), the `hearings` folder in it, and `adb push ~/caracole-bench /sdcard/Download/`.
+3. **Run it**: Debug caracole › Settings › Chords bench, the folder as before (Download › caracole-bench), then
+   **Hear the songs (B1)**. Each song is heard whole in a fresh `:ml` process, the screen kept on; a few minutes a
+   song.
+4. **The report**: `caracole-bench-<UTC time>.json` in the folder, its `hearings`: `gates`; `files`, a song each (its
+   WCSR and F against each threshold, `failures`, `pass`, the samples and frames each model read beside the
+   computer's, `frames_differ` and where, `seconds`, `rtf`, `stages_seconds`, `ml_peak_mb`); `over_all` (`pass`,
+   each score's least and its mean by length, `rtf_max`, `ml_peak_mb_max`); `unmatched`; and `pass`.

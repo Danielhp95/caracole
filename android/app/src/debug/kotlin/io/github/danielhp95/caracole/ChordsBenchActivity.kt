@@ -25,8 +25,8 @@ import io.github.danielhp95.caracole.ml.BenchReport
  * The debug build's Chords bench (the chords-on-the-phone design's §9.1), from Settings' Chords bench row: the folder
  * picked (`ACTION_OPEN_DOCUMENT_TREE`, its grant kept for the next time), what to run (the models, the thread counts,
  * ONNX Runtime's arena off and on, how many passes, the screen-off round, the clips and the references), Start and
- * Stop, and what the runs say. The runs are [BenchService]'s, in this process (":bench"); this screen keeps the
- * screen on for the first round alone.
+ * Stop, [HEAR_SONGS] (the whole-pipeline mode, Gate B1: BenchService's `hearings`), and what the runs say. The runs
+ * are [BenchService]'s, in this process (":bench"); this screen keeps the screen on for the first round alone.
  */
 class ChordsBenchActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("bench", MODE_PRIVATE) }
@@ -36,6 +36,7 @@ class ChordsBenchActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var start: Button
     private lateinit var stop: Button
+    private lateinit var hear: Button
     private lateinit var passes: EditText
     private val models = mutableMapOf<String, CheckBox>()
     private val threads = mutableMapOf<Int, CheckBox>()
@@ -72,6 +73,9 @@ class ChordsBenchActivity : Activity() {
         start = Button(this).apply { text = "Start"; setOnClickListener { begin() } }.also(buttons::addView)
         stop = Button(this).apply { text = "Stop"; setOnClickListener { BenchSession.stopAsked = true } }
             .also(buttons::addView)
+        label("The whole pipeline (Gate B1): each song of the folder heard whole, against the computer's hearing " +
+            "of it in its folder ${BenchHearings.FOLDER}")
+        hear = Button(this).apply { text = HEAR_SONGS; setOnClickListener { hearSongs() } }.also(root::addView)
         log = TextView(this).apply { setTextIsSelectable(true); typeface = android.graphics.Typeface.MONOSPACE }
             .also(root::addView)
         scroll = ScrollView(this).apply { addView(root) }
@@ -97,6 +101,7 @@ class ChordsBenchActivity : Activity() {
     private fun tick() {
         val running = BenchSession.running
         start.isEnabled = !running && folder() != null
+        hear.isEnabled = start.isEnabled
         stop.isEnabled = running
         val text = BenchSession.text()
         if (log.text.toString() != text) {
@@ -152,10 +157,20 @@ class ChordsBenchActivity : Activity() {
         })
     }
 
+    private fun hearSongs() {
+        val uri = folder() ?: return
+        BenchSession.say("starting the whole pipeline…")
+        ContextCompat.startForegroundService(this, Intent(this, BenchService::class.java).apply {
+            putExtra(BenchService.FOLDER, uri.toString())
+            putExtra(BenchService.HEARINGS, true)
+        })
+    }
+
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
         private const val PICK = 1
         private const val FOLDER = "folder"
+        const val HEAR_SONGS = "Hear the songs (B1)"
     }
 }

@@ -3,7 +3,7 @@
 # here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [--ml]
-#                                  [--tcpdump FILE] [CLASS[=DIR]]...
+#                                  [--data DIR] [--tcpdump FILE] [CLASS[=DIR]]...
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server, viewer and autochords.testing's Replays); "all" or an
 #                   empty list: every one
@@ -18,11 +18,18 @@
 #   --ml            :ml's ModelParityTest, DecoderTest and PipelineTest (its own test APK,
 #                   io.github.danielhp95.caracole.ml.test; DecoderTest, the decode gate, needs no model; PipelineTest,
 #                   the whole hearing in the :ml process, says each clip's scores, time and that process's peak RSS),
-#                   then the app's ChordsBenchTest (the debug build's Chords bench) and MlProcessTest (MlService's
-#                   process name, as Caracole.kt's guard names it), over the chord and beat models in
+#                   then ParityRunTest (skipped without --data), the app's ChordsBenchTest (the debug build's Chords
+#                   bench) and MlProcessTest (MlService's process name, as Caracole.kt's guard names it), over the
+#                   chord and beat models in
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
+#   --data DIR      :ml's ParityRunTest, B1's gates over audio of a folder outside the repository (the owner's own
+#                   songs) with the computer's hearing of each beside it (tests/helpers/autochords_reference.py
+#                   --hearings: meta.json and <stem>.hearing.json): its files (a link pushed as the file it names, under
+#                   the link's name) pushed into /data/local/tmp/caracole-data, named to the class (-e data), on the
+#                   models --ml pushes, and that folder removed from the emulator however the run ends. With --ml, in
+#                   its place in that run; alone, ParityRunTest alone
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
@@ -74,6 +81,7 @@ areas=""
 want_areas=0
 want_app=0
 want_ml=0
+data=""
 tcpdump=""
 computer=""
 sites=""
@@ -87,6 +95,7 @@ while [ $# -gt 0 ]; do
         --area=*) want_areas=1; areas="${1#--area=}"; shift ;;
         --app) want_app=1; shift ;;
         --ml) want_ml=1; shift ;;
+        --data) data="${2-}"; [ -n "$data" ] || usage; shift 2 ;;
         --tcpdump) tcpdump="${2-}"; [ -n "$tcpdump" ] || usage; shift 2 ;;
         --computer) computer="${2-}"; [ -n "$computer" ] || usage; shift 2 ;;
         --sites) sites="${2-}"; [ -n "$sites" ] || usage; shift 2 ;;
@@ -95,19 +104,27 @@ while [ $# -gt 0 ]; do
         *) classes+=("$1"); shift ;;
     esac
 done
-[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ "$want_ml" = 1 ] || [ ${#classes[@]} -gt 0 ] || usage
+[ "$want_areas" = 1 ] || [ "$want_app" = 1 ] || [ "$want_ml" = 1 ] || [ -n "$data" ] || [ ${#classes[@]} -gt 0 ] \
+    || usage
+if [ -n "$data" ]; then
+    [ -d "$data" ] || { echo "device-test.sh: no folder '$data'" >&2; exit 2; }
+    data="$(realpath "$data")"
+fi
+models_needed=0
+{ [ "$want_ml" = 1 ] || [ -n "$data" ]; } && models_needed=1
 [ "$areas" = all ] && areas=""
 [ -z "$tcpdump" ] || tcpdump="$(realpath -m "$tcpdump")"
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
 tasks=(assembleDebug assembleDebugAndroidTest)
-[ "$want_ml" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
+[ "$models_needed" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
 (cd "$repo" && nix develop ./android -c gradle -p android "${tasks[@]}" --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 ml_apk="$android/ml/build/outputs/apk/androidTest/debug/ml-debug-androidTest.apk"
 ml_models=/data/local/tmp/caracole-models
-if [ "$want_ml" = 1 ]; then
+ml_data=/data/local/tmp/caracole-data
+if [ "$models_needed" = 1 ]; then
     models="${CARACOLE_CHORD_MODELS:-$(cd "$repo" && nix develop ./android#ml -c printenv CARACOLE_CHORD_MODELS)}"
     [ -f "$models/btc-graph.onnx" ] || { echo "device-test.sh: no chord models in '$models'" >&2; exit 2; }
 fi
@@ -167,7 +184,7 @@ adb() { adb_cmd -s "$serial" "$@"; }
 # 3. Both APKs.
 adb install -r -t "$apk" >/dev/null
 adb install -r -t "$test_apk" >/dev/null
-if [ "$want_ml" = 1 ]; then
+if [ "$models_needed" = 1 ]; then
     adb install -r -t "$ml_apk" >/dev/null
     adb shell mkdir -p "$ml_models"
     for file in "$models"/*; do
@@ -181,6 +198,7 @@ fi
 servers=()
 capturing=0
 owned=0
+data_pushed=0
 # caracole_own's rules taken off, iptables' and ip6tables', whatever state they were left in.
 unown() {
     local t
@@ -191,6 +209,8 @@ unown() {
 }
 cleanup() {
     for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
+    # The folder --data pushed never stays on the emulator.
+    if [ "$data_pushed" = 1 ]; then adb shell rm -rf "$ml_data" >/dev/null 2>&1 || true; fi
     if [ "$owned" = 1 ]; then unown; fi
     # A run cut short while it captured leaves the emulator as it found it: capturing nothing, its Wi-Fi on.
     if [ "$capturing" = 1 ]; then
@@ -199,6 +219,20 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
+
+# --data's folder, each file as itself (a link's target, under the link's name), into a folder of its own there.
+if [ -n "$data" ]; then
+    data_pushed=1
+    adb shell rm -rf "$ml_data"
+    adb shell mkdir -p "$ml_data"
+    for file in "$data"/*; do
+        [ -f "$file" ] || continue
+        # Quiet: adb names the file it pushes, and a link's target's name is no business of the log's.
+        adb push "$(readlink -f "$file")" "$ml_data/$(basename "$file")" >/dev/null 2>&1 \
+            || { echo "device-test.sh: $(basename "$file") wouldn't push" >&2; exit 3; }
+    done
+    echo "device-test.sh: $(adb shell ls "$ml_data" | wc -l) file(s) of $data in $ml_data" >&2
+fi
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'; }
 
@@ -352,9 +386,16 @@ run_with_computer() {
     run_class "$name" -e server "$url"
 }
 
-if [ "$want_ml" = 1 ]; then
-    for name in ModelParityTest DecoderTest PipelineTest; do
-        out="$(adb shell am instrument -w -e class "$ns.ml.$name" -e models "$ml_models" \
+data_args=()
+[ -z "$data" ] || data_args=(-e data "$ml_data")
+ml_classes=()
+[ "$want_ml" = 1 ] && ml_classes=(ModelParityTest DecoderTest PipelineTest ParityRunTest)
+[ "$want_ml" = 0 ] && [ -n "$data" ] && ml_classes=(ParityRunTest)
+if [ ${#ml_classes[@]} -gt 0 ]; then
+    for name in "${ml_classes[@]}"; do
+        args=()
+        [ "$name" = ParityRunTest ] && args=(${data_args[@]+"${data_args[@]}"})
+        out="$(adb shell am instrument -w -e class "$ns.ml.$name" -e models "$ml_models" ${args[@]+"${args[@]}"} \
             "$ns.ml.test/androidx.test.runner.AndroidJUnitRunner" 2>&1 | tr -d '\r')" || true
         echo "$out"
         if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then
@@ -364,6 +405,8 @@ if [ "$want_ml" = 1 ]; then
             failed=1
         fi
     done
+fi
+if [ "$want_ml" = 1 ]; then
     # The debug build's Chords bench over the committed clips, on the same pushed models.
     run_class ChordsBenchTest -e models "$ml_models"
     # The models' process as the installed app declares it, and the guard in Caracole.kt that keeps the phone out.

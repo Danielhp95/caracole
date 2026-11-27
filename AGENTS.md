@@ -2588,7 +2588,9 @@ It is rows.js's, shared by both pages:
   `reference(path)`: the computer's every step, BTC's and beat_this's own code; `python -m
   tests.helpers.autochords_reference IN OUT` the same for the owner's songs, never committed; its length read_audio's,
   and a song whose decoded samples, mel frames and length disagree by more than 0.1 s not written, saying which,
-  `lengths_disagree`):
+  `lengths_disagree`; `--hearings IN OUT` the compact one, the corpus's `hearing` record of each song,
+  `hearing_record`, its `file` its name and SHA-256, `<stem>.hearing.json`, beside `meta.json`, models.jsonl's gates
+  as committed, for ParityRunTest and the bench's B1 mode):
   - `vectors/autochords/frontend.jsonl`: each clip's log-CQT (float32) and log-mel (stored as float16), their frames'
     norms, its samples' SHA-256 and mutagen's length; three excerpts' log-CQT (long.wav's 2048, 2049 and 4095 samples
     from its second chunk on, btc.py's last chunk alone); its meta's `gates`, the design's B1 feature gate
@@ -2811,8 +2813,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     its failure; Android's exit reason read for memory; what a crashed one left swept as the bench starts); the folder
     the owner picks (`BenchFolder`, the Storage Access Framework: the model files, checked by models.json's SHA-256 and
     copied into `no_backup/bench-models/`, `BenchModels`; the references; the report) and the clips as debug assets
-    (`autochords/`, app/build.gradle.kts). `ChordsBenchTest` (`device-test.sh --ml`) runs its sessions over the clips on
-    the emulator, a process each.
+    (`autochords/`, app/build.gradle.kts). Its whole-pipeline mode (Gate B1, the screen's Hear the songs (B1),
+    `BenchService.HEARINGS`): the folder's songs and its `hearings` folder copied into `no_backup/bench-hearings/`,
+    each song heard whole through `MlChordModels` (a fresh `:ml` a song, no checkpoint kept), scored by `EndToEnd`
+    (`BenchHearings`), the report's `hearings` member (`BenchReport.hearings`, `HeardSong`: each song's scores against
+    the thresholds, lengths, stages, `ml_peak_mb`, and over all; null where it didn't run). `ChordsBenchTest`
+    (`device-test.sh --ml`) runs its sessions over the clips on the emulator, a process each, and the B1 mode over
+    hearing.mp3 and hearing.m4a.
   - `android/scripts/release-check.sh` holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath
     (which names `:core`: read), no `libonnxruntime*`, class under `ai/onnxruntime/` or of `:ml`, bench name or
     Settings' row's words in its dex, `caracole/autochords/` or `assets/autochords/` entry, model file (`.onnx`, `.pt`),
@@ -2876,9 +2883,16 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     (JVM, the graphs faked) holds the checkpoints; `PipelineTest` (`device-test.sh --ml`) hears each committed clip
     and models.jsonl's `hearing` files (44.1 kHz stereo MP3, 48 kHz stereo AAC) through the process against
     `gates.end_to_end` (WCSR of the Harte labels, beats and downbeats F after the 5 s trim; the clips' frames the
-    computer's argmax but at its margins; each model's input the computer's length), kills `:ml` mid-hearing
-    (`ChordsUnavailable`, this process still answering, the next hearing from `chords.json`), and checks every decode
-    file's pcm length.
+    computer's argmax but at its margins, as many frames; each model's input the computer's length), kills `:ml`
+    mid-hearing (`ChordsUnavailable`, this process still answering, the next hearing from `chords.json`), and checks
+    every decode file's pcm length. `EndToEnd` is that gate as code (`Gates.of` a meta's `gates.end_to_end`, `Hearing`
+    a `hearing` record, `score`, where the frames part, `overAll`: every file passing each gate, each score's least
+    and its mean by length; `EndToEndTest` on the JVM). `ParityRunTest` (`device-test.sh --data DIR`: the folder's
+    files pushed to `/data/local/tmp/caracole-data`, removed however the run ends; skipped with no `-e data`) runs it
+    over songs outside the repository, the owner's, against autochords_reference's `--hearings`, each stage's time
+    (`Pipeline.STAGES`: decode, mixdown, resample, chords, beats, told by `hear`'s `timed`, `MlProtocol.STAGES` and
+    `STAGE_NANOS` in its DONE, `MlChordModels.lastStagesNanos`), `:ml`'s peak, the platform's encoder delay and padding
+    and the decoder's trim.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for

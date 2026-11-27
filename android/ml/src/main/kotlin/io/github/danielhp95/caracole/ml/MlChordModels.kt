@@ -53,6 +53,10 @@ class MlChordModels(
     @Volatile var lastPeakKb: Long? = null
         private set
 
+    /** The last song's stages that ran, each with its time in ns, in their order (Pipeline's [Pipeline.STAGES]). */
+    @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
+        private set
+
     override fun ready(): String? = synchronized(checked) {
         val doc = Json.parseToJsonElement(pins()).jsonObject
         val btc = doc["btc"]!!.jsonObject
@@ -76,6 +80,8 @@ class MlChordModels(
     }
 
     override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
+        lastPeakKb = null
+        lastStagesNanos = emptyMap()
         ready()?.let { throw ChordsUnavailable(it) }
         // The process of an earlier hearing ends once its client let go of it: a bind meanwhile could reach it as
         // it goes, so it is let finish first, or the hearing refused in words.
@@ -142,6 +148,9 @@ class MlChordModels(
                     MlProtocol.DONE -> {
                         answered = true
                         lastPeakKb = m.data.getLong(MlProtocol.PEAK_KB).takeIf { it >= 0 }
+                        val names = m.data.getStringArray(MlProtocol.STAGES).orEmpty()
+                        val nanos = m.data.getLongArray(MlProtocol.STAGE_NANOS) ?: LongArray(0)
+                        lastStagesNanos = names.zip(nanos.toList()).toMap()
                         return Heard.read(File(m.data.getString(MlProtocol.HEARD)!!).readText(Charsets.UTF_8))
                     }
                     MlProtocol.FAILED -> {
@@ -219,7 +228,7 @@ class MlChordModels(
         /** The client's own word, beside [MlProtocol]'s: the process is gone. */
         private const val GONE = -1
 
-        internal fun sha256(file: File): String {
+        fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
             file.inputStream().use { input ->
                 val chunk = ByteArray(1 shl 20)

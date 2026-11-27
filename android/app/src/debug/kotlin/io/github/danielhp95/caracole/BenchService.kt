@@ -21,6 +21,7 @@ import io.github.danielhp95.caracole.ml.Device
 import io.github.danielhp95.caracole.ml.OrtModels
 import io.github.danielhp95.caracole.ml.Session
 import io.github.danielhp95.caracole.ml.SessionResult
+import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -28,6 +29,8 @@ import java.time.temporal.ChronoUnit
 import kotlin.concurrent.thread
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonPrimitive
 
 /** What the bench says as it goes, and what the screen asks of it, shared by [BenchService] and
  * [ChordsBenchActivity] in their one process (":bench"). */
@@ -102,6 +105,7 @@ class BenchService : Service() {
         val say = BenchSession::say
         val tree = intent.getStringExtra(FOLDER)!!
         val folder = BenchFolder(contentResolver, Uri.parse(tree))
+        if (intent.getBooleanExtra(HEARINGS, false)) return hearings(folder)
         val chosen = intent.getStringArrayExtra(MODELS).orEmpty().toList()
         val needed = buildSet {
             if (BenchReport.BTC in chosen) { add(OrtModels.BTC_GRAPH); add(OrtModels.BTC_WEIGHTS) }
@@ -194,6 +198,63 @@ class BenchService : Service() {
         say(if (BenchSession.stopAsked) "stopped; the report so far: $name" else "done: $name, in the folder")
     }
 
+    /**
+     * The whole-pipeline mode (Gate B1): the folder's songs and its `hearings` folder copied into the app's own storage
+     * (`no_backup/bench-hearings/`, emptied first and after), the three model files the hearing runs on prepared as the
+     * sessions' are, every song heard whole ([BenchHearings]) with the screen kept on, and the report written into the
+     * folder with its `hearings` member, the battery over the whole.
+     */
+    private fun hearings(folder: BenchFolder) {
+        val say = BenchSession::say
+        val (models, ready) = BenchModels.prepare(this, folder,
+            setOf(OrtModels.BTC_GRAPH, OrtModels.BTC_WEIGHTS, OrtModels.BEATS_FP16), say)
+        if (ready.size < 3) {
+            say("nothing to hear: the whole pipeline needs BTC's weights and beat_this's fp16 file in the folder")
+            return
+        }
+        val hearings = folder.folder(BenchHearings.FOLDER)
+        if (hearings == null) {
+            say("no folder ${BenchHearings.FOLDER} in the folder: put the computer's hearings of the songs there")
+            return
+        }
+        val local = File(noBackupFilesDir, "bench-hearings")
+        local.deleteRecursively()
+        local.mkdirs()
+        try {
+            val songs = folder.entries().filter { BenchHearings.isAudio(it.name) }
+            val records = hearings.entries().filter {
+                it.name == BenchHearings.META || it.name.endsWith(BenchHearings.HEARING)
+            }
+            if (songs.isEmpty() || records.none { it.name == BenchHearings.META }) {
+                say("nothing to hear: the folder needs the songs and ${BenchHearings.FOLDER}/${BenchHearings.META}")
+                return
+            }
+            for (entry in songs + records) {
+                say("copying ${entry.name}…")
+                folder.open(entry).use { input -> File(local, entry.name).outputStream().use { input.copyTo(it) } }
+            }
+            val made = Instant.now().truncatedTo(ChronoUnit.SECONDS)
+            val name = REPORT_PREFIX + DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
+                .format(made) + ".json"
+            val report = folder.create(name, "application/json")
+            val probe = AndroidProbe(this)
+            val start = probe.heat()
+            BenchSession.keepScreenOn = true
+            say("${songs.size} song(s), each heard whole in a fresh :ml process")
+            val heard = BenchHearings.run(this, models, local, say) { BenchSession.stopAsked }
+            val now = probe.heat()
+            val battery = Battery(start.chargeUah, now.chargeUah, start.percent, now.percent, start.plugged)
+            val text = JSON.encodeToString(JsonObject.serializer(), BenchReport.ofSessions(emptyList(),
+                BenchClips.read(this).gates, Device.here(BuildConfig.VERSION_NAME), made.toString(), battery,
+                heard)) + "\n"
+            folder.write(report, text.toByteArray(Charsets.UTF_8))
+            val pass = heard.getValue("pass").jsonPrimitive.boolean
+            say("done: $name, in the folder: B1 ${if (pass) "passes" else "fails"} over all")
+        } finally {
+            local.deleteRecursively()
+        }
+    }
+
     private fun startForeground() {
         Notifications.channel(this)
         val open = PendingIntent.getActivity(this, 0, Intent(this, ChordsBenchActivity::class.java),
@@ -219,6 +280,9 @@ class BenchService : Service() {
         const val SCREEN_OFF = "screen_off"
         const val CLIPS = "clips"
         const val REFERENCES = "references"
+
+        /** The whole-pipeline mode: the folder's songs heard whole against their hearings (Gate B1). */
+        const val HEARINGS = "hearings"
 
         /** The report's name begins so; a reference is any other `.json` of the folder. */
         const val REPORT_PREFIX = "caracole-bench-"

@@ -137,6 +137,9 @@ dependencies {
     // The chord and beat models on ONNX Runtime, the debug build's alone until the owner chooses the runtime that
     // ships (the design's stage S): no release carries it.
     debugImplementation(project(":ml"))
+    // Its hearing's types (Heard, Checkpoints), which the Chords bench's whole-pipeline mode reads: :ml's own, the
+    // debug build's alone too.
+    debugImplementation(project(":autochords"))
 
     // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
     // phone's server and copied for another app, an index fetched): `gradle :app:test`.

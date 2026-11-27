@@ -26,7 +26,8 @@ import kotlin.concurrent.thread
  * [HEAR] (`replyTo` its client's messenger) of paths in the app's own storage, which both processes read ([AUDIO],
  * [MODELS], [WORK], and [THREADS], at most so many, 0 for the heat's choice), or [CANCEL] of the hearing under way;
  * then the replies [STEP] (a step's or a wait's words, [WORDS]), and one of [DONE] (the heard file's path, [HEARD],
- * and the process's peak RSS while it heard, [PEAK_KB]) or [FAILED] ([KIND]: [AUDIO_KIND], [SETUP_KIND] or
+ * the process's peak RSS while it heard, [PEAK_KB], and each stage that ran with its time, [STAGES] and
+ * [STAGE_NANOS], Pipeline's) or [FAILED] ([KIND]: [AUDIO_KIND], [SETUP_KIND] or
  * [BUG_KIND]; and [WORDS]). The binder never carries the audio, nor what was heard.
  */
 object MlProtocol {
@@ -43,6 +44,8 @@ object MlProtocol {
     const val WORDS = "words"
     const val HEARD = "heard"
     const val PEAK_KB = "peak_kb"
+    const val STAGES = "stages"
+    const val STAGE_NANOS = "stage_nanos"
     const val KIND = "kind"
     const val AUDIO_KIND = "audio"
     const val SETUP_KIND = "setup"
@@ -132,12 +135,15 @@ class MlService : Service() {
                 val audio = File(request.getString(MlProtocol.AUDIO)!!)
                 val pipeline = Pipeline(File(request.getString(MlProtocol.MODELS)!!), Heat(this),
                     request.getInt(MlProtocol.THREADS, 0), cancelled = cancelled::get, syncFolder = ::syncFolder)
-                val result = pipeline.hear(audio, work) { words -> send(client, MlProtocol.STEP, Bundle().apply {
-                    putString(MlProtocol.WORDS, words)
-                }) }
+                val stages = mutableListOf<Pair<String, Long>>()
+                val result = pipeline.hear(audio, work, { stage, ns -> stages += stage to ns }) { words ->
+                    send(client, MlProtocol.STEP, Bundle().apply { putString(MlProtocol.WORDS, words) })
+                }
                 send(client, MlProtocol.DONE, Bundle().apply {
                     putString(MlProtocol.HEARD, result.points.file(Checkpoints.HEARD).path)
                     putLong(MlProtocol.PEAK_KB, peakKb())
+                    putStringArray(MlProtocol.STAGES, stages.map { it.first }.toTypedArray())
+                    putLongArray(MlProtocol.STAGE_NANOS, stages.map { it.second }.toLongArray())
                 })
             } catch (e: Throwable) {
                 val (kind, words) = MlProtocol.failure(e)
