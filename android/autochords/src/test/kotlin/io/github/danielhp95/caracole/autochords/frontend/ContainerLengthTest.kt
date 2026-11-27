@@ -57,6 +57,24 @@ class ContainerLengthTest {
         assertEquals(23L, Mp4.rescale(1, 45, 2))  // 22.5 rounds away from zero, as FFmpeg's av_rescale does
     }
 
+    /** An edit whose segment runs past its media: decode.m4a's edit made longer (7,700 samples past its media's
+     * 132,300 after the priming), which FFmpeg 9.0.2 decodes to its media's 132,300 (checked by hand, 2026-11-26), as it
+     * did an M4A of the owner's spike folder whose edit was 5 samples longer than its media (ParityRunTest). */
+    @Test fun anEditPastItsMediaKeepsTheMediasSamplesAsFfmpegDoes() {
+        val r = records.first { name(it).endsWith("decode.m4a") }
+        val bytes = Corpus.fixture(name(r))
+        val at = String(bytes, Charsets.ISO_8859_1).indexOf("elst")
+        ByteBuffer.wrap(bytes).putInt(at + 12, 140_000)  // its one entry's segment, after the version and count
+        val longer = tmp.newFile("longer.m4a").apply { writeBytes(bytes) }
+        val track = Mp4.audioTrack(longer)!!
+        val edit = track.edit()!!
+        assertEquals(140_000L, edit.segment)
+        assertEquals(132_300L, track.keptFrames(edit))
+        assertEquals(440_995L, Mp4.Track(44100, 440_995, 1000, listOf(Mp4.Edit(10_000, 0))).let {
+            it.keptFrames(it.edit()!!)
+        })
+    }
+
     @Test fun anEditsLengthPastALongIsRefusedNeverWrapped() {
         // A hostile segment: Long.MAX_VALUE seconds of a movie of 1 a second, in a media of 44,100 a second.
         val track = Mp4.Track(44100, 300_000, 1, listOf(Mp4.Edit(Long.MAX_VALUE, 0)))

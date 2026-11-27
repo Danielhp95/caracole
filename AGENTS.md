@@ -2883,7 +2883,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
   sample; `Mp4`, `MpegHeader` and `Ogg`, what a container's boxes, first frame and last page say of its length as
-  mutagen and FFmpeg read them (`ContainerLengthTest`, to the bit against decode.jsonl).
+  mutagen and FFmpeg read them (`ContainerLengthTest`, to the bit against decode.jsonl; an MP4's edit that runs past
+  its media ends with the media, `keptFrames`, as FFmpeg's does).
   `Cqt.logFeatures(y)` is btc.py's `cqt_features` (`[frames, 144]`, its 10 s chunks and tail rule), each chunk
   frontend.json's steps replayed: a resample by `Soxr` (librosa's length fix to `ceil(n · ratio)` and its √ratio
   scale on top, the samples kept float32), an octave's STFT in librosa 1.0's centred framing (`Stft.librosa`: only

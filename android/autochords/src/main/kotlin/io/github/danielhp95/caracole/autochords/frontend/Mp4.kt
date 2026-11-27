@@ -36,8 +36,12 @@ object Mp4 {
         fun edit(): Edit? = edits.filter { it.mediaTime >= 0 }.singleOrNull()
             ?.takeIf { it.segment >= 0 && timescale > 0 && movieTimescale > 0 }
 
-        /** The samples FFmpeg keeps of [edit]: its segment rescaled to the media's timescale (av_rescale). */
-        fun keptFrames(edit: Edit): Long = rescale(edit.segment, timescale, movieTimescale)
+        /** The samples FFmpeg keeps of [edit]: its segment rescaled to the media's timescale (av_rescale), and never
+         * more than the media holds from the edit's start ([duration] less its media time): a segment that runs past
+         * the media's last sample ends with it, the last frame's padding cut to its stated duration (an M4A of
+         * 16,299,355 samples whose edit says 369.600 s, 16,299,360 of them: FFmpeg gives 16,299,355). */
+        fun keptFrames(edit: Edit): Long =
+            minOf(rescale(edit.segment, timescale, movieTimescale), maxOf(0L, duration - edit.mediaTime))
     }
 
     /** `a * b / c`, rounded to the nearest, halves away from zero, as FFmpeg's `av_rescale` rounds (a, b ≥ 0,
