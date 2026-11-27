@@ -5,6 +5,10 @@ import java.io.IOException
 /**
  * yt-dlp itself, one run at a time: the seam between the runner ([YtDlp], which decides what a run came to) and the
  * process that runs it (the app's `:youtube` process in a later task; a test's fake that replays recorded runs).
+ *
+ * The argv holds the gate's address, its user and secret among it: an implementation never puts it, whole or in part,
+ * into an exception's message, a log line or anything it says. The runner reads every exception the process throws
+ * with the secret taken out all the same, as a second guard, never as leave to.
  */
 interface YtDlpProcess {
     /**

@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.EventLog
 import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.health.Strptime
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.http.Event
@@ -46,6 +47,28 @@ class GateRefused(provider: String, url: String?, val host: String, msg: String)
  * event. An error, never a miss. */
 class RunHeldBack(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
 
+/**
+ * The gate a run goes through, as the runner sees it: the `--proxy` value it is given, its log, and its end. A run
+ * asks for one ([YtDlp]'s `gate`) and closes it once it has read the run's log, on every path. [HostGate.Opened] is
+ * one, a gate of its own a run, which its close ends; a job that wants one gate for all its runs passes
+ * `{ YtDlpGate.keptOpen(opened) }`, whose close does nothing, and closes `opened` itself once the job is over.
+ */
+interface YtDlpGate : java.io.Closeable {
+    val proxyArg: String
+
+    fun log(): Map<String, HostGate.HostUse>
+
+    companion object {
+        /** [gate], its close a no-op: the job's gate, which a run never ends. */
+        fun keptOpen(gate: YtDlpGate): YtDlpGate = object : YtDlpGate {
+            override val proxyArg: String get() = gate.proxyArg
+            override fun log() = gate.log()
+            override fun close() {}
+            override fun toString() = "kept open: $gate"
+        }
+    }
+}
+
 /** A download's audio, right inside the folder given, and the video as yt-dlp reported it. */
 data class Download(val path: File, val video: Video)
 
@@ -55,12 +78,16 @@ data class Download(val path: File, val video: Video)
  * HTTP providers' machinery, for provider `youtube`:
  *
  * - [budget] runs at most ([requestsMade] counts them), then `BudgetExhausted`, the `budget` event written once;
- * - before each run, [beforeRun] may refuse it ([RunHeldBack]: no process, no budget spent, no event);
+ * - before each run, a cooldown recorded by an earlier job (`Health.isCooling`) refuses it: `ProviderBlocked` in the
+ *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
+ *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no
+ *   budget spent, no event);
  * - before the first, the pause after the last run this side sent ([Pace.pauseAfterLastRequest], kv
  *   `http:last_request:youtube`); before each later one, `_pause`'s: a draw of [policy]'s delay from [rng], less the
  *   time since the last run ended on [clock]'s monotonic clock;
  * - every run's argv is youtube.json's template filled ([YouTubeData.argv]), the gate's `proxyArg` its `--proxy`
- *   ([gate] asked once a run); the cache is [cacheDir]'s `runner.cache_folder`;
+ *   ([gate] asked once a run, closed once the run's log is read, whatever the run came to: [YtDlpGate]); the cache is
+ *   [cacheDir]'s `runner.cache_folder`;
  * - each run one `events` row ([EventLog] under [runId]: the computer's fields), heard after by [onEvent], and for one
  *   sent kv `http:last_request:youtube` as `f"{time.time():.3f}"` writes it;
  * - after a run, in order: the gate's log first (a host it refused during the run: [GateRefused], an `error` event);
@@ -69,6 +96,17 @@ data class Download(val path: File, val video: Video)
  *   unavailable ([VideoUnavailable]), pass_over ([PassedOver]), outdated ([ExtractorOutdated]: no block recorded),
  *   else a ProviderError. The events are the computer's for every run (a pass-over and an out of date run are its
  *   `error`s); only the class raised is the phone's.
+ * - a run the process ends by throwing (a cancel, an interrupt, the service killed: anything but
+ *   [YtDlpProcess.NotStarted]) was started, so it is counted ([requestsMade]) and logged, an `error` event and kv
+ *   `http:last_request:youtube` as any run, then rethrown in words with no secret: an interrupt as an
+ *   InterruptedException (the thread's interrupt kept), a cancel as a CancellationException, anything else a
+ *   ProviderError. The computer's runner writes no event for its BaseException path; the phone's day budget and the
+ *   next job's pause must see a run yt-dlp may have sent requests in, the `:youtube` process being one Android can
+ *   kill mid-run.
+ *
+ * What the callers do: never record a block themselves (the runner records it, [Health.recordBlock], one strike), and
+ * send its alert ([io.github.danielhp95.caracole.core.health.Alerts.blocked], once a cooldown) from the
+ * `ProviderBlocked` they catch.
  *
  * The gate's address holds its secret: no event, kv record, exception or line given to [onLine] holds it (each is
  * read with the proxy's user and secret put back as `<proxy>`).
@@ -78,7 +116,7 @@ class YtDlp(
     val policy: ProviderPolicy,
     private val cacheDir: File,
     private val qjs: String,
-    private val gate: () -> HostGate.Opened,
+    private val gate: () -> YtDlpGate,
     private val db: Db,
     private val clock: Pacing,
     private val rng: Draws = clock.draws,
@@ -142,6 +180,7 @@ class YtDlp(
 
     private fun run(what: String, target: String, timeout: Double, into: File?): String {
         blocked?.let { throw ProviderBlocked(PROVIDER, target, it.status, words("blocked_earlier")) }
+        if (Health.isCooling(db, PROVIDER, clock.clock())) throw ProviderBlocked(PROVIDER, target, null, coolingWords())
         if (requestsMade >= budget) {
             if (!budgetReported) {
                 budgetReported = true
@@ -150,7 +189,16 @@ class YtDlp(
             throw BudgetExhausted(PROVIDER)
         }
         beforeRun()?.let { throw RunHeldBack(PROVIDER, target, it) }
-        val opened = gate()
+        try {
+            return gate().use { opened -> runThrough(opened, what, target, timeout, into) }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt() // kept, once the gate is closed (its close joins its threads)
+            throw e
+        }
+    }
+
+    /** One run through [opened], which the caller closes after: everything here reads its log first. */
+    private fun runThrough(opened: YtDlpGate, what: String, target: String, timeout: Double, into: File?): String {
         val argv = DATA.argv(what, target, File(cacheDir, words("cache_folder")).path, qjs, opened.proxyArg, into?.path)
         if (!pacedAfterLastRun) {
             pacedAfterLastRun = true
@@ -162,6 +210,12 @@ class YtDlp(
             process.run(argv, timeout, { line -> onLine(redacted(line, opened)) }, waiting)
         } catch (e: YtDlpProcess.NotStarted) { // nothing was sent
             throw ProviderError(PROVIDER, target, null, redacted(e.message ?: e.toString(), opened))
+        } catch (e: Exception) { // started, then cut off: counted and logged, said with no secret
+            requestsMade++
+            last = clock.monotonic()
+            val said = redacted(e.message ?: e::class.simpleName.orEmpty(), opened)
+            event(target, null, ERROR, said)
+            throw cutOff(e, target, said)
         }
         requestsMade++
         last = clock.monotonic()
@@ -225,8 +279,26 @@ class YtDlp(
         onEvent?.invoke(e)
     }
 
+    /** youtube_sheet.py's words for a cooling YouTube: "waiting out YouTube until 2026-11-27 13:00 UTC". */
+    private fun coolingWords(): String {
+        val stamp = Health.state(db, PROVIDER).cooldownUntil?.let { Strptime.format(it) }
+        val until = if (stamp == null) "later" else stamp.substring(0, 10) + " " + stamp.substring(11, 16) + " UTC"
+        return "waiting out YouTube until $until"
+    }
+
+    /** What a run cut off by [e] is rethrown as: its kind kept where a caller acts on it, its words [said]. */
+    private fun cutOff(e: Exception, target: String, said: String): Exception {
+        val again = when (e) {
+            is InterruptedException -> InterruptedException(said)
+            is java.util.concurrent.CancellationException -> java.util.concurrent.CancellationException(said)
+            else -> ProviderError(PROVIDER, target, null, said)
+        }
+        again.stackTrace = e.stackTrace
+        return again
+    }
+
     /** The gate's refusals by host, as its log has them now. */
-    private fun refusals(opened: HostGate.Opened): Map<String, Int> =
+    private fun refusals(opened: YtDlpGate): Map<String, Int> =
         opened.log().filterValues { it.refused > 0 }.mapValues { it.value.refused }
 
     companion object {
@@ -261,7 +333,7 @@ class YtDlp(
         }
 
         /** [text] with the gate's address, and its user and secret alone, put back as the `proxy` placeholder. */
-        internal fun redacted(text: String, opened: HostGate.Opened): String {
+        internal fun redacted(text: String, opened: YtDlpGate): String {
             val mark = DATA.placeholders.getValue("proxy")
             val arg = opened.proxyArg
             var out = text.replace(arg, mark)

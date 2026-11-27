@@ -865,4 +865,51 @@ class HostGateTest {
         for (name in data.texts("apart", gate)) assertTrue(rule.reportsApart(name), name)
         assertFalse(rule.reportsApart("www.youtube.com"))
     }
+
+    // Fix round 1 of Y1.3's review.
+
+    @Test
+    fun aConnectionThreadThatThrowsLeavesTheGateServingAndTheProcessAlone() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            val throwing = AtomicBoolean(true)
+            gate.beforeServing = { if (throwing.getAndSet(false)) throw NoSuchElementException("a bug in a connection") }
+            connect(opened).use { s ->
+                s.getOutputStream().write(connectLine("127.0.0.1:1", auth(opened)).toByteArray())
+                assertEquals(-1, s.getInputStream().read(), "the broken connection is closed")
+            }
+            assertEquals(407, status(ask(opened, connectLine("127.0.0.1:1", null))), "the gate still serves")
+            eventually("the broken connection's thread ended") {
+                Thread.getAllStackTraces().keys.none { it.isAlive && it.name == "caracole-gate-${opened.port}-1" }
+            }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
+
+    @Test
+    fun aTunnelWhosePumpsEndTogetherIsWaitedForWithoutABug() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            repeat(40) { round ->
+                val server = upstream(0, bytes(64, round))
+                val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+                connect(opened).use { s ->
+                    s.getOutputStream().write(connectLine("127.0.0.1:${server.port}", auth(opened)).toByteArray())
+                    assertEquals(200, status(head(s.getInputStream())))
+                    s.shutdownOutput()
+                    s.getInputStream().readAllBytes()
+                }
+            }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
 }

@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.youtube.Download
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.YtDlp
+import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import java.io.File
 import java.nio.file.Files
 import java.time.Duration
@@ -232,7 +233,7 @@ object YouTubeReplay : AreaReplay {
                         )
                     }
                     val fake = FakeYtDlpProcess(planned)
-                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { opened }, db, pacing,
+                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, db, pacing,
                                    budget = budget, runId = "youtube-replay", timeouts = timeouts)
                     var made = 0
                     for (c in calls) {
