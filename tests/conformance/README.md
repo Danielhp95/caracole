@@ -47,3 +47,11 @@ in the default shell, with the rest of the corpus.
 `data/caracole/autochords/` ships in the debug build alone, as android/ml's resources (frontend.json as
 android/autochords'): `:core`, whose resource root is `data/`, leaves it out, so the release carries none of it until
 the stage that ships the models.
+
+The `autochords-sheet` area (`vectors/autochords-sheet/`) is the sheet laid out of what was heard, which needs no
+model: `merge.jsonl` (merge.py's `build_sheet`, `snap_to_beats`, its LRC reader and its word columns over the calls
+test_autochords_merge.py makes, the literals of both auto-chords test files and seeded hearings) and `align.jsonl`
+(align.py's `lyrics_offset` and `shifted_lrc`, and `math.fsum`), with `data/caracole/viewer/autochords.json`, both
+modules' constants and patterns, which ships in the release as the rest of `viewer/`'s data.
+tests/test_conformance_autochords.py writes them in the default shell, and `:viewer`'s viewer.autochords replays them
+(AutochordsReplay).

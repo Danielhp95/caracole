@@ -91,6 +91,9 @@ val arm64SoxrDriver by tasks.registering(CmakeBuild::class) {
 }
 
 dependencies {
+    // ChordSegment's one home, viewer.autochords (merge.py's port); :viewer depends on no part of this module.
+    api(project(":viewer"))
+
     // frontend.json read, as :core reads JSON (the same version).
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 

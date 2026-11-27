@@ -9,10 +9,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** A chord sounding from [start] to [end] seconds, merge.py's `ChordSegment`; the label "N" means no chord. The design
- * places it in `:viewer`'s `viewer.autochords` (a later task, merge.py's port): then one of the two becomes an alias of
- * the other. */
-data class ChordSegment(val start: Double, val end: Double, val label: String)
+/** A chord sounding from [start] to [end] seconds, merge.py's `ChordSegment`; the label "N" means no chord. Its one
+ * home is `:viewer`'s `viewer.autochords` (merge.py's port, which lays the sheet out of it), as the design places it;
+ * the hearing names it here by this alias, so `:viewer`, which the release build ships, never depends on `:autochords`. */
+typealias ChordSegment = io.github.danielhp95.caracole.viewer.autochords.ChordSegment
 
 /**
  * btc.py's labels (the chords-on-the-phone design's §3.7): the Harte labels of a BTC model's classes ([vocabulary]),

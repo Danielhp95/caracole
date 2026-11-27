@@ -132,6 +132,71 @@ object Py {
         return sum
     }
 
+    /** math.fsum: the sum of floats correctly rounded (half to even), CPython's own algorithm (Shewchuk's partials,
+     * then the half-way correction of the last two), so the bits are its; an infinity or a NaN as it answers them,
+     * inf + -inf its ValueError (an [IllegalArgumentException]), a finite sum past a float's range its
+     * OverflowError (an [ArithmeticException]). Where statistics.fmean sums its data. */
+    fun mathFsum(xs: Iterable<Double>): Double {
+        val p = ArrayList<Double>()
+        var special = 0.0
+        var infSum = 0.0
+        for (item in xs) {
+            var x = item
+            val xsave = x
+            var i = 0
+            for (j in 0 until p.size) {
+                var y = p[j]
+                if (Math.abs(x) < Math.abs(y)) {
+                    val t = x
+                    x = y
+                    y = t
+                }
+                val hi = x + y
+                val yr = hi - x
+                val lo = y - yr
+                if (lo != 0.0) p[i++] = lo
+                x = hi
+            }
+            while (p.size > i) p.removeAt(p.size - 1)
+            if (x != 0.0) {
+                if (!x.isFinite()) {
+                    // a nonfinite x: an infinity or NaN in the input, or an overflow of the partials
+                    if (xsave.isFinite()) throw ArithmeticException("intermediate overflow in fsum")
+                    if (xsave.isInfinite()) infSum += xsave
+                    special += xsave
+                    p.clear()
+                } else {
+                    p += x
+                }
+            }
+        }
+        if (special != 0.0) {
+            if (infSum.isNaN()) throw IllegalArgumentException("-inf + inf in fsum")
+            return special
+        }
+        var n = p.size
+        var hi = 0.0
+        if (n > 0) {
+            hi = p[--n]
+            var lo = 0.0
+            while (n > 0) {
+                val x = hi
+                val y = p[--n]
+                hi = x + y
+                val yr = hi - x
+                lo = y - yr
+                if (lo != 0.0) break
+            }
+            if (n > 0 && ((lo < 0.0 && p[n - 1] < 0.0) || (lo > 0.0 && p[n - 1] > 0.0))) {
+                val y = lo * 2.0
+                val x = hi + y
+                val yr = x - hi
+                if (y == yr) hi = x
+            }
+        }
+        return hi
+    }
+
     fun floorMod(a: Int, b: Int): Int = Math.floorMod(a, b)
 
     /** Counter(items).most_common(1)[0][0]: the commonest, the first seen of those tied; null for none. */

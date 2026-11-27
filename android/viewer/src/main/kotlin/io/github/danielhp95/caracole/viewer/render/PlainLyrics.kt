@@ -10,9 +10,8 @@ import io.github.danielhp95.caracole.core.library.SharedFolder
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
-import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.core.py.PyText
-import io.github.danielhp95.caracole.core.py.PyUnicode
+import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.render.internal.LibraryReads
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -23,7 +22,7 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
 
 /**
  * autochords/sheet_lyrics.py on the phone: lyrics that came after an auto sheet was made, put on it with no model
- * (merge.with_plain_lyrics), the first thing a render does, so every page of the song has them: the sheet kept again
+ * (merge.with_plain_lyrics, [AutoSheet.withPlainLyrics]), the first thing a render does, so every page of the song has them: the sheet kept again
  * (`sheet (auto).txt`), its version's `raw` saying `"lyrics": "plain"` and `"lyrics_key"` their words' [lyricsKey], and
  * the song's info.json written.
  */
@@ -60,7 +59,8 @@ object PlainLyrics {
             try {
                 val text = PyText.utf8(LibraryReads.regular(File(libraryDir, auto.path))) ?: continue // ValueError
                 Kept.keepFile(db, lib, song, auto.versionId, RenderNames.AUTO_SHEET,
-                              withPlainLyrics(text, plain).toByteArray(Charsets.UTF_8), auto.keptRank, Stamps.now())
+                              AutoSheet.withPlainLyrics(text, plain).toByteArray(Charsets.UTF_8), auto.keptRank,
+                              Stamps.now())
             } catch (_: NoSuchFileException) {
                 continue // gone from its folder: auto-chords makes it again
             } catch (_: IOException) {
@@ -89,23 +89,5 @@ object PlainLyrics {
         }
         while (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.size - 1)
         return Canonical.sha256Hex(lines.joinToString("\n").toByteArray(Charsets.UTF_8)).substring(0, 16)
-    }
-
-    /** merge.with_plain_lyrics: a sheet build_sheet made with no lyrics, as it would have made it with [plain]: its
-     * chart, then them. */
-    fun withPlainLyrics(sheet: String, plain: String): String =
-        (listOf(sheet.trimEnd('\n'), "") + lyricsBlock(plain)).joinToString("\n").trimEnd('\n') + "\n"
-
-    /** merge._lyrics_block: plain lyrics as a sheet's last section, or no line for none. */
-    private fun lyricsBlock(plain: String?): List<String> {
-        val lyrics = PyStr.splitlines((plain ?: "").trim('\n')).map(::rstrip)
-        return if (lyrics.any { it.isNotEmpty() }) listOf("[Lyrics]") + lyrics else emptyList()
-    }
-
-    /** str.rstrip(): Python's whitespace off the end. */
-    private fun rstrip(s: String): String {
-        var end = s.length
-        while (end > 0 && PyUnicode.isSpace(s.codePointBefore(end))) end -= Character.charCount(s.codePointBefore(end))
-        return s.substring(0, end)
     }
 }

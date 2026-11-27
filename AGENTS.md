@@ -3897,6 +3897,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     each tab's fit and choices, `_tab_harps`), harmonica_pages.jsonl (the parts, and every page as digests: the page,
     its header, tab, foot and bar, each data member, the overlay's two) and harmonica_pages_whole.jsonl (a small page
     whole, the files it inlines by name); the texts that are no fixture in harpfit_texts.jsonl.
+- An auto sheet laid out (autochords-sheet): `viewer.autochords`, autochords/merge.py and align.py, function for
+  function, the sheet's text byte for byte:
+  - `Lrc.parse` and `parseWords` (`LrcLine`, `WordStart`) are merge.py's own LRC reader (`parse_lrc`,
+    `parse_lrc_words`), never core's LyricsFiles (lyrics.py's): its patterns through PyRegex, a stamp's numbers
+    `int()` and `float()` of any script's digits (PyInt, PyFloat), int()'s ValueError and a float's OverflowError
+    raised as Python raises them;
+  - `AutoSheet` (`build`, `snapToBeats`, `beatGrid`, `youtubeCredit`, `withPlainLyrics`, which PlainLyrics calls;
+    `wordStart`, `onWords`, `chordLine`): Python's `round`, `int()`, `statistics.median`, `bisect`, `max` and `min`
+    (the first of those tied) and stable sorts by `<` (0.0 and -0.0 tied); lengths and indexes in code points, a chord
+    line's columns ChordPro.displayColumns', a word's letters PyUnicode.category's;
+  - `Align` (`lyricsOffset`, `Alignment`, `shiftedLrc`): `statistics.fmean` math.fsum's (`Py.mathFsum`, CPython's
+    partials), the builtin sum `Py.fsum`, `why` and the stamps PyFormat's, float `divmod` CPython's;
+  - `ChordSegment`'s one home: `:autochords` names it by a typealias (it depends on `:viewer`, never the other way);
+  - both modules' constants and patterns are data/caracole/viewer/autochords.json; tests/test_conformance_autochords.py
+    writes it and vectors/autochords-sheet/merge.jsonl and align.jsonl (the tests' own calls, both test files'
+    literals, seeded hearings, `math.fsum`), which `AutochordsReplay` (area `autochords-sheet`) replays.
 - The phone's own pages, `PhoneRender` (phone-render): render.py's page path with no PDF, for the songs no mirror
   page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
