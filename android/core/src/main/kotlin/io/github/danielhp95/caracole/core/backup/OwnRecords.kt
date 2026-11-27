@@ -19,7 +19,9 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * - its politeness: each provider's health (`provider:`), its pace (`http:last_request:`), and the global records
  *   that gate a request (LaCuerda's searches and their failures, gtptabs.com's unusable tabs, UG's artist pages
- *   learned, its pages that won't read and the pasted links whose read failed within the hour, YouTube's searches);
+ *   learned, its pages that won't read and the pasted links whose read failed within the hour, YouTube's searches
+ *   and their failures, `youtube-outdated`, the yt-dlp version YouTube changed what it reads, and
+ *   `phone:youtube-auto`, whether the automatic YouTube pass is on);
  * - its identity and what it agreed with the computer (`sync:`: its id, each base and kept answer, the peer and index
  *   records), so the restored library is the phone's own change, given to the computer at the next sync;
  * - the computer's settings (`phone:settings`), the phone's own schema record, and its indexes' progress and the
@@ -40,6 +42,7 @@ object OwnRecords {
     /** Records kept by their whole key. */
     val KEYS: Set<String> = setOf(
         "phone:settings", "phone:schema", "lacuerda:search-failed", "ug:link-failed", MergedIndexes.KEY,
+        "youtube-outdated", "phone:youtube-auto",
         "ug:sitemaps", "gtptabs:sitemaps", "musescore:sitemaps", "harptabs:sitemaps", "gametabs:sitemaps",
     )
 

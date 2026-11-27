@@ -127,13 +127,16 @@ def route_problem(cfg: Config) -> str | None:
     return None
 
 
+OFF_REASON = "YouTube is off"  # route_reason of [providers.youtube] enabled = false
+
+
 def route_reason(cfg: Config) -> str | None:
     """``route_problem`` in a few words, for a page ("auto-chords isn't installed"); None when there is none."""
     problem = route_problem(cfg)
     if problem is None:
         return None
     if problem.startswith("turned off"):
-        return "YouTube is off"
+        return OFF_REASON
     if problem == autochords_problem(cfg):
         return autochords_reason(problem)
     return "yt-dlp is missing"

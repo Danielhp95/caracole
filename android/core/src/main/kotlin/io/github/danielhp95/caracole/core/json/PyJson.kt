@@ -201,6 +201,8 @@ object PyJson {
      * every walk of a JsonElement, its toString among them) recurse, a frame or more a container, on a lookup's
      * thread, whose stack on ART is about 1 MiB.
      */
+    // A well-formed answer of yt-dlp's nested past it is an AnswerError on the phone where Python reads it:
+    // vectors/youtube/parse.jsonl's record with `phone` says so (core.youtube.Videos).
     const val MAX_DEPTH = Canonical.MAX_DEPTH
 
     /** Python's RecursionError where json nests deeper than [MAX_DEPTH]: an [IllegalArgumentException], as each

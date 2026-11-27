@@ -31,6 +31,14 @@ systemd's MemoryDenyWriteExecute, which caracole's units keep, so deno gets
 
 A video's address (``video_id_from_url``, ``watch_url``) is youtube_urls.py's, which
 overrides.py reads without this module and its HTTP errors.
+
+The phone's half, which the computer never runs (the conformance corpus's youtube/youtube.json carries it to the
+Android app): ``phone_argv``, the computer's arguments but audio chosen by its format alone (``PHONE_DOWNLOAD_ARGS``:
+no FFmpeg there to extract it), QuickJS as the challenges' runtime and the app's gate as the proxy; and ``classify``,
+which tells a run that failed out of date (``_OUTDATED``: yt-dlp can't read YouTube's page) or passed over
+(``PHONE_PASS_OVER``: the video has no stream of that format) apart from blocked and unavailable; ``PHONE_GATE``,
+the hosts the app's gate lets yt-dlp reach (the computer has no gate); and the runner's words (``BUDGET_SPENT``…),
+which the phone's runner says as ``YtDlp`` does.
 """
 
 from __future__ import annotations
@@ -94,8 +102,23 @@ class Video:
                    _number(data.get("duration")))
 
 
+LIVE_STATUSES = ("is_live", "is_upcoming")  # a search result's or a video's live_status: a stream, never a song
+SHORTS_PATH = "/shorts/"  # in a search result's url: a short
+SEARCH_NOT_JSON = "yt-dlp's search answer isn't JSON: {}"
+VIDEO_NOT_JSON = "yt-dlp's answer isn't JSON: {}"
+NO_SUCH_VIDEO = "yt-dlp answered for no such video"
+
+
 def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _duration(value: Any, url: str | None, words: str) -> float | None:
+    """An answer's duration (``_number``); an int too big for a float makes the answer unusable, in ``words``."""
+    try:
+        return _number(value)
+    except OverflowError as e:
+        raise ProviderError(PROVIDER, url, None, words.format(e)) from e
 
 
 def parse_search(text: str) -> list[Video]:
@@ -103,7 +126,7 @@ def parse_search(text: str) -> list[Video]:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
-        raise ProviderError(PROVIDER, None, None, f"yt-dlp's search answer isn't JSON: {e}") from e
+        raise ProviderError(PROVIDER, None, None, SEARCH_NOT_JSON.format(e)) from e
     entries = data.get("entries") if isinstance(data, dict) else None
     videos = []
     for e in entries if isinstance(entries, list) else []:
@@ -111,9 +134,9 @@ def parse_search(text: str) -> list[Video]:
             continue
         videos.append(Video(
             e["id"], str(e.get("title") or ""), str(e.get("channel") or e.get("uploader") or ""),
-            _number(e.get("duration")),
-            live=e.get("live_status") in ("is_live", "is_upcoming"),
-            short="/shorts/" in str(e.get("url") or ""),
+            _duration(e.get("duration"), None, SEARCH_NOT_JSON),
+            live=e.get("live_status") in LIVE_STATUSES,
+            short=SHORTS_PATH in str(e.get("url") or ""),
         ))
     return videos
 
@@ -123,11 +146,12 @@ def parse_video(text: str, video_id: str) -> Video:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError) as e:
-        raise ProviderError(PROVIDER, watch_url(video_id), None, f"yt-dlp's answer isn't JSON: {e}") from e
+        raise ProviderError(PROVIDER, watch_url(video_id), None, VIDEO_NOT_JSON.format(e)) from e
     if not isinstance(data, dict) or data.get("id") != video_id:
-        raise ProviderError(PROVIDER, watch_url(video_id), None, "yt-dlp answered for no such video")
+        raise ProviderError(PROVIDER, watch_url(video_id), None, NO_SUCH_VIDEO)
     return Video(video_id, str(data.get("title") or ""), str(data.get("channel") or data.get("uploader") or ""),
-                 _number(data.get("duration")), live=data.get("live_status") in ("is_live", "is_upcoming"))
+                 _duration(data.get("duration"), watch_url(video_id), VIDEO_NOT_JSON),
+                 live=data.get("live_status") in LIVE_STATUSES)
 
 
 # --- choosing the song's video ---------------------------------------------------------------------
@@ -139,9 +163,12 @@ class _Song(Protocol):
     artists: list[str]
 
 
+SEARCH_QUERY = "{artist} {title}"
+
+
 def search_query(song: _Song) -> str:
     """What yt-dlp's search is asked: the artist and the title without its version suffix."""
-    return f"{song.artist.strip()} {clean_title(song.title)}"
+    return SEARCH_QUERY.format(artist=song.artist.strip(), title=clean_title(song.title))
 
 
 TOLERANCE_S = 20.0  # how far a video's length may be from LRCLIB's: an intro, not another cut
@@ -180,6 +207,10 @@ _CHANNEL_SUFFIX = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channe
 _OWN_CHANNEL = ("", "vevo", "official", "oficial", "officiel", "music", "tv", "band", "channel", "officialchannel")
 _OFFICIAL_AUDIO = re.compile(r"\bofficial (?:hd )?audio\b")
 _OFFICIAL_VIDEO = re.compile(r"\bofficial (?:hd )?(?:music )?video\b|\(official\)")
+# A song that is itself live or acoustic (normalize.title_variant): a video whose title doesn't say so is another
+# version.
+_VARIANT = r"\b{variant}\b|unplugged"
+CJK_WIDTH = "W"  # unicodedata.east_asian_width of a letter of those scripts (_cjk)
 
 
 # Letters of Chinese, Japanese and Korean (Han, kana, Hangul and the jamo it folds to), and runs of one
@@ -231,7 +262,7 @@ def _parts(text: str) -> list[str]:
 
 
 def _cjk(form: str) -> bool:
-    return any(unicodedata.east_asian_width(c) == "W" for c in form)
+    return any(unicodedata.east_asian_width(c) == CJK_WIDTH for c in form)
 
 
 class _Names:
@@ -240,7 +271,8 @@ class _Names:
     def __init__(self, song: _Song):
         artists = [a for a in (song.artists or [song.artist]) if a and a.strip()] or [song.artist]
         self.artists = set().union(*(_compact_forms(a) for a in artists))
-        self.artist_slugs = {f for a in artists for f in name_forms(a) if f}
+        # name_forms' order, the whole name first: the first of them _stripped_to_title takes off decides, so never a set.
+        self.artist_slugs = tuple(dict.fromkeys(f for a in artists for f in name_forms(a) if f))
         title = clean_title(song.title)
         self.titles = _compact_forms(title)
         self.cjk_titles = {t for t in self.titles if _CJK_LETTER.search(t)}
@@ -408,6 +440,14 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
     length (within 2 s the synced lyrics fit); then the artist's Topic channel, official
     audio, the artist's own channel or an official video; then the search's order.
     """
+    ranked = _ranked(song, videos, expected, skip=skip)
+    return min(ranked, key=lambda r: r[0])[1] if ranked else None
+
+
+def _ranked(song: _Song, videos: Sequence[Video], expected: float | None, *,
+            skip: Iterable[str] = ()) -> list[tuple[tuple[int, int, int, int, int], Video]]:
+    """``choose``'s videos that fit, each with its key, the least of which ``choose`` takes: ``(tier, -title,
+    closeness, -official, rank)``."""
     names = _Names(song)
     skipped = set(skip)
     ranked = []
@@ -421,10 +461,10 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
         if not (names.channel_is_artist(video.channel) or names.artist_in(video.title)):
             continue
         tier = 1 if names.unwanted(video.title, video.channel) else 0
-        if names.variant and not re.search(rf"\b{names.variant}\b|unplugged", fold(video.title)):
+        if names.variant and not re.search(_VARIANT.format(variant=names.variant), fold(video.title)):
             tier = max(tier, 1)
         ranked.append(((tier, -title, close, -_official(names, video), rank), video))
-    return min(ranked, key=lambda r: r[0])[1] if ranked else None
+    return ranked
 
 
 # --- running yt-dlp -----------------------------------------------------------------------------------
@@ -435,11 +475,25 @@ _BASE_ARGS = (
     "--no-remote-components", "--no-playlist", "--no-progress", "--socket-timeout", "30",
     "--retries", "0", "--extractor-retries", "0", "--fragment-retries", "0", "--sleep-requests", "0.5",
 )
+SEARCH_PREFIX = "ytsearch{n}:"  # a search's target: this, n its results, then the query
+SEARCH_ARGS = ("--flat-playlist", "--dump-single-json")  # a search's, after the base
+VIDEO_ARGS = ("--skip-download", "--flat-playlist", "--dump-single-json")  # a video's metadata, no download
 _DOWNLOAD_ARGS = (
     "--sleep-interval", "2.5", "--max-sleep-interval", "5", "-f", "bestaudio[ext=m4a]/bestaudio/best",
     "-x", "--audio-format", AUDIO_FORMAT, "--max-filesize", MAX_FILESIZE, "--no-mtime",
     "--print", "after_move:%(.{id,title,channel,uploader,duration,filepath})j",
 )
+OUTPUT_NAME = "audio.%(ext)s"  # a download's file in the folder it is given (-o)
+# The phone's download: the computer's, but m4a by its format alone, with no fallback and no -x to m4a (the phone has
+# no FFmpeg): a video with no such stream fails PHONE_PASS_OVER's words, and is passed over.
+PHONE_FORMAT = "bestaudio[ext=m4a]"
+PHONE_DOWNLOAD_ARGS = tuple(
+    PHONE_FORMAT if before == "-f" else arg
+    for before, arg in zip(("", *_DOWNLOAD_ARGS), _DOWNLOAD_ARGS)
+    if arg not in ("-x", "--audio-format") and before != "--audio-format"
+)
+PHONE_KINDS = {"search": SEARCH_ARGS, "video": VIDEO_ARGS, "download": PHONE_DOWNLOAD_ARGS}
+NO_NUL = ("target", "cache_dir", "qjs", "proxy", "into")  # phone_argv's values, none of which may hold a NUL
 # A block: YouTube's bot check, a refusal, a rate limit or a captcha.
 _BLOCKED = re.compile(r"not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
                       re.IGNORECASE)
@@ -452,6 +506,87 @@ _UNAVAILABLE = re.compile(
 )
 _STATUS = re.compile(r"HTTP Error (\d{3})")
 REASON_CHARS = 300
+REASON_CUT = "…"  # what ends a reason cut to REASON_CHARS
+# The phone's alone, read on a failed run's ERROR line (classify): yt-dlp can't read YouTube's page (its extractor is
+# out of date), and the video has no stream of the format the phone asks.
+_OUTDATED = re.compile(
+    r"Unable to extract|nsig extraction failed|Signature extraction failed|Failed to extract any player response"
+    r"|Precondition check failed|challenge solving failed",
+    re.IGNORECASE,
+)
+PHONE_PASS_OVER = re.compile(r"Requested format is not available", re.IGNORECASE)
+# A challenge solver that failed, on a WARNING line: yt-dlp then leaves out the formats that needed it, and with m4a
+# alone a pass-over's words follow for every video. yt-dlp 2026.08.19's words (extractor/youtube/_video.py: "n
+# challenge solving failed", "Signature solving failed", "No supported JavaScript runtime could be found";
+# jsc/_director.py: "Error solving <type> challenge request(s) using"; jsc/_builtin/ejs.py, its solver script:
+# "Challenge solver <type> script version … is not supported", "Hash mismatch on challenge solver", "Failed to load
+# challenge solver", "Failed to read builtin challenge solver"), and earlier yt-dlp's "nsig extraction failed" and
+# "Signature extraction failed".
+_DEGRADED = re.compile(
+    r"n challenge solving failed|Signature solving failed|Error solving .{0,40}challenge request"
+    r"|No supported JavaScript runtime could be found|Challenge solver \S+ script version"
+    r"|Hash mismatch on challenge solver|Failed to (?:load|read builtin) challenge solver"
+    r"|nsig extraction failed|Signature extraction failed",
+    re.IGNORECASE,
+)
+DEBUG_PREFIX, ERROR_PREFIX, WARNING_PREFIX = "[debug]", "ERROR:", "WARNING:"
+RUN_CLASSES = ("blocked", "unavailable", "pass_over", "outdated", "error")  # what classify answers
+# classify's steps in order: (the class, the lines it reads, the pattern, and, for a step that needs one, a second
+# (lines, pattern) that must match too). "stderr" is every line read; "error_line" the last ERROR line, less that word;
+# "warning_lines" each WARNING line. A broken solver turns a pass-over out of date.
+_PATTERNS = {"blocked": _BLOCKED, "unavailable": _UNAVAILABLE, "pass_over": PHONE_PASS_OVER, "outdated": _OUTDATED,
+             "degraded": _DEGRADED}
+CLASSIFY_STEPS = (
+    ("blocked", "stderr", "blocked", None),
+    ("unavailable", "stderr", "unavailable", None),
+    ("outdated", "error_line", "pass_over", ("warning_lines", "degraded")),
+    ("pass_over", "error_line", "pass_over", None),
+    ("outdated", "error_line", "outdated", None),
+)
+
+
+# The runner's words (YtDlp): its events' and errors', which the phone's runner says alike (youtube.json's ``runner``).
+CACHE_FOLDER = "yt-dlp"  # in the cache folder given: the player's code and signatures, between runs
+BUDGET_SPENT = "budget of {budget} yt-dlp runs spent"
+BLOCKED_EARLIER = "blocked earlier this run"
+UNAVAILABLE_SAID = "video unavailable: {reason}"
+TIMED_OUT = "yt-dlp took longer than {timeout:g} s and was stopped"
+SAID_NOTHING = "yt-dlp failed and said nothing"
+CANT_RUN = "can't run yt-dlp ({binary}): {why}"
+NO_AUDIO_LEFT = "yt-dlp left no audio file in {folder}"
+BLOCK_STATUSES = (403, 429)  # a block's status, when stderr names one of these; else none
+
+
+@dataclass(frozen=True)
+class PhoneGate:
+    """The phone's gate (the app's HostGate, the phone-YouTube design's §3.3): the proxy every yt-dlp run on the phone
+    is given, and the hosts it lets yt-dlp reach. The computer itself has no gate: its yt-dlp is given no proxy, and
+    nothing here is read on the computer; the conformance corpus carries it to the Android app (youtube.json's
+    ``gate``).
+
+    - ``names``, and any name under one of ``suffixes``, on ``port`` alone, by CONNECT: the YouTube rule;
+    - ``apart``: allowed, and reported apart (the owner is in the EU: the consent page, and the redirector);
+    - ``refused``: refused by name, and any name under it, in every mode and by every rule (Google's attestation,
+      BotGuard's ``Waa``: a CONNECT hides the path, so the host is the rule);
+    - ``refusal``: a run whose gate refused a host is an error in these words (``{host}`` the host), decided from the
+      gate's log before stderr is read: never a block, never unavailable, never retried;
+    - ``stopped``: the name the gate's log lists when it stopped accepting connections by a bug of its own (no host
+      ever has it: a host is a lowercased name or address), and ``stopped_said`` the words of a run that met it, an
+      error decided from the gate's log before stderr is read, as a refusal is.
+    """
+
+    names: tuple[str, ...] = ("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
+                              "consent.youtube.com")
+    suffixes: tuple[str, ...] = (".googlevideo.com",)
+    port: int = 443
+    apart: tuple[str, ...] = ("consent.youtube.com", "redirector.googlevideo.com")
+    refused: tuple[str, ...] = ("jnn-pa.googleapis.com",)
+    refusal: str = "yt-dlp asked for {host}, which caracole doesn't allow"
+    stopped: str = "(the gate stopped)"
+    stopped_said: str = "caracole's gate stopped taking yt-dlp's connections"
+
+
+PHONE_GATE = PhoneGate()
 
 
 class VideoUnavailable(ProviderError):
@@ -465,12 +600,83 @@ class Download:
     video: Video
 
 
+def _lines(stderr: str) -> list[str]:
+    return [line.strip() for line in stderr.splitlines() if line.strip()]
+
+
+def _error_line(stderr: str) -> str | None:
+    """yt-dlp's last ``ERROR:`` line, less that word, or None when it wrote none."""
+    errors = [line.removeprefix("ERROR:").strip() for line in _lines(stderr) if line.startswith("ERROR:")]
+    return errors[-1] if errors else None
+
+
 def _reason(stderr: str) -> str:
     """yt-dlp's reason, one line: its last error, else its last word."""
-    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
-    errors = [line.removeprefix("ERROR:").strip() for line in lines if line.startswith("ERROR:")]
-    text = (errors or lines or ["yt-dlp failed and said nothing"])[-1]
-    return text if len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + "…"
+    error = _error_line(stderr)
+    text = error if error is not None else (_lines(stderr) or [SAID_NOTHING])[-1]
+    return text if len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + REASON_CUT
+
+
+def classify(stderr: str) -> str:
+    """What a run that failed came to, for the phone (``RUN_CLASSES``), by ``CLASSIFY_STEPS``: its lines as
+    ``_lines`` reads them less the ``[debug]`` ones (under ``-v`` they echo the target); ``blocked`` and
+    ``unavailable`` over every one, the patterns ``YtDlp._run`` reads over the whole of stderr (the computer's, its
+    ``[debug]`` lines and all, ``-v`` never being given there); then on the last ERROR line alone a pass-over's
+    words are ``outdated`` where a WARNING line says the challenge solver failed (``_DEGRADED``), else ``pass_over``;
+    then ``outdated`` (``_OUTDATED``); else ``error``. The computer's runs never ask it: an extraction error there is
+    an error, counted against the video as ever."""
+    lines = [line for line in _lines(stderr) if not line.startswith(DEBUG_PREFIX)]
+    errors = [line.removeprefix(ERROR_PREFIX).strip() for line in lines if line.startswith(ERROR_PREFIX)]
+    read = {"stderr": lines, "error_line": errors[-1:],
+            "warning_lines": [line for line in lines if line.startswith(WARNING_PREFIX)]}
+
+    def found(over: str, pattern: str) -> bool:
+        return any(_PATTERNS[pattern].search(line) for line in read[over])
+
+    for cls, over, pattern, also in CLASSIFY_STEPS:
+        if found(over, pattern) and (also is None or found(*also)):
+            return cls
+    return "error"
+
+
+def phone_argv(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str,
+               into: str | None = None) -> list[str]:
+    """The phone's yt-dlp arguments for a run (``PHONE_KINDS``: a search, a video's metadata or a download, ``into``
+    the folder a download's audio goes to), with no program name: the computer's (``_BASE_ARGS``, ``--cache-dir``,
+    the kind's, ``--`` and the target), but QuickJS as the one runtime for YouTube's challenges (``qjs`` its program)
+    and ``proxy``, the app's gate, as the proxy, after the cache folder; and a download's audio by its format alone
+    (``PHONE_DOWNLOAD_ARGS``). ``cache_dir`` is given to ``--cache-dir`` as it is (the computer's runner adds
+    ``yt-dlp`` to its own); ``into`` loses its trailing slashes before ``/`` and ``OUTPUT_NAME``. A video's or a
+    download's target is a video's plain address (``watch_url``) of an id ``VIDEO_ID`` matches whole, as the
+    computer's ``video`` and ``download`` give it, else a ValueError; so is a value that holds a NUL (``NO_NUL``: no
+    program's argument can), an empty search and a download's folder that is empty or ``/`` alone (its audio would go
+    to the root)."""
+    given = {"target": target, "cache_dir": cache_dir, "qjs": qjs, "proxy": proxy, "into": into}
+    for name in NO_NUL:
+        if given[name] is not None and "\0" in given[name]:
+            raise ValueError(f"{name} holds a NUL")  # never the value: the proxy's holds the gate's secret
+    if what == "search" and not target:
+        raise ValueError("an empty search")
+    if what == "download" and into is not None and not into.rstrip("/"):
+        raise ValueError(f"an empty folder to download into: {into!r}")
+    if what in PHONE_KINDS and what != "search":
+        video_id = target.removeprefix(watch_url(""))
+        if not VIDEO_ID.fullmatch(video_id) or target != watch_url(video_id):
+            raise ValueError(f"not a YouTube video's address: {target!r}")
+    return _phone_args(what, target, cache_dir=cache_dir, qjs=qjs, proxy=proxy, into=into)
+
+
+def _phone_args(what: str, target: str, *, cache_dir: str, qjs: str, proxy: str, into: str | None) -> list[str]:
+    """``phone_argv``'s arguments, its target not checked: the corpus's templates are made of it."""
+    if what not in PHONE_KINDS:
+        raise ValueError(f"no such yt-dlp run: {what!r}")
+    args = list(PHONE_KINDS[what])
+    if (what == "download") != (into is not None):
+        raise ValueError("a download, and it alone, is given the folder its audio goes into")
+    if into is not None:
+        args += ["-o", f"{into.rstrip('/')}/{OUTPUT_NAME}"]
+    return [*_BASE_ARGS, "--cache-dir", str(cache_dir), "--no-js-runtimes", "--js-runtimes", f"quickjs:{qjs}",
+            "--proxy", proxy, *args, "--", target]
 
 
 class YtDlp:
@@ -498,7 +704,7 @@ class YtDlp:
         self.provider = PROVIDER
         self.binary = binary
         self.policy = policy
-        self.cache_dir = cache_dir / "yt-dlp"  # the player's code and signatures, between runs
+        self.cache_dir = cache_dir / CACHE_FOLDER  # the player's code and signatures, between runs
         self.requests_made = 0
         self._on_event = on_event
         self._sleep = sleep
@@ -511,8 +717,8 @@ class YtDlp:
         self._budget_reported = False
 
     def search(self, query: str, n: int = SEARCH_RESULTS) -> list[Video]:
-        target = f"ytsearch{n}:{query}"
-        out = self._run(["--flat-playlist", "--dump-single-json"], target, "search", self._timeouts[0])
+        target = SEARCH_PREFIX.format(n=n) + query
+        out = self._run([*SEARCH_ARGS], target, "search", self._timeouts[0])
         return parse_search(out)
 
     def video(self, video_id: str) -> Video:
@@ -521,7 +727,7 @@ class YtDlp:
         if not VIDEO_ID.fullmatch(video_id):
             raise ValueError(f"not a YouTube video id: {video_id!r}")
         url = watch_url(video_id)
-        out = self._run(["--skip-download", "--flat-playlist", "--dump-single-json"], url, "video", self._timeouts[0])
+        out = self._run([*VIDEO_ARGS], url, "video", self._timeouts[0])
         return parse_video(out, video_id)
 
     def download(self, video_id: str, into: Path) -> Download:
@@ -529,7 +735,7 @@ class YtDlp:
         if not VIDEO_ID.fullmatch(video_id):
             raise ValueError(f"not a YouTube video id: {video_id!r}")
         url = watch_url(video_id)
-        out = self._run([*_DOWNLOAD_ARGS, "-o", str(into / "audio.%(ext)s")], url, "download", self._timeouts[1])
+        out = self._run([*_DOWNLOAD_ARGS, "-o", str(into / OUTPUT_NAME)], url, "download", self._timeouts[1])
         info: dict[str, Any] = {}
         for line in reversed(out.splitlines()):
             try:
@@ -541,8 +747,8 @@ class YtDlp:
                 break
         path = Path(str(info.get("filepath") or ""))
         if not _audio_in(path, into):
-            raise ProviderError(PROVIDER, url, None, f"yt-dlp left no audio file in {into.name}")
-        duration = _number(info.get("duration"))
+            raise ProviderError(PROVIDER, url, None, NO_AUDIO_LEFT.format(folder=into.name))
+        duration = _duration(info.get("duration"), url, VIDEO_NOT_JSON)  # an int no float holds: an answer error
         video = Video(video_id, str(info.get("title") or ""), str(info.get("channel") or info.get("uploader") or ""),
                       duration)
         return Download(path, video)
@@ -562,11 +768,11 @@ class YtDlp:
 
     def _run(self, args: list[str], target: str, what: str, timeout: float) -> str:
         if self._blocked is not None:
-            raise ProviderBlocked(PROVIDER, target, self._blocked.status, "blocked earlier this run")
+            raise ProviderBlocked(PROVIDER, target, self._blocked.status, BLOCKED_EARLIER)
         if self.requests_made >= self.policy.budget:
             if not self._budget_reported:
                 self._budget_reported = True
-                self._event(target, None, "budget", f"budget of {self.policy.budget} yt-dlp runs spent")
+                self._event(target, None, "budget", BUDGET_SPENT.format(budget=self.policy.budget))
             raise BudgetExhausted(PROVIDER)
         self._pause()
         argv = [self.binary, *_BASE_ARGS, "--cache-dir", str(self.cache_dir), *args, "--", target]
@@ -577,7 +783,8 @@ class YtDlp:
                                     env=env, start_new_session=True)
         except OSError as e:  # no yt-dlp there: nothing was sent
             held.give_back()
-            raise ProviderError(PROVIDER, target, None, f"can't run yt-dlp ({self.binary}): {e.strerror or e}") from e
+            raise ProviderError(PROVIDER, target, None,
+                                CANT_RUN.format(binary=self.binary, why=e.strerror or e)) from e
         except BaseException:
             held.give_back()
             raise
@@ -589,7 +796,7 @@ class YtDlp:
         except subprocess.TimeoutExpired:
             _stop(proc)
             self._last = self._clock()
-            message = f"yt-dlp took longer than {timeout:g} s and was stopped"
+            message = TIMED_OUT.format(timeout=timeout)
             self._log(what, target, "timed out")
             self._event(target, None, "error", message)
             raise ProviderError(PROVIDER, target, None, message) from TimeoutError(message)
@@ -607,11 +814,11 @@ class YtDlp:
         status = int(status_m.group(1)) if status_m else None
         self._log(what, target, reason)
         if _BLOCKED.search(stderr):
-            self._blocked = ProviderBlocked(PROVIDER, target, status if status in (403, 429) else None, reason)
+            self._blocked = ProviderBlocked(PROVIDER, target, status if status in BLOCK_STATUSES else None, reason)
             self._event(target, status, "blocked", reason)
             raise self._blocked
         if _UNAVAILABLE.search(stderr):
-            self._event(target, status, "ok", f"video unavailable: {reason}")
+            self._event(target, status, "ok", UNAVAILABLE_SAID.format(reason=reason))
             raise VideoUnavailable(PROVIDER, target, status, reason)
         self._event(target, status, "error", reason)
         raise ProviderError(PROVIDER, target, status, reason)
