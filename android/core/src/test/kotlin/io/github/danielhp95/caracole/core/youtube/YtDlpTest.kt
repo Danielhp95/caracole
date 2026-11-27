@@ -368,4 +368,18 @@ class YtDlpTest {
             for (secret in listOf(user, key, opened.proxyArg)) assertFalse(text!!.contains(secret), "the secret in: $text")
         }
     }
+
+    // The runner's re-review.
+
+    @Test
+    fun aRunWhoseGateStoppedIsAnErrorInTheGatesWordsNeverABlock() = db { db ->
+        gate.afterAccepting = { throw NoSuchElementException("a bug in the acceptor") }
+        val fake = FakeYtDlpProcess(listOf(Planned(failed("ERROR: Unable to download API page: Connection refused"),
+                                                   during = asks("www.youtube.com:443"))))
+        val e = assertFailsWith<ProviderError> { runner(db, fake).search("Radiohead Creep") }
+        assertTrue(e !is ProviderBlocked)
+        val said = data.text("stopped_said", data.gate)
+        assertTrue(e.message!!.endsWith(said), e.message)
+        assertEquals(listOf("error", said), events(db).single().let { listOf(it[2], it[3]) })
+    }
 }

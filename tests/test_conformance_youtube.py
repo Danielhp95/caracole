@@ -55,12 +55,16 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
 - ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
   under one of ``suffixes``, on ``port`` by CONNECT; ``apart``, allowed and reported apart; ``refused``, by name in
   every mode; ``refusal``, a run's error when the gate refused a host (``{host}``), read from its log first;
+  ``stopped``, the name its log lists once it stopped accepting by a bug of its own, and ``stopped_said``, a run's
+  error then, read from its log first too;
 - ``runner``: ``YtDlp``'s words and folder: ``cache_folder`` (``CACHE_FOLDER``, under the cache folder given),
   ``budget_spent`` (``{budget}``), ``blocked_earlier``, ``unavailable_said`` (``{reason}``), ``timed_out``
   (``{timeout:g}``, Python's ``format(timeout, "g")``), ``said_nothing`` (a failed run's reason when stderr has no
   line), ``reason_cut`` (what ends a reason cut to ``reason_chars``), ``no_audio_left`` (``{folder}``, the folder's
   name) and
-  ``block_statuses`` (a block's status when stderr names one of them, else none).
+  ``block_statuses`` (a block's status when stderr names one of them, else none); ``cooling`` (youtube_sheet.py's
+  ``COOLING_SAID``, a run refused while an earlier job's cooldown runs, ``{when}`` its end as ``cooling_when``,
+  ``{date}`` and ``{time}`` of it in UTC, or ``cooling_later`` with no end).
 
 argv.jsonl: ``{"phone": {what, target, cache_dir, qjs, proxy, into}, "argv": [...]}``, ``phone_argv``'s answer (each
 also the template filled by ``fill``'s rule); ``{"phone": {...}, "refused": true}`` for a target no run is made of;
@@ -116,7 +120,7 @@ import pytest
 from helpers.corpus import DATA, VECTORS, check, jsonl
 from helpers.fake_ytdlp import FakeYtDlp, entry
 
-from caracole import db, health, youtube, youtube_fetch, youtube_search
+from caracole import db, health, youtube, youtube_fetch, youtube_search, youtube_sheet
 from caracole.config import ProviderPolicy
 from caracole.http import BudgetExhausted, ProviderError
 from caracole.search import STRONG
@@ -173,6 +177,15 @@ def _template(what: str) -> list[str]:
     into = PLACEHOLDERS["into"] if what == "download" else None
     return youtube._phone_args(what, PLACEHOLDERS["target"], cache_dir=PLACEHOLDERS["cache_dir"],
                                qjs=PLACEHOLDERS["qjs"], proxy=PLACEHOLDERS["proxy"], into=into)
+
+
+def _cooling_when() -> str:
+    """youtube_sheet.COOLING_WHEN as a template of the cooldown's end: ``{date}`` its YYYY-MM-DD, ``{time}`` its HH:MM."""
+    when = youtube_sheet.COOLING_WHEN.replace("%Y-%m-%d", "{date}").replace("%H:%M", "{time}")
+    assert "%" not in when, youtube_sheet.COOLING_WHEN
+    sample = datetime(2026, 11, 27, 13, 5, tzinfo=UTC)
+    assert sample.strftime(youtube_sheet.COOLING_WHEN) == when.format(date="2026-11-27", time="13:05")
+    return when
 
 
 def youtube_json() -> str:
@@ -254,12 +267,15 @@ def youtube_json() -> str:
         "record": {"prefix": youtube_fetch.RECORD_PREFIX, "fields": RECORD_FIELDS, "rule": RECORD_RULE},
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
-                 "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal},
+                 "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal,
+                 "stopped": youtube.PHONE_GATE.stopped, "stopped_said": youtube.PHONE_GATE.stopped_said},
         "runner": {"cache_folder": youtube.CACHE_FOLDER, "budget_spent": youtube.BUDGET_SPENT,
                    "blocked_earlier": youtube.BLOCKED_EARLIER, "unavailable_said": youtube.UNAVAILABLE_SAID,
                    "timed_out": youtube.TIMED_OUT, "said_nothing": youtube.SAID_NOTHING,
                    "no_audio_left": youtube.NO_AUDIO_LEFT, "reason_cut": youtube.REASON_CUT,
-                   "block_statuses": list(youtube.BLOCK_STATUSES)},
+                   "block_statuses": list(youtube.BLOCK_STATUSES),
+                   "cooling": youtube_sheet.COOLING_SAID, "cooling_when": _cooling_when(),
+                   "cooling_later": youtube_sheet.COOLING_LATER},
     }
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
@@ -1112,6 +1128,8 @@ GATE_SCENES = [
     ("cooling", "gate", Q, False, True, {}, [], _cooling(hours=1)),
     ("found while cooling", "gate", Q, False, True, _searched(QK, FOUND, days=2), [], _cooling(hours=1)),
     ("a cooldown over", "gate", Q, False, True, {}, [], _cooling(days=3)),
+    ("a cooldown over a second ago", "gate", Q, False, True, {}, [], _cooling(hours=26, seconds=1)),
+    ("a cooldown over in a second", "gate", Q, False, True, {}, [], _cooling(hours=26, seconds=-1)),
     ("the hour's 10", "gate", Q, False, True, {}, _runs(10), {}),
     ("9 runs", "gate", Q, False, True, {}, _runs(9), {}),
     ("one run of 12 events", "gate", Q, False, True, {}, _runs(1, each=12), {}),
@@ -1119,6 +1137,11 @@ GATE_SCENES = [
     ("10 an hour and a minute ago", "gate", Q, False, True, {}, _runs(10, minutes=61), {}),
     ("10 of other runs", "gate", Q, False, True, {}, _runs(10, run="lookup:x"), {}),
     ("10 of another provider", "gate", Q, False, True, {}, _runs(10, provider="ytimg"), {}),
+    ("a video's read among the hour's 10", "gate", Q, False, True, {},
+     _runs(9) + [[f"{youtube_search.RUN}{VK}:2026-11-26T11:50:00Z", _at(minutes=10), "youtube"]], {}),
+    ("a search among a video's hour's 10", "video", ID, False, True, {},
+     _runs(9, run=f"{youtube_search.RUN}{VK}:") + [[f"{youtube_search.RUN}2026-11-26T11:55:00Z", _at(minutes=5),
+                                                     "youtube"]], {}),
     ("spent while failed", "gate", Q, False, True, _failed(**{QK: {"at": _at(minutes=5), "error": "boom"}}),
      _runs(10), {}),
     ("its own failure", "gate", Q, False, True, _failed(**{QK: {"at": _at(minutes=10), "error": "boom"}}), [], {}),
@@ -1142,6 +1165,9 @@ GATE_SCENES = [
     ("a failure that isn't an object", "gate", Q, False, True,
      _failed(**{QK: "x", "b": {"at": _at(minutes=1), "error": "y"}}), [], {}),
     ("CJK", "gate", "宋冬野 安和桥", False, True, {}, [], {}),
+    ("accents and punctuation inside words", "gate", "Café Tacvba — Eres (en vivo)", False, True, {}, [], {}),
+    ("an apostrophe and a slash inside words", "gate", "Guns N' Roses / AC/DC T.N.T.", False, True,
+     _searched(youtube_search.query_key("Guns N' Roses / AC/DC T.N.T."), FOUND, days=1), [], {}),
     ("video fresh", "video", ID, False, True, {}, [], {}),
     ("video off", "video", ID, False, False, _searched(VK, FOUND, days=1), [], {}),
     ("video found", "video", ID, False, True, _searched(VK, FOUND, True, days=1), [], {}),
@@ -1275,6 +1301,7 @@ RECORD_TEXTS = [
     json.dumps({"video": {"id": ID, "title": ["a", 1], "channel": {"k": False}, "duration": "239"}}),
     json.dumps({"video": {"id": ID, "duration": True}, "source": "pasted"}),
     json.dumps({"video": {"id": ID, "duration": 1e300}, "query": "a \"quoted\" \\ name\n"}),
+    '{"failures": {"z": -0, "n": -5, "t": false}, "skip": []}',  # -0 is Python's int 0, written back 0
 ]
 
 

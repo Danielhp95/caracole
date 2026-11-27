@@ -569,7 +569,10 @@ class PhoneGate:
     - ``refused``: refused by name, and any name under it, in every mode and by every rule (Google's attestation,
       BotGuard's ``Waa``: a CONNECT hides the path, so the host is the rule);
     - ``refusal``: a run whose gate refused a host is an error in these words (``{host}`` the host), decided from the
-      gate's log before stderr is read: never a block, never unavailable, never retried.
+      gate's log before stderr is read: never a block, never unavailable, never retried;
+    - ``stopped``: the name the gate's log lists when it stopped accepting connections by a bug of its own (no host
+      ever has it: a host is a lowercased name or address), and ``stopped_said`` the words of a run that met it, an
+      error decided from the gate's log before stderr is read, as a refusal is.
     """
 
     names: tuple[str, ...] = ("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
@@ -579,6 +582,8 @@ class PhoneGate:
     apart: tuple[str, ...] = ("consent.youtube.com", "redirector.googlevideo.com")
     refused: tuple[str, ...] = ("jnn-pa.googleapis.com",)
     refusal: str = "yt-dlp asked for {host}, which caracole doesn't allow"
+    stopped: str = "(the gate stopped)"
+    stopped_said: str = "caracole's gate stopped taking yt-dlp's connections"
 
 
 PHONE_GATE = PhoneGate()

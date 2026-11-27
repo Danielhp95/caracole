@@ -24,8 +24,8 @@ import kotlin.test.assertTrue
  *   fixed text (`quickjs:`, the `--print` expression), the targets' and the lines' prefixes, every pattern's source
  *   and each of its alternatives that is a phrase (a word alone is any code's), the phone's format and output name,
  *   the gate's hosts and words, the runner's and the answers' words, the search gate's states, keys and words and
- *   the record's; a literal that is exactly one of the data's keys, or of the record's fields (how the code reads the
- *   data and a record), excepted;
+ *   the record's; a literal that is exactly one of the data's keys, of the record's fields or of the search gate's
+ *   states (how the code reads the data, a record and a gate's answer), excepted;
  *
  * and no literal is compiled as a pattern (`Regex(`, `PyRegex.compile(`, `Pattern.compile(` or `.toRegex()` of one).
  */
@@ -50,6 +50,8 @@ class NoLiteralsTest {
         assertEquals(1, scan("val q = \"quickjs:\$path\"").size)
         assertEquals(1, scan("val h = \"jnn-pa.googleapis.com\"").size)
         assertEquals(1, scan("val y = \"YouTube turned us back\"").size, "the search gate's words")
+        assertEquals(1, scan("val c = \"waiting out YouTube until \$until\"").size, "the runner's cooling words")
+        assertEquals(1, scan("val g = \"(the gate stopped)\"").size, "the gate's words")
         assertEquals(1, scan("val k = \"youtube-search:failed\"").size, "the search gate's keys")
         assertEquals(emptyList(), scan("val f = \"unusable_reason\""), "a record's field is how it's read")
         assertEquals(emptyList(), scan("val k = \"live_statuses\"; val n = \"x\""), "a key of the data is how it's read")
@@ -78,6 +80,8 @@ class NoLiteralsTest {
         walk(YouTubeData.read().json)
         // The record's fields are its JSON's keys, as a member's name is the data's: how the code reads one.
         YouTubeData.read().json.getValue("record").jsonObject.getValue("fields").jsonArray.forEach { keys += it.jsonPrimitive.content }
+        // So are the search gate's states: the names its answers are read by (SearchGate checks each is the data's).
+        YouTubeData.read().json.getValue("search").jsonObject.getValue("states").jsonArray.forEach { keys += it.jsonPrimitive.content }
         keys
     }
 

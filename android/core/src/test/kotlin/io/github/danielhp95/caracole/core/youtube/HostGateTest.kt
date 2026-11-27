@@ -912,4 +912,44 @@ class HostGateTest {
             Thread.setDefaultUncaughtExceptionHandler(was)
         }
     }
+
+    // The runner's re-review.
+
+    @Test
+    fun aCloseUnderAnInterruptReturnsClosesEverythingAndKeepsTheInterrupt() {
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, headTimeoutMs = 60_000)
+        val (s, t) = trickle(opened, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nX-Slow: " + "a".repeat(100), everyMs = 200)
+        eventually("the slow client is served") { gateThreads(opened).any { it.name != "caracole-gate-${opened.port}-accept" } }
+        Thread.currentThread().interrupt()
+        try {
+            gate.close()
+            assertTrue(Thread.interrupted(), "the interrupt is kept (and cleared here)")
+        } finally {
+            Thread.interrupted()
+        }
+        s.use { assertEquals(-1, endOf(it), "its client's socket is closed") }
+        t.join(5_000)
+        assertEquals(emptyList(), gateThreads(opened).map { it.name }, "no thread of the gate is left")
+        assertFailsWith<java.net.ConnectException> { connect(opened).close() }
+    }
+
+    @Test
+    fun anAcceptorThatThrowsStopsTheGateSaysSoInItsLogAndLeavesTheProcessAlone() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            gate.afterAccepting = { throw NoSuchElementException("a bug in the acceptor") }
+            connect(opened).use { s -> assertEquals(-1, s.getInputStream().read(), "the client it took is closed") }
+            eventually("the acceptor ended") { gateThreads(opened).isEmpty() }
+            val stopped = YouTubeData.read().text("stopped", YouTubeData.read().gate)
+            assertEquals(listOf(stopped), gate.log().keys.toList(), "the log says the gate stopped, and nothing else")
+            assertTrue(stopped == HostGate.STOPPED && !gate.refusedAny())
+            assertFailsWith<java.net.ConnectException> { connect(opened).close() }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
 }

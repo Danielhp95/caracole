@@ -555,7 +555,9 @@
   "refused": [
    "jnn-pa.googleapis.com"
   ],
-  "refusal": "yt-dlp asked for {host}, which caracole doesn't allow"
+  "refusal": "yt-dlp asked for {host}, which caracole doesn't allow",
+  "stopped": "(the gate stopped)",
+  "stopped_said": "caracole's gate stopped taking yt-dlp's connections"
  },
  "runner": {
   "cache_folder": "yt-dlp",
@@ -569,6 +571,9 @@
   "block_statuses": [
    403,
    429
-  ]
+  ],
+  "cooling": "waiting out YouTube until {when}",
+  "cooling_when": "{date} {time} UTC",
+  "cooling_later": "later"
  }
 }

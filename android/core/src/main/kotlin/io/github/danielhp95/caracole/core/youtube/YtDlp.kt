@@ -90,7 +90,8 @@ data class Download(val path: File, val video: Video)
  *   [cacheDir]'s `runner.cache_folder`;
  * - each run one `events` row ([EventLog] under [runId]: the computer's fields), heard after by [onEvent], and for one
  *   sent kv `http:last_request:youtube` as `f"{time.time():.3f}"` writes it;
- * - after a run, in order: the gate's log first (a host it refused during the run: [GateRefused], an `error` event);
+ * - after a run, in order: the gate's log first (a host it refused during the run: [GateRefused], an `error` event;
+ *   the gate stopped accepting by a bug of its own, its log's `gate.stopped`: a ProviderError in `gate.stopped_said`);
  *   then a timeout (an `error`, the computer's words); then the exit status (`ok`); then [Classify.of] the stderr:
  *   blocked (`ProviderBlocked`, [Health.recordBlock] at the job's start, every later run refused with no process),
  *   unavailable ([VideoUnavailable]), pass_over ([PassedOver]), outdated ([ExtractorOutdated]: no block recorded),
@@ -232,6 +233,11 @@ class YtDlp(
             event(target, null, ERROR, message)
             throw GateRefused(PROVIDER, target, host, message)
         }
+        if (DATA.text("stopped", DATA.gate) in opened.log()) {
+            val message = DATA.text("stopped_said", DATA.gate)
+            event(target, null, ERROR, message)
+            throw ProviderError(PROVIDER, target, null, message)
+        }
         if (ran.timedOut) {
             val message = YouTubeData.fillAll(words("timed_out"), mapOf("timeout:g" to PyFormat.general(timeout)))
             event(target, null, ERROR, message)
@@ -285,11 +291,13 @@ class YtDlp(
         onEvent?.invoke(e)
     }
 
-    /** youtube_sheet.py's words for a cooling YouTube: "waiting out YouTube until 2026-11-27 13:00 UTC". */
+    /** youtube_sheet.py's words for a cooling YouTube (the data's `runner.cooling`, its end as `cooling_when`, else
+     * `cooling_later`): "waiting out YouTube until 2026-11-27 13:00 UTC". */
     private fun coolingWords(): String {
         val stamp = Health.state(db, PROVIDER).cooldownUntil?.let { Strptime.format(it) }
-        val until = if (stamp == null) "later" else stamp.substring(0, 10) + " " + stamp.substring(11, 16) + " UTC"
-        return "waiting out YouTube until $until"
+        val until = if (stamp == null) words("cooling_later") else YouTubeData.fillAll(words("cooling_when"),
+            mapOf("date" to stamp.substring(0, 10), "time" to stamp.substring(11, 16)))
+        return YouTubeData.fillAll(words("cooling"), mapOf("when" to until))
     }
 
     /** What a run cut off by [e] is rethrown as: its kind kept where a caller acts on it, its words [said]. */

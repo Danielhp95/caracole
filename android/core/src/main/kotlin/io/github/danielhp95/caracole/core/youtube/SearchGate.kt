@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.search.IndexFound
 import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.SiteArtist
+import io.github.danielhp95.caracole.core.search.SearchLimits
 import io.github.danielhp95.caracole.core.search.SiteHit
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -54,14 +55,21 @@ object SearchGate {
     /** The provider whose cooldown and switch hold (youtube.py's PROVIDER). */
     private val provider: String get() = data.text("provider", data.json.getValue("answers") as JsonObject)
 
-    /** A state of the data's `states`, by its place: found, none, auto, failed, spent, off. */
-    private fun state(i: Int): String = data.texts("states", search)[i]
-    private val FOUND = 0
-    private val NONE = 1
-    private val AUTO = 2
-    private val FAILED = 3
-    private val SPENT = 4
-    private val OFF = 5
+    /** The states the gates answer, by name: each one the data's `states` (STATES) holds, checked as they are read. */
+    private val NAMES: List<String> get() = listOf(FOUND, NONE, AUTO, FAILED, SPENT, OFF)
+    private val states: Set<String> by lazy {
+        data.texts("states", search).toSet().also { held ->
+            check(held.containsAll(NAMES)) { "youtube.json's search states lack ${NAMES - held}" }
+        }
+    }
+
+    private fun state(name: String): String = name.also { check(it in states) { "youtube.json has no state $it" } }
+    private const val FOUND = "found"
+    private const val NONE = "none"
+    private const val AUTO = "auto"
+    private const val FAILED = "failed"
+    private const val SPENT = "spent"
+    private const val OFF = "off"
 
     private const val SECOND_US = 1_000_000L
     private const val DAY_US = 86_400L * SECOND_US
@@ -184,15 +192,12 @@ object SearchGate {
      */
     fun sheetOnScreen(mine: List<LibraryHit>, index: IndexFound, lcArtists: List<SiteArtist>, lcSongs: List<SiteHit>): Boolean {
         val strong = number("strong").toDouble()
-        return mine.any { it.score >= strong && it.via != BY_ARTIST } ||
+        return mine.any { it.score >= strong && it.via != SearchLimits.VIA_ARTIST } ||
             index.songs.any { it.score >= strong } ||
             index.artists.any { it.score >= strong && !it.part } ||
             lcSongs.any { it.score >= strong && !it.sheet.isNullOrEmpty() } ||
             lcArtists.any { it.score >= strong && !it.part }
     }
-
-    /** search.py's reading of a library hit by its artist's name alone (LibraryHit.via). */
-    private const val BY_ARTIST = "artist"
 
     /** stamps.before: a stored time older than [cutoff], or missing or unreadable. */
     private fun before(value: JsonElement?, cutoff: Long): Boolean {

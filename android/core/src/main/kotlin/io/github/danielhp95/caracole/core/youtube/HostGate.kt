@@ -180,6 +180,9 @@ class HostGate(
     /** A test's seam: run first on each connection's thread (a handler that throws stands for a bug there). */
     @Volatile internal var beforeServing: (() -> Unit)? = null
 
+    /** A test's seam: run on the acceptor's thread after each accept (a handler that throws stands for a bug there). */
+    @Volatile internal var afterAccepting: (() -> Unit)? = null
+
     /** The address it listens on: 127.0.0.1, never another. */
     internal val boundAddress: InetAddress? get() = server?.inetAddress
 
@@ -193,7 +196,14 @@ class HostGate(
         val socket = ServerSocket(0, 50, LOOPBACK_ADDRESS)
         server = socket
         val port = socket.localPort
-        acceptor = spawn("caracole-gate-$port-accept") { accept(socket) }!!
+        acceptor = spawn("caracole-gate-$port-accept") {
+            try {
+                accept(socket)
+            } catch (t: Throwable) {
+                stopped(socket)
+                throw t // ends this thread alone (spawn), said nowhere
+            }
+        }!!
         return Opened(port, "http://$user:$secret@127.0.0.1:$port", this)
     }
 
@@ -203,7 +213,12 @@ class HostGate(
     /** Whether any request was refused (a host off the rule, or a malformed one). */
     fun refusedAny(): Boolean = synchronized(uses) { uses.values.any { it.refused.get() > 0 } }
 
-    /** Stops accepting, closes every open connection and tunnel, and waits for every thread of the gate to end. */
+    /**
+     * Stops accepting, closes every open connection and tunnel, and waits for every thread of the gate to end, each
+     * [JOIN_MS] at most. It never throws: an interrupt of the calling thread (set before, or coming while it waits) is
+     * kept, the flag set again once every thread was waited for, so that a run already over isn't made an interrupt
+     * and one whose exception is on its way keeps its interrupt too.
+     */
     override fun close() {
         val toJoin: List<Thread>
         synchronized(this) {
@@ -216,8 +231,33 @@ class HostGate(
         }
         // No thread is spawned and no client registered once closed is set (both under this lock): the snapshot is all.
         sockets.forEach { quietly(it) }
-        for (t in toJoin + threads.toList()) t.join(JOIN_MS)
+        var interrupted = Thread.interrupted()
+        for (t in toJoin + threads.toList()) {
+            val until = System.nanoTime() + JOIN_MS * 1_000_000L
+            while (t.isAlive) {
+                val left = (until - System.nanoTime()) / 1_000_000L
+                if (left <= 0) break
+                try {
+                    t.join(left)
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                }
+            }
+        }
         threads.removeIf { !it.isAlive }
+        if (interrupted) Thread.currentThread().interrupt()
+    }
+
+    /** The acceptor's body threw (a bug of the gate's own): it accepts nothing more, its socket is closed so that a
+     * client is refused at once rather than left waiting, and its log lists `gate.stopped` (no secret, no request's
+     * words), which a run reads first ([YtDlp]). */
+    private fun stopped(socket: ServerSocket) {
+        if (closed) return
+        synchronized(uses) { uses.getOrPut(STOPPED) { Use(apart = false) } }
+        try {
+            socket.close()
+        } catch (_: IOException) {
+        }
     }
 
     override fun toString() = "HostGate($mode, $rule, ${server?.localPort ?: "not started"})"
@@ -230,6 +270,12 @@ class HostGate(
                 break
             }
             val acceptedAt = System.nanoTime()
+            try {
+                afterAccepting?.invoke()
+            } catch (t: Throwable) {
+                quietly(client)
+                throw t
+            }
             if (active.incrementAndGet() > maxConnections) {
                 active.decrementAndGet()
                 try {
@@ -539,7 +585,7 @@ class HostGate(
 
     private fun use(key: String): Use = synchronized(uses) {
         uses[key] ?: run {
-            val named = uses.keys.count { it != OTHER_HOSTS && it != MALFORMED }
+            val named = uses.keys.count { it != OTHER_HOSTS && it != MALFORMED && it != STOPPED }
             if (key != MALFORMED && named >= LOG_HOSTS) uses.getOrPut(OTHER_HOSTS) { Use(apart = false) }
             else Use(rule.reportsApart(key)).also { uses[key] = it }
         }
@@ -582,6 +628,8 @@ class HostGate(
         const val LOG_HOSTS = 256
         const val OTHER_HOSTS = "(other hosts)"
         const val MALFORMED = "(malformed)"
+        /** Listed once the acceptor stopped by a bug of the gate's own: youtube.json's `gate.stopped`. */
+        val STOPPED: String by lazy { YouTubeData.read().text("stopped", YouTubeData.read().gate) }
 
         /** Why a host was refused, its log's [HostUse.why] (the last refusal's). */
         const val WHY_BY_NAME = "refused by name"
