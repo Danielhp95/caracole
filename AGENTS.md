@@ -4539,8 +4539,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   form's YouTube field where ok (`ServerControls.youtube`: `Phone.youtubeOffered()`, the design's §5.6, YouTube
   cooling down after the problem's reasons, `YouTubeRoutes.COOLING`), its line "its lyrics from the lyrics sites"
   (library_page.py's `_request_form(hears=)`: the lyrics heard from the video only where `server.transcribe.ok`,
-  never on the phone, whose `transcribe.why` is "Whisper isn't installed", `LibraryPage.TRANSCRIBE_PROBLEM`; library.js
-  says so in Make sheet's title too). vectors/web/youtube_routes.jsonl (`WebReplay.youtubeRoutes`,
+  never on the phone, whose `transcribe.why` is "No lyrics site has its words. The computer hears them from its own
+  audio of this song.", `LibraryPage.TRANSCRIBE_PROBLEM`; library.js says so in Make sheet's title too). vectors/web/youtube_routes.jsonl (`WebReplay.youtubeRoutes`,
   YouTubeRoutesReplay: each answer's member order too, the song the job adds against wanted.txt's line there),
   library_page.json's cases with `youtube` (the field drawn, a why).
 

@@ -88,7 +88,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("youtube", JsonObject(linkedMapOf("ok" to JsonPrimitive(controls.youtube == null),
                                                   "why" to (controls.youtube?.let(::JsonPrimitive) ?: JsonNull),
                                                   "off" to JsonPrimitive(controls.youtubeOff))))
-            // No lyrics transcribed: no Whisper on the phone.
+            // No lyrics transcribed on the phone: the computer hears them.
             put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(TRANSCRIBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
@@ -140,9 +140,9 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             "placeholder=\"youtube.com/watch?v=…\"></label>"
         const val YOUTUBE_HINT = "<p class=\"hint\">Sheet made from the video, its lyrics from the lyrics sites</p>"
 
-        /** Why the phone transcribes no lyrics (the server member's `transcribe.why`): youtube_fetch.transcribe_reason's
-         * words for a caracole built without Whisper, as the phone is. */
-        const val TRANSCRIBE_PROBLEM = "Whisper isn't installed"
+        /** Why the phone transcribes no lyrics (the server member's `transcribe.why`): none is made on the phone, by
+         * design; the computer hears a song's words from its own audio (the chords lane's words, the same). */
+        const val TRANSCRIBE_PROBLEM = "No lyrics site has its words. The computer hears them from its own audio of this song."
 
         /** Why the phone makes no sheet from an audio file (the server member's `audio.why`): its page has no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"

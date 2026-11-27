@@ -94,9 +94,9 @@ CARDS = VECTORS / "web" / "cards.jsonl"
 # What the phone's page says where caracole serve's says why this caracole makes no sheet from a YouTube video
 # (youtube_fetch.route_reason): the request form's line, "No sheets from YouTube here: YouTube isn't on the phone."
 YOUTUBE_PROBLEM = "YouTube isn't on the phone"
-# Why the phone transcribes no lyrics (``server.transcribe.why``): youtube_fetch.transcribe_reason's words for a caracole
-# built without Whisper, as the phone is; its request form's line says the lyrics come from the lyrics sites alone.
-TRANSCRIBE_PROBLEM = "Whisper isn't installed"
+# Why the phone transcribes no lyrics (``server.transcribe.why``): none is made on the phone, by design, the computer
+# hearing a song's words from its own audio; its request form's line says the lyrics come from the lyrics sites alone.
+TRANSCRIBE_PROBLEM = "No lyrics site has its words. The computer hears them from its own audio of this song."
 AUDIO_PROBLEM = "auto-chords isn't on the phone"  # LibraryPage.kt AUDIO_PROBLEM: no sheet from an audio file
 LIBRARY_NAME = "Phone"
 # A form token with every character html.escape writes otherwise, so the request form's escape is checked too.
@@ -487,7 +487,7 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
 
 def test_the_server_member_is_build_library_pages(conn, cfg):
     # The phone's server member is the one build_library_page writes for the same controls, with no Guitar Pro page,
-    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (no Whisper).
+    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (the computer hears them).
     youtube = cfg.provider("youtube")
     off = mock.patch.object(type(cfg), "provider", lambda self, name: (
         type(youtube)(**{**youtube.__dict__, "enabled": False}) if name == "youtube" else youtube))
