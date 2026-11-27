@@ -1,0 +1,535 @@
+{
+ "args": {
+  "base": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5"
+  ],
+  "search": [
+   "--flat-playlist",
+   "--dump-single-json"
+  ],
+  "video": [
+   "--skip-download",
+   "--flat-playlist",
+   "--dump-single-json"
+  ],
+  "download": [
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]/bestaudio/best",
+   "-x",
+   "--audio-format",
+   "m4a",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j"
+  ],
+  "phone_download": [
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j"
+  ]
+ },
+ "output_name": "audio.%(ext)s",
+ "phone_argv": {
+  "search": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--flat-playlist",
+   "--dump-single-json",
+   "--",
+   "<target>"
+  ],
+  "video": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--skip-download",
+   "--flat-playlist",
+   "--dump-single-json",
+   "--",
+   "<target>"
+  ],
+  "download": [
+   "--ignore-config",
+   "--no-plugin-dirs",
+   "--no-cookies",
+   "--no-cookies-from-browser",
+   "--no-remote-components",
+   "--no-playlist",
+   "--no-progress",
+   "--socket-timeout",
+   "30",
+   "--retries",
+   "0",
+   "--extractor-retries",
+   "0",
+   "--fragment-retries",
+   "0",
+   "--sleep-requests",
+   "0.5",
+   "--cache-dir",
+   "<cache_dir>",
+   "--no-js-runtimes",
+   "--js-runtimes",
+   "quickjs:<qjs>",
+   "--proxy",
+   "<proxy>",
+   "--sleep-interval",
+   "2.5",
+   "--max-sleep-interval",
+   "5",
+   "-f",
+   "bestaudio[ext=m4a]",
+   "--max-filesize",
+   "100M",
+   "--no-mtime",
+   "--print",
+   "after_move:%(.{id,title,channel,uploader,duration,filepath})j",
+   "-o",
+   "<into>/audio.%(ext)s",
+   "--",
+   "<target>"
+  ]
+ },
+ "placeholders": {
+  "target": "<target>",
+  "cache_dir": "<cache_dir>",
+  "qjs": "<qjs>",
+  "proxy": "<proxy>",
+  "into": "<into>"
+ },
+ "fill": "each element holds at most one placeholder, alone, after a fixed prefix or before a fixed suffix; it is filled in one pass (before + value + after) and a value is never read again; into loses its trailing '/' first; cache_dir is given as it is",
+ "targets": {
+  "search_prefix": "ytsearch{n}:",
+  "watch_url": "https://www.youtube.com/watch?v={id}",
+  "video_id": {
+   "pattern": "[A-Za-z0-9_-]{11}",
+   "ignorecase": false
+  },
+  "video_id_matched": "whole",
+  "rule": "a video's or a download's target is exactly watch_url of an id video_id matches whole (re.fullmatch, the pattern having no anchors), else no run is made"
+ },
+ "refuse": {
+  "no_nul": [
+   "target",
+   "cache_dir",
+   "qjs",
+   "proxy",
+   "into"
+  ],
+  "nul": "\u0000",
+  "empty_search": true,
+  "empty_into": true,
+  "rule": "no run is made of a value in no_nul that holds a NUL, of an empty search target, or of a download whose into is empty once its trailing '/' are taken off"
+ },
+ "patterns": {
+  "blocked": {
+   "pattern": "not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[- ]limited|try again later|captcha",
+   "ignorecase": true
+  },
+  "unavailable": {
+   "pattern": "Video unavailable|Private video|confirm your age|age[- ]restricted|available in your country|members[- ]only|has been removed|has been terminated|copyright|live event will begin|Premieres in|DRM protected|This video is (?:un|not )available",
+   "ignorecase": true
+  },
+  "status": {
+   "pattern": "HTTP Error (\\d{3})",
+   "ignorecase": false
+  },
+  "outdated": {
+   "pattern": "Unable to extract|nsig extraction failed|Signature extraction failed|Failed to extract any player response|Precondition check failed|challenge solving failed",
+   "ignorecase": true
+  },
+  "pass_over": {
+   "pattern": "Requested format is not available",
+   "ignorecase": true
+  },
+  "degraded": {
+   "pattern": "n challenge solving failed|Signature solving failed|Error solving .{0,40}challenge request|No supported JavaScript runtime could be found|Challenge solver \\S+ script version|Hash mismatch on challenge solver|Failed to (?:load|read builtin) challenge solver|nsig extraction failed|Signature extraction failed",
+   "ignorecase": true
+  },
+  "network": {
+   "pattern": "\\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable|Remote end closed|HTTP Error 5\\d\\d",
+   "ignorecase": true
+  }
+ },
+ "classes": [
+  "blocked",
+  "unavailable",
+  "pass_over",
+  "outdated",
+  "error"
+ ],
+ "classify": {
+  "ok_exit": 0,
+  "ok_class": "ok",
+  "order": "the gate's log first (its step, the runner's), then the exit status (ok_exit is ok_class whatever stderr says), then the steps over stderr",
+  "lines": "str.splitlines, each str.strip()ped; empty lines and those beginning skip_prefix dropped",
+  "skip_prefix": "[debug]",
+  "error_prefix": "ERROR:",
+  "warning_prefix": "WARNING:",
+  "over": {
+   "stderr": "every line read",
+   "error_line": "the last line read that begins error_prefix, that word taken off and the rest str.strip()ped: one line or none",
+   "warning_lines": "every line read that begins warning_prefix, whole",
+   "gate_log": "the app's gate's log of the run, never stderr"
+  },
+  "steps": [
+   {
+    "class": "gate",
+    "over": "gate_log",
+    "note": "the phone's runner's, before stderr is read: a refusal of the app's gate, or its 407, is decided from the gate's log; classify never sees it"
+   },
+   {
+    "class": "blocked",
+    "over": "stderr",
+    "pattern": "blocked"
+   },
+   {
+    "class": "unavailable",
+    "over": "stderr",
+    "pattern": "unavailable"
+   },
+   {
+    "class": "outdated",
+    "over": "error_line",
+    "pattern": "pass_over",
+    "and": {
+     "over": "warning_lines",
+     "pattern": "degraded"
+    }
+   },
+   {
+    "class": "pass_over",
+    "over": "error_line",
+    "pattern": "pass_over"
+   },
+   {
+    "class": "outdated",
+    "over": "error_line",
+    "pattern": "outdated"
+   }
+  ],
+  "otherwise": "error"
+ },
+ "reason_chars": 300,
+ "search_timeout": 120.0,
+ "download_timeout": 900.0,
+ "search_results": 8,
+ "max_filesize": "100M",
+ "audio_suffixes": [
+  ".m4a",
+  ".mp4",
+  ".aac",
+  ".opus",
+  ".ogg",
+  ".oga",
+  ".mp3",
+  ".flac",
+  ".wav"
+ ],
+ "audio_format": "m4a",
+ "phone_format": "bestaudio[ext=m4a]",
+ "fetch": {
+  "recheck_after_days": 30,
+  "give_up_after": 3
+ },
+ "answers": {
+  "provider": "youtube",
+  "live_statuses": [
+   "is_live",
+   "is_upcoming"
+  ],
+  "shorts_path": "/shorts/",
+  "search_not_json": "yt-dlp's search answer isn't JSON: {}",
+  "video_not_json": "yt-dlp's answer isn't JSON: {}",
+  "no_such_video": "yt-dlp answered for no such video"
+ },
+ "search_query": "{artist} {title}",
+ "choose": {
+  "patterns": {
+   "parts": {
+    "pattern": "\\s+[-–—~/|｜:]\\s+|\\s*[|｜]\\s*|[()\\[\\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗]",
+    "ignorecase": false
+   },
+   "quoted": {
+    "pattern": "[\\\"“”«»]([^\\\"“”«»]+)[\\\"“”«»]|(?<!\\w)['‘’]([^'‘’]+)['‘’](?!\\w)",
+    "ignorecase": false
+   },
+   "unwanted": {
+    "pattern": "\\bcover(?:s|ed)?\\b|翻唱|カバー|\\blive\\b|\\ben vivo\\b|\\bao vivo\\b|\\ben directo\\b|\\bconcert\\b|\\bunplugged\\b|现场|現場|演唱会|演唱會|ライブ|\\bkaraoke\\b|\\binstrumental\\b|\\bbacking track\\b|\\bminus one\\b|伴奏|カラオケ|노래방|\\blesson\\b|\\btutorial\\b|\\bhow to play\\b|\\bchords?\\b|\\btabs?\\b|\\bguitar\\b|教学|教學|吉他|\\bslowed\\b|\\breverb\\b|\\bsped up\\b|\\bspeed up\\b|\\bnightcore\\b|\\b8d\\b|\\bbass boosted\\b|\\b\\d+ hours?\\b|\\bloop\\b|\\breact(?:s|ion|ing)?\\b|\\bremix\\b|\\bmashup\\b|\\bparody\\b|\\bacoustic\\b|\\bpiano\\b|\\bdrum\\b|\\bin the style of\\b|\\b(?:as )?made famous by\\b|\\boriginally performed by\\b",
+    "ignorecase": false
+   },
+   "karaoke_channel": {
+    "pattern": "karafun|sing ?king|sunfly|party ?tyme",
+    "ignorecase": false
+   },
+   "topic": {
+    "pattern": "^(.*\\S)\\s+-\\s+topic$",
+    "ignorecase": true
+   },
+   "channel_suffix": {
+    "pattern": "\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$",
+    "ignorecase": true
+   },
+   "official_audio": {
+    "pattern": "\\bofficial (?:hd )?audio\\b",
+    "ignorecase": false
+   },
+   "official_video": {
+    "pattern": "\\bofficial (?:hd )?(?:music )?video\\b|\\(official\\)",
+    "ignorecase": false
+   },
+   "cjk_letter": {
+    "pattern": "[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]",
+    "ignorecase": false
+   },
+   "script_run": {
+    "pattern": "[ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+|[^ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿𠀀-𮯯]+",
+    "ignorecase": false
+   }
+  },
+  "variant": "\\b{variant}\\b|unplugged",
+  "decoration": [
+   "1080p",
+   "4k",
+   "8d",
+   "acoustic",
+   "and",
+   "audio",
+   "bass",
+   "boosted",
+   "by",
+   "chord",
+   "chords",
+   "clip",
+   "cover",
+   "drum",
+   "easy",
+   "edit",
+   "en",
+   "explicit",
+   "feat",
+   "ft",
+   "full",
+   "guitar",
+   "hd",
+   "how",
+   "hq",
+   "instrumental",
+   "karaoke",
+   "learn",
+   "lesson",
+   "letra",
+   "live",
+   "lyric",
+   "lyrics",
+   "m",
+   "music",
+   "musica",
+   "mv",
+   "new",
+   "nightcore",
+   "official",
+   "officiel",
+   "oficial",
+   "original",
+   "paroles",
+   "piano",
+   "play",
+   "premiere",
+   "radio",
+   "reaction",
+   "remaster",
+   "remastered",
+   "remix",
+   "reverb",
+   "single",
+   "slowed",
+   "sped",
+   "tab",
+   "tabs",
+   "the",
+   "to",
+   "tutorial",
+   "up",
+   "v",
+   "ver",
+   "version",
+   "video",
+   "videoclip",
+   "visualizer",
+   "vivo",
+   "with"
+  ],
+  "cjk_decoration": [
+   "가사",
+   "공식",
+   "노래방",
+   "뮤직비디오",
+   "カハー",
+   "カラオケ",
+   "フル",
+   "ライフ",
+   "中字",
+   "伴奏",
+   "公式",
+   "动态歌词",
+   "吉他",
+   "字幕",
+   "完整版",
+   "官方",
+   "官方版",
+   "弹唱",
+   "影片",
+   "教学",
+   "无损",
+   "歌词",
+   "歌词版",
+   "正式版",
+   "演唱会",
+   "现场",
+   "现场版",
+   "翻唱",
+   "视频",
+   "音乐",
+   "音频",
+   "首播",
+   "高清",
+   "高音质"
+  ],
+  "own_channel": [
+   "",
+   "vevo",
+   "official",
+   "oficial",
+   "officiel",
+   "music",
+   "tv",
+   "band",
+   "channel",
+   "officialchannel"
+  ],
+  "cjk_width": "W",
+  "tolerance_s": 20.0,
+  "synced_s": 2.0,
+  "close_s": 5.0,
+  "shortest_s": 45.0,
+  "longest_s": 900.0,
+  "exact": 2,
+  "alone": 1,
+  "key": "of the videos that fit, the least of (tier, -title, closeness, -official, rank): tier 1 for a version unwanted or not the song's own variant, else 0; title exact or alone; closeness 0 to 3 (3 with no length); official 3 the artist's Topic channel, 2 official audio, 1 the artist's own channel or an official video, else 0; rank the search's order"
+ },
+ "search": {
+  "searches_per_hour": 10,
+  "asked_for_days": 30,
+  "failed_for_seconds": 3600,
+  "failures_pause": 3
+ },
+ "gate": {
+  "names": [
+   "youtube.com",
+   "www.youtube.com",
+   "m.youtube.com",
+   "music.youtube.com",
+   "consent.youtube.com"
+  ],
+  "suffixes": [
+   ".googlevideo.com"
+  ],
+  "port": 443,
+  "apart": [
+   "consent.youtube.com",
+   "redirector.googlevideo.com"
+  ],
+  "refused": [
+   "jnn-pa.googleapis.com"
+  ],
+  "refusal": "yt-dlp asked for {host}, which caracole doesn't allow"
+ },
+ "runner": {
+  "cache_folder": "yt-dlp",
+  "budget_spent": "budget of {budget} yt-dlp runs spent",
+  "blocked_earlier": "blocked earlier this run",
+  "unavailable_said": "video unavailable: {reason}",
+  "timed_out": "yt-dlp took longer than {timeout:g} s and was stopped",
+  "said_nothing": "yt-dlp failed and said nothing",
+  "no_audio_left": "yt-dlp left no audio file in {folder}",
+  "reason_cut": "…",
+  "block_statuses": [
+   403,
+   429
+  ]
+ }
+}

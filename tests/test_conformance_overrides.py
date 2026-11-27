@@ -169,6 +169,8 @@ def fields(o) -> dict[str, Any]:
         "harptabs": {k: dataclasses.asdict(v) for k, v in o.harptabs.items()},
         "gametabs": {k: dataclasses.asdict(v) for k, v in o.gametabs.items()},
         "azlyrics": dict(o.azlyrics),
+        "lyrics": {k: {"asked": list(v.asked) if v.asked else None,
+                       "record": dataclasses.asdict(v.record) if v.record else None} for k, v in o.lyrics.items()},
         "version": dict(o.version),
         "harmonica": {k: {tab: (dict(s) if isinstance(s, dict) else s) for tab, s in v.items()}
                       for k, v in o.harmonica.items()},
@@ -265,6 +267,12 @@ tab_ids = [99, 101, 4242]
 [azlyrics]
 "Misc Musicals - Hadestown Wait For Me" = "azlyrics.com/lyrics/hadestown/waitforme.html?x=1"
 
+[lyrics]
+"孟维来 - 野人『动态歌词MV』" = { as = " 孟维来 -  野人 ", record = "lrclib:28399373" }
+"Plan B - Ill Manors" = { as = "Plan B - Ill Manors - Official" }
+"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }
+"Daft Punk - Veridis Quo" = { record = "megalobiz:105007" }
+
 [version]
 "Soda Stereo - De Música Ligera" = "#t=2&mode=dorian&capo=0&at=3.1"
 "Radiohead - Creep" = "key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6"
@@ -338,6 +346,29 @@ BAD_ROWS: dict[str, list[tuple[str, str, str, Any]]] = {
     "an AZLyrics page of an artist": [("azlyrics", "radiohead/creep", "Radiohead - Creep",
                                        "https://www.azlyrics.com/r/radiohead.html")],
     "an AZLyrics page as a list": [("azlyrics", "radiohead/creep", "Radiohead - Creep", ["x"])],
+    "lyrics as a record alone": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", "lrclib:1")],
+    "lyrics of nothing": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {})],
+    "lyrics with another key": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"as": "A - B", "note": "x"})],
+    "lyrics asked under no title": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"as": "Pomme -  "})],
+    "lyrics asked under a number": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"as": 3})],
+    "lyrics of record 0": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"record": "lrclib:0"})],
+    "lyrics of a record that is no number": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                              {"record": "megalobiz:x1"})],
+    "lyrics of a record of thirteen digits": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                               {"record": "lrclib:1234567890123"})],
+    "lyrics of a record in other digits": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                            {"record": "lrclib:\u0663"})],
+    "lyrics of another site": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"record": "genius:1"})],
+    "lyrics of no site": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"record": "28399373"})],
+    "lyrics of an AZLyrics artist alone": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                            {"record": "azlyrics:pomme"})],
+    "lyrics of an AZLyrics page in capitals": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                                {"record": "azlyrics:Pomme/mononoke"})],
+    "lyrics of another AZLyrics path": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                                         {"record": "azlyrics:../lyrics/x"})],
+    "lyrics of an address": [("lyrics", "pomme/mononoke", "Pomme - Mononoké",
+                              {"record": "https://lrclib.net/api/get/1"})],
+    "lyrics of a record as a number": [("lyrics", "pomme/mononoke", "Pomme - Mononoké", {"record": 1})],
     "a version as a number": [("version", "radiohead/creep", "Radiohead - Creep", 3)],
     "a version as a truth": [("version", "radiohead/creep", "Radiohead - Creep", True)],
     "a version that escapes no UTF-8": [("version", "radiohead/creep", "Radiohead - Creep", "t=%ff")],
@@ -473,6 +504,8 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_match", "no slash", {"display": "Blur - Song 2", "ug_ref": "blur"}),
     ("add_match", "two slashes", {"display": "Blur - Song 2", "ug_ref": "a/b/c"}),
     ("add_match", "an artist with no key", {"display": "Blur - Song 2", "ug_ref": "-/song-2"}),
+    ("add_match", "a song with a [lyrics] entry: it stays as it is",
+     {"display": "Radiohead - Creep", "ug_ref": "radiohead/creep-live"}),
     # add_pin
     ("add_pin", "a new song's, each address as a pin writes it",
      {"display": "Blur - Song 2", "urls": ["tabs.ultimate-guitar.com/tab/blur/song-2-chords-1234?ref=x#c", " 85053 ",
@@ -543,6 +576,7 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_ignore", "a new song", {"display": "Blur - Song 2"}),
     ("add_ignore", "a song ignored already, written another way", {"display": "Nobody - Nothing"}),
     ("add_ignore", "no song named", {"display": "Song 2"}),
+    ("add_ignore", "a song with a [lyrics] entry alone", {"display": "Pomme - Mononoké"}),
     # add_version
     ("add_version", "a new song's, its # dropped", {"display": "Blur - Song 2", "query": "  #t=2&mode=dorian  "}),
     # Two marks: add_version drops one and writes "#t=2", which the file then reads as "t=2" (song_entries' value).
@@ -593,8 +627,15 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_harmonica", "no song named", {"display": "Blur", "tab": "harmonica-1.txt", "reading": "letters"}),
 ]
 
-# The cases that start from rows of their own, not BASE's.
+# The cases that start from rows of their own: none, or BASE's with a [lyrics] entry.
 EMPTY_CASES = {("add_harmonica", "a song with no entry")}
+LYRICS_BASE = BASE + '''
+[lyrics]
+"radiohead - creep" = { as = "Radiohead - Creep (Acoustic)", record = "lrclib:28399373" }
+"Pomme - Mononoké" = { record = "azlyrics:pomme/mononoke" }
+'''
+LYRICS_CASES = {("add_match", "a song with a [lyrics] entry: it stays as it is"),
+                ("add_ignore", "a song with a [lyrics] entry alone")}
 
 TWO_PINS = ("remove_pin", "both of two")
 
@@ -638,9 +679,12 @@ def write_records(tmp: Path) -> list[dict[str, Any]]:
     base = tmp / "base.toml"
     base.write_text(BASE, encoding="utf-8")
     base_rows = rows_of(base)
+    with_lyrics = tmp / "lyrics.toml"
+    with_lyrics.write_text(LYRICS_BASE, encoding="utf-8")
+    lyrics_rows = rows_of(with_lyrics)
     records = []
     for n, (fn, case, kw) in enumerate(WRITE_CASES):
-        rows = [] if (fn, case) in EMPTY_CASES else base_rows
+        rows = [] if (fn, case) in EMPTY_CASES else lyrics_rows if (fn, case) in LYRICS_CASES else base_rows
         path = tmp / f"write-{n}.toml"
         path.write_text(toml_of(rows), encoding="utf-8")
         before = path.read_bytes()

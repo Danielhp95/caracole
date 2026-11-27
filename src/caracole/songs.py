@@ -59,7 +59,7 @@ KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored key
 _SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")  # what a line says of its song, kept whole
 _WANTED = "wanted"  # wanted.SOURCE: a line's source id is its identity key
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
-# gtptabs_fetch.py, youtube_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
+# gtptabs_fetch.py, youtube_fetch.py, lyrics_search.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
 # may give that id to the next new song.
 _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
@@ -68,7 +68,7 @@ _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressio
                 "ug:blocked:", "youtube:", "transcript:", "transcribe:none:",
                 "transcribe:unreadable:", "transcribe:failed:",
                 "sheet_versions:same:",
-                "sheet_versions:yours:", "sheet_versions:unkeepable:")
+                "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:")
 
 
 def utc_now_iso() -> str:

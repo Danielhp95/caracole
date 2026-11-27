@@ -78,7 +78,7 @@ def test_what_else_the_version_says_stays(conn, cfg):
     song = found(conn, chords_only(conn, cfg))
     before = raw(conn, song)
     lyrics_onto_sheets(conn, cfg)
-    assert raw(conn, song) == {**before, "lyrics": "plain"}
+    assert raw(conn, song) == {**before, "lyrics": "plain", "lyrics_key": raw(conn, song)["lyrics_key"]}
 
 
 def test_the_sheet_takes_them_once(conn, cfg):
@@ -97,6 +97,32 @@ def test_auto_chords_has_nothing_left_to_do_for_plain_lyrics(conn, cfg, tmp_path
     assert _skip_reason(conn, get_song(conn, song.id), Overrides()) is None  # due, by the models, until now
     lyrics_onto_sheets(conn, cfg)
     assert _skip_reason(conn, get_song(conn, song.id), Overrides()) == "up to date"
+
+
+def test_the_words_key_holds_through_their_spacing_and_is_another_for_other_words():
+    from caracole.autochords.sheet_lyrics import lyrics_key
+
+    key = lyrics_key("Une ligne\n\nUne autre")
+    assert len(key) == 16
+    assert lyrics_key("\n  Une ligne \r\n\n\n\tUne autre\n\n") == key
+    assert {lyrics_key("Une ligne\nUne autre"), lyrics_key("une ligne\n\nUne autre"),
+            lyrics_key("Une ligne,\n\nUne autre")}.isdisjoint({key})
+
+
+def test_lyrics_put_on_a_chart_keep_their_key(conn, cfg, tmp_path):
+    # Then other words make the sheet due for the models, as for a sheet they made over lyrics.
+    from caracole.autochords.run import _lyrics_key
+
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x")
+    song = found(conn, chords_only(conn, cfg))
+    update_song(conn, song.id, audio_path=str(audio), autochords_mtime=1.0)
+    lyrics_onto_sheets(conn, cfg)
+    song = get_song(conn, song.id)
+    assert raw(conn, song)["lyrics_key"] == _lyrics_key(song) and _lyrics_key(song) is not None
+    assert _skip_reason(conn, song, Overrides()) == "up to date"
+    song = found(conn, song, plain="Des mots tout autres")
+    assert _skip_reason(conn, song, Overrides()) is None
 
 
 def test_timed_lyrics_go_on_at_once_then_stay_due_for_the_models(conn, cfg, tmp_path):

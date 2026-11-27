@@ -78,16 +78,41 @@ object Outcomes {
      * no site. */
     val AUDIO_STEPS: List<Pair<String, List<String>>> = YOUTUBE_STEPS
 
-    /** A staged job (outcome._staged): its steps, the stage of its words a Ready one says may wait, and the site its
-     * Audio step names (YouTube for a YouTube sheet's, none for a file you gave); null for any other job. */
-    private class Staged(val table: List<Pair<String, List<String>>>, val words: String, val audioSite: String)
+    /** A record of a song's lyrics search picked's steps (lyrics_pick.STAGES). */
+    val LYRICS_PICK_STEPS: List<Pair<String, List<String>>> = listOf(
+        "Song" to listOf("song"), "Lyrics" to listOf("lyrics"), "Chords" to listOf("chords"), "PDF" to listOf("pdf"),
+    )
+
+    /** A staged job (outcome.Staged): its steps, the stage of its words a Ready one says may wait ([waits]), the
+     * stage whose words a Ready says ([holds]: the chords, or a lyrics pick's lyrics), and the step that names a site
+     * and that site in full ([sited], [site]: a YouTube sheet's Audio, YouTube; a lyrics pick's Lyrics, its record's
+     * site); null for any other job. */
+    private class Staged(val table: List<Pair<String, List<String>>>, val waits: String, val holds: String,
+                         val sited: String = "", val site: String = "")
 
     private fun staged(job: Shape): Staged? = when {
-        job.fromYoutube -> Staged(YOUTUBE_STEPS, "lyrics", SITE_NAMES.getValue(YOUTUBE_SOURCE))
-        job.transcribes -> Staged(TRANSCRIBE_STEPS, "words", "")
-        job.fromAudio -> Staged(AUDIO_STEPS, "lyrics", "")
+        job.fromYoutube -> Staged(YOUTUBE_STEPS, "lyrics", "chords", "Audio", SITE_NAMES.getValue(YOUTUBE_SOURCE))
+        job.transcribes -> Staged(TRANSCRIBE_STEPS, "words", "chords")
+        job.fromAudio -> Staged(AUDIO_STEPS, "lyrics", "chords")
+        job.picksLyrics -> Staged(LYRICS_PICK_STEPS, "lyrics", "lyrics", "Lyrics", pickedSite(job))
         else -> null
     }
+
+    /** The site of the record a lyrics pick takes (outcome._picked_site: its `--record=SITE:ID`), in full ([NAMES]);
+     * a site it doesn't know as it is; "" for a pick by its row. */
+    private fun pickedSite(job: Shape): String {
+        val record = job.steps.flatMap { it.args }.firstOrNull { it.startsWith("--record=") }
+            ?.removePrefix("--record=") ?: ""
+        val site = record.substringBefore(':')
+        return NAMES[site] ?: site
+    }
+
+    /** get.py's NAMES: each provider's name in full, by its key. */
+    val NAMES: Map<String, String> = linkedMapOf(
+        "ug" to "Ultimate Guitar", "lrclib" to "LRCLIB", "megalobiz" to "Megalobiz", "azlyrics" to "AZLyrics",
+        "lacuerda" to "LaCuerda", "gtptabs" to "gtptabs.com", "musescore" to "MuseScore", "harptabs" to "harptabs.com",
+        "gametabs" to "gametabs.net", "ireal" to "iReal Pro's forum",
+    )
 
     /** A step's site in full, by its tag (outcome.SITE_NAMES: get.py's NAMES by icons.tag, YouTube's, and where an
      * auto sheet or a file you filed came from); a tag it lacks is named as it is. */
@@ -145,6 +170,9 @@ object Outcomes {
     const val CANCELLED = "Cancelled before it ran."
     const val INTERRUPTED_RAN = "The server stopped mid-way. Try again to finish."
     const val INTERRUPTED_WAITED = "The server stopped before it ran. Try again runs it."
+    const val LYRICS_KEPT = "Lyrics kept."  // an interrupted lyrics pick's, its lyrics kept before the stop
+    private const val NO_NEW = "no new lyrics"  // lyrics_pick.py's: a pick's chords skipped as it kept nothing
+
     /** A sync's, whose next step is Compare again ([COMPARE_AGAIN]), never Try again: the action its entry offers
      * named (outcome.py's INTERRUPTED_SYNC_RAN and INTERRUPTED_SYNC_WAITED). */
     const val INTERRUPTED_SYNC_RAN = "The server stopped mid-way. Compare again to finish."
@@ -213,7 +241,7 @@ object Outcomes {
                      if (stage.state == Job.INTERRUPTED) Job.FAILED else stage.state)
             }
         }
-        if (job.stages.isNotEmpty()) staged(job)?.let { return stagedSteps(job, it.table, it.audioSite) }
+        if (job.stages.isNotEmpty()) staged(job)?.let { return stagedSteps(job, it) }
         if (job.stages.isNotEmpty()) return lookupSteps(job, facts)
         return job.steps.filter { it.state != Job.SKIPPED }.map { step ->
             val name = COMMAND_STEPS[step.args.firstOrNull() ?: ""] ?: step.label
@@ -241,16 +269,16 @@ object Outcomes {
         return chips
     }
 
-    private fun stagedSteps(job: Shape, table: List<Pair<String, List<String>>>, audioSite: String): List<Chip> {
+    private fun stagedSteps(job: Shape, staged: Staged): List<Chip> {
         val byName = job.stages.associateBy { it.name }
         val chips = ArrayList<Chip>()
-        for ((name, names) in table) {
+        for ((name, names) in staged.table) {
             val read = names.mapNotNull { byName[it] }.map { stage ->
                 stage to if ((stage.name == "audio" && stage.state == Job.SKIPPED && stage.detail.isNotEmpty()) ||
                     stage.state == Job.INTERRUPTED) Job.FAILED else stage.state
             }
             val state = stateOf(read.map { it.second }) ?: continue
-            chips += Chip(name, state, if (name == "Audio") audioSite else "", found(read))
+            chips += Chip(name, state, if (name == staged.sited) staged.site else "", found(read))
         }
         return chips
     }
@@ -365,8 +393,10 @@ object Outcomes {
         }
         val peer = job.peer
         if (peer != null && job.state != Job.CANCELLED) return peerOutcome(job, peer, line)
-        if (job.state == Job.INTERRUPTED) {
-            return Outcome("waiting", "Interrupted", if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED, again)
+        if (job.state == Job.INTERRUPTED) {  // a pick's lyrics kept before the stop, said so
+            val said = if (job.startedAt != null) INTERRUPTED_RAN else INTERRUPTED_WAITED
+            val kept = job.picksLyrics && Status.lyricsKept(job)
+            return Outcome("waiting", "Interrupted", if (kept) "$LYRICS_KEPT $said" else said, again)
         }
         if (tone == "failed") return Outcome("failed", "Failed", sentence(text), again)
         if (tone == "removed") return Outcome("removed", text)
@@ -374,7 +404,7 @@ object Outcomes {
         if (tone == "ready") {
             val href = line.link?.let { href(it.second) }
             if (text == Status.READY) {
-                val said = staged(job)?.let { stagedHolds(job.stages, it.words) } ?: waits(job.stages, afterSheet = true)
+                val said = staged(job)?.let { stagedHolds(job.stages, it) } ?: waits(job.stages, afterSheet = true)
                 return Outcome("ready", "Ready", said, href?.let { Action("Open", href = it) })
             }
             return Outcome("ready", text, "", if (line.link != null && href != null) Action(line.link.first, href = href) else null)
@@ -384,10 +414,19 @@ object Outcomes {
             return Outcome("review", "Needs your pick", IN_REVIEW,
                            if (picker != null) Action("Pick", href = href(picker)) else inLibrary(songId))
         }
+        if (job.key.startsWith(JobCommands.LYRICS_CLEAR) && tone == "added") {  // "Cleared", "Nothing to clear"
+            Status.cleared(job)?.let { said ->
+                return Outcome(tone, "Cleared", sentence(capitalFirst(said.removePrefix("Cleared "))))
+            }
+            val (word, rest) = partition(text, ": ")
+            return Outcome(tone, word.trimEnd('.'), if (rest.isNotEmpty()) sentence(capitalFirst(rest)) else "")
+        }
         if (JobCommands.INDEX_READS.any(job.key::startsWith)) {
             val (word, rest) = partition(text, ": ")  // "Read: …", "Not read: …"
             return Outcome(tone, word, if (rest.isNotEmpty()) sentence(rest) else "", if (tone == "waiting") again else null)
         }
+        // a pick's record gone: asking it again answers alike
+        staged(job)?.let { if (tone == "missing") return Outcome("missing", text, stagedStopped(job.stages, it.table)) }
         if (tone == "missing") return notFound(job, facts, songId)
         staged(job)?.let { if (tone == "waiting") return Outcome("waiting", text, stagedStopped(job.stages, it.table), again) }
         if (tone == "waiting") {
@@ -478,20 +517,28 @@ object Outcomes {
         return names.firstNotNullOfOrNull { name -> byName[name]?.let(::stageReason)?.takeIf { it.isNotEmpty() } } ?: ""
     }
 
-    private fun stagedHolds(stages: List<Stage>, words: String): String {
+    private fun stagedHolds(stages: List<Stage>, staged: Staged): String {
         val byName = stages.associateBy { it.name }
-        val lyrics = byName[words]
-        val chords = byName["chords"]
+        val waited = byName[staged.waits]
+        val held = byName[staged.holds]
         val heard = listOf("vocals", "words").mapNotNull { byName[it] }
             .firstOrNull { it.state == Job.FAILED && it.detail.isNotEmpty() }  // whichever stage of Words failed
-        if (words == "lyrics" && lyrics != null && lyrics.state == Job.DONE && heard != null &&
-            chords != null && chords.detail.isNotEmpty()) {
-            return "${capital(chords.detail).trimEnd('.')}: the words couldn't be heard here (${heard.detail})."
+        if (staged.waits == "lyrics" && waited != null && waited.state == Job.DONE && heard != null &&
+            held != null && held.detail.isNotEmpty()) {
+            return "${capital(held.detail).trimEnd('.')}: the words couldn't be heard here (${heard.detail})."
         }
-        if (lyrics != null && (lyrics.state == Job.SKIPPED || lyrics.state == Job.FAILED) && lyrics.detail.isNotEmpty()) {
-            return capital(lyrics.detail)
+        if (waited != null && (waited.state == Job.SKIPPED || waited.state == Job.FAILED) &&
+            waited.detail.isNotEmpty()) {
+            return capital(waited.detail)
         }
-        return if (chords != null && chords.detail.isNotEmpty()) capital(chords.detail.removePrefix("up to date: ")) else ""
+        val said = if (held != null && held.detail.isNotEmpty()) capital(held.detail.removePrefix("up to date: "))
+                   else ""
+        val chords = byName["chords"]
+        if (staged.holds != "chords" && chords != null && chords.state == Job.SKIPPED && chords.detail.isNotEmpty() &&
+            chords.detail != NO_NEW) {  // what became of the sheet: its own sentence after what was kept
+            return PyText.strip("$said ${capital(chords.detail)}")
+        }
+        return said
     }
 
     private fun stagedStopped(stages: List<Stage>, table: List<Pair<String, List<String>>>): String {

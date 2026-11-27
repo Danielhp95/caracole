@@ -32,6 +32,10 @@ a harptabs.com artist runs. Its last line starts as ``caracole lacuerda --artist
 the lookups' lane (``_common.exclusive(..., lane=True)``), where another lookup goes first in
 their client's pause before each request but its first; LaCuerda's search checks its gate and
 sends its one request in one turn. Each one's good run is what its own client was answered.
+``caracole lyrics --song X --as "A - T"`` lists what the three lyrics sites have under a name typed, in the lane too
+(lyrics_search.py), with a client a site; it changes no lyrics. ``--pick N`` or ``--record SITE:ID`` makes a row of
+that search the song's lyrics and its auto sheet again over them (lyrics_pick.py), ``--clear`` takes the record
+picked back, each under the lock as asked for now, as ``versions --keep`` takes it.
 ``caracole gametabs --index`` reads gametabs.net's game pages into its local index
 (gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
 instruments, so that a song is found by its composer. ``caracole ireal`` reads iReal Pro's forum's sitemaps and
@@ -97,9 +101,55 @@ LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the he
 
 def register(app: typer.Typer) -> None:
     @app.command("lyrics")
-    def lyrics_cmd(ctx: typer.Context) -> None:
+    def lyrics_cmd(
+        ctx: typer.Context,
+        song: str | None = typer.Option(
+            None, "--song", metavar='"ARTIST - TITLE"',
+            help="With --as, --pick, --record or --clear: the song whose lyrics they are.",
+        ),
+        asked: str | None = typer.Option(
+            None, "--as", metavar='"ARTIST - TITLE"',
+            help="With --song: list what LRCLIB, Megalobiz and AZLyrics have under this name, now, at a lookup's "
+                 "pace, and note it under \\[lyrics] so the nights ask under it too. Changes no lyrics.",
+        ),
+        pick: int | None = typer.Option(
+            None, "--pick", metavar="N", min=1,
+            help="With --song: make row N of its last --as search its lyrics now, and its auto sheet again over them.",
+        ),
+        record: str | None = typer.Option(
+            None, "--record", metavar="SITE:ID",
+            help="With --song: as --pick, the row of its last search that lists this record (lrclib:ID, "
+                 "megalobiz:ID, azlyrics:ARTIST/SONG).",
+        ),
+        clear: bool = typer.Option(
+            False, "--clear",
+            help="With --song: take the record you picked out of \\[lyrics] (its name kept), the lyrics it gave with "
+                 "it; every site is asked again. Sends no request.",
+        ),
+        progress: bool = typer.Option(
+            False, "--progress", help="With --pick or --record: a JSON line per stage too, for caracole serve.",
+        ),
+    ) -> None:
         """Fetch lyrics from LRCLIB for songs that have none yet, timed ones from Megalobiz, then AZLyrics' where none."""
-        _lyrics(load_cfg(ctx))
+        cfg = load_cfg(ctx)
+        asks = [name for name, given in (("--as", asked is not None), ("--pick", pick is not None),
+                                         ("--record", record is not None), ("--clear", clear)) if given]
+        if progress and not (pick is not None or record is not None):
+            _common.fail("--progress goes with --pick or --record", 2)
+        if song is None and not asks:
+            _lyrics(cfg)
+            return
+        if song is None or not asks:
+            _common.fail("--song goes with one of --as, --pick, --record and --clear: caracole lyrics --song "
+                         "\"Artist - Title\" --as \"Artist - Title\".", 2)
+        if len(asks) > 1:
+            _common.fail(f"{' and '.join(asks)} don't go together: give one.", 2)
+        if asked is not None:
+            _lyrics_as(cfg, song, asked)
+        elif clear:
+            _lyrics_clear(cfg, song)
+        else:
+            _lyrics_pick(cfg, song, pick=pick, record=record, progress=progress)
 
     @app.command("lacuerda")
     def lacuerda_cmd(
@@ -233,11 +283,13 @@ def register(app: typer.Typer) -> None:
 def _lyrics(cfg: Config) -> None:
     """Look up every song still waiting for lyrics, and old misses, then print the counts."""
     from caracole.lyrics import fetch_pending_lyrics
+    from caracole.overrides import load_overrides
 
-    overrides = load_ovr(cfg)  # for the pages
+    overrides = load_ovr(cfg)  # [lyrics], and the pages
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
-        return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
+        return fetch_pending_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics,
+                                    reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: LyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -263,19 +315,120 @@ def _lyrics(cfg: Config) -> None:
     _sheets_with_lyrics(cfg, _common.overrides_since(cfg, overrides, handed))
 
 
+def _typed_name(cfg: Config, text: str) -> tuple[str, str]:
+    """The artist and the title a name typed for ``--as`` says (lyrics_search.py ``typed_name``, with the library's
+    known artists where its database opens); exit 2 for a text that doesn't say who its artist is, or a part that
+    cleans to nothing."""
+    from caracole import db
+    from caracole.lyrics_search import typed_name
+
+    try:
+        conn: sqlite3.Connection | None = db.connect(cfg.db_path)
+    except (OSError, sqlite3.Error):
+        conn = None
+    try:
+        name = typed_name(conn, text)
+    finally:
+        if conn is not None:
+            conn.close()
+    if name is None:
+        _common.fail(f"--as: expected \"Artist - Title\", got {text!r}", 2)
+    return name
+
+
+def _lyrics_as(cfg: Config, display: str, typed: str) -> None:
+    """List what the lyrics sites have under a name you type for a song (lyrics_search.py): the name noted under
+    ``[lyrics]`` first, then each site asked once, in the lookups' lane, the rows numbered. A site that fails, waits
+    or blocks says so and the others are listed; it exits 0 whatever the sites answered, since nothing changed.
+
+    Its last line starts with what came of it, which caracole serve's request line reads: "Searched: " (rows),
+    "Nothing found: " (every site asked answered none) or "Not searched: " (no rows, a site failed or waited)."""
+    import shlex
+
+    from caracole.lyrics_search import clock, is_own_name, last_line, notes, row_facts, search_lyrics
+
+    name = _typed_name(cfg, typed)
+    overrides = load_ovr(cfg)
+    with exclusive(cfg, f"lyrics --as {display}", lane=True), closing(open_db(cfg)) as conn:
+        song = _common.song_named(conn, display, overrides)
+        found = search_lyrics(cfg, conn, song, name, now=utcnow())
+    audio = f" (its audio is {clock(found.length)})" if found.length else ""
+    noted = ("; the song's own name, so none is kept under [lyrics]" if is_own_name(song, name)
+             else "; noted under [lyrics]")
+    typer.echo(f"Asked as {found.name}{audio}{noted}.")
+    for n, row in enumerate(found.rows, 1):  # each row as the card lists it too (row_facts), its best fit said
+        typer.echo(f"{n:>2}. {provider_name(row.site):<10} {row_facts(row, found.length)}"
+                   + " · best fit" * row.best)
+    for note in notes(found):  # each site that listed none in its words, then the instrumental records counted
+        typer.echo(note.line)
+    if found.rows:
+        typer.echo(f"Take one: caracole lyrics --song {shlex.quote(song.display)} --pick 1")
+    typer.echo(last_line(found))
+
+
+def _lyrics_pick(cfg: Config, display: str, *, pick: int | None, record: str | None, progress: bool) -> None:
+    """A row of the song's last search made its lyrics now (lyrics_pick.py), said a stage a line, as ``caracole
+    transcribe`` says its own; its last line "No lyrics kept: …" for a refusal, a failure or a site that gave none,
+    "Lyrics kept; the job failed after: …" for a chords, a PDF or an info.json failure once they were kept, which
+    caracole serve's request line says (status.py)."""
+    from caracole.commands.get import _Lines
+    from caracole.lyrics_pick import KEPT_FAILED_AFTER, NOTHING_KEPT, PickRequest, pick_lyrics
+    from caracole.overrides import OverridesError, override_key
+    from caracole.progress import ticker
+
+    try:
+        override_key(display)
+    except OverridesError as e:
+        _common.fail(str(e), 2)
+    artist, _, title = display.partition(" - ")
+    with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
+        result = pick_lyrics(cfg, PickRequest(artist.strip(), title.strip(), pick=pick, record=record), reporter)
+        said = result.details.get("lyrics", "").removesuffix(NOTHING_KEPT)
+        kept = result.states.get("lyrics") == "done"
+        done = f"Done in {result.seconds:.1f} s." if kept else f"No lyrics kept: {said}."
+        stopped = KEPT_FAILED_AFTER if kept else "No lyrics kept"  # a chords, a PDF or an info.json failure
+        _common.staged_end(reporter, result, progress=progress, refused=stopped, done=done)
+
+
+def _lyrics_clear(cfg: Config, display: str) -> None:
+    """The record you picked for the song taken out of ``[lyrics]`` (lyrics_pick.py ``clear_pick``), with no request,
+    under caracole's lock as asked for now; then its PDF and the pages. Exit 1 for a song with no record picked."""
+    from caracole.lyrics_pick import NOTHING_TO_CLEAR, clear_pick
+    from caracole.overrides import OverridesError, override_key
+    from caracole.render import render_all
+
+    try:
+        override_key(display)
+    except OverridesError as e:
+        _common.fail(str(e), 2)
+    with exclusive(cfg, f"lyrics --clear {display}", interactive=True), closing(open_db(cfg)) as conn:
+        overrides = load_ovr(cfg)
+        song = _common.song_named(conn, display, overrides)
+        said = clear_pick(cfg, conn, song, overrides)
+        if said is None:
+            _common.fail(f"{song.display} {NOTHING_TO_CLEAR}")
+        overrides = load_ovr(cfg)
+        now = utcnow()
+        render_all(conn, cfg, overrides, now=now, song_ids={song.id})
+        write_pages(conn, cfg, overrides, now)
+    typer.echo(said)
+
+
 def _megalobiz(cfg: Config, overrides: Overrides) -> None:
     """Megalobiz's pass after LRCLIB's, as the nightly run's step follows LRCLIB's: the songs LRCLIB left without
     timed lyrics. Nothing, not a word, when it is turned off or has no song to ask about."""
     from caracole.megalobiz_fetch import MegalobizStats, megalobiz_lyrics, songs_to_ask
+    from caracole.overrides import load_overrides
 
     if not cfg.provider("megalobiz").enabled:
         return
     with closing(open_db(cfg)) as conn:
-        if not songs_to_ask(conn, utcnow()):
+        if not songs_to_ask(conn, utcnow(), picks=overrides.lyrics):
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> MegalobizStats:
-        return megalobiz_lyrics(conn, client, cfg.library_dir, now)
+        return megalobiz_lyrics(conn, client, cfg.library_dir, now, picks=overrides.lyrics,
+                                reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: MegalobizStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
@@ -294,15 +447,17 @@ def _azlyrics(cfg: Config, overrides: Overrides) -> None:
     """AZLyrics' pass after Megalobiz's, as the nightly run's step follows it: the songs still without lyrics. Nothing,
     not a word, when it is turned off or has no song to ask about."""
     from caracole.azlyrics_fetch import AzLyricsStats, azlyrics_lyrics, songs_to_ask
+    from caracole.overrides import load_overrides
 
     if not cfg.provider("azlyrics").enabled:
         return
     with closing(open_db(cfg)) as conn:
-        if not songs_to_ask(conn, utcnow(), picks=overrides.azlyrics):
+        if not songs_to_ask(conn, utcnow(), picks=overrides.azlyrics, lyrics=overrides.lyrics):
             return
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime) -> AzLyricsStats:
-        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics)
+        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics, lyrics=overrides.lyrics,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: AzLyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)

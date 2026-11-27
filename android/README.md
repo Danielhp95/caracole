@@ -981,3 +981,16 @@ SQLite (public domain), libffi, bzip2, xz and zlib; Chaquopy (MIT, its POMs'); i
 setuptools (MIT) and pyelftools (public domain) in its bootstrap, whose texts are there; yt-dlp and yt-dlp-ejs
 (Unlicense, their texts there); and yt-dlp-ejs's bundled meriyah (ISC) and astring (MIT), whose texts its wheel doesn't
 carry.
+
+## YouTube's gate (not in the app yet)
+
+A song's audio from YouTube, on the phone, will come from yt-dlp run inside the app, reaching the network only through a
+proxy of the app's own, `core.youtube.HostGate`: on 127.0.0.1 at a port of its own, with a user and a secret made for
+each run (its `--proxy`). It tunnels a CONNECT on port 443 to `youtube.com`, `www.`, `m.`, `music.` and
+`consent.youtube.com` and any `*.googlevideo.com`, and to nothing else: any other host gets 403, and
+`jnn-pa.googleapis.com` (Google's attestation) is refused by name whatever the rule. It logs each host asked for, its
+connects, its bytes each way and its refusals, `consent.youtube.com` and `redirector.googlevideo.com` apart. A listed
+name that resolves to a loopback, private, link-local, shared or multicast address is refused too. A client that hasn't
+sent its whole request 15 s after connecting is closed, and so is a tunnel in which nothing moves either way for two
+minutes. Under `caracole.network=loopback` (tests and the emulator's) it allows `127.0.0.1` and `10.0.2.2` alone, and
+looks nothing up. It is a check and a measurement: only yt-dlp's argv sends it through the gate.

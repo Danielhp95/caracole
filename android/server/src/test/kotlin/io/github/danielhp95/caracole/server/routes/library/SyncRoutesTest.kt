@@ -488,8 +488,9 @@ class SyncRoutesTest {
                      "the conflict as it was on both sides")
         // Each unit left said by its name, a conflict as what it is, in commands/peer.py's words (LEFT): which the
         // Journal's Output shows (Feed's step of what it said), where the Wi-Fi line sends the owner.
+        // What it took and gave first, each by its name (SyncSaid's, commands/peer.py's done_lines).
         val said = "Left as it was: Oasis - Wonderwall: changed on both sides: tap Sync to choose"
-        assertEquals(listOf(said), ended.said)
+        assertEquals(listOf("Took Radiohead - Creep", "Gave Muse - Hysteria", said), ended.said)
         assertEquals(said, SyncRoutes.leftLine("Oasis - Wonderwall", SyncEngine.UNSETTLED))
         val feed = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(ended), emptyMap(), opened = setOf(ended.id))
         val shown = feed.toString()
@@ -497,6 +498,29 @@ class SyncRoutesTest {
                    shown)
         assertEquals(1, synced.get())
         assertTrue(routes.alone(address) != null, "once over, another may be queued")
+    }
+
+    @Test fun `a sync that took 2 and gave 1 with a removal among them names each in the Journal's Output`() {
+        val creep = onComputer("Radiohead", "Creep")
+        val address = computer.address.toString()
+        runBlocking { withTimeout(20_000) { queue.await(routes.alone(address)!!.id) } }  // Creep on both
+        computer.database.writeBlocking { computer.store.remove(it, creep.key, "2026-11-03T11:00:00Z") }
+        onComputer("Estopa", "Tu Calorro")
+        onPhone("Muse", "Hysteria")
+        val compared = compare()
+        val answer = app.postScript("/sync/apply", listOf(
+            "comparison" to compared.getValue("comparison").jsonPrimitive.content, "prefer" to "", "choices" to ""))
+        assertEquals(200, answer.status, answer.json.toString())
+        val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
+        assertEquals("done", job.state, job.output.joinToString("\n"))
+        val outcome = JobViews.view(job, queue).getValue("outcome").jsonObject
+        assertEquals(3, outcome.getValue("taken").jsonArray.size, "$outcome")  // the song, its tombstone, Tu Calorro
+        // The removal said once, as a removal (its tombstone goes with it); nothing else said.
+        val said = listOf("Took Estopa - Tu Calorro", "Took Radiohead - Creep (removed)", "Gave Muse - Hysteria")
+        assertEquals(said, job.said)
+        val shown = io.github.danielhp95.caracole.server.jobs.Feed.feed(listOf(job), emptyMap(), opened = setOf(job.id))
+            .toString()
+        assertTrue(io.github.danielhp95.caracole.server.jobs.Feed.SAID in shown && said.all { it in shown }, shown)
     }
 
     @Test fun `a name holding a newline is said on one line, as commands-peer's left_line says it`() {

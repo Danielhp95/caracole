@@ -8,6 +8,9 @@ import io.github.danielhp95.caracole.core.testing.FakeTransport.Companion.answer
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.replays.LyricsReplay
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.library.LyricsPick
+import io.github.danielhp95.caracole.core.library.LyricsRecord
+import io.github.danielhp95.caracole.core.library.OverrideUrls
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -76,5 +79,45 @@ class AzLyricsTest {
         assertEquals(setOf("caracole.azlyrics.artist_url", "caracole.azlyrics.parse_artist", "caracole.azlyrics.parse_lyrics",
                            "caracole.azlyrics.pick_song"), fns)
         assertTrue(LyricsReplay.records(LyricsReplay.AZLYRICS_LOOKUP).size >= 15)
+    }
+
+    @Test fun theLyricsNamesArtistPageAndAPickedRecordsPageAlone() {
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val named = w.song("ポム", "もののけ", null, "lyrics_status" to "missing")
+            val picked = w.song("Someone Else", "Mononoke")
+            val overrides = Overrides(lyrics = mapOf(
+                OverrideUrls.overrideKey(named.display) to LyricsPick("Pomme" to "mononoke", null),
+                OverrideUrls.overrideKey(picked.display) to LyricsPick(null, LyricsRecord("azlyrics", "pomme/mononoke"))))
+            val artist = "GET https://www.azlyrics.com/p/pomme.html"
+            val lyrics = "GET https://www.azlyrics.com/lyrics/pomme/mononoke.html"
+            val (client, site) = w.client("azlyrics", mapOf(
+                artist to answer(200, LyricsWorld.fixture("azlyrics/artist_pomme.html")),
+                lyrics to answer(200, LyricsWorld.fixture("azlyrics/lyrics_mononoke.html"))))
+            val stats = w.db { AzLyrics.azlyricsLyrics(it, client, w.library, w.now, overrides, setOf(named.id, picked.id)) }
+            assertEquals(2, stats.found)
+            // The named song's artist page and lyrics page; the picked one's page alone, the same, from the cache.
+            assertEquals(listOf(lyrics, artist).sorted(), site.said.sorted())
+        }
+    }
+
+    @Test fun aPickedRecordAskedAgainAfterAnErrorIsAskedPastTheCache() {
+        LyricsWorld(tmp.newFolder()).use { w ->
+            val song = w.song("Someone Else", "Mononoke")
+            val overrides = Overrides(lyrics = mapOf(
+                OverrideUrls.overrideKey(song.display) to LyricsPick(null, LyricsRecord("azlyrics", "pomme/mononoke"))))
+            val page = "GET https://www.azlyrics.com/lyrics/pomme/mononoke.html"
+            fun pass(answer: io.github.danielhp95.caracole.core.http.HttpAnswer, days: Long): Pair<AzLyricsStats, List<String>> {
+                val (client, site) = w.client("azlyrics", mapOf(page to answer))
+                val stats = w.db {
+                    AzLyrics.azlyricsLyrics(it, client, w.library, w.now.plusSeconds(days * 86400), overrides, setOf(song.id))
+                }
+                return stats to site.said
+            }
+            assertEquals(1, pass(answer(404, LyricsWorld.fixture("azlyrics/not_found.html")), 0).first.missing)
+            assertEquals(1, pass(answer(502, "Bad Gateway"), 31).first.errors)
+            val (stats, said) = pass(answer(200, LyricsWorld.fixture("azlyrics/lyrics_mononoke.html")), 32)
+            assertEquals(1, stats.found)
+            assertEquals(listOf(page), said)
+        }
     }
 }

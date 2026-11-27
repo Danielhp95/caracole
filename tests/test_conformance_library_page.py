@@ -147,13 +147,15 @@ SERVER_CONTROLS = WebControls(CSRF, busy=frozenset({3, 1}), active=2, held=froze
 def server_member(controls: WebControls) -> dict[str, Any]:
     """``build_library_page``'s ``server`` for ``controls`` on the phone: no Guitar Pro page, no sheet from YouTube
     (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (for the same reason: no song offered one, no time
-    said), and no sheet from an audio file (``AUDIO_PROBLEM``: no "+") (checked against build_library_page itself: ``test_the_server_member_is_build_library_pages``)."""
+    said), no sheet from an audio file (``AUDIO_PROBLEM``: no "+"), and no lyrics looked up under another name
+    (``lyricsSearch`` false: computer only) (checked against build_library_page itself:
+    ``test_the_server_member_is_build_library_pages``)."""
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
             "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
                            "transcribed": [], "time": ""},
-            "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""}}
+            "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""}, "lyricsSearch": False}
 
 
 def data_objects() -> dict[str, dict[str, Any]]:

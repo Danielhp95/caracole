@@ -1,8 +1,10 @@
 {"corpus":"library/override_urls","header":true,"made_by":"tests/test_conformance_overrides.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.overrides.override_key","out":"pomme/mononoke"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.overrides.override_key","out":"billy-joel/piano-man-https-www-harptabs-com-tab-23862-piano-man-c-harmonica"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.overrides.override_key","out":"estopa/como-camaron-https-acordes-lacuerda-net-estopa-como-camaron-2-shtml"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.overrides.override_key","out":"pomme/mononoke-as-pomme-mononoke-record-azlyrics-pomme-mononoke"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.overrides.override_key","out":"radiohead/creep-https-www-youtube-com-watch-v-xfkzrnyygfk"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.overrides.override_key","out":"yuzo-koshiro/fillmore-https-gametabs-net-tabs-actraiser-fillmore"}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.overrides.override_key","out":"mana/rayando-el-sol"}
@@ -20,7 +22,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.overrides.override_key","out":"mana/rayando-el-sol"}
 {"args":["Nobody - Nothing"],"fn":"caracole.overrides.override_key","out":"nobody/nothing"}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.overrides.override_key","out":"oasis/wonderwall"}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.overrides.override_key","out":"plan-b/ill-manors"}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.overrides.override_key","out":"plan-b/ill-manors-official"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"fn":"caracole.overrides.override_key","out":"pomme/mononoke"}
+{"args":["Pomme - Mononoké"],"fn":"caracole.overrides.override_key","out":"pomme/mononoke"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.override_key","out":"radiohead/creep"}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.override_key","out":"radio-head/creep"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.override_key","out":"radio-head/creep-official-video"}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.override_key","out":"radiohead/creep"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.override_key","out":"ritchie-valens/la-bamba"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.override_key","out":"soda/persiana-americana"}
@@ -33,6 +42,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.overrides.override_key","out":"lyrics-pomme/mononoke-expected-as-artist-title-record-lrclib-id-megalobiz-id-azlyrics-artist-song-got"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.overrides.override_key","out":"lyrics-pomme-expected-artist/title"}
 {"args":["[reject] 'A - B'"],"fn":"caracole.overrides.override_key","out":"reject-a/b"}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.override_key","out":"version-radiohead/creep"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.override_key","out":"gametabs-yuzo-koshiro/fillmore-expected-a-gametabs-net-tab"}
@@ -44,6 +55,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1'"}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.override_key","out":"cowboy-bebop/spokey-dokey"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'example.com/tab/85053'"}
@@ -134,6 +148,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.azlyrics.com/lyrics/hadestown/waitforme.html'"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.azlyrics.com/lyrics/pomme/mononoke.html'"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.azlyrics.com/lyrics/seanpaul/temperature.html'"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.harptabs.com/'"}
@@ -184,11 +199,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'lacuerda'"}
+{"args":["plan b - ill manors"],"fn":"caracole.overrides.override_key","out":"plan-b/ill-manors"}
 {"args":["soda - persiana americana"],"fn":"caracole.overrides.override_key","out":"soda/persiana-americana"}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.override_key","out":"soda-stereo/persiana-americana"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.override_key","out":"under-radiohead/creep-found-megalobiz-has-no-timed-ones"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.overrides.override_key","out":"孟维来/野人不再借世人的手替我开脱动态歌词mv"}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.overrides.override_key","out":"宋冬野/斑马斑马"}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.overrides.override_key","out":"宋冬野/斑马斑马"}
 {"args":["85053"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got '85053'"}
@@ -268,10 +291,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.overrides.override_key","out":"band/song"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.override_key","message":"expected \"Artist - Title\", got 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"fn":"caracole.overrides.override_key","out":"radiohead/creep"}
+{"args":[" Pomme -  Mononoke "],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: ' Pomme -  Mononoke '"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\"'"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\"'"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}'"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\"'"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\"'"}
 {"args":["'Maná - Rayando el Sol'"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"'Maná - Rayando el Sol'\""}
@@ -289,7 +314,14 @@
 {"args":["Maná - Rayando el Sol"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Maná - Rayando el Sol'"}
 {"args":["Nobody - Nothing"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Nobody - Nothing'"}
 {"args":["Oasis - Wonderwall"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Oasis - Wonderwall'"}
+{"args":["Plan B - Ill Manors"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Plan B - Ill Manors'"}
+{"args":["Plan B - Ill Manors (Official)"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Plan B - Ill Manors (Official)'"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Pomme - Mononoke'"}
+{"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Soda - Persiana Americana'"}
@@ -302,6 +334,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[lyrics] \\'Pomme - Mononoké\\': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got '"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '[lyrics] \\'Pomme\\': expected \"Artist - Title\"'"}
 {"args":["[reject] 'A - B'"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"[reject] 'A - B'\""}
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
@@ -313,6 +347,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1'"}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'example.com/tab/85053'"}
@@ -403,6 +440,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.azlyrics.com/lyrics/hadestown/waitforme.html'"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.azlyrics.com/lyrics/pomme/mononoke.html'"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.azlyrics.com/lyrics/seanpaul/temperature.html'"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.harptabs.com/'"}
@@ -453,11 +491,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'lacuerda'"}
+{"args":["plan b - ill manors"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'plan b - ill manors'"}
 {"args":["soda - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'soda - persiana americana'"}
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.tab_id_from_url","out":302}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』'"}
 {"args":["宋冬野 - 斑马斑马"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '宋冬野 - 斑马斑马'"}
 {"args":["宋冬野 - 斑马，斑马"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '宋冬野 - 斑马，斑马'"}
 {"args":["85053"],"fn":"caracole.overrides.tab_id_from_url","out":85053}
@@ -537,10 +583,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: '𝄞 Band - 𝄞 Song'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"err":"OverridesError","fn":"caracole.overrides.tab_id_from_url","message":"not an Ultimate Guitar tab URL: 'Radiohead - Creep\\u3000'"}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -558,7 +606,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Nobody - Nothing"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Pomme - "],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Pomme - Mononoke"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Pomme - Mononoké"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -571,6 +626,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[lacuerda]"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[reject] 'A - B'"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -582,6 +639,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["azlyrics"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["azlyrics.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["azlyrics:../x"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -672,6 +732,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
@@ -722,11 +783,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["lacuerda"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["plan b - ill manors"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["soda - persiana americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com/tab/radiohead/creep-power-302"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["85053"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com/tab/85053"}
@@ -806,10 +875,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
 {"args":["Radiohead - Creep　"],"fn":"caracole.overrides.pin_url","out":"https://tabs.ultimate-guitar.com"}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -827,7 +898,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Nobody - Nothing"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Pomme - "],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Pomme - Mononoke"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Pomme - Mononoké"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -840,6 +918,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[lacuerda]"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[reject] 'A - B'"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -851,6 +931,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["azlyrics"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["azlyrics.com"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["azlyrics:../x"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -941,6 +1024,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -991,11 +1075,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["lacuerda"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["plan b - ill manors"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["soda - persiana americana"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["85053"],"fn":"caracole.overrides.artist_page_address","out":null}
@@ -1075,10 +1167,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.artist_page_address","out":null}
 {"args":["Radiohead - Creep　"],"fn":"caracole.overrides.artist_page_address","out":null}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1096,7 +1190,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Nobody - Nothing"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Pomme - "],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Pomme - Mononoke"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Pomme - Mononoké"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1109,6 +1210,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[lacuerda]"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[reject] 'A - B'"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1120,6 +1223,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["azlyrics"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["azlyrics.com"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["azlyrics:../x"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1210,6 +1316,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1260,11 +1367,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["lacuerda"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["plan b - ill manors"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["soda - persiana americana"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides._artist_url_value","out":"https://tabs.ultimate-guitar.com/tab/radiohead/creep-power-302"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["85053"],"fn":"caracole.overrides._artist_url_value","out":null}
@@ -1344,10 +1459,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides._artist_url_value","out":null}
 {"args":["Radiohead - Creep　"],"fn":"caracole.overrides._artist_url_value","out":null}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1365,7 +1482,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Nobody - Nothing"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Pomme - "],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Pomme - Mononoke"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Pomme - Mononoké"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1378,6 +1502,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[lacuerda]"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[reject] 'A - B'"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1389,6 +1515,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["azlyrics"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["azlyrics.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["azlyrics:../x"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1479,6 +1608,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1529,11 +1659,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["lacuerda"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["plan b - ill manors"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["soda - persiana americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["85053"],"fn":"caracole.overrides.pasted_tab_id","out":null}
@@ -1613,10 +1751,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.overrides.pasted_tab_id","out":null}
 {"args":["Radiohead - Creep　"],"fn":"caracole.overrides.pasted_tab_id","out":null}
+{"args":[" Pomme -  Mononoke "],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got ' Pomme -  Mononoke '"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\"'"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\"'"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}'"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\"'"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\"'"}
 {"args":["'Maná - Rayando el Sol'"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"'Maná - Rayando el Sol'\""}
@@ -1634,7 +1774,14 @@
 {"args":["Maná - Rayando el Sol"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Maná - Rayando el Sol'"}
 {"args":["Nobody - Nothing"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Nobody - Nothing'"}
 {"args":["Oasis - Wonderwall"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Oasis - Wonderwall'"}
+{"args":["Plan B - Ill Manors"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Plan B - Ill Manors'"}
+{"args":["Plan B - Ill Manors (Official)"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Plan B - Ill Manors (Official)'"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Pomme - Mononoke'"}
+{"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Soda - Persiana Americana'"}
@@ -1647,6 +1794,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[lyrics] \\'Pomme - Mononoké\\': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got '"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '[lyrics] \\'Pomme\\': expected \"Artist - Title\"'"}
 {"args":["[reject] 'A - B'"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"[reject] 'A - B'\""}
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
@@ -1658,6 +1807,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.overrides.lacuerda_pick_from_url","out":{"artist":"estopa","song":"como_camaron","url":"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml","version":2}}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'example.com/tab/85053'"}
@@ -1748,6 +1900,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.azlyrics.com/lyrics/hadestown/waitforme.html'"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.azlyrics.com/lyrics/pomme/mononoke.html'"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.azlyrics.com/lyrics/seanpaul/temperature.html'"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.harptabs.com/'"}
@@ -1798,11 +1951,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'lacuerda'"}
+{"args":["plan b - ill manors"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'plan b - ill manors'"}
 {"args":["soda - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'soda - persiana americana'"}
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』'"}
 {"args":["宋冬野 - 斑马斑马"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '宋冬野 - 斑马斑马'"}
 {"args":["宋冬野 - 斑马，斑马"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '宋冬野 - 斑马，斑马'"}
 {"args":["85053"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '85053'"}
@@ -1882,10 +2043,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got '𝄞 Band - 𝄞 Song'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"err":"OverridesError","fn":"caracole.overrides.lacuerda_pick_from_url","message":"expected a LaCuerda song's page (https://acordes.lacuerda.net/<artist>/<song>) or one of its versions' (…/<song>-2.shtml), got 'Radiohead - Creep\\u3000'"}
+{"args":[" Pomme -  Mononoke "],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got ' Pomme -  Mononoke '"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\"'"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\"'"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}'"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\"'"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\"'"}
 {"args":["'Maná - Rayando el Sol'"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"'Maná - Rayando el Sol'\""}
@@ -1903,7 +2066,14 @@
 {"args":["Maná - Rayando el Sol"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Maná - Rayando el Sol'"}
 {"args":["Nobody - Nothing"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Nobody - Nothing'"}
 {"args":["Oasis - Wonderwall"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Oasis - Wonderwall'"}
+{"args":["Plan B - Ill Manors"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Plan B - Ill Manors'"}
+{"args":["Plan B - Ill Manors (Official)"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Plan B - Ill Manors (Official)'"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Pomme - Mononoke'"}
+{"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Soda - Persiana Americana'"}
@@ -1916,6 +2086,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[lyrics] \\'Pomme - Mononoké\\': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got '"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '[lyrics] \\'Pomme\\': expected \"Artist - Title\"'"}
 {"args":["[reject] 'A - B'"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"[reject] 'A - B'\""}
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
@@ -1927,6 +2099,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1'"}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'example.com/tab/85053'"}
@@ -2017,6 +2192,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.azlyrics.com/lyrics/hadestown/waitforme.html'"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.azlyrics.com/lyrics/pomme/mononoke.html'"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.azlyrics.com/lyrics/seanpaul/temperature.html'"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.harptabs.com/'"}
@@ -2067,11 +2243,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'lacuerda'"}
+{"args":["plan b - ill manors"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'plan b - ill manors'"}
 {"args":["soda - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'soda - persiana americana'"}
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.overrides.harptabs_pick_from_url","out":{"path":"tab/23862/piano-man-c-harmonica","slug":"piano-man-c-harmonica","tab_id":23862,"url":"https://www.harptabs.com/tab/23862/piano-man-c-harmonica"}}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』'"}
 {"args":["宋冬野 - 斑马斑马"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '宋冬野 - 斑马斑马'"}
 {"args":["宋冬野 - 斑马，斑马"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '宋冬野 - 斑马，斑马'"}
 {"args":["85053"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '85053'"}
@@ -2151,10 +2335,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got '𝄞 Band - 𝄞 Song'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"err":"OverridesError","fn":"caracole.overrides.harptabs_pick_from_url","message":"expected a harptabs.com tab's page (https://www.harptabs.com/tab/<id>/<slug>), got 'Radiohead - Creep\\u3000'"}
+{"args":[" Pomme -  Mononoke "],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got ' Pomme -  Mononoke '"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\"'"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\"'"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}'"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\"'"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\"'"}
 {"args":["'Maná - Rayando el Sol'"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"'Maná - Rayando el Sol'\""}
@@ -2172,7 +2358,14 @@
 {"args":["Maná - Rayando el Sol"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Maná - Rayando el Sol'"}
 {"args":["Nobody - Nothing"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Nobody - Nothing'"}
 {"args":["Oasis - Wonderwall"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Oasis - Wonderwall'"}
+{"args":["Plan B - Ill Manors"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Plan B - Ill Manors'"}
+{"args":["Plan B - Ill Manors (Official)"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Plan B - Ill Manors (Official)'"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Pomme - Mononoke'"}
+{"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Soda - Persiana Americana'"}
@@ -2185,6 +2378,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[lyrics] \\'Pomme - Mononoké\\': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got '"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '[lyrics] \\'Pomme\\': expected \"Artist - Title\"'"}
 {"args":["[reject] 'A - B'"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"[reject] 'A - B'\""}
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
@@ -2196,6 +2391,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1'"}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'example.com/tab/85053'"}
@@ -2286,6 +2484,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.azlyrics.com/lyrics/hadestown/waitforme.html'"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.azlyrics.com/lyrics/pomme/mononoke.html'"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.azlyrics.com/lyrics/seanpaul/temperature.html'"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.harptabs.com/'"}
@@ -2336,11 +2535,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'lacuerda'"}
+{"args":["plan b - ill manors"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'plan b - ill manors'"}
 {"args":["soda - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'soda - persiana americana'"}
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』'"}
 {"args":["宋冬野 - 斑马斑马"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '宋冬野 - 斑马斑马'"}
 {"args":["宋冬野 - 斑马，斑马"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '宋冬野 - 斑马，斑马'"}
 {"args":["85053"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '85053'"}
@@ -2420,10 +2627,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got '𝄞 Band - 𝄞 Song'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"err":"OverridesError","fn":"caracole.overrides.gametabs_pick_from_url","message":"expected a gametabs.net tab's page (https://gametabs.net/tabs/<game>/<tab>), got 'Radiohead - Creep\\u3000'"}
+{"args":[" Pomme -  Mononoke "],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got ' Pomme -  Mononoke '"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\"'"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\"'"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"https://www.azlyrics.com/p/pomme.html\"'"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"https://www.youtube.com/playlist?list=PL1\"'"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}'"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\"'"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\"'"}
 {"args":["'Maná - Rayando el Sol'"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"'Maná - Rayando el Sol'\""}
@@ -2441,7 +2650,14 @@
 {"args":["Maná - Rayando el Sol"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Maná - Rayando el Sol'"}
 {"args":["Nobody - Nothing"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Nobody - Nothing'"}
 {"args":["Oasis - Wonderwall"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Oasis - Wonderwall'"}
+{"args":["Plan B - Ill Manors"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Plan B - Ill Manors'"}
+{"args":["Plan B - Ill Manors (Official)"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Plan B - Ill Manors (Official)'"}
+{"args":["Pomme - "],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Pomme - '"}
+{"args":["Pomme - Mononoke"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Pomme - Mononoke'"}
+{"args":["Pomme - Mononoké"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Pomme - Mononoké'"}
 {"args":["RADIOHEAD - CREEP"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'RADIOHEAD - CREEP'"}
+{"args":["Radio Head - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radio Head - Creep'"}
+{"args":["Radio Head - Creep (Official Video)"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radio Head - Creep (Official Video)'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radiohead - Creep'"}
 {"args":["Ritchie Valens - La Bamba"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Ritchie Valens - La Bamba'"}
 {"args":["Soda - Persiana Americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Soda - Persiana Americana'"}
@@ -2454,6 +2670,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[gametabs] https://gametabs.net/tabs/actraiser/fillmore'"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[harptabs] https://www.harptabs.com/tab/701/creep-intro'"}
 {"args":["[lacuerda]"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[lacuerda]'"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[lyrics] \\'Pomme - Mononoké\\': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got '"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '[lyrics] \\'Pomme\\': expected \"Artist - Title\"'"}
 {"args":["[reject] 'A - B'"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"[reject] 'A - B'\""}
 {"args":["[version] 'Radiohead - Creep': "],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"[version] 'Radiohead - Creep': \""}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got \"\\\\[gametabs\\\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab\""}
@@ -2465,6 +2683,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1'"}
 {"args":["azlyrics"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics'"}
 {"args":["azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics.com'"}
+{"args":["azlyrics:../x"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:../x'"}
+{"args":["azlyrics:pomme/mononoke"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:pomme/mononoke'"}
+{"args":["azlyrics:radiohead/creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'azlyrics:radiohead/creep'"}
 {"args":["cowboy bebop - spokey dokey"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'cowboy bebop - spokey dokey'"}
 {"args":["es.ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'es.ultimate-guitar.com'"}
 {"args":["example.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'example.com/tab/85053'"}
@@ -2555,6 +2776,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://user@tabs.ultimate-guitar.com/tab/85053'"}
 {"args":["https://www.azlyrics.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://www.azlyrics.com'"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.overrides.azlyrics_page_from_url","out":"https://www.azlyrics.com/lyrics/hadestown/waitforme.html"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.overrides.azlyrics_page_from_url","out":"https://www.azlyrics.com/lyrics/pomme/mononoke.html"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.overrides.azlyrics_page_from_url","out":"https://www.azlyrics.com/lyrics/seanpaul/temperature.html"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://www.azlyrics.com/r/radiohead.html'"}
 {"args":["https://www.harptabs.com/"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://www.harptabs.com/'"}
@@ -2605,11 +2827,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3'"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'https://youtu.be/XFkzRNyygfk'"}
 {"args":["lacuerda"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'lacuerda'"}
+{"args":["plan b - ill manors"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'plan b - ill manors'"}
 {"args":["soda - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'soda - persiana americana'"}
 {"args":["soda stereo - persiana americana"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'soda stereo - persiana americana'"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x'"}
 {"args":["ultimate-guitar.com"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'ultimate-guitar.com'"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'under “Radiohead - Creep”: found; Megalobiz has no timed ones'"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1'"}
+{"args":["{ record = \"azlyrics:../b\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:../b\" }'"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:A/b\" }'"}
+{"args":["{ record = \"azlyrics:a\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:a\" }'"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:a/b.html\" }'"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '{ record = \"azlyrics:a/b/c\" }'"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』'"}
 {"args":["宋冬野 - 斑马斑马"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '宋冬野 - 斑马斑马'"}
 {"args":["宋冬野 - 斑马，斑马"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '宋冬野 - 斑马，斑马'"}
 {"args":["85053"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '85053'"}
@@ -2689,10 +2919,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got '𝄞 Band - 𝄞 Song'"}
 {"args":["Radiohead - Creep"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radiohead\\xa0-\\xa0Creep'"}
 {"args":["Radiohead - Creep　"],"err":"OverridesError","fn":"caracole.overrides.azlyrics_page_from_url","message":"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got 'Radiohead - Creep\\u3000'"}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2710,7 +2942,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Nobody - Nothing"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Pomme - "],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Pomme - Mononoke"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Pomme - Mononoké"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Radio Head - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2723,6 +2962,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[lacuerda]"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[reject] 'A - B'"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2734,6 +2975,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["azlyrics"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["azlyrics.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["azlyrics:../x"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["example.com/tab/85053"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2824,6 +3068,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2874,11 +3119,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.youtube_urls.video_id_from_url","out":"XFkzRNyygfk"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.youtube_urls.video_id_from_url","out":"XFkzRNyygfk"}
 {"args":["lacuerda"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["plan b - ill manors"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["soda - persiana americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["ultimate-guitar.com"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["85053"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
@@ -2958,10 +3211,12 @@
 {"args":["𝄞 Band - 𝄞 Song"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Radiohead - Creep"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
 {"args":["Radiohead - Creep　"],"fn":"caracole.youtube_urls.video_id_from_url","out":null}
+{"args":[" Pomme -  Mononoke "],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"billy joel - piano man\" = \"https://www.harptabs.com/tab/23862/piano-man-c-harmonica\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"estopa - como camarón\" = \"https://acordes.lacuerda.net/estopa/como_camaron-2.shtml\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"https://www.azlyrics.com/p/pomme.html\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"https://www.youtube.com/playlist?list=PL1\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["\"pomme - mononoké\" = {as = \"Pomme - Mononoke\", record = \"azlyrics:pomme/mononoke\"}"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"radiohead - creep\" = \"https://www.youtube.com/watch?v=XFkzRNyygfk\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\"yuzo koshiro - fillmore\" = \"https://gametabs.net/tabs/actraiser/fillmore\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["'Maná - Rayando el Sol'"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -2979,7 +3234,14 @@
 {"args":["Maná - Rayando el Sol"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Nobody - Nothing"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Oasis - Wonderwall"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Plan B - Ill Manors"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Plan B - Ill Manors (Official)"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Pomme - "],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Pomme - Mononoke"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Pomme - Mononoké"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["RADIOHEAD - CREEP"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Radio Head - Creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["Radio Head - Creep (Official Video)"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Radiohead - Creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Ritchie Valens - La Bamba"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["Soda - Persiana Americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -2992,6 +3254,8 @@
 {"args":["[gametabs] https://gametabs.net/tabs/actraiser/fillmore"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[harptabs] https://www.harptabs.com/tab/701/creep-intro"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[lacuerda]"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["[lyrics] 'Pomme - Mononoké': expected { as = \"Artist - Title\", record = \"lrclib:ID\" | \"megalobiz:ID\" | \"azlyrics:ARTIST/SONG\" }, got "],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["[lyrics] 'Pomme': expected \"Artist - Title\""],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[reject] 'A - B'"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["[version] 'Radiohead - Creep': "],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["\\[gametabs\\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -3003,6 +3267,9 @@
 {"args":["acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["azlyrics"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["azlyrics.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["azlyrics:../x"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["azlyrics:pomme/mononoke"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["azlyrics:radiohead/creep"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["cowboy bebop - spokey dokey"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["es.ultimate-guitar.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["example.com/tab/85053"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -3093,6 +3360,7 @@
 {"args":["https://user@tabs.ultimate-guitar.com/tab/85053"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://www.azlyrics.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://www.azlyrics.com/lyrics/hadestown/waitforme.html"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["https://www.azlyrics.com/lyrics/pomme/mononoke.html"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://www.azlyrics.com/lyrics/seanpaul/temperature.html"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://www.azlyrics.com/r/radiohead.html"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://www.harptabs.com/"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
@@ -3143,11 +3411,19 @@
 {"args":["https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["https://youtu.be/XFkzRNyygfk"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["lacuerda"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["plan b - ill manors"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["soda - persiana americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["soda stereo - persiana americana"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["ultimate-guitar.com"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["under “Radiohead - Creep”: found; Megalobiz has no timed ones"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["{ record = \"azlyrics:../b\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["{ record = \"azlyrics:A/b\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["{ record = \"azlyrics:a\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["{ record = \"azlyrics:a/b.html\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["{ record = \"azlyrics:a/b/c\" }"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
+{"args":["孟维来 - 野人『不再借世人的手 替我开脱』『动态歌词MV』"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["宋冬野 - 斑马斑马"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["宋冬野 - 斑马，斑马"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}
 {"args":["85053"],"fn":"caracole.ug.sitemap.classify_tab_url","out":"unrecognized"}

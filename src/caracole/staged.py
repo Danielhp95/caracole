@@ -152,6 +152,13 @@ class StagedRun:
         self.overrides = overrides_since(self.cfg, self.overrides, handed)
         self._song_again()
 
+    def _overrides_now(self) -> Any:
+        """overrides.toml as it is now: what a lyrics pass reads again once its client handed the lock over (lyrics.py
+        ``Turns``)."""
+        from caracole.overrides import load_overrides
+
+        return load_overrides(self.cfg.overrides_file)
+
     def _song_again(self) -> None:
         """The song read again; gone (another caracole removed it, or merged it into a song of the same name, while
         this one let a lookup have the lock), the job ends there, a refusal (``_Stop``), before anything more is
@@ -163,6 +170,14 @@ class StagedRun:
         except KeyError:
             raise _Stop(f"{self.song.display} left the book while {self.MAKING} (removed, or merged into a song "
                         "of the same name)") from None
+
+    def _audio_length(self) -> float | None:
+        """The song's length in seconds, by lyrics_search.py's one rule (``audio_length``: its line's, else as yt-dlp
+        reported its video, else as its file says), the length the lyrics sites are asked with; None when none tells (a
+        length is a hint: the sites are asked without one)."""
+        from caracole.lyrics_search import audio_length
+
+        return audio_length(self.conn, self.song)
 
     # --- the stages both jobs end with -------------------------------------------------------------------
 

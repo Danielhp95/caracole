@@ -23,7 +23,7 @@ from caracole.commands import _common
 from caracole.config import load_config
 from caracole.health import get_state, record_block
 from caracole.overrides import load_overrides, tab_id_from_url
-from caracole.songs import find_song, get_song, list_songs
+from caracole.songs import find_song, get_song, list_songs, update_song
 from caracole.ug.index import mark_built, upsert_rows
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -50,6 +50,7 @@ class Sites:
     def __init__(self):
         self.pages: dict[str, tuple[int, str]] = {}
         self.lyrics: dict[tuple[str, str], str] = {}
+        self.lrclib_records: dict[int, str] = {}  # /api/get/{id}: a record's plain lyrics by its id
         self.megalobiz = FakeMegalobiz()  # with no record: a search finds nothing
         self.requests: list[str] = []
 
@@ -64,6 +65,12 @@ class Sites:
                 return httpx.Response(200, json=record)
             if request.url.path == "/api/search":
                 return httpx.Response(200, json=[])
+            picked = request.url.path.removeprefix("/api/get/")
+            if picked.isdigit() and int(picked) in self.lrclib_records:
+                record = {"id": int(picked), "trackName": "Creep", "artistName": "Radiohead", "albumName": "",
+                          "duration": 200.0, "instrumental": False, "plainLyrics": self.lrclib_records[int(picked)],
+                          "syncedLyrics": None}
+                return httpx.Response(200, json=record)
             return httpx.Response(404, json={"name": "TrackNotFound"})
         if request.url.host == "api.megalobiz.com":
             return self.megalobiz.handler(request)
@@ -580,6 +587,121 @@ def test_a_lookup_passes_a_turn_before_each_stage_never_inside_one(cfg, conn, si
         assert heard[heard.index(("running", name)) - 1] == "turn", name
     assert heard.count("turn") > 11  # and before each request but a client's first
     assert not any(in_transaction for in_transaction in turns)
+
+
+def test_a_lookup_asks_the_lyrics_sites_under_the_songs_lyrics_name(cfg, conn, sites):
+    # [lyrics]' `as`: LRCLIB and Megalobiz are asked under it, with no album, and the stage says so.
+    from caracole.overrides import set_lyrics_name
+
+    serve_creep(sites, conn)
+    set_lyrics_name(cfg.overrides_file, "Radio Head - Creep (Official Video)", "Radiohead - Creep")
+
+    result, progress = look_up(cfg, sites=sites, artist="Radio Head", title="Creep (Official Video)")
+
+    assert [httpx.URL(u).params["artist_name"] for u in sites.lrclib()] == ["Radiohead"]
+    assert [httpx.URL(u).params.get("artist") for u in sites.megalobiz_asked()] == ["Radiohead"]
+    assert result.details["lyrics"] == "under “Radiohead - Creep”: found; Megalobiz has no timed ones"
+    assert get_song(conn, result.song_id).lyrics_status == "found"
+
+
+def test_a_lookup_says_the_name_once_when_every_site_missed_under_it(cfg, conn, sites):
+    from caracole.overrides import set_lyrics_name
+
+    set_lyrics_name(cfg.overrides_file, "Radio Head - Creep (Official Video)", "Radiohead - Creep")
+    result, _ = look_up(cfg, sites=sites, artist="Radio Head", title="Creep (Official Video)")
+    assert result.details["lyrics"] == ("under “Radiohead - Creep”: LRCLIB has none; Megalobiz has no timed ones; "
+                                        "AZLyrics has none")
+
+
+@pytest.mark.parametrize("record", ["lrclib:9", "megalobiz:5", "azlyrics:radiohead/creep"])
+def test_a_picked_record_within_its_30_days_isnt_asked_and_says_so(cfg, conn, sites, record):
+    from caracole.overrides import set_lyrics_record
+
+    from conftest import add_song
+
+    song = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-10-10T00:00:00Z")
+    set_lyrics_record(cfg.overrides_file, song.display, record)
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    said = record.replace(":", " ", 1)
+    assert result.details["lyrics"] == f"the record you picked isn't asked now: {said}"
+    assert sites.lrclib() == [] and sites.megalobiz_asked() == [] and not any("azlyrics" in u for u in sites.requests)
+
+
+def test_a_lookup_keeps_the_record_you_picked_and_asks_no_other_site(cfg, conn, sites):
+    # A Megalobiz record picked: that record alone, one request; LRCLIB (cooling down here) and AZLyrics are passed
+    # over, never said.
+    from caracole.overrides import set_lyrics_record
+
+    sites.megalobiz.records.append(record(lrc_id=5, title="Creep", artist="Radiohead", duration=None))
+    record_block(conn, "lrclib", NOW, "lrclib: 429")
+    set_lyrics_record(cfg.overrides_file, "Radiohead - Creep", "megalobiz:5")
+
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.details["lyrics"] == "the record you picked: megalobiz 5"
+    assert sites.lrclib() == [] and [u.rsplit("/", 1)[-1] for u in sites.megalobiz_asked()] == ["5"]
+    assert not any("azlyrics.com" in u for u in sites.requests)
+    assert get_song(conn, result.song_id).lyrics_status == "found"
+
+
+def test_a_lookup_says_the_record_you_picked_is_gone(cfg, conn, sites):
+    from caracole.overrides import set_lyrics_record
+
+    set_lyrics_record(cfg.overrides_file, "Radiohead - Creep", "lrclib:9")
+
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.details["lyrics"] == "the record you picked is gone: lrclib 9"
+    assert [httpx.URL(u).path for u in sites.lrclib()] == ["/api/get/9"]
+    assert sites.megalobiz_asked() == [] and not any("azlyrics.com" in u for u in sites.requests)
+    assert get_song(conn, result.song_id).lyrics_status == "missing"
+
+
+def test_a_picked_lrclib_record_gone_stays_missing_and_is_asked_again_past_the_cache_after_30_days(cfg, conn, sites):
+    # A picked record is final: Megalobiz, cooling down, would never be asked about the song, so it puts nothing back
+    # to pending. The song stays missing with its time, and 31 days later LRCLIB is sent a real request for the
+    # record, never the cached 404 read again with no request.
+    from datetime import timedelta
+
+    from caracole.get import LookupRequest, look_up as run
+    from caracole.overrides import set_lyrics_record
+
+    set_lyrics_record(cfg.overrides_file, "Radiohead - Creep", "lrclib:9")
+    record_block(conn, "megalobiz", NOW, "megalobiz: 429")
+
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert get_song(conn, result.song_id).lyrics_status == "missing"
+    sites.lrclib_records[9] = "\n".join(LINES)
+    later = run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Progress(sites), runner=FakeRunner(),
+                now=NOW + timedelta(days=31))
+    assert [httpx.URL(u).path for u in sites.lrclib()] == ["/api/get/9", "/api/get/9"]
+    assert later.details["lyrics"] == "the record you picked: lrclib 9"
+    assert get_song(conn, result.song_id).lyrics_status == "found"
+
+
+def test_after_a_turn_the_lyrics_stage_keeps_to_the_lyrics_table_read_again(cfg, conn, sites, monkeypatch):
+    # The other lookup in the lane names the song's lyrics at its turn: this one asks under that name.
+    from caracole.overrides import set_lyrics_name
+
+    serve_creep(sites, conn)
+    monkeypatch.setattr(_common, "_handoffs", _common.handoffs())  # put back as it was after the test
+    turns: list[int] = []
+
+    def turn(cfg_, conn_=None) -> bool:
+        turns.append(1)
+        if len(turns) != 2:
+            return False
+        _common._handoffs += 1
+        set_lyrics_name(cfg.overrides_file, "Radio Head - Creep", "Radiohead - Creep")
+        return True
+
+    monkeypatch.setattr(_common, "pass_turn", turn)
+
+    look_up(cfg, sites=sites, artist="Radio Head", title="Creep")
+
+    assert [httpx.URL(u).params["artist_name"] for u in sites.lrclib()] == ["Radiohead"]
 
 
 def test_after_a_turn_a_lookup_reads_overrides_and_its_song_again(cfg, conn, sites, monkeypatch):

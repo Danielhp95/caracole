@@ -24,6 +24,9 @@ More on this: [the sites caracole reads](sources.md).
 
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
+If the song's lyrics later become other words, the sheet is made again over them, once; the same
+words retimed (other times on a sheet already timed) change nothing. A sheet made before caracole kept track of its
+words isn't made again for this.
 
 When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
 **Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.

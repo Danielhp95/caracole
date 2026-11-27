@@ -270,6 +270,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     youtube = served.pop("youtube")  # whether a sheet can be made from a YouTube video here: test_web_youtube.py
     transcribe = served.pop("transcribe")  # whether lyrics are transcribed here, and for which songs (below)
     audio = served.pop("audio")  # whether a sheet can be made from an audio file here (below)
+    assert served.pop("lyricsSearch") is False  # a song's lyrics looked up under another name: serve's alone (below)
     assert served == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id], "jobs": [job],
                       "guitar": False}
     assert set(youtube) == {"ok", "why", "off"}
@@ -312,6 +313,31 @@ def test_the_served_page_lists_the_songs_offered_a_transcription(conn, cfg, tmp_
     assert "server" not in data_of(page(conn, cfg))  # the file on disk offers none of it
 
 
+def test_the_served_page_says_lyrics_search(conn, cfg):
+    # A song's lyrics looked up under another name, listed and one taken (web/lyrics_routes.py): caracole serve's
+    # alone (WebControls.lyrics_search, which its library route sets), last in the member; the phone's page, built
+    # with the controls' default, says false; the cards' own data is the same either way, and the file has none.
+    from caracole.library_page import WebControls
+
+    add_song(conn, "孟维来", "野人『动态歌词MV』")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", lyrics_search=True))
+    phone = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    assert data_of(served)["server"]["lyricsSearch"] is True and list(data_of(served)["server"])[-1] == "lyricsSearch"
+    assert data_of(phone)["server"]["lyricsSearch"] is False
+    assert data_of(served)["songs"] == data_of(phone)["songs"]
+    assert "server" not in data_of(page(conn, cfg))
+
+
+def test_caracole_serves_library_page_offers_the_lyrics_search(cfg, conn):
+    from caracole.web.app import Request, WebApp
+    from caracole.web.jobs import JobQueue
+
+    add_song(conn, "孟维来", "野人『动态歌词MV』")
+    app = WebApp(cfg, JobQueue(lambda args, emit: 0), allowed=frozenset({"localhost"}), csrf="tok")
+    html = app.handle(Request("GET", "/", {"host": "localhost:8737"})).body.decode()
+    assert data_of(html)["server"]["lyricsSearch"] is True
+
+
 def test_the_served_page_says_whether_a_sheet_can_be_made_from_an_audio_file(conn, cfg, tmp_path, monkeypatch):
     # Served alone, after the transcriptions: whether this caracole makes chords of a file (auto-chords and its model
     # files: no YouTube, no yt-dlp), why not, and the most an upload takes; the "+" and the cards read it.
@@ -326,7 +352,7 @@ def test_the_served_page_says_whether_a_sheet_can_be_made_from_an_audio_file(con
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
     served = data_of(html)["server"]
     assert served["audio"] == {"ok": False, "why": "auto-chords isn't installed", "limit": 0, "too_big": ""}
-    assert list(served)[-1] == "audio"
+    assert list(served)[-2:] == ["audio", "lyricsSearch"]
     monkeypatch.setattr(yf, "autochords_missing", lambda: [])
     files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt"}
     for path in files.values():

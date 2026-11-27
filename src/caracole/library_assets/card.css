@@ -189,10 +189,29 @@ a.tile-source:hover .tile-source-name { color: var(--text); text-decoration: und
 .btn.remove svg.glyph { color: var(--failed); }
 .btn.remove:hover { border-color: var(--failed); background: var(--failed-bg); }
 
+/* A song's lyrics looked up under another name (library.js lyricsPanel): in what needs you, open, for a song with no
+   lyrics; else folded right under the foot. Its form is the pasted link's (.link-form), its rows the drawer's version
+   rows (.vrows), its notes muted lines (.hint); each part after its summary a step under the one before. */
+details.lyrics-search { position: relative; min-width: 0; margin: 0; }
+details.lyrics-search > summary { width: fit-content; max-width: 100%; font-weight: 600; cursor: pointer; }
+details.lyrics-search > summary ~ * { margin-top: 8px; }
+details.lyrics-search > summary ~ [hidden] { display: none; }
+details.lyrics-search .link-form .btn { min-height: 44px; }  /* as tall as the fields beside it */
+details.lyrics-search .vrow { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ver stars act"
+  "note note note"; padding-inline: 0; }
+details.lyrics-search .vrow .note, details.lyrics-search p { overflow-wrap: anywhere; }
+details.lyrics-search .vrow .ver { display: inline-flex; align-items: center; gap: calc(6 * var(--sp)); }
+details.lyrics-search .vrow .stars { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+details.lyrics-search .btn[aria-disabled="true"] { opacity: .55; cursor: progress; }
+/* Empty, the live line takes no room and stays a live region, so its first words are read out. */
+.lyrics-said:empty { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); }
+
 /* A thumb's targets: every chevron, link, download, button and close of the card, 44 px; a tile 58 px tall (each in the
    text's pixels, --sp). */
 @media (pointer: coarse) {
   .dl, .prog, .vrow .btn, .inuse, .info-file, .progs-more, a.tile-source { min-height: calc(44 * var(--sp)); }
+  details.lyrics-search > summary { box-sizing: border-box; min-height: calc(44 * var(--sp));
+    padding-block: calc(10 * var(--sp)); }
   .foot-more-btn { min-width: calc(44 * var(--sp)); }
   .dl { min-width: calc(44 * var(--sp)); justify-content: center; }
   .tile-open { padding: calc(9 * var(--sp)) calc(4 * var(--sp)) calc(9 * var(--sp)) calc(10 * var(--sp)); }

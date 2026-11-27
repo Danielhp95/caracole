@@ -145,6 +145,16 @@ object JobCommands {
     val INDEX_MERGE_COMMAND: List<String> = listOf("index", "merge")
     val INDEX_MERGE_STAGES: List<Pair<String, String>> = listOf("merge" to "Merging the other scribe's index pages")
 
+    /** lyrics_pick.py's STAGES, `caracole lyrics --record --progress`'s (caracole serve's alone: lyrics are searched
+     * and picked on the computer, for now). */
+    val LYRICS_PICK_STAGES: List<Pair<String, String>> = listOf(
+        "song" to "Find the song",
+        "lyrics" to "Lyrics",
+        "chords" to "Chords from the audio",
+        "pdf" to "PDF",
+        "pages" to "The logbook page",
+    )
+
     // The job keys' prefixes, what follows each a song's or a query's key.
     const val REMOVING = "remove:"  // a removal's: never joins the song's add or fetch
     const val EXPORTING = "export:"  // Make this my version's: the song's key and the version, then MINE
@@ -158,13 +168,18 @@ object JobCommands {
     const val YOUTUBE_SHEET = "youtube:"  // a sheet from a YouTube video: the song's identity key after it
     const val TRANSCRIBE = "transcribe:"  // lyrics transcribed from a song's audio: the song's identity key after it
     const val AUDIO_SHEET = "audio:"  // a sheet from an audio file you gave: the song's identity key after it
+    const val LYRICS_SEARCH = "lyrics-search:"  // a song's lyrics searched under a name: the song's key after it
+    const val LYRICS_PICK = "lyrics:"  // a record of a song's kept lyrics search picked: the song's key after it
+    const val LYRICS_CLEAR = "lyrics-clear:"  // the record picked for a song's lyrics taken back: the song's key
+                                              // after it
     const val INDEX_MERGE = "index-merge:"  // an index export's merge
     const val SYNCING = "sync:"  // a sync's (sync_routes.SYNCING): the address it syncs with after it
     const val IMPORTING = "import:"  // a file's import (sync_routes.IMPORTING): the staged file's id after it
     const val SONGBOOK = "songbook\u001f"  // a songbook's change (web/songbooks.py's KEY)
 
-    /** What a site's index reads, and a search's suggestion: jobs of no song's. */
-    val INDEX_READS: List<String> = listOf(LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK)
+    /** What a site's index reads, a search's suggestion, and a song's lyrics searched: jobs of no song's. */
+    val INDEX_READS: List<String> =
+        listOf(LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH, UG_LINK, LYRICS_SEARCH)
 
     // --- the builders -------------------------------------------------------------------------------------------
 
@@ -289,7 +304,7 @@ object JobCommands {
     /** Whether a command writes `caracole get --progress` lines: a lookup, `caracole versions --progress`, `lacuerda
      * --search --progress`, `youtube … --progress`, `peer … --progress` or `index merge --progress`. */
     fun reports(args: List<String>): Boolean = first(args) == LOOKUP ||
-        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER, "ug", "transcribe", "audio") &&
+        (first(args) in listOf(VERSIONS, "lacuerda", "youtube", PEER, "ug", "transcribe", "audio", "lyrics") &&
          "--progress" in options(args)) ||
         (args.take(2) == INDEX_MERGE_COMMAND && "--progress" in options(args))
 
@@ -307,6 +322,16 @@ object JobCommands {
 
     /** Whether a command makes a song's sheet from an audio file you gave (`caracole audio`). */
     fun sheetsFromAudio(args: List<String>): Boolean = first(args) == "audio"
+
+    /** jobs._picks_lyrics: whether a command makes a record of a song's kept lyrics search its lyrics (`caracole
+     * lyrics --pick` or `--record`). */
+    fun picksLyrics(args: List<String>): Boolean =
+        first(args) == "lyrics" && options(args).any { it.startsWith("--pick=") || it.startsWith("--record=") }
+
+    /** Whether a command searches a song's lyrics under a name (`caracole lyrics --as`): a lookup, the lane's on the
+     * computer (jobs._in_the_lane). */
+    private fun searchesLyrics(args: List<String>): Boolean =
+        first(args) == "lyrics" && options(args).any { it.startsWith("--as=") }
 
     private fun peerStages(args: List<String>): List<Pair<String, String>> {
         if (args.take(2) == INDEX_MERGE_COMMAND && "--progress" in options(args)) return INDEX_MERGE_STAGES
@@ -328,10 +353,12 @@ object JobCommands {
         return if (link.kind == UgLink.TAB) UG_LINK_STAGES else UG_LINK_STAGES.drop(1)
     }
 
-    /** The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's and a sheet
-     * from an audio file's have theirs after a prefix. */
+    /** The song's identity key in a job's key: a removal's, a sheet from YouTube's, a transcription's, a sheet from
+     * an audio file's, a lyrics pick's and a lyrics clear's have theirs after a prefix; a lyrics search's is kept
+     * whole, a job of no song's (jobs.song_key_of). */
     fun songKeyOf(jobKey: String): String =
         jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET).removePrefix(TRANSCRIBE).removePrefix(AUDIO_SHEET)
+            .removePrefix(LYRICS_PICK).removePrefix(LYRICS_CLEAR)
 
     private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal=")
 
@@ -368,6 +395,7 @@ object JobCommands {
         if (commands.any(::sheetsFromYoutube)) YOUTUBE_SHEET_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         if (commands.any(::transcribes)) TRANSCRIBE_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         if (commands.any(::sheetsFromAudio)) AUDIO_SHEET_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
+        if (commands.any(::picksLyrics)) LYRICS_PICK_STAGES.forEach { (name, label) -> names.putIfAbsent(name, label) }
         for (args in commands) {
             peerStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
             ugLinkStages(args).forEach { (name, label) -> names.putIfAbsent(name, label) }
@@ -377,24 +405,25 @@ object JobCommands {
 
     /**
      * Whether a command is an interactive lookup (AGENTS.md's): `caracole get`, `versions` (keep, keep more, choose,
-     * clear), `lacuerda --artist` or `--search`, `harptabs --artist`, `ug --link`: the jobs of the lookup kinds (song,
-     * versions, lacuerda-artist, lacuerda-search, harptabs-artist, ug-link) a long job of the phone's own lets go first
-     * (JobContext.yieldToQueued).
+     * clear), `lacuerda --artist` or `--search`, `harptabs --artist`, `ug --link`, `lyrics --as`: the jobs of the
+     * lookup kinds (song, versions, lacuerda-artist, lacuerda-search, harptabs-artist, ug-link, lyrics-search) a long
+     * job of the phone's own lets go first (JobContext.yieldToQueued).
      */
     fun isLookup(args: List<String>): Boolean = when (first(args)) {
         LOOKUP, VERSIONS -> true
         "lacuerda" -> args.any { it.startsWith("--artist=") || it.startsWith("--search=") }
         "harptabs" -> args.any { it.startsWith("--artist=") }
         "ug" -> readsUgLink(args)
+        "lyrics" -> searchesLyrics(args)
         else -> false
     }
 
     /**
      * The kind (JobSpec.kind) of a job read back from the history, which keeps none (history.py's format 1) for a job
      * of commands: by its key, as jobs_routes.view tells them apart (a removal, an export, a songbook's change, a
-     * site's index read, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], each prefix's kind,
-     * PhoneKinds': the render job's `render:`…), else by its first command (`versions`, `review`); an add the phone
-     * ran itself (no command, an `add` stage) is "add"; any other a song's ("song").
+     * site's index read, a lyrics search, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], each
+     * prefix's kind, PhoneKinds': the render job's `render:`…), else by its first command (`versions`, `review`); an
+     * add the phone ran itself (no command, an `add` stage) is "add"; any other a song's ("song"), a lyrics pick's too.
      */
     fun kindOf(key: String, commands: List<List<String>>, stageNames: List<String>,
                phoneKinds: Map<String, String> = PhoneKinds.ALL.values.associate { it.key to it.kind }): String = when {
@@ -407,6 +436,7 @@ object JobCommands {
         key.startsWith(HARPTABS_ARTIST) -> "harptabs-artist"
         key.startsWith(YOUTUBE_SEARCH) -> "youtube-search"
         key.startsWith(UG_LINK) -> "ug-link"
+        key.startsWith(LYRICS_SEARCH) -> "lyrics-search"  // no song's, as the other index reads; a pick is a song's
         key.startsWith(YOUTUBE_SHEET) -> "youtube"
         key.startsWith(INDEX_MERGE) -> "index-merge"
         key.startsWith(SYNCING) || key.startsWith(IMPORTING) -> "sync"
