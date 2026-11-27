@@ -5,10 +5,9 @@ import java.io.IOException
 
 /**
  * The chord models, wherever they run (the design's §3.1; on the phone `:ml`'s MlChordModels, the models in a process
- * of their own). Here, in :viewer, beside [Heard], so that :server's AudioRunner, which the release ships, names it
- * with no part of `:autochords` (the front ends and their data, the debug build's alone until stage S: the release
- * may carry nothing under `caracole/autochords/`, android/scripts/release-check.sh); `:autochords` names it by a
- * typealias.
+ * of their own). Here, in :viewer, beside [Heard], so that :server's AudioRunner names it with no part of
+ * `:autochords` (the front ends and their data, which a build without `:ml` carries none of); `:autochords` names it
+ * by a typealias.
  *
  * - [ready]: null when the models can hear a song here, else why not in words (a file missing, one that isn't the one
  *   pinned).

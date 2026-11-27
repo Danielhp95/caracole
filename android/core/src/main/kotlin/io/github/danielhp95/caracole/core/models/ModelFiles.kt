@@ -17,13 +17,14 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.security.MessageDigest
 
-/** This build carries no chord models (no models.json on its classpath: the release's, until stage S): never a bug,
- * which [ModelFiles.carried] tells apart with no exception. */
+/** This build carries no chord models (no models.json on its classpath: a build without `:ml`, the default shell's):
+ * never a bug, which [ModelFiles.carried] tells apart with no exception. */
 class ModelsNotCarried : RuntimeException("This build carries no chord models.")
 
 /** Where a pinned file comes from. */
 sealed interface From {
-    /** The app's own: the debug build's `:ml` resource `caracole/autochords/<name>` (BTC's graph), no request. */
+    /** The app's own: `:ml`'s resource `caracole/autochords/<name>` (BTC's graph), in the release as in debug builds,
+     * no request. */
     data object App : From
 
     /** An asset of this repository's GitHub release [Pins.release], named [asset] (beat_this's converted file). */
@@ -66,7 +67,8 @@ data class Pins(val contract: Int, val release: String, val files: List<Pin>,
  * back).
  */
 object ModelFiles {
-    /** The pins on the classpath: the debug build's `:ml` puts them there (`:core` ships none, as the graph). */
+    /** The pins on the classpath: `:ml` puts them there, the release's as a debug build's (`:core` ships none, as the
+     * graph). */
     const val RESOURCE = "caracole/autochords/models.json"
 
     /** The models' folders' parent in the state directory. */

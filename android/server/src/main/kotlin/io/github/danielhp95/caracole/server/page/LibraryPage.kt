@@ -138,8 +138,9 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         const val TRANSCRIBE_PROBLEM =
             "No lyrics site has its words. The computer hears them from its own audio of this song."
 
-        /** Why a phone with nothing to hear with makes no sheet from an audio file (the release; AudioRunner.problemOf
-         * with no chords): the server member's `audio.why`, its page then with no "+". */
+        /** Why a phone with nothing to hear with makes no sheet from an audio file (a build without `:ml`, the
+         * default shell's; AudioRunner.problemOf with no chords): the server member's `audio.why`, its page then with
+         * no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"
     }
 }

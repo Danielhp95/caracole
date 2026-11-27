@@ -89,7 +89,7 @@ object Caracole {
     @Volatile var meteredForTests: Boolean? = null
 
     /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none: the
-     * app's own (PhoneExaminer: the debug build's `:autochords` and Android's tags, the release's none). */
+     * app's own (PhoneExaminer: `:autochords`' lengths and Android's tags in a build with `:ml`, none without). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
 
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
@@ -128,9 +128,9 @@ object Caracole {
         phone ?: start(context.applicationContext, starting).also { phone = it }
     }
 
-    /** The chord models' process's name's end (the debug build's `:ml`, its MlService's): nothing of the phone's
-     * caracole (its database, its queue, its server) starts there, so the models' memory and their end are theirs
-     * alone. Named, never the class, which the release doesn't have. */
+    /** The chord models' process's name's end (`:ml`'s, its MlService's): nothing of the phone's caracole (its
+     * database, its queue, its server) starts there, so the models' memory and their end are theirs alone. Named,
+     * never the class, which a build without `:ml` doesn't have. */
     const val MODELS_PROCESS = ":ml"
 
     /** Whether the process [name] of [packageName] is the chord models' ([MODELS_PROCESS]). */

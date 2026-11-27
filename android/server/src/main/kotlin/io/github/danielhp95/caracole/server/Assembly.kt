@@ -110,10 +110,12 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
  * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
  * now, read as the job runs (the app's ConnectivityManager; none metered by default). [models]: where the chord
- * models' job downloads them from, with this build's pins (ModelFiles.carried(): the debug build's `:ml` puts them on
- * the classpath; a device test's GitHub on loopback and pins of its own), null for a build that carries none (the
- * release's), whose job and Settings say so. [chords]: the chord models that hear a song's audio (the debug app's
- * `:ml`, E22's), null where nothing can hear (the release, a test's): the audio job then refuses in its words.
+ * models' job downloads them from, with this build's pins (ModelFiles.carried(): `:ml` puts them on the classpath,
+ * the release's as a debug build's; a device test's GitHub on loopback and pins of its own), null for a build that
+ * carries none (one without `:ml`), whose job and Settings say so. [chords]: the chord models that hear a song's audio
+ * (`:ml`'s MlChordModels, E22's), null where nothing can hear (a build without `:ml`, a test's): the audio job then
+ * refuses in its words; a phone `:ml` can't hear on (x86_64, Android 12, little memory) says why through
+ * ChordModels.phoneProblem.
  * [examiner]: the reader of an audio file's length and tags the audio store needs (the app's, E24's); by default one
  * that reads none ([NO_EXAMINER]: every file refused as audio caracole doesn't read here).
  */
