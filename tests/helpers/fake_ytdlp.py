@@ -11,7 +11,7 @@ was given, and its process id.
   --dump-single-json`` prints: the entries the plan lists for the query, at most N.
 - A download (a watch URL) writes the video's bytes where ``-o`` says (``data``, or the bytes of
   the file ``copy`` names: real audio, for a length to read), the extension filled in, and prints
-  the fields of its ``--print after_move:`` template as JSON.
+  the fields of its ``--print after_move:`` template as JSON; the file dated ``mtime`` where the plan gives one.
 - A video's metadata (``--skip-download``, a watch URL) prints the video's fields as yt-dlp's
   ``--dump-single-json`` does, and writes nothing.
 - Either can instead fail as yt-dlp does (``ERROR: ...`` on stderr, exit 1), or hang a while
@@ -72,6 +72,8 @@ if "--skip-download" in argv:
 template = argv[argv.index("-o") + 1]
 path = Path(template.replace("%(ext)s", spec.get("ext", "m4a")))
 path.write_bytes(Path(spec["copy"]).read_bytes() if spec.get("copy") else spec.get("data", "fake audio").encode("utf-8"))
+if "mtime" in spec:
+    os.utime(path, (spec["mtime"], spec["mtime"]))
 info = {k: spec[k] for k in ("id", "title", "channel", "uploader", "duration") if k in spec}
 info["filepath"] = spec.get("print_path", str(path))
 print(json.dumps(info))
