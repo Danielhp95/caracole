@@ -41,7 +41,8 @@ interface BeatsGraph : AutoCloseable {
  * - [beats]: beat_this's mel made a chunk at a time ([Mel.logMel] of frames, bit for bit the whole signal's), its
  *   1500-frame chunks ([Chunks]) through the graph, aggregated, the minimal postprocessor ([Peaks]).
  *
- * [check] is called before each chunk and window batch (the heat, a cancel); what it throws ends the stage.
+ * [check] is called before each chunk and window batch (the heat, a cancel), and the resample's before each piece;
+ * what it throws ends the stage.
  */
 object Stages {
     /** BTC's and beat_this's rate (btc.py SAMPLE_RATE). */
@@ -60,7 +61,8 @@ object Stages {
         if (rate == RATE) n else ceil(n.toDouble() * (RATE.toDouble() / rate)).toLong()
 
     /** [mono], at [rate], as [RATE] into [pcm]; its samples. */
-    fun resample(mono: File, rate: Int, pcm: File): Long = Soxr.resample(mono, rate.toDouble(), RATE.toDouble(), pcm)
+    fun resample(mono: File, rate: Int, pcm: File, check: () -> Unit = {}): Long =
+        Soxr.resample(mono, rate.toDouble(), RATE.toDouble(), pcm, check)
 
     /** The Harte chords of the first [btcSamples] of [pcm]. */
     fun chords(pcm: File, btcSamples: Long, graph: ChordsGraph, check: () -> Unit = {}): List<ChordSegment> {

@@ -24,10 +24,11 @@ import java.security.MessageDigest
  * Each step's file, in order: [PCM_META] and [PCM] (the audio mono at 22,050 Hz, float32, deleted once [BEATS] is
  * there), [CHORDS] (BTC's chords, Harte labels spelled for the key, before [Labels.recognized]), [BEATS], then
  * [HEARD]. A file is written under a name of its own ([PART] after it), forced to the disk, and renamed into place,
- * so one cut off is never read ([read] reads the name alone); one that won't parse all the same is absent
+ * so one cut off is never read ([read] reads the name alone), and the folder then forced too ([syncFolder], or the
+ * platform's own, [of]'s `sync`), so the rename is on the disk as well; one that won't parse all the same is absent
  * ([parsed]), as is a [PCM] shorter than its meta says ([pcmWhole]).
  */
-class Checkpoints private constructor(val folder: File) {
+class Checkpoints private constructor(val folder: File, private val sync: (File) -> Unit) {
     /** [name]'s text, or null while no whole one is there. */
     fun read(name: String): String? = File(folder, name).takeIf { it.isFile }?.readText(Charsets.UTF_8)
 
@@ -64,6 +65,8 @@ class Checkpoints private constructor(val folder: File) {
         FileChannel.open(part.toPath(), StandardOpenOption.WRITE).use { it.force(true) }
         Files.move(part.toPath(), File(folder, name).toPath(), StandardCopyOption.ATOMIC_MOVE,
             StandardCopyOption.REPLACE_EXISTING)
+        // The rename is the folder's: forced too, or a power cut may keep the bytes and lose the name.
+        sync(folder)
     }
 
     fun file(name: String) = File(folder, name)
@@ -80,7 +83,20 @@ class Checkpoints private constructor(val folder: File) {
         const val HEARD = "heard.json"
         const val PART = ".part"
 
-        fun of(root: File, audio: File) = Checkpoints(File(root, "${sha16(audio)}-c${Heard.CONTRACT}"))
+        /** [audio]'s checkpoints under [root]; [sync] forces their folder after each rename ([syncFolder] where the
+         * JVM can; Android's FileChannel won't open a folder, so the `:ml` process gives its own, `Os.fsync`). */
+        fun of(root: File, audio: File, sync: (File) -> Unit = ::syncFolder) =
+            Checkpoints(File(root, "${sha16(audio)}-c${Heard.CONTRACT}"), sync)
+
+        /** [folder] forced to the disk (`fsync` of the folder opened read-only), where the platform opens one so (a
+         * JVM on Linux); quietly nothing where it refuses (Android's FileChannel, another OS). */
+        fun syncFolder(folder: File) {
+            try {
+                FileChannel.open(folder.toPath(), StandardOpenOption.READ).use { it.force(true) }
+            } catch (e: Exception) {
+                // Not where this platform opens a folder so.
+            }
+        }
 
         /** The first 16 hex digits of [file]'s SHA-256 (design C's kept-file name's). */
         fun sha16(file: File): String {

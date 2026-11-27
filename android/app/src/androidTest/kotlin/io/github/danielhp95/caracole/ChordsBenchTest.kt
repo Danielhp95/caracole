@@ -41,7 +41,8 @@ import org.junit.runner.RunWith
  * The debug build's Chords bench on the emulator (the design's §9.1, B0): its sessions over the committed clips the
  * debug build carries, on both beat files and both memory settings, each in a fresh process of its own, their report
  * of BenchReport's shape, each run's peak reset, whose parity passes; a reference of the owner's (autochords_reference's JSON, its decoded samples and all) read as the
- * computer wrote it and run; and Settings' Chords bench row opening the bench in its process of its own. The models
+ * computer wrote it and run; the whole-pipeline mode (Gate B1) over the committed end-to-end files; and Settings'
+ * Chords bench row opening the bench in its process of its own. The models
  * are those `android/scripts/device-test.sh --ml` pushes (`-e models`): the APK carries none.
  */
 @RunWith(AndroidJUnit4::class)
@@ -176,6 +177,46 @@ class ChordsBenchTest {
         val parity = report.getValue("parity").jsonObject
         assertTrue("parity: $parity", parity.getValue("pass").jsonPrimitive.boolean)
         assertEquals(listOf("steady.json"), parity.getValue("btc").jsonArray.map { it.jsonObject.str("file") })
+    }
+
+    /** The whole-pipeline mode (Gate B1) over the committed end-to-end files, hearing.mp3 (44.1 kHz stereo) and
+     * hearing.m4a (48 kHz stereo), as the owner's folder gives it its songs: each heard whole in the `:ml` process,
+     * every stage timed, scored against the corpus's hearing of it, in the report beside its old members. */
+    @Test fun theWholePipelineHearsEachSongAndTheReportSaysB1sGatesAStageAtATime() {
+        val folder = File(context.cacheDir, "bench-hearings-test").apply { deleteRecursively(); mkdirs() }
+        val assets = instrumentation.context.assets
+        for (name in listOf("hearing.mp3", "hearing.m4a")) {
+            assets.open("fixtures/autochords/$name").use { i -> File(folder, name).outputStream().use { i.copyTo(it) } }
+        }
+        val records = assets.open("conformance/autochords/models.jsonl").bufferedReader(Charsets.UTF_8)
+            .useLines { lines -> lines.drop(1).toList() }
+        File(folder, BenchHearings.META).writeText(records.first())
+        records.filter { JSONObject(it).optString("kind") == "hearing" }.forEachIndexed { i, r ->
+            File(folder, "$i${BenchHearings.HEARING}").writeText(r)
+        }
+        val lines = mutableListOf<String>()
+        val hearings = BenchHearings.run(context, models(), folder, { lines += it })
+        lines.forEach(::println)
+        val report = BenchReport.ofSessions(emptyList(), BenchClips.read(context).gates,
+            Device.here(BuildConfig.VERSION_NAME), "2026-11-26T21:00:00Z", hearings = hearings)
+        for (key in listOf("device", "runtime", "sessions", "runs", "summary", "parity")) assertTrue(key, key in report)
+        val h = report.getValue("hearings").jsonObject
+        assertEquals(0.99, h.getValue("gates").jsonObject.num("wcsr_majmin_min"), 0.0)
+        val files = h.getValue("files").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("hearing.m4a", "hearing.mp3"), files.map { it.str("file") }.sorted())
+        for (f in files) {
+            assertTrue("$f", f.getValue("pass").jsonPrimitive.boolean)
+            assertEquals("$f", f.num("computer_btc_frames"), f.num("btc_frames"), 0.0)
+            assertEquals("$f", setOf("decode", "mixdown", "resample", "chords", "beats"),
+                f.getValue("stages_seconds").jsonObject.keys)
+            assertTrue("$f", f.num("ml_peak_mb") > 0 && f.num("seconds") > 0 && f.num("rtf") > 0)
+        }
+        val all = h.getValue("over_all").jsonObject
+        assertTrue("$all", all.getValue("pass").jsonPrimitive.boolean)
+        assertEquals(2.0, all.num("files"), 0.0)
+        assertTrue(h.getValue("unmatched").jsonArray.isEmpty())
+        assertTrue(h.getValue("pass").jsonPrimitive.boolean)
+        folder.deleteRecursively()
     }
 
     @Test fun settingsChordsBenchRowOpensTheBenchInAProcessOfItsOwn() {

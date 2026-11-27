@@ -64,6 +64,15 @@ class HeatTest {
         assertEquals(listOf(HeatRules.COOLING), said)
     }
 
+    @Test fun aStopAskedWhileTheHeatIsWaitedOutEndsTheWaitAtItsNextPoll() {
+        val s = Scripted("severe")
+        var polls = 0
+        assertThrows(IllegalStateException::class.java) {
+            HeatRules.cool(s.gauge, s::sleep, { s.now }, {}) { if (++polls == 3) throw IllegalStateException("stop") }
+        }
+        assertEquals(20_000L, s.now)
+    }
+
     @Test fun aPhoneStillSevereAfterFiveMinutesIsTooHot() {
         val s = Scripted("severe")
         val e = assertThrows(TooHot::class.java) { HeatRules.cool(s.gauge, s::sleep, { s.now }, {}) }

@@ -14,7 +14,8 @@ import java.nio.ByteOrder
  *   any other version none, as mutagen refuses it), else, with no sound track, the `mvhd`'s;
  * - its edit list (`edts/elst`), by which FFmpeg trims the decoded samples (libavformat's mov demuxer, autochords/
  *   audio.py `load_mono` reading an M4A through it): the samples from the one media edit's `media_time`, as many as
- *   its segment duration rescaled from the movie's timescale to the media's ([keptFrames]).
+ *   its segment duration rescaled from the movie's timescale to the media's, never past the media's known length
+ *   ([keptFrames], [Track.bound]).
  *
  * Only the box headers are read on the way to `moov`, which is read whole (at most [MOOV_MOST]), never the samples.
  */
@@ -26,18 +27,39 @@ object Mp4 {
     data class Edit(val segment: Long, val mediaTime: Long)
 
     /** The sound track: its `mdhd` timescale and duration (or the `mvhd`'s, with no sound track), the movie's
-     * timescale, and its edits. */
-    data class Track(val timescale: Long, val duration: Long, val movieTimescale: Long, val edits: List<Edit>) {
+     * timescale, its edits, its sample table's total length (`stbl/stts`: each entry's count times its delta, in the
+     * media's timescale; null where none is read, or past a Long), and whether the file is [fragmented] (an `mvex` in
+     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty). */
+    data class Track(val timescale: Long, val duration: Long, val movieTimescale: Long, val edits: List<Edit>,
+                     val samples: Long? = null, val fragmented: Boolean = false) {
         /** mutagen's length: `float(duration) / timescale`, 0 for a timescale of 0. */
         val seconds: Double get() = if (timescale == 0L) 0.0 else duration.toDouble() / timescale
 
         /** The one media edit (empty ones aside), or none: no list, several media edits, which are not trimmed
-         * exactly here, or numbers that lead nowhere (a timescale of 0, a negative segment). */
+         * exactly here, or numbers that lead nowhere (a timescale of 0, a segment of no length or less, as a
+         * fragmented file's commonly is: the stated delay applies then). */
         fun edit(): Edit? = edits.filter { it.mediaTime >= 0 }.singleOrNull()
-            ?.takeIf { it.segment >= 0 && timescale > 0 && movieTimescale > 0 }
+            ?.takeIf { it.segment > 0 && timescale > 0 && movieTimescale > 0 }
 
-        /** The samples FFmpeg keeps of [edit]: its segment rescaled to the media's timescale (av_rescale). */
-        fun keptFrames(edit: Edit): Long = rescale(edit.segment, timescale, movieTimescale)
+        /** The media's length that bounds an edit, where it is known: none in a [fragmented] file; else the sample
+         * table's total ([samples], what FFmpeg indexes the samples by) where it is read and positive, else `mdhd`'s
+         * [duration] where positive, else none (an unknown length never trims the audio away). */
+        val bound: Long? get() = when {
+            fragmented -> null
+            samples != null && samples > 0 -> samples
+            samples == null && duration > 0 -> duration
+            else -> null
+        }
+
+        /** The samples FFmpeg keeps of [edit]: its segment rescaled to the media's timescale (av_rescale), and never
+         * more than the media holds from the edit's start ([bound] less its media time, where that is known): a
+         * segment that runs past the media's last sample ends with it, the last frame's padding cut to its stated
+         * duration (an M4A of 16,299,355 samples whose edit says 369.600 s, 16,299,360 of them: FFmpeg gives
+         * 16,299,355); with no known bound, the segment alone. */
+        fun keptFrames(edit: Edit): Long {
+            val kept = rescale(edit.segment, timescale, movieTimescale)
+            return bound?.let { minOf(kept, maxOf(0L, it - edit.mediaTime)) } ?: kept
+        }
     }
 
     /** `a * b / c`, rounded to the nearest, halves away from zero, as FFmpeg's `av_rescale` rounds (a, b ≥ 0,
@@ -58,7 +80,8 @@ object Mp4 {
             if (hdlr.remaining() < 12 || !named(hdlr, 8, "soun")) continue
             val mdhd = child(mdia, "mdhd")?.let(::header) ?: return null
             val edits = child(trak, "edts")?.let { child(it, "elst") }?.let(::edits) ?: emptyList()
-            return Track(mdhd.first, mdhd.second, movie.first, edits)
+            val stts = child(mdia, "minf")?.let { child(it, "stbl") }?.let { child(it, "stts") }?.let(::total)
+            return Track(mdhd.first, mdhd.second, movie.first, edits, stts, child(moov, "mvex") != null)
         }
         Track(movie.first, movie.second, movie.first, emptyList())
     }
@@ -83,6 +106,19 @@ object Mp4 {
             val at = 8 + i * size
             if (version == 1) Edit(b.getLong(at), b.getLong(at + 8)) else Edit(u32(b, at), b.getInt(at + 4).toLong())
         }
+    }
+
+    /** An `stts` payload's total: each entry's sample count times its delta; null where it is cut short or the
+     * total passes a Long. */
+    private fun total(b: ByteBuffer): Long? {
+        if (b.remaining() < 8) return null
+        val count = u32(b, 4)
+        if (8 + count * 8 > b.remaining()) return null
+        var sum = BigInteger.ZERO
+        for (i in 0 until count.toInt()) {
+            sum += BigInteger.valueOf(u32(b, 8 + 8 * i)).multiply(BigInteger.valueOf(u32(b, 12 + 8 * i)))
+        }
+        return if (sum.bitLength() < 63) sum.toLong() else null
     }
 
     private fun u32(b: ByteBuffer, at: Int): Long = b.getInt(at).toLong() and 0xFFFFFFFFL

@@ -37,7 +37,8 @@ row-major; every number in a record a float32's value or an int, written as JSON
   and 48 kHz stereo M4A), the computer's whole hearing of that file (``reference``), no array: ``btc``'s ``samples``
   (librosa's 22,050 Hz length, ``ceil(n · ratio)``), ``frames``, its ``argmax`` as runs (``[class, frames]``) and
   ``segments``; ``beats``' ``frames`` (the mel's, of beat_this's own soxr length), ``beats`` and ``downbeats``; its
-  ``duration``, read_audio's.
+  ``duration``, read_audio's (autochords_reference.py ``hearing_record``, whose ``--hearings`` writes the same of a
+  folder of the owner's songs, outside the repository).
 - ``vectors/autochords/soxr.jsonl``: a ``meta`` record (python-soxr's and libsoxr's versions, its engine, the
   tolerance the phone's libsoxr is held to), then a record a conversion: python-soxr's ``resample`` at HQ (libsoxr
   0.1.3, linear phase, nixpkgs' own build, which python-soxr links) of seeded noise (its samples in the record) or of
@@ -245,7 +246,7 @@ def _records() -> tuple[list[dict], list[dict]]:
     from caracole.autochords.beats import detect_beats
     from caracole.autochords.btc import CHUNK_SECONDS, LOG_FLOOR, SAMPLE_RATE, TIMESTEP, BTCRecognizer, cqt_features
     from caracole.autochords.btc import load_audio as btc_load
-    from helpers.autochords_reference import array, logits_of, peaks_of, reference, torch_threads
+    from helpers.autochords_reference import array, hearing_record, logits_of, peaks_of, reference, torch_threads
     from helpers.corpus import fixture_ref
 
     meta = _meta()
@@ -304,17 +305,7 @@ def _records() -> tuple[list[dict], list[dict]]:
     for name in HEARING_FILES:
         path = CLIPS / name
         ref = reference(path, btc=BTC_WEIGHTS, beats=BEAT_CHECKPOINT, threads=THREADS)
-        runs: list[list[int]] = []
-        for k in ref.logits.argmax(axis=-1).tolist():
-            if runs and runs[-1][0] == k:
-                runs[-1][1] += 1
-            else:
-                runs.append([k, 1])
-        models.append({
-            "kind": "hearing", "file": fixture_ref(path), "duration": ref.duration,
-            "btc": {"samples": len(ref.decoded), "frames": len(ref.logits), "argmax": runs, "segments": ref.segments},
-            "beats": {"frames": len(ref.mel), "beats": ref.beats, "downbeats": ref.downbeats},
-        })
+        models.append(hearing_record(ref, fixture_ref(path)))
     return frontend, models
 
 

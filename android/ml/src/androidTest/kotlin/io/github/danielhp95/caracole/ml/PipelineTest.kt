@@ -85,15 +85,19 @@ class PipelineTest {
             // The clip's inputs are the parity tests' own (22,050 Hz mono): each frame BTC's argmax, the computer's but
             // where its top two were within the parity gate's margin, so a frame a wrong pad flips can't hide.
             val margin = btc.getJSONArray("margin")
+            // As many frames as the computer's, never fewer or more, then each the computer's.
+            val phone = harte(chords, audio(name))
+            val frames = framesOf(phone)
+            if (frames != argmax.size) failures += "$name: BTC heard $frames frames, the computer ${argmax.size}"
             val reference = frameLabels(Labels.spellForKey(Labels.framesToSegments(argmax, Labels.FRAME_SECONDS,
-                Labels.vocabulary(OrtModels.CLASSES))), argmax.size)
-            val got = frameLabels(harte(chords, audio(name)), argmax.size)
+                Labels.vocabulary(OrtModels.CLASSES))), maxOf(frames, argmax.size))
+            val got = frameLabels(phone, maxOf(frames, argmax.size))
             val differ = reference.indices.filter { reference[it] != got[it] }
             for (t in differ) {
                 if (margin.getDouble(t) >= parity.getDouble("margin_under")) failures += "$name: frame $t is ${got[t]}"
             }
             report("$name: ${scores.line}; frames differing ${differ}; ${"%.1f".format(took)} s end to end, :ml's " +
-                "peak RSS ${chords.lastPeakKb?.let { it / 1024 }} MB")
+                peak(chords))
             failures += scores.failures.map { "$name: $it" }
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
@@ -121,9 +125,11 @@ class PipelineTest {
             report("$name: ${scores.line}; BTC read ${pcm.btcSamples} samples (the computer's " +
                 "${btc.getLong("samples")}), beat_this ${Mel.frames(pcm.samples.toInt())} frames of ${pcm.samples} " +
                 "samples (the computer's ${beats.getInt("frames")} frames); ${heard.duration} s (read_audio's " +
-                "${record.getDouble("duration")}); ${"%.1f".format(took)} s end to end, :ml's peak RSS " +
-                "${chords.lastPeakKb?.let { it / 1024 }} MB")
+                "${record.getDouble("duration")}); ${"%.1f".format(took)} s end to end, :ml's " +
+                peak(chords))
             if (pcm.btcSamples != btc.getLong("samples")) failures += "$name: BTC read ${pcm.btcSamples} samples"
+            val frames = framesOf(harte(chords, audio(name)))
+            if (frames != argmax.size) failures += "$name: BTC heard $frames frames, the computer ${argmax.size}"
             if (Mel.frames(pcm.samples.toInt()) != beats.getInt("frames")) failures += "$name: the mel's frames"
             if (heard.duration != record.getDouble("duration")) failures += "$name: its length ${heard.duration}"
             failures += scores.failures.map { "$name: $it" }
@@ -305,17 +311,14 @@ class PipelineTest {
             return out.toIntArray()
         }
 
-        /** Each of [frames] frames' label, from segments whose times are [Labels.time]'s of their first frames. */
-        fun frameLabels(segments: List<ChordSegment>, frames: Int): List<String> {
-            val out = ArrayList<String>(frames)
-            var i = 0
-            for (s in segments) while (i < frames && Labels.time(i, Labels.FRAME_SECONDS) < s.end) {
-                out += s.label
-                i++
-            }
-            while (out.size < frames) out += "?"
-            return out
-        }
+        fun frameLabels(segments: List<ChordSegment>, frames: Int) = EndToEnd.frameLabels(segments, frames)
+
+        fun framesOf(segments: List<ChordSegment>) = EndToEnd.framesOf(segments)
+
+        /** `:ml`'s peak RSS while it heard, and what it was made of at its highest (anonymous, file-backed). */
+        fun peak(chords: MlChordModels): String = "peak RSS ${chords.lastPeakKb?.let { it / 1024 }} MB" +
+            (chords.lastPeakSplitKb?.let { (anon, file) -> " (RssAnon ${anon / 1024} MB, RssFile ${file / 1024} MB)" }
+                ?: "")
 
         fun doubles(array: JSONArray) = List(array.length()) { array.getDouble(it) }
 

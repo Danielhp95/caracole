@@ -15,6 +15,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** [Mp4] and [MpegHeader] against the computer's lengths of the decode gate's files (decode.jsonl's `duration`,
  * music.py read_audio's: mutagen's, an MP3 that names no length its frames counted), each to the bit, and the edit
@@ -55,6 +56,66 @@ class ContainerLengthTest {
         assertEquals(264_600L, track.keptFrames(track.edit()!!))
         assertEquals(22L, Mp4.rescale(1, 44100, 2000))
         assertEquals(23L, Mp4.rescale(1, 45, 2))  // 22.5 rounds away from zero, as FFmpeg's av_rescale does
+    }
+
+    /** An edit whose segment runs past its media: decode.m4a's edit made longer (7,700 samples past its media's
+     * 132,300 after the priming), which FFmpeg 9.0.2 decodes to its media's 132,300 (checked by hand, 2026-11-26), as
+     * did an M4A of the owner's spike folder whose edit was 5 samples longer than its media (ParityRunTest). */
+    @Test fun anEditPastItsMediaKeepsTheMediasSamplesAsFfmpegDoes() {
+        val r = records.first { name(it).endsWith("decode.m4a") }
+        val bytes = Corpus.fixture(name(r))
+        val at = String(bytes, Charsets.ISO_8859_1).indexOf("elst")
+        ByteBuffer.wrap(bytes).putInt(at + 12, 140_000)  // its one entry's segment, after the version and count
+        val longer = tmp.newFile("longer.m4a").apply { writeBytes(bytes) }
+        val track = Mp4.audioTrack(longer)!!
+        val edit = track.edit()!!
+        assertEquals(140_000L, edit.segment)
+        assertEquals(132_300L, track.keptFrames(edit))
+        assertEquals(440_995L, Mp4.Track(44100, 440_995, 1000, listOf(Mp4.Edit(10_000, 0))).let {
+            it.keptFrames(it.edit()!!)
+        })
+    }
+
+    /** decode.m4a's bytes, [patch]ed, as a file. */
+    private fun patched(name: String, patch: (ByteArray, (String) -> Int) -> ByteArray): File {
+        val r = records.first { name(it).endsWith("decode.m4a") }
+        val bytes = Corpus.fixture(name(r))
+        val at = { box: String -> String(bytes, Charsets.ISO_8859_1).indexOf(box) }
+        return tmp.newFile(name).apply { writeBytes(patch(bytes, at)) }
+    }
+
+    /** The edit is bounded only by a media length that is known: the sample table's total (what FFmpeg indexes) before
+     * `mdhd`'s duration; none at all in a fragmented file (its samples in `moof`s), whose `mdhd` and `stts` commonly
+     * say 0. None of these decodes to nothing. */
+    @Test fun anEditIsBoundedByTheSampleTablesTotalAndNeverByALengthThatIsntKnown() {
+        // mdhd's duration 0, the sample table whole: the table bounds it (132,300 after the priming).
+        val noDuration = Mp4.audioTrack(patched("mdhd0.m4a") { b, at ->
+            ByteBuffer.wrap(b).putInt(at("mdhd") + 20, 0); b
+        })!!
+        assertEquals(0L, noDuration.duration)
+        assertEquals(132_300L, noDuration.keptFrames(noDuration.edit()!!))
+        // The table's last sample 4 long, not 204: it sums below the edit, and bounds it, as FFmpeg 9.0.2's 132,100.
+        val shortTable = Mp4.audioTrack(patched("stts.m4a") { b, at ->
+            ByteBuffer.wrap(b).putInt(at("stts") + 12 + 8 + 4, 4); b
+        })!!
+        assertEquals(133_124L, shortTable.samples)
+        assertEquals(132_100L, shortTable.keptFrames(shortTable.edit()!!))
+        // Fragmented: an mvex in the moov, mdhd and stts empty: no bound, the edit's own length.
+        val fragmented = Mp4.audioTrack(patched("fragmented.m4a") { b, at ->
+            val bb = ByteBuffer.wrap(b)
+            bb.putInt(at("mdhd") + 20, 0)
+            bb.putInt(at("stts") + 8, 0)
+            val moov = at("moov") - 4
+            val end = moov + bb.getInt(moov)
+            val out = b.copyOfRange(0, end) + byteArrayOf(0, 0, 0, 8) + "mvex".toByteArray() +
+                b.copyOfRange(end, b.size)
+            ByteBuffer.wrap(out).putInt(moov, bb.getInt(moov) + 8)
+            out
+        })!!
+        assertTrue(fragmented.fragmented)
+        assertEquals(132_300L, fragmented.keptFrames(fragmented.edit()!!))
+        // An edit of no length is no edit to trim to (a fragmented file's commonly is): the stated delay instead.
+        assertNull(Mp4.Track(44100, 0, 1000, listOf(Mp4.Edit(0, 1024))).edit())
     }
 
     @Test fun anEditsLengthPastALongIsRefusedNeverWrapped() {

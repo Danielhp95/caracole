@@ -25,8 +25,8 @@ object Mixdown {
     }
 
     /** The file [pcm] of interleaved little-endian float32 frames of [channels] (Decoder's), as mono into [into], a
-     * block at a time; the frames written. */
-    fun mono(pcm: File, channels: Int, into: File): Long {
+     * block at a time, [check] called before each (a cancel: what it throws ends it there); the frames written. */
+    fun mono(pcm: File, channels: Int, into: File, check: () -> Unit = {}): Long {
         val frameBytes = 4 * channels
         val inBuffer = ByteBuffer.allocate(BLOCK_FRAMES * frameBytes).order(ByteOrder.LITTLE_ENDIAN)
         val outBuffer = ByteBuffer.allocate(BLOCK_FRAMES * 4).order(ByteOrder.LITTLE_ENDIAN)
@@ -37,6 +37,7 @@ object Mixdown {
                 StandardOpenOption.TRUNCATE_EXISTING).use { sink ->
                 val block = FloatArray(BLOCK_FRAMES * channels)
                 while (true) {
+                    check()
                     inBuffer.clear()
                     while (inBuffer.hasRemaining() && source.read(inBuffer) >= 0) Unit
                     inBuffer.flip()

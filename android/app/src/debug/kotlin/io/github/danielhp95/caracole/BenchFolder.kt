@@ -12,17 +12,26 @@ import org.json.JSONObject
 
 /**
  * The folder the owner picks for the Chords bench (`ACTION_OPEN_DOCUMENT_TREE`, its grant kept), read and written
- * through the Storage Access Framework alone: the model files and the references in it, and the report written
- * there. Its files are named by their display names; the report names none but the references'.
+ * through the Storage Access Framework alone: the model files and the references in it, the songs and their hearings
+ * (its folder `hearings`, [folder]) for the whole-pipeline mode, and the report written there. Its files are named by
+ * their display names; the report names none but the references' and the songs'.
  */
-internal class BenchFolder(private val resolver: ContentResolver, private val tree: Uri) {
+internal class BenchFolder private constructor(private val resolver: ContentResolver, private val tree: Uri,
+                                               document: String) {
+    constructor(resolver: ContentResolver, tree: Uri) : this(resolver, tree, DocumentsContract.getTreeDocumentId(tree))
+
     class Entry(val name: String, val uri: Uri, val size: Long)
 
-    private val folder: Uri =
-        DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+    private val folder: Uri = DocumentsContract.buildDocumentUriUsingTree(tree, document)
 
     /** Its files (no folders), by name. */
-    fun entries(): List<Entry> {
+    fun entries(): List<Entry> = children(folders = false)
+
+    /** Its folder [name], or null. */
+    fun folder(name: String): BenchFolder? = children(folders = true).firstOrNull { it.name == name }
+        ?.let { BenchFolder(resolver, tree, DocumentsContract.getDocumentId(it.uri)) }
+
+    private fun children(folders: Boolean): List<Entry> {
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(folder))
         val columns = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE,
@@ -30,7 +39,7 @@ internal class BenchFolder(private val resolver: ContentResolver, private val tr
         val out = mutableListOf<Entry>()
         resolver.query(children, columns, null, null, null)?.use { c ->
             while (c.moveToNext()) {
-                if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) continue
+                if ((c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) != folders) continue
                 out += Entry(c.getString(1), DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0)),
                     if (c.isNull(3)) -1 else c.getLong(3))
             }

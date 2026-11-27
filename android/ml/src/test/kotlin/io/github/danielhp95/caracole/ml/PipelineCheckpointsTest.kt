@@ -116,6 +116,57 @@ class PipelineCheckpointsTest {
         assertEquals(0, graphs.chords)
     }
 
+    @Test fun eachStageThatRunsIsTimedInItsOrder() {
+        val timed = mutableListOf<Pair<String, Long>>()
+        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted())
+        pipeline.hear(wav(12), tmp.newFolder(), { s, ns -> timed += s to ns }) {}
+        assertEquals(listOf(Pipeline.DECODE, Pipeline.CHORDS, Pipeline.BEATS), timed.map { it.first })
+        timed.clear()
+        pipeline.hear(stereo44k(4), tmp.newFolder(), { s, ns -> timed += s to ns }) {}
+        assertEquals(Pipeline.STAGES, timed.map { it.first })
+        assertTrue(timed.all { it.second > 0 })
+    }
+
+    /** A 44.1 kHz stereo WAV of [seconds]: its samples mixed down and resampled. */
+    private fun stereo44k(seconds: Int): File {
+        val n = 44100 * seconds
+        val b = ByteBuffer.allocate(44 + 4 * n).order(ByteOrder.LITTLE_ENDIAN)
+        b.put("RIFF".toByteArray()).putInt(36 + 4 * n).put("WAVE".toByteArray()).put("fmt ".toByteArray())
+        b.putInt(16).putShort(1).putShort(2).putInt(44100).putInt(4 * 44100).putShort(4).putShort(16)
+        b.put("data".toByteArray()).putInt(4 * n)
+        for (i in 0 until 2 * n) b.putShort((8000 * sin(2 * PI * 220 * (i / 2) / 44100)).toInt().toShort())
+        return tmp.newFile("stereo$seconds.wav").apply { writeBytes(b.array()) }
+    }
+
+    /** A cancel asked from inside one of the pcm stage's loops, [stage] the file that stage writes, [during] true while
+     * the stage runs (the file it reads still there): the hearing stops there (each fails once that loop's `::stop`
+     * is dropped: the stage then runs whole, its input goes, and the cancel never comes), nothing of the pcm kept. */
+    private fun cancelInside(during: (File) -> Boolean) {
+        val audio = stereo44k(30)
+        val work = tmp.newFolder()
+        val folder = Checkpoints.of(work, audio).folder
+        var fired = false
+        val pipeline = Pipeline(File("no-models"), cool, graphs = Counted(),
+            cancelled = { during(folder).also { if (it) fired = true } })
+        assertThrows(Pipeline.Cancelled::class.java) { pipeline.hear(audio, work) {} }
+        assertTrue("the cancel came from inside the stage", fired)
+        val points = Checkpoints.of(work, audio)
+        assertFalse("cancelled before the pcm was whole", points.has(Checkpoints.PCM_META))
+        assertTrue(points.folder.list().orEmpty().toList().toString(),
+            points.folder.list().orEmpty().none { it in Checkpoints.STAGE_FILES })
+    }
+
+    private fun File.has(name: String) = File(this, name).let { it.isFile && it.length() > 0 }
+
+    @Test fun aCancelDuringTheDecodeStopsItThere() =
+        cancelInside { it.has("decoded.f32") && !File(it, "mono.f32").exists() }
+
+    @Test fun aCancelDuringTheMixdownStopsItThere() =
+        cancelInside { it.has("mono.f32") && File(it, "decoded.f32").exists() }
+
+    @Test fun aCancelDuringTheResampleStopsItThere() =
+        cancelInside { it.has("resampled.f32") && File(it, "mono.f32").exists() }
+
     @Test fun theStagesShapesAreTheModelsOwn() {
         assertEquals(OrtModels.WINDOW, Stages.WINDOW)
         assertEquals(OrtModels.CLASSES, Stages.CLASSES)
