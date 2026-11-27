@@ -31,8 +31,10 @@ class AnswerError(message: String, cause: Throwable? = null) : IllegalStateExcep
 /**
  * yt-dlp's JSON answers read as youtube.py reads them (`parse_search`, `parse_video`), and what a search asks
  * (`search_query`). JSON as json.loads reads it (PyJson.loads), each value as Python's `str()`, truth and `float()`
- * take it (an int too big for a float is Python's OverflowError, an ArithmeticException, as there); the words of an
- * answer that can't be read are the data's (`answers`).
+ * take it (an int duration too big for a float makes the answer an [AnswerError], as on the computer); the words of
+ * an answer that can't be read are the data's (`answers`). A text nested deeper than PyJson.MAX_DEPTH is an
+ * AnswerError, well-formed or not, where Python reads it: the one place the two answer otherwise (parse.jsonl's
+ * record of it says both).
  */
 object Videos {
     private val answers: JsonObject by lazy { YouTubeData.read().json.getValue("answers").jsonObject }
@@ -61,7 +63,7 @@ object Videos {
             val id = PyValues.string(e["id"]) ?: continue
             if (PyRe.fullmatch(rules.videoId, id) == null) continue
             videos += Video(
-                id, str(e["title"]), str(or(e["channel"], e["uploader"])), PyValues.number(e["duration"]),
+                id, str(e["title"]), str(or(e["channel"], e["uploader"])), duration(e["duration"], null, "search_not_json"),
                 live = PyValues.string(e["live_status"]) in liveStatuses,
                 short = shortsPath in str(e["url"]),
             )
@@ -76,7 +78,7 @@ object Videos {
         val data = loads(text) { AnswerError(said(url, words("video_not_json", it.message)), it) }
         if (data !is JsonObject || PyValues.string(data["id"]) != videoId) throw AnswerError(said(url, words("no_such_video")))
         return Video(videoId, str(data["title"]), str(or(data["channel"], data["uploader"])),
-            PyValues.number(data["duration"]), live = PyValues.string(data["live_status"]) in liveStatuses)
+            duration(data["duration"], url, "video_not_json"), live = PyValues.string(data["live_status"]) in liveStatuses)
     }
 
     /** search_query: the artist, stripped, and the title without its version suffix (normalize.clean_title). */
@@ -88,6 +90,14 @@ object Videos {
         PyJson.loads(text)
     } catch (e: IllegalArgumentException) { // json.JSONDecodeError, a ValueError, or nested deeper than it reads
         throw error(e)
+    }
+
+    /** `_duration`: a duration as `_number` reads it; an int too big for a float makes the answer an [AnswerError] in
+     * [words]' words, as one that isn't JSON. */
+    private fun duration(v: JsonElement?, url: String?, words: String): Double? = try {
+        PyValues.number(v)
+    } catch (e: ArithmeticException) {
+        throw AnswerError(said(url, words(words, e.message)), e)
     }
 
     /** Python's `a or b`. */

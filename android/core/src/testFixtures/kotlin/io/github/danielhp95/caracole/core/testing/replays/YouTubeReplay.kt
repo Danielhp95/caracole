@@ -45,7 +45,8 @@ import kotlinx.serialization.json.jsonPrimitive
  *   `computer` records are the computer's own runs, which the phone never makes (passed over, counted);
  * - classify.jsonl: Classify.ofRun of each run's exit status and stderr (`ok` for an exit of 0);
  * - parse.jsonl: Videos.parseSearch, parseVideo and searchQuery, each video's duration as Python's repr, an
- *   AnswerError in Python's words (where its record gives them) or an ArithmeticException for its OverflowError;
+ *   AnswerError in Python's words (where its record gives them); a record with `phone` (a well-formed text nested past
+ *   PyJson's depth) the phone's AnswerError, not Python's answer;
  * - choose.jsonl: Choose.choose's video and Choose.ranked's videos with their keys;
  * - runs.jsonl: YtDlp over [FakeYtDlpProcess] replaying each scenario's recorded runs, through a real HostGate in
  *   loopback mode, on a fresh database: each call's outcome (the phone's class where classify, beside, says
@@ -135,11 +136,13 @@ object YouTubeReplay : AreaReplay {
                 if (fn == "parse_search") Videos.parseSearch(input).map(::shown) else shown(Videos.parseVideo(input, text(r, "id")!!))
             } catch (e: AnswerError) {
                 "ProviderError" to e.message
-            } catch (e: ArithmeticException) {
-                "OverflowError" to null
             }
             val error = text(r, "error")
+            val phone = r["phone"]?.jsonObject
             when {
+                phone != null -> misses.check(got is Pair<*, *> && got.first == text(phone, "error")) {
+                    "$fn($shownInput) = $got, where the phone's answer is ${text(phone, "error")}: ${text(phone, "why")}"
+                }
                 error != null -> {
                     val message = text(r, "message")
                     misses.check(got is Pair<*, *> && got.first == error && (message == null || got.second == message)) {

@@ -6,6 +6,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** core.youtube against youtube.py: the corpus's records (YouTubeReplay), and a few cases by hand. */
 class YouTubeRulesTest {
@@ -53,5 +60,18 @@ class YouTubeRulesTest {
         assertEquals(topic, Choose.choose(creep, listOf(lyrics, topic), null))
         assertEquals(lyrics, Choose.choose(creep, listOf(lyrics, topic), null, setOf(topic.id)))
         assertNull(Choose.choose(creep, listOf(topic), 270.0))
+    }
+
+    @Test fun aTemplateElementOfTwoPlaceholdersFailsAsTheDataIsRead() {
+        val json = YouTubeData.read().json
+        val argv = json.getValue("phone_argv").jsonObject
+        val search = argv.getValue("search").jsonArray
+        val twice = JsonArray(search.map { e ->
+            if ("<qjs>" in e.jsonPrimitive.content) JsonPrimitive(e.jsonPrimitive.content + "<proxy>") else e
+        })
+        val bad = JsonObject(json + ("phone_argv" to JsonObject(argv + ("search" to twice))))
+        val e = assertFailsWith<IllegalStateException> { YouTubeData.of(bad) }
+        assertTrue("search" in e.message!!, e.message)
+        YouTubeData.of(json)
     }
 }

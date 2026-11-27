@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.youtube
 
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyStr
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -67,7 +68,7 @@ object Classify {
         val data = YouTubeData.read()
         fun found(over: String, pattern: String): Boolean {
             val regex = data.pattern(pattern)
-            return read.getValue(over).any { regex.containsMatchIn(it) }
+            return read.getValue(over).any { PyRe.search(regex, it) != null }
         }
         for (step in steps) {
             if (found(step.over, step.pattern) && (step.and == null || found(step.and.over, step.and.pattern))) return step.cls

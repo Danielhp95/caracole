@@ -52,6 +52,10 @@ class YouTubeData private constructor(val json: JsonObject) {
         check(targets.getValue("video_id_matched").jsonPrimitive.content == "whole") { "video_id is matched whole" }
         check(SEARCH in templates) { "youtube.json has no $SEARCH template" }
         check(refuse.getValue("empty_search").jsonPrimitive.boolean && refuse.getValue("empty_into").jsonPrimitive.boolean)
+        for ((what, template) in templates) for (arg in template) {
+            val marks = placeholders.values.sumOf { mark -> arg.windowed(mark.length).count { it == mark } }
+            check(marks <= 1) { "youtube.json's $what template has an element of $marks placeholders" }
+        }
     }
 
     private val compiledPatterns = HashMap<String, Regex>()
@@ -97,7 +101,7 @@ class YouTubeData private constructor(val json: JsonObject) {
         val given = mapOf("target" to target, "cache_dir" to cacheDir, "qjs" to qjs, "proxy" to proxy, "into" to into)
         check(given.keys == placeholders.keys) { "youtube.json's placeholders aren't phone_argv's values" }
         for (name in noNul) if (given.getValue(name)?.contains(nul) == true) throw Refused("$name holds a NUL")
-        val template = templates[what] ?: throw Refused("no such yt-dlp run: $what")
+        val template = templates[what] ?: throw Refused("no template of a run of kind $what")
         val takesInto = template.any { placeholders.getValue(INTO) in it }
         if (what == SEARCH && target.isEmpty()) throw Refused("an empty search")
         if (takesInto && into != null && into.trimEnd('/').isEmpty()) throw Refused("an empty folder to download into")
@@ -133,6 +137,9 @@ class YouTubeData private constructor(val json: JsonObject) {
         }
 
         fun read(): YouTubeData = DATA
+
+        /** A YouTubeData of [json] in place of the corpus's: a test's, to show a data mistake fails at once. */
+        internal fun of(json: JsonObject): YouTubeData = YouTubeData(json)
 
         /** A `{"pattern", "ignorecase"}` of the data, as PyRegex reads Python's pattern. */
         fun compiled(p: JsonObject): Regex {

@@ -59,7 +59,8 @@ object Choose {
             if (title == 0 || close == null) continue
             if (!(names.channelIsArtist(video.channel) || names.artistIn(video.title))) continue
             var tier = if (names.unwanted(video.title, video.channel)) 1 else 0
-            if (names.variant != null && PyRe.search(rules.variant(names.variant), Normalize.fold(video.title)) == null) {
+            // Python's `if names.variant`: a truthy text (title_variant gives "acoustic", "live" or None, never "").
+            if (!names.variant.isNullOrEmpty() && PyRe.search(rules.variant(names.variant), Normalize.fold(video.title)) == null) {
                 tier = maxOf(tier, 1)
             }
             out += Ranked(video, tier, title, close, official(names, video), rank)

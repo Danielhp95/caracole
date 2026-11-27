@@ -113,6 +113,14 @@ def _number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _duration(value: Any, url: str | None, words: str) -> float | None:
+    """An answer's duration (``_number``); an int too big for a float makes the answer unusable, in ``words``."""
+    try:
+        return _number(value)
+    except OverflowError as e:
+        raise ProviderError(PROVIDER, url, None, words.format(e)) from e
+
+
 def parse_search(text: str) -> list[Video]:
     """The videos of yt-dlp's flat search (``--flat-playlist --dump-single-json``), in its order."""
     try:
@@ -126,7 +134,7 @@ def parse_search(text: str) -> list[Video]:
             continue
         videos.append(Video(
             e["id"], str(e.get("title") or ""), str(e.get("channel") or e.get("uploader") or ""),
-            _number(e.get("duration")),
+            _duration(e.get("duration"), None, SEARCH_NOT_JSON),
             live=e.get("live_status") in LIVE_STATUSES,
             short=SHORTS_PATH in str(e.get("url") or ""),
         ))
@@ -142,7 +150,8 @@ def parse_video(text: str, video_id: str) -> Video:
     if not isinstance(data, dict) or data.get("id") != video_id:
         raise ProviderError(PROVIDER, watch_url(video_id), None, NO_SUCH_VIDEO)
     return Video(video_id, str(data.get("title") or ""), str(data.get("channel") or data.get("uploader") or ""),
-                 _number(data.get("duration")), live=data.get("live_status") in LIVE_STATUSES)
+                 _duration(data.get("duration"), watch_url(video_id), VIDEO_NOT_JSON),
+                 live=data.get("live_status") in LIVE_STATUSES)
 
 
 # --- choosing the song's video ---------------------------------------------------------------------
@@ -262,7 +271,8 @@ class _Names:
     def __init__(self, song: _Song):
         artists = [a for a in (song.artists or [song.artist]) if a and a.strip()] or [song.artist]
         self.artists = set().union(*(_compact_forms(a) for a in artists))
-        self.artist_slugs = {f for a in artists for f in name_forms(a) if f}
+        # name_forms' order, the whole name first: the first of them _stripped_to_title takes off decides, so never a set.
+        self.artist_slugs = tuple(dict.fromkeys(f for a in artists for f in name_forms(a) if f))
         title = clean_title(song.title)
         self.titles = _compact_forms(title)
         self.cjk_titles = {t for t in self.titles if _CJK_LETTER.search(t)}

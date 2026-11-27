@@ -745,3 +745,41 @@ def test_an_empty_search_or_download_folder_is_refused(what, target, into):
 
     with pytest.raises(ValueError, match="empty"):
         phone_argv(what, target, cache_dir="/c", qjs="/q", proxy="http://p", into=into)
+
+
+SEEDED_NAMES = """
+import dataclasses, json
+from caracole.youtube import _Names, choose, Video
+
+@dataclasses.dataclass
+class S:
+    artist: str
+    title: str
+    artists: list
+
+song = S("Rihanna feat. Drake", "Work", [])
+title = "Rihanna feat. Drake Work (Official Video)"
+chosen = choose(song, [Video("AAAAAAAAAAA", title, "someone", 219.0)], None)
+print(json.dumps([_Names(song).title_in(title), chosen.id if chosen else None]))
+"""
+
+
+@pytest.mark.slow
+def test_choose_gives_one_answer_whatever_the_hash_seed():
+    # A featuring artist's forms ("rihanna-feat-drake", "rihanna"), one a prefix of the other: the first that
+    # _stripped_to_title takes off decides, so the forms go in name_forms' order, never a set's.
+    import sys
+    from pathlib import Path
+
+    from conftest import subprocess_pythonpath
+
+    from caracole import youtube
+
+    src = Path(__file__).resolve().parents[1] / "src"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(src)}
+    answers = {}
+    for seed in range(8):
+        done = subprocess.run([sys.executable, "-c", SEEDED_NAMES], env={**env, "PYTHONHASHSEED": str(seed)},
+                              capture_output=True, text=True, check=True)
+        answers[seed] = json.loads(done.stdout)
+    assert set(map(json.dumps, answers.values())) == {json.dumps([youtube.EXACT, "AAAAAAAAAAA"])}, answers

@@ -70,13 +70,19 @@ yt-dlp (``<tmp>`` the test's folder, ``cache_dir`` the folder its runner adds ``
 
 parse.jsonl: ``{"fn": "parse_search", "text"}`` and ``{"fn": "parse_video", "text", "id"}`` with ``videos`` or
 ``video`` (each ``[id, title, channel, duration as Python's repr or null, live, short]``) or ``error``
-(``ProviderError`` with its ``message``, null where Python's json nests deeper than the phone's reads; or
-``OverflowError``, float() of an int too big for one); ``{"fn": "search_query", "artist", "title", "query"}``.
+(``ProviderError`` with its ``message``; an int duration too big for a float is one too, in the words of an answer
+that isn't JSON); ``{"fn": "search_query", "artist", "title", "query"}``. The one place the phone answers otherwise:
+a text nested deeper than its JSON reader reads (core.json.PyJson's MAX_DEPTH, ``DEEPEST``), measured as real
+nesting (``_depth``: brackets inside strings don't count). Python reads it (an error's ``message`` is then null, the
+phone's words its own), and where it is well-formed Python's answer is kept and ``phone`` says the phone's:
+``{"error": "ProviderError", "why": ...}``, an answer error by PyJson's depth limit, which the replay asserts.
 
 choose.jsonl: ``{"song": [artist, title, artists], "videos": [[id, title, channel, duration, live, short]...],
 "expected", "skip", "chosen", "ranked"}``: ``choose``'s video's id (or null), and ``_ranked``'s videos that fit, each
-``[id, tier, -title, closeness, -official, rank]``: test_youtube.py's cases, CJK, live, short and karaoke titles, and
-seeded draws of their songs and videos.
+``[id, tier, -title, closeness, -official, rank]``: test_youtube.py's cases, CJK, live, short and karaoke titles, a
+featuring artist and one named in two scripts, each closeness boundary, durations that are NaN, infinite, zero or
+negative (a non-finite one written ``"NaN"``, ``"Infinity"``, ``"-Infinity"``), a duplicate id, titles of
+decoration words alone, and seeded draws of their songs and videos, most of them a song with videos of its own.
 
 classify.jsonl: ``{"stderr", "exit", "class", "provisional"}``: ``classify(stderr)`` for a run that exited otherwise
 than 0, ``ok`` for one that exited 0. ``provisional`` is null for the computer's own samples (tests/test_youtube.py)
@@ -509,17 +515,46 @@ def _video(v: youtube.Video) -> list:
 DEEPEST = 512  # the phone's json reads no deeper (core.json.PyJson.MAX_DEPTH): past it, its words are its own
 
 
+PHONE_DEEP = ("an answer error by PyJson's depth limit (MAX_DEPTH): the phone's JSON reader nests no deeper, where "
+              "Python's reads the answer")
+
+
+def _depth(text: str) -> int:
+    """How deep the text's arrays and objects nest, as a JSON reader meets them: a bracket inside a string doesn't
+    count."""
+    depth = most = 0
+    in_string = escaped = False
+    for c in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif c in "[{":
+            depth += 1
+            most = max(most, depth)
+        elif c in "]}":
+            depth -= 1
+    return most
+
+
 def _answer(read, text: str) -> dict:
-    """What a parse came to: its videos, or what it raised (a ProviderError's words, but where Python's json went
-    deeper than the phone's reads)."""
+    """What a parse came to: its videos, or what it raised (a ProviderError's words, but where the text nests deeper
+    than the phone reads, whose words are its own); a well-formed text nested that deep keeps Python's answer, and
+    ``phone`` says the phone's."""
+    deep = _depth(text) > DEEPEST
     try:
         found = read()
     except youtube.ProviderError as e:
-        deep = isinstance(e.__cause__, RecursionError) or text.count("[") + text.count("{") > DEEPEST
-        return {"error": "ProviderError", "message": None if deep else str(e)}
-    except OverflowError:  # float() of an int too big for one, as Python raises it out of the parse
-        return {"error": "OverflowError"}
-    return {"videos": [_video(v) for v in found]} if isinstance(found, list) else {"video": _video(found)}
+        return {"error": "ProviderError", "message": None if deep or isinstance(e.__cause__, RecursionError) else str(e)}
+    answer = {"videos": [_video(v) for v in found]} if isinstance(found, list) else {"video": _video(found)}
+    if deep:
+        answer["phone"] = {"error": "ProviderError", "why": PHONE_DEEP}
+    return answer
 
 
 # test_youtube.py's flat search, then the shapes its readers meet: no dict, entries that aren't a list, values of
@@ -552,6 +587,11 @@ SEARCH_TEXTS = [
     '{"entries": [{"id": "CCCCCCCCCCC", "url": "https://www.youtube.com/SHORTS/x"}, {"id": "DDDDDDDDDDD", "url": 5},'
     ' {"id": "EEEEEEEEEEE", "url": ["/shorts/"]}, {"id": "FFFFFFFFFFF", "url": "/shorts/"}]}',
     '{"entries": [{"id": "CCCCCCCCCCC", "title": "宋冬野《斑马斑马》\\ud83c\\udfb8", "channel": "宋冬野 - Topic"}]}',
+    # Well-formed, one value nested past the phone's reader beside a good entry: Python reads the video.
+    '{"entries": [{"id": "AAAAAAAAAAA", "title": "Creep", "channel": "Radiohead"}, {"x": ' + "[" * 600 + "]" * 600
+    + '}]}',
+    # Brackets inside strings are no nesting: a shallow answer whose title is long and bracketed.
+    '{"entries": [{"id": "AAAAAAAAAAA", "title": "' + "[{" * 400 + '", "duration": 1' + "0" * 400 + '}]}',
 ]
 VIDEO_TEXTS = [
     (json.dumps({"id": ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 239}), ID),
@@ -603,7 +643,9 @@ def test_the_parse_corpus():
     for artist, title in SEARCH_QUERIES + [(s.artist, s.title) for s, *_ in CHOOSE_CASES]:
         records.append({"fn": "search_query", "artist": artist, "title": title,
                         "query": youtube.search_query(_S(artist, title, []))})
-    assert {r.get("error") for r in records} == {None, "ProviderError", "OverflowError"}
+    assert {r.get("error") for r in records} == {None, "ProviderError"}
+    assert sum("phone" in r for r in records) == 1
+    assert any(r.get("message") and "int too large" in r["message"] for r in records)
     check(VECTORS / "youtube" / "parse.jsonl", jsonl(records, corpus="youtube/parse", made_by=MADE_BY))
 
 
@@ -630,6 +672,7 @@ _SONGS = {
     "lemon": _S("米津玄師", "Lemon", []), "iu": _S("아이유", "좋은 날", []), "yoasobi": _S("YOASOBI", "夜に駆ける", []),
     "astral": _S("𠮷田", "𠮷野家の歌", []), "trad": _S("周杰倫", "晴天", ["周杰倫", "Jay Chou"]),
     "blank": _S("  ", "Creep", ["", "  "]), "dashed": _S("Guns N' Roses", "Sweet Child O' Mine", []),
+    "feat": _S("Rihanna feat. Drake", "Work", []), "scripts": _S("Song Dongye (宋冬野)", "斑马，斑马", []),
 }
 # Each of test_youtube.py's cases (song, its videos in the search's order, the length to fit, the skipped ids), and
 # Japanese, Korean, a letter past the BMP, Traditional characters, blank artists and apostrophes.
@@ -721,22 +764,65 @@ CHOOSE_CASES = [
     (CREEP, [_v("short45", "Radiohead - Creep", "Radiohead", 45.0), _v("long900", "Radiohead - Creep", "Radiohead",
      900.0), _v("over", "Radiohead - Creep", "Radiohead", 900.5)], None, []),
     (CREEP, [], None, []),
+    # A featuring artist: name_forms gives the whole name and its first artist, one a prefix of the other.
+    (_SONGS["feat"], [_v("feat", "Rihanna feat. Drake Work (Official Video)", "someone"),
+                      _v("ft", "Rihanna - Work (Explicit) ft. Drake", "RihannaVEVO")], None, []),
+    (_SONGS["feat"], [_v("feat", "Rihanna feat. Drake Work (Official Video)", "someone")], None, []),
+    (_SONGS["feat"], [_v("drake", "Drake Work", "someone"), _v("plain", "Rihanna Work", "x")], None, []),
+    # An artist named in two scripts.
+    (_SONGS["scripts"], [_v("hanzi", "宋冬野 - 斑马，斑马", "x"), _v("pinyin", "Song Dongye 斑马斑马 Official", "x"),
+                         _v("topic", "斑马，斑马", "宋冬野 - Topic")], None, []),
+    (_SONGS["scripts"], [_v("pinyin", "Song Dongye - Banma Banma", "Song Dongye")], None, []),
+    # Each closeness boundary: 2 s and 5 s off either way, just past them, 20 s and just past it.
+    (CREEP, [_v(f"d{d:g}".replace(".", "p"), "Radiohead - Creep", "Radiohead", d) for d in (
+        241.0, 237.0, 241.001, 244.0, 234.0, 244.001, 259.0, 219.0, 259.001, 218.999)], 239.0, []),
+    *[(CREEP, [_v(f"d{i}", "Radiohead - Creep", "Radiohead", d) for i, d in enumerate(
+        (float("nan"), float("inf"), float("-inf"), 0.0, -1.0, -239.0))], expected, []) for expected in (None, 239.0)],
+    *[(CREEP, [_v("nan", "Radiohead - Creep", "Radiohead", d)], expected, [])
+      for d in (float("nan"), float("inf")) for expected in (None, 239.0)],
+    # One id twice in a search.
+    (CREEP, [_v("twice", "Radiohead - Creep (Lyrics)", "lyrics"), _v("twice", "Creep", "Radiohead - Topic")], None, []),
+    (CREEP, [_v("twice", "Creep", "Radiohead - Topic"), _v("twice", "Creep", "Radiohead - Topic")], None,
+     ["twicexxxxxx"]),
+    # Titles of decoration words and digits alone, and the artist's name with them.
+    (CREEP, [_v("deco", "Official Video 2024", "Radiohead"), _v("hd", "HD 1080p", "Radiohead"),
+             _v("artist", "Radiohead Official", "Radiohead"), _v("digits", "1993", "Radiohead - Topic")], None, []),
+    (CREEP, [_v("deco", "Official Music Video", "Radiohead"), _v("creep", "Official Creep 1993 HD", "Radiohead")],
+     None, []),
 ]
 
 
 def _seeded_choices() -> list[tuple]:
-    """Songs and videos of the cases above drawn together, the same in every process."""
+    """Songs and videos of the cases above drawn together, the same in every process: most of them a case's song with
+    some of its own videos and a few others, so that most draws choose one; some a song with any videos."""
+    import math
     import random
 
     rng = random.Random(2611)
-    pool = sorted({v for _, videos, _, _ in CHOOSE_CASES for v in videos}, key=lambda v: (v.id, v.title, v.channel, v.duration or -1.0, v.live, v.short))
+    finite = [v for _, videos, _, _ in CHOOSE_CASES for v in videos if v.duration is None or math.isfinite(v.duration)]
+    pool = sorted(set(finite), key=lambda v: (v.id, v.title, v.channel, v.duration or -1.0, v.live, v.short))
     songs = [_SONGS[k] for k in sorted(_SONGS)]
+    cases = [c for c in CHOOSE_CASES if c[1] and all(v in finite for v in c[1])]
     found = []
-    for _ in range(140):
-        videos = rng.sample(pool, rng.randrange(1, 6))
+    for i in range(140):
+        if i % 5:
+            song, own, expected, _ = rng.choice(cases)
+            videos = rng.sample(own, rng.randrange(1, len(own) + 1)) + rng.sample(pool, rng.randrange(0, 3))
+            rng.shuffle(videos)
+            expected = rng.choice([expected, expected, None])
+        else:
+            song, videos = rng.choice(songs), rng.sample(pool, rng.randrange(1, 6))
+            expected = rng.choice([None, None, 239.0, 230.0, 243.0, 261.0, 30.0])
         skip = [rng.choice(videos).id] if rng.random() < 0.1 else []
-        found.append((rng.choice(songs), videos, rng.choice([None, None, 239.0, 230.0, 243.0, 261.0, 30.0]), skip))
+        found.append((song, videos, expected, skip))
     return found
+
+
+def _duration(d: float | None):
+    """A video's duration as a record holds it: a non-finite one by its name, as Kotlin's toDouble reads it."""
+    if d is None or d == d and d not in (float("inf"), float("-inf")):
+        return d
+    return "NaN" if d != d else "Infinity" if d > 0 else "-Infinity"
 
 
 def test_the_choose_corpus():
@@ -745,10 +831,11 @@ def test_the_choose_corpus():
         chosen = youtube.choose(song, videos, expected, skip=skip)
         ranked = youtube._ranked(song, videos, expected, skip=skip)
         records.append({"song": [song.artist, song.title, song.artists],
-                        "videos": [[v.id, v.title, v.channel, v.duration, v.live, v.short] for v in videos],
+                        "videos": [[v.id, v.title, v.channel, _duration(v.duration), v.live, v.short] for v in videos],
                         "expected": expected, "skip": skip, "chosen": chosen.id if chosen else None,
                         "ranked": [[v.id, *key] for key, v in ranked]})
     assert len({r["chosen"] for r in records}) > 30 and sum(r["chosen"] is None for r in records) > 10
+    assert sum(r["chosen"] is None for r in records) < len(records) / 3
     check(VECTORS / "youtube" / "choose.jsonl", jsonl(records, corpus="youtube/choose", made_by=MADE_BY))
 
 

@@ -3079,7 +3079,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `YouTubeData`: `read()`, `argv` (phone_argv: a kind's template, each element filled in one pass, a value never
     read again; its refusals, `Refused`), `searchTarget`, `watchUrl`, `pattern`;
   - `Videos`: `parseSearch`, `parseVideo` and `searchQuery` (PyJson.loads, Python's `str()`, truth and `float()`, an
-    `AnswerError` in a ProviderError's words; past PyJson's depth, its own words);
+    `AnswerError` in a ProviderError's words, an int duration too big for a float one too, on both sides; past
+    PyJson's depth, its own words, a well-formed answer too, which Python reads: parse.jsonl's `phone` record);
   - `Choose`: `choose` and `ranked` (`_ranked`'s key: tier, title, closeness, official, rank), in code points, names by
     core.keys.Normalize, patterns through PyRegex;
   - `Classify`: `of` (classify), `ofRun` (the exit status first), `OK_EXIT`, `OK`, `GATE` (the runner's, before both);
