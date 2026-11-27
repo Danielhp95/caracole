@@ -261,7 +261,7 @@ class _Transcription(HearsWords, StagedRun):
                                                  anyway=self.request.force) != ALREADY_TRANSCRIBED):
             return False
         try:
-            return _skip_reason(self.conn, self.song, self.overrides) in (None, RELAID)
+            return _skip_reason(self.conn, self.song, self.overrides, asked=True) in (None, RELAID)
         except Exception as e:  # noqa: BLE001 - a record another device wrote: the song's, never a bug's traceback
             log.error("%s: its auto sheet's record can't be read: %s: %s", self.song.display, type(e).__name__, e,
                       exc_info=not isinstance(e, (OSError, RuntimeError, ValueError)))

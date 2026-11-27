@@ -2627,6 +2627,23 @@ It is rows.js's, shared by both pages:
     no hand-over, its words `holds`'), where `relays_here` (new audio a job brought, a file or a video, is heard by the
     models), and a pick or a clear clears `autochords_mtime` only for a sheet without `heard` (lyrics_pick.py
     `_models_remake`); transcribe_job.py's `_sheet_to_make` takes `RELAID` as a sheet to make.
+  - A sheet another caracole made (E14, the design's R3 and R5): its raw's `made_by` not this side's id
+    (sheet.py `made_by_another(raw, own)`, sheet_lyrics.py `made_elsewhere(conn, raw)` and `auto_made_elsewhere(conn,
+    song_id)` by peer_sync.py `own_id`, a read; a raw that names none, made before E12, is this side's own, as
+    ever). `_skip_reason(..., asked=False)` checks it before the audio's mtime (a take writes none; this side's
+    `autochords_mtime` says nothing of whose the sheet is): `MADE_ELSEWHERE` ("made by another caracole from your audio
+    there", sheet_lyrics.py's) by itself, whatever audio this side holds or gets, `RELAID` while its words re-lay it
+    (`relays_here(song, elsewhere=True)`: from its own `heard`, never this side's transcript, `noted_of` giving
+    `noted_in`); `_count_due` counts it nowhere, no failure, the to-do page and the card its chords done
+    (youtube_fetch.py `song_state` CHORDS). None (made here, this side its maker, its one auto version's tab id kept)
+    for an ask: `autochords_pending(only=, asked=None)`, `asked` by default whenever `only` names songs (`caracole
+    autochords --song`; staged.py `_autochords_sheet`, which skips `_relaid` for such a sheet: a sheet from a video,
+    from an audio file, a transcription's chords; transcribe_job.py `_sheet_to_make` asks `asked=True`); a lyrics pick
+    is no ask (lyrics_pick.py `chords`: re-laid, else skipped in `MADE_ELSEWHERE`'s words, no model). And None for its
+    chords alone (`lyrics` "none", no transcript of its own) once this side keeps a transcript of its own audio and no
+    site has words or an instrumental verdict, while transcript.py `WORDS_WIN` (§11.5's yes, one constant: False
+    leaves it, `_Listening.first` hearing no words for it unless asked; `why_not_offered` offers it either way, the
+    card's Transcribe by hand). `caracole peer new-id` makes every earlier sheet another's.
 - export.py, for the phone (nothing on the computer runs it but `nix build .#chord-models` and its tests): BTC and
   beat_this as ONNX graphs, `CONTRACT` what each takes and gives, torch's TorchScript exporter at opset 17:
   - `export_btc`: `btc-graph.onnx`, raw log-CQT frames (`features`, [N, 108, 144]) to `logits` ([N, 108, 170]),

@@ -23,6 +23,13 @@ made it, from which file (its name and a hash of its bytes) and with which model
 sheet from audio, whichever of your caracoles made it. A sheet made before this remembers none of it, and is left as
 it is.
 
+A sheet made on your other device (taken at a sync) is kept as it is: the nightly run here never makes it again, even
+from audio of the song this computer has or gets later. New words lay it out again, as below. To replace it, ask for a
+sheet here: an audio file, a video, `caracole autochords --song`, or Transcribe the lyrics. The sheet is then this
+computer's. One exception: if every lyrics site missed and this computer hears the words in its own audio, its sheet
+over them replaces a chords-only one from the other device. A copied database given a new id (`caracole peer new-id`)
+counts every sheet made before as the other caracole's.
+
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
 works from your own files only. caracole never tries to get around a block.

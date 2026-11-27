@@ -25,7 +25,16 @@ from collections.abc import Callable, Collection, Mapping
 from pathlib import Path
 
 from caracole.autochords.merge import with_plain_lyrics
-from caracole.autochords.sheet import Noted, noted_in, raw_of, read_heard, relay, relay_due, relays_here
+from caracole.autochords.sheet import (
+    Noted,
+    made_by_another,
+    noted_in,
+    raw_of,
+    read_heard,
+    relay,
+    relay_due,
+    relays_here,
+)
 from caracole.autochords.sheet import lyrics_key  # sheet.py's, kept here for render.py and older callers
 from caracole.config import Config
 from caracole.library import SharedFolder, keep_file, kept_files, read_regular, write_info
@@ -34,6 +43,10 @@ from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song
 from caracole.versions import get_version, set_raw
 
 log = logging.getLogger(__name__)
+
+# run.py ``_skip_reason``'s for a sheet another caracole made (its raw's ``made_by`` not this side's ``sync:id``), which
+# no pass here makes again by itself (the design's R3), but for words heard here (R5, transcript.py ``WORDS_WIN``).
+MADE_ELSEWHERE = "made by another caracole from your audio there"
 
 
 def _wanting(conn: sqlite3.Connection, overrides: Overrides,
@@ -97,14 +110,30 @@ def lyrics_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     return done
 
 
+def made_elsewhere(conn: sqlite3.Connection, raw: Mapping[str, object]) -> bool:
+    """Whether an auto sheet (``raw``) was made by another caracole than this one (sheet.py ``made_by_another``, by
+    this side's own id, peer_sync.py ``own_id``: a read, no write)."""
+    from caracole.peer_sync import own_id
+
+    return made_by_another(raw, own_id(conn))
+
+
+def auto_made_elsewhere(conn: sqlite3.Connection, song_id: int) -> bool:
+    """Whether the song's kept auto sheet was made by another caracole (``made_elsewhere``): False with none kept."""
+    auto = next((f for f in kept_files(conn, song_id) if f.name == AUTO_SHEET), None)
+    return auto is not None and made_elsewhere(conn, get_version(conn, auto.version_id).raw)
+
+
 def noted_of(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> Noted:
     """What this caracole notes of the words of the audio the sheet was heard from (sheet.py ``Noted``): its kv's
     transcript and nothing-sung verdict of the song's audio (transcript.py, as run.py's ``_generate`` reads them), where
-    the sheet was heard from the audio this side holds now (sheet.py ``relays_here``: its mtime, never its path, which a
-    file moved and relinked changes); else, this side holding none, what the sheet was laid out with (``noted_in``)."""
+    the sheet was heard here from the audio this side holds now (sheet.py ``relays_here``: its mtime, never its path,
+    which a file moved and relinked changes); else, this side holding none, or the sheet made by another caracole
+    (``made_elsewhere``: a transcript here is timed against other audio than the one it was heard from), what the sheet
+    was laid out with (``noted_in``)."""
     from caracole.autochords.transcript import heard_nothing, said_not_sung, transcript_of
 
-    if not song.audio_path or not relays_here(song):
+    if not song.audio_path or made_elsewhere(conn, raw) or not relays_here(song):
         return noted_in(raw)
     transcript = transcript_of(conn, song)
     silent = transcript is None and heard_nothing(conn, song)
@@ -116,7 +145,7 @@ _TOLD: set[tuple[int, str]] = set()  # the unreadable heard records said this pr
 
 def _relay_plan(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> tuple[str, Noted] | None:
     """Why the song's auto sheet is to be re-laid now and what it is laid with (``relay_reason``'s), or None."""
-    if raw.get("heard") is None or not relays_here(song):
+    if raw.get("heard") is None or not relays_here(song, made_elsewhere(conn, raw)):
         return None
     noted = noted_of(conn, song, raw)
     why = relay_due(song, raw, noted)
@@ -136,7 +165,8 @@ def _relay_plan(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object])
 def relay_reason(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> str | None:
     """Why the song's auto sheet (``raw``, its version's) is to be re-laid now (sheet.py ``relay_due`` over
     ``noted_of``), or None: always None for a sheet that keeps no ``heard`` (made before it was kept: the models'), for
-    one heard from other audio than this side holds now (sheet.py ``relays_here``: the models' to make again from it),
+    one this side heard from other audio than it holds now (sheet.py ``relays_here``: the models' to make again from it;
+    one another caracole made is re-laid whatever audio this side holds, ``made_elsewhere``),
     and for one whose ``heard`` can't be read (``read_heard``: a newer caracole's contract, a damaged record), which is
     neither re-laid nor made due for its words; where it would have been, that is said once a process at WARNING, by
     song and reason, so a render a night says it, never each of a render's songs or a lookup's every render again."""

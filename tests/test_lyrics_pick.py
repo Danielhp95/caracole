@@ -833,3 +833,26 @@ def test_a_lyrics_file_that_cant_be_removed_is_said_and_the_clear_stands(cfg, co
     assert "lyrics.lrc couldn't be removed (" in said
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json) == ("pending", None) and entry(cfg).record is None
+
+
+def test_a_pick_re_lays_a_sheet_another_caracole_made_and_never_runs_a_model_on_it(cfg, conn, song, sites, here):
+    # A pick is no ask for the sheet (the design's R2, R3): another caracole's sheet is re-laid over the words picked
+    # from its own heard, its maker kept, though this side holds audio of its own; with its words as they were, left.
+    from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE
+
+    auto_sheet_of(cfg, conn, song)
+    version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, version_id, {**auto_raw(conn, song), "made_on": "phone", "made_by": "0f1e2d3c4b5a6978"})
+    update_song(conn, song.id, autochords_mtime=None)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    raw = auto_raw(conn, song)
+    assert (raw["lyrics"], raw["made_by"]) == ("synced", "0f1e2d3c4b5a6978")
+    # The same record again: nothing new to lay out, and no model for another caracole's sheet
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
+    assert auto_raw(conn, song)["made_by"] == "0f1e2d3c4b5a6978"

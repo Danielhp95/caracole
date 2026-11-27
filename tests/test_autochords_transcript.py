@@ -339,3 +339,20 @@ def test_a_removal_takes_the_failed_hearings_note_with_the_song(conn, cfg, tmp_p
     assert tr.HEARING_FAILED in _PER_SONG_KV
     delete_song_kv(conn, song.id)
     assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None
+
+
+@pytest.mark.parametrize("words_win", [True, False])
+def test_a_song_whose_auto_sheet_another_caracole_made_is_offered_its_words_as_any(conn, cfg, tmp_path, monkeypatch,
+                                                                                    words_win):
+    # Decision 5 decides what words heard here do to that sheet (run.py), never whether the card offers them: with
+    # words winning the nightly pass hears them too; without, Transcribe the lyrics by hand is the one way.
+    assert tr.WORDS_WIN is True  # the design's recommendation, in force until the owner says otherwise
+    monkeypatch.setattr(tr, "WORDS_WIN", words_win)
+    song = youtube_song(conn, tmp_path)
+    version = upsert_version(conn, provider="auto", tab_id="42", song_id=song.id, slot="sheet", kind="auto", rating=0,
+                             votes=0, version=1, label=None, url="file:///data/phone/x.mp3",
+                             raw={"lyrics": "none", "heard": {"contract": 1}, "made_on": "phone",
+                                  "made_by": "0f1e2d3c4b5a6978"}, now="2026-11-20T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=version, name="sheet (auto).txt", data=b"[C]", rank=1)
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+    assert song.id in tr.offers(conn, cfg, Overrides())["songs"]

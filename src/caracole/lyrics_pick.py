@@ -326,12 +326,15 @@ class _Pick(StagedRun):
 
     def chords(self) -> tuple[str, str]:
         from caracole import youtube_fetch
+        from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE, auto_made_elsewhere
 
         if self.result.states.get("lyrics") != "done":
             return "skipped", NO_NEW
         relaid = self._relaid()  # what was heard is kept: seconds, no model, no audio, no hand-over
         if relaid is not None:
             return relaid
+        if auto_made_elsewhere(self.conn, self.song.id):  # words never run a model on another caracole's sheet (R3)
+            return "skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model"
         why = self._why_no_chords()
         if why is not None:
             return "skipped", why

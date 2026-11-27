@@ -29,6 +29,10 @@ with linked audio is due when:
   what was heard was kept): one that keeps it is laid out again over new words
   with no model, in render's first step (sheet_lyrics.py ``relay_onto_sheets``),
   and is due here only once its audio changes;
+- its sheet, if any, wasn't made by another caracole (its version's ``raw["made_by"]`` isn't this side's
+  ``sync:id``): such a sheet is never made again here by itself (``MADE_ELSEWHERE``), only when the owner asks for
+  it now (``autochords_pending``'s ``asked``), or, its chords alone, when words of this side's audio are heard here
+  and no lyrics site has the song's (transcript.py ``WORDS_WIN``);
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
@@ -108,7 +112,14 @@ from caracole.autochords.sheet import (
     synced_key,
     wider_lines,
 )
-from caracole.autochords.sheet_lyrics import relay_onto_sheets, relay_reason
+from caracole.autochords import transcript as words_rule  # its ``WORDS_WIN``, read as each song is weighed
+from caracole.autochords.sheet_lyrics import (
+    MADE_ELSEWHERE,
+    auto_made_elsewhere,
+    made_elsewhere,
+    relay_onto_sheets,
+    relay_reason,
+)
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
     UNREADABLE,
@@ -237,6 +248,7 @@ def autochords_pending(
     overrides: Overrides | None = None,
     between: Callable[[], bool] | None = None,
     only: Collection[int] | None = None,
+    asked: bool | None = None,
     on_step: Callable[[str], None] | None = None,
     hearing: Hearing | None = None,
     transcriptions: int = 0,
@@ -259,6 +271,11 @@ def autochords_pending(
     ``only``: the ids of the songs to work on (``caracole autochords --song``, a sheet
     from a YouTube video); the others count nowhere, and the run's record keeps their
     failures as the last whole run left them.
+
+    ``asked``: whether the songs of ``only`` are the owner's ask now (by default, whenever ``only`` names them):
+    ``caracole autochords --song``, a sheet from a YouTube video, from an audio file, a transcription's chords. An ask
+    makes again a sheet another caracole made, from this side's audio, this side its maker (the design's R3); no pass
+    over the library does (``MADE_ELSEWHERE``), but for words heard here (R5, transcript.py ``WORDS_WIN``).
 
     Before each song it works on, it logs which, and how many of those due it is
     ("Working out the chords of A - T (3 of 12)…"), a song taking minutes: the due
@@ -293,17 +310,18 @@ def autochords_pending(
     if remeasure:  # once ever: an MP3 whose length was guessed (remeasure.py)
         stats.remeasured = remeasure_once(conn, cfg, list_songs(conn), overrides, stamp)
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
+    asked = only is not None if asked is None else asked
     hears = transcriptions if hearing is not None else 0
-    due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp)), 0
+    due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp), asked=asked), 0
     turns = _Turns(cfg, conn, overrides, between)
-    listening = _Listening(hearing, transcriptions)
+    listening = _Listening(hearing, transcriptions, asked=asked)
     for listed in turns.each(songs):
         song = listening.first(conn, cfg, listed, turns, stats, stamp, told)
         if song is None:  # left the book while its words were heard and a lookup went first
             continue
         overrides = turns.overrides
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
-        if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats):
+        if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats, asked=asked):
             continue
         loaded = models.load(stats, told)
         if loaded is None:  # the models can't run: the song stays due
@@ -363,13 +381,16 @@ class _Turns:
 @dataclass
 class _Listening:
     """A run's hearing of words: ``hearing``, up to ``cap`` songs (``tried`` so far), ``stopped`` once its setup
-    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``asked``)."""
+    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``said``). Where
+    words don't win (transcript.py ``WORDS_WIN`` false), a song whose auto sheet another caracole made isn't heard by a
+    pass over the library (``asked`` false): its words would make no sheet here."""
 
     hearing: Hearing | None
     cap: int
+    asked: bool = False
     tried: int = 0
     stopped: bool = False
-    asked: bool = False
+    said: bool = False
 
     def first(self, conn: sqlite3.Connection, cfg: Config, song: Song, turns: _Turns, stats: AutoStats, stamp: str,
               told: Callable[[str], None]) -> Song | None:
@@ -377,16 +398,18 @@ class _Listening:
         song that left the book meanwhile."""
         if not self.cap or self.stopped or self.tried >= self.cap or not song.audio_path:
             return song
-        if self.hearing is None and self.asked:  # said already: nothing more to hear or say this run
+        if self.hearing is None and self.said:  # said already: nothing more to hear or say this run
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
+        if not self.asked and not words_rule.WORDS_WIN and auto_made_elsewhere(conn, song.id):
+            return song  # another caracole's sheet, which words heard here wouldn't replace: Transcribe by hand does
         failed = hearing_failed(conn, song, parse_stamp(stamp) or datetime.now(UTC))
         if failed is not None:  # its hearing failed lately: passed over, no slot taken, till a new file or 30 days
             log.info("%s: its words aren't heard tonight (its hearing failed lately: %s)", song.display, failed)
             return song
         if self.hearing is None:
-            self.asked = True
+            self.said = True
             stats.transcribe_problem = transcribe_problem(cfg)
             return song
         return self._hear_words(conn, cfg, self.hearing, song, turns, stats, stamp, told)
@@ -469,10 +492,11 @@ def _quiet(said: str) -> None:
 
 
 def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
-               hears: int = 0, now: datetime | None = None) -> int:
+               hears: int = 0, now: datetime | None = None, *, asked: bool = False) -> int:
     """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
     nothing in a run's stats; with the first ``hears`` songs offered their words counted due too, as hearing them
-    makes their sheet due (not one whose hearing failed lately: ``_Listening.first`` passes over it)."""
+    makes their sheet due (not one whose hearing failed lately: ``_Listening.first`` passes over it; nor one whose
+    sheet they would re-lay, no model, or leave as another caracole made it)."""
     now = now or datetime.now(UTC)
     n = 0
     for song in songs:
@@ -480,10 +504,15 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
             continue
         heard = (hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
                  and hearing_failed(conn, song, now) is None)
-        hears -= heard
-        heard = heard and not _keeps_heard(conn, song)  # its words heard re-lay it, no model
         try:
-            if _skip_reason(conn, song, overrides) is not None and not heard:
+            raw = _auto_raw(conn, song)
+            elsewhere = raw is not None and made_elsewhere(conn, raw)
+            if heard and elsewhere and not asked and not words_rule.WORDS_WIN:
+                heard = False  # ``_Listening.first`` passes over it, no slot taken
+            hears -= heard
+            if raw is not None and raw.get("heard") is not None:  # its words heard re-lay it, no model ...
+                heard = heard and elsewhere and _words_replace(raw)  # ... but another caracole's chords alone (R5)
+            if _skip_reason(conn, song, overrides, asked=asked) is not None and not heard:
                 continue
         except Exception:  # noqa: BLE001 - a song's bad data: ``_due`` says so as its turn comes
             continue
@@ -492,22 +521,27 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
     return n
 
 
-def _keeps_heard(conn: sqlite3.Connection, song: Song) -> bool:
-    """Whether the song's kept auto sheet keeps what was heard (``raw["heard"]``): its words alone never make it the
-    models' again."""
+def _auto_raw(conn: sqlite3.Connection, song: Song) -> dict | None:
+    """The song's kept auto sheet's version's raw, or None with none kept."""
     auto = next((f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET), None)
-    return auto is not None and get_version(conn, auto.version_id).raw.get("heard") is not None
+    return get_version(conn, auto.version_id).raw if auto is not None else None
+
+
+def _words_replace(raw: dict) -> bool:
+    """Whether words heard here would replace this sheet another caracole made (transcript.py ``WORDS_WIN``, the
+    design's R5): its chords alone, over no words and no transcript of its own."""
+    return words_rule.WORDS_WIN and raw.get("lyrics") == "none" and raw.get("lyrics_source") != LYRICS_SOURCE
 
 
 def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,
-         stats: AutoStats) -> bool:
+         stats: AutoStats, *, asked: bool = False) -> bool:
     """Whether a song with linked audio is due for an auto sheet now. One that isn't is counted in ``stats`` here:
     skipped (by ``_skip_reason``, or as another song keeps a sheet where its own would go), failed (its file failed
     before and hasn't changed: ``failure``), or an error (its data couldn't be read). One whose sheet keeps what was
     heard and whose words alone changed (``RELAID``: its words heard just before, or lyrics a render hasn't put on it
     yet) is laid out again here, with no model (sheet_lyrics.py ``relay_onto_sheets``), and counted ``relaid``."""
     try:
-        reason = _skip_reason(conn, song, overrides)
+        reason = _skip_reason(conn, song, overrides, asked=asked)
     except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
         _error(stats, song, e)
         return False
@@ -702,11 +736,17 @@ def _short(e: BaseException, path: str) -> str:
     return text if len(text) <= ERROR_CHARS else text[: ERROR_CHARS - 1] + "…"
 
 
-def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> str | None:
+def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides, *, asked: bool = False) -> str | None:
     """Why a song with linked audio is not due for an auto sheet, or None when it is. A sheet that keeps what was heard
     (``raw["heard"]``) is never due for its words alone: they re-lay it with no model (sheet_lyrics.py
     ``relay_onto_sheets``, ``RELAID`` the reason while that is due); only its audio's change (or a sheet gone) makes it
-    the models' again. A sheet made before ``heard`` was kept is due for its words as ever."""
+    the models' again. A sheet made before ``heard`` was kept is due for its words as ever.
+
+    A sheet another caracole made (``made_elsewhere``: its raw's ``made_by``, not this side's id) is never due by
+    itself, whatever audio this side holds or got since (``MADE_ELSEWHERE``; its words re-lay it from its own ``heard``,
+    ``RELAID``), unless the owner asks for it now (``asked``: the song named by ``autochords_pending``'s ``only``), or
+    it is chords alone and every lyrics site missed and this side heard words from its own audio (transcript.py
+    ``WORDS_WIN``): then it is made here, from this side's audio, this side its maker."""
     if song.status == "ignored" or song.key in overrides.ignore:
         return "ignored"
     if not Path(song.audio_path or "").is_file():
@@ -714,13 +754,15 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     kept = {f.name: f for f in kept_files(conn, song.id)}
     if HUMAN_SHEET in kept:
         return "has a human sheet"
+    auto = kept.get(AUTO_SHEET)
+    raw = get_version(conn, auto.version_id).raw if auto is not None else None
+    if raw is not None and made_elsewhere(conn, raw):
+        return _elsewhere_reason(conn, song, raw, asked)
     # Not "newer than": Syncthing keeps the sender's mtime, so a replacement can be older.
     if song.autochords_mtime is None or song.audio_mtime != song.autochords_mtime:
         return None
-    auto = kept.get(AUTO_SHEET)
-    if auto is None:
+    if raw is None:
         return None
-    raw = get_version(conn, auto.version_id).raw
     if raw.get("heard") is not None:  # what was heard is kept: its words alone re-lay it (sheet_lyrics.py), no model
         return RELAID if relay_reason(conn, song, raw) is not None else "up to date"
     if raw.get("lyrics") == "none" and sung_lyrics(song):
@@ -745,6 +787,18 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and wider_lines(song):
         return None  # its chords at their characters' indexes, before they went at display columns: once more
     return "up to date"
+
+
+def _elsewhere_reason(conn: sqlite3.Connection, song: Song, raw: dict, asked: bool) -> str | None:
+    """``_skip_reason``'s for a sheet another caracole made: None (made here) for an ask now, or for its chords alone
+    once words of this side's audio are heard here and no site has the song's (R5); else ``RELAID`` while its words
+    re-lay it, ``MADE_ELSEWHERE`` otherwise."""
+    if asked:
+        return None  # the owner's ask now: made again here from this side's audio, this side its maker (R3)
+    if (_words_replace(raw) and transcript_of(conn, song) is not None and not sung_lyrics(song)
+            and not instrumental(song)):
+        return None  # words heard here from this side's audio win over another caracole's chords alone (R5)
+    return RELAID if relay_reason(conn, song, raw) is not None else MADE_ELSEWHERE
 
 
 def _models(

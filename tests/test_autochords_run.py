@@ -309,8 +309,8 @@ def test_a_song_keeps_its_one_auto_version_whoever_made_it(conn, cfg, tmp_path):
                  (s.id,))
     taken = auto_version_of(conn, s.id)
     assert taken.tab_id == "42"
-    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)  # your audio changed: made again here
-    assert run(conn, cfg).generated == 1
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)  # your audio changed, and you ask: made again here (E14)
+    assert run(conn, cfg, only={s.id}).generated == 1
     [version] = song_versions(conn, s.id, include_gone=True)
     assert (version.id, version.tab_id, version.provider) == (taken.id, "42", "auto")
     assert version.raw["made_by"] != "theirs"
@@ -2738,3 +2738,244 @@ def test_the_bulk_command_alone_remeasures_and_its_summary_names_them(tmp_path, 
     add_song(bought(tmp_path), "Ana", "Luna")
     assert invoke(config, "--song", "Ana - Luna").exit_code == 0  # one song by hand: never the others' lengths
     assert seen == [True, False]
+
+
+# --- a sheet another caracole made (E14: the design's R3 and R5) ----------------------------------------------------
+
+PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id
+
+
+class Refusing:
+    """A recognizer, and beats, that fail the test if a model is asked to hear anything."""
+
+    name = "refusing"
+
+    def recognize(self, path):
+        raise AssertionError(f"a model was asked to hear {path}")
+
+    def __call__(self, path):
+        raise AssertionError(f"a model was asked for the beats of {path}")
+
+
+def made_there(conn, song, *, by=PHONE, mtime_kept=False):
+    """The song's auto sheet as a sync's take leaves one another caracole (the phone) made: its raw naming that
+    caracole, under its tab id; this side's ``autochords_mtime`` none (a take writes none), unless ``mtime_kept`` (this
+    side made one before it took the other's)."""
+    version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    raw = {**get_version(conn, version_id).raw, "made_on": "phone", "made_by": by, "runtime": "onnxruntime 1.32.0",
+           "audio": "/data/user/0/phone/files/audio/7-0123456789abcdef.mp3", "audio_name": "river road.mp3"}
+    from caracole.versions import set_raw
+
+    set_raw(conn, version_id, raw)
+    conn.execute("UPDATE versions SET tab_id = '42' WHERE id = ?", (version_id,))
+    if not mtime_kept:
+        update_song(conn, song.id, autochords_mtime=None)
+    return get_song(conn, song.id)
+
+
+def test_the_nightly_run_never_remakes_a_sheet_another_caracole_made(conn, cfg, tmp_path):
+    from caracole.autochords.run import MADE_ELSEWHERE, _count_due
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    s = made_there(conn, s)
+    before, text = auto_raw(conn, s), auto_sheet(cfg, conn, s)
+    assert _skip_reason(conn, s, Overrides()) == MADE_ELSEWHERE
+    assert _count_due(conn, cfg, [s], Overrides()) == 0
+    stats = run(conn, cfg, Refusing(), Refusing())
+    assert (stats.generated, stats.skipped, stats.failed, stats.failures, stats.errors) == (0, 1, 0, [], [])
+    assert (auto_raw(conn, s), auto_sheet(cfg, conn, s)) == (before, text)
+    # Nor once your audio here changes (a purchase dropped into Music/): the phone's sheet stays (R3)
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)
+    assert run(conn, cfg, Refusing(), Refusing()).skipped == 1 and auto_raw(conn, s) == before
+    assert kv_get_json(conn, STATUS)["failed"] == []
+    # Nor when this side had made one before it took the other's: its autochords_mtime is no say on whose it is
+    s = made_there(conn, get_song(conn, s.id), mtime_kept=True)
+    update_song(conn, s.id, autochords_mtime=get_song(conn, s.id).audio_mtime)
+    assert _skip_reason(conn, get_song(conn, s.id), Overrides()) == MADE_ELSEWHERE
+
+
+def test_a_sheet_that_names_no_maker_is_this_sides_own_as_before(conn, cfg, tmp_path):
+    # The owner's sheets made before who made them was kept (R4): new audio makes them again, as it always did.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.made_by', '$.made_on') WHERE song_id = ?", (s.id,))
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    # A sheet this side made names this side: its own, too
+    from caracole.peer_sync import own_id
+
+    assert auto_raw(conn, s)["made_by"] == own_id(conn)
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 9)
+    assert run(conn, cfg).generated == 1
+
+
+def test_an_ask_now_remakes_it_and_becomes_its_maker(conn, cfg, tmp_path):
+    from caracole.peer_sync import own_id
+    from caracole.versions import auto_version_of
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    for kept in (False, True):  # taken onto a side that had none, and onto one that had made its own before
+        s = made_there(conn, get_song(conn, s.id), mtime_kept=kept)
+        rec = FakeRecognizer()
+        stats = run(conn, cfg, rec, only={s.id})  # caracole autochords --song, a job's chords stage
+        assert (stats.generated, rec.calls) == (1, [Path(s.audio_path)])
+        raw = auto_raw(conn, s)
+        assert (raw["made_on"], raw["made_by"], raw["audio"]) == ("computer", own_id(conn), s.audio_path)
+        assert auto_version_of(conn, s.id).tab_id == "42"  # its one auto version, whoever made it
+        assert get_song(conn, s.id).autochords_mtime == s.audio_mtime
+    # Made here now: the nightly run treats it as this side's own
+    assert _skip_reason(conn, get_song(conn, s.id), Overrides()) == "up to date"
+
+
+def test_an_ask_now_from_a_job_remakes_it_rather_than_re_laying_it(conn, cfg, tmp_path):
+    # A sheet from a video, from an audio file, a transcription: each is an ask, whose chords stage makes the sheet
+    # again from this side's audio even where its words alone would re-lay the other's (staged.py _autochords_sheet).
+    from types import SimpleNamespace
+
+    from caracole.autochords.sheet_lyrics import relay_reason
+    from caracole.peer_sync import own_id
+    from caracole.staged import StagedResult, StagedRun
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    s = made_there(conn, s)
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=lyrics_json(plain="New words here"))
+    s = get_song(conn, s.id)
+    assert relay_reason(conn, s, auto_raw(conn, s)) is not None  # the nightly run would re-lay it, no model
+    rec = FakeRecognizer()
+    job = StagedRun(cfg, SimpleNamespace(stage=lambda *a: None, readable=lambda *a: None), StagedResult(),
+                    recognizer=rec, beats_fn=FakeBeats(), clock=lambda: 0.0)
+    job.conn, job.overrides, job.song = conn, Overrides(), s
+    job.result.states["chords"] = "running"
+    state, _ = job._autochords_sheet()
+    assert state == "done" and rec.calls == [Path(s.audio_path)]
+    assert auto_raw(conn, s)["made_by"] == own_id(conn) and "New words here" in auto_sheet(cfg, conn, s)
+
+
+def test_words_heard_here_replace_a_chords_only_sheet_made_elsewhere(conn, cfg, tmp_path, loud):
+    # Decision 5, "words win": every lyrics site missed, and this side hears words from its own audio of the song
+    from caracole.autochords.transcript import why_not_offered
+    from caracole.peer_sync import own_id
+
+    s = offered_song(conn, cfg, tmp_path, "River Road")
+    run(conn, cfg)
+    s = made_there(conn, get_song(conn, s.id))
+    assert auto_raw(conn, s)["lyrics"] == "none"
+    assert why_not_offered(conn, cfg, s, Overrides()) is None  # offered its words, a taken sheet or not
+    hearing, rec = hearing_of(cfg), FakeRecognizer()
+    try:
+        stats = run(conn, cfg, rec, hearing=hearing, transcriptions=1)
+    finally:
+        hearing.close()
+    assert heard_names(hearing) == ["River Road.wav"]
+    assert (stats.heard, stats.generated, rec.calls) == (1, 1, [Path(s.audio_path)])
+    raw = auto_raw(conn, s)
+    assert (raw["lyrics_source"], raw["made_on"], raw["made_by"]) == ("transcript", "computer", own_id(conn))
+    assert "somos vikingos veganos" in auto_sheet(cfg, conn, s).lower()
+
+
+def test_where_words_dont_win_a_chords_only_sheet_made_elsewhere_is_left_and_offered_by_hand(
+    conn, cfg, tmp_path, loud, monkeypatch
+):
+    # Decision 5's reverse, one line: never replaced by itself; the card offers Transcribe the lyrics, an ask.
+    from caracole.autochords import transcript
+    from caracole.autochords.run import MADE_ELSEWHERE, _count_due
+    from caracole.autochords.transcript import why_not_offered
+
+    monkeypatch.setattr(transcript, "WORDS_WIN", False)
+    s = offered_song(conn, cfg, tmp_path, "River Road")
+    run(conn, cfg)
+    s = made_there(conn, get_song(conn, s.id))
+    before = auto_raw(conn, s)
+    assert _count_due(conn, cfg, [s], Overrides(), hears=1) == 0
+    hearing = hearing_of(cfg)
+    try:
+        stats = run(conn, cfg, Refusing(), Refusing(), hearing=hearing, transcriptions=1)
+    finally:
+        hearing.close()
+    assert heard_names(hearing) == [] and (stats.heard, stats.generated, stats.skipped) == (0, 0, 1)
+    assert auto_raw(conn, s) == before
+    assert why_not_offered(conn, cfg, s, Overrides()) is None  # the card's Transcribe the lyrics, by hand
+    from test_autochords_sheet import _transcript
+
+    _transcript(conn, s)  # what that transcription keeps: words of this side's audio, an ask's
+    assert _skip_reason(conn, get_song(conn, s.id), Overrides()) == MADE_ELSEWHERE  # not by itself...
+    assert _skip_reason(conn, get_song(conn, s.id), Overrides(), asked=True) is None  # ...but its chords stage
+
+
+def test_a_sheet_made_elsewhere_over_a_sites_lyrics_is_never_replaced(conn, cfg, tmp_path):
+    from caracole.autochords.run import MADE_ELSEWHERE
+    from caracole.autochords.sheet_lyrics import relay_onto_sheets
+    from test_autochords_sheet import _transcript
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(plain="A site's words"))
+    run(conn, cfg)
+    s = made_there(conn, get_song(conn, s.id))
+    _transcript(conn, s)  # whatever this side hears
+    before = auto_raw(conn, s)
+    assert before["lyrics"] == "plain"
+    assert _skip_reason(conn, s, Overrides()) == MADE_ELSEWHERE
+    assert run(conn, cfg, Refusing(), Refusing()).generated == 0 and auto_raw(conn, s) == before
+    # Its words change here (a pick, new lyrics): re-laid from the other side's heard, no model, its maker kept,
+    # though this side holds audio of its own, which it was never heard from
+    update_song(conn, s.id, lyrics_json=lyrics_json(plain="Other words picked"))
+    s = get_song(conn, s.id)
+    stats = run(conn, cfg, Refusing(), Refusing())
+    assert (stats.generated, stats.relaid) == (0, 1)
+    raw = auto_raw(conn, s)
+    assert {m: raw[m] for m in ("made_on", "made_by", "audio", "heard")} == {
+        m: before[m] for m in ("made_on", "made_by", "audio", "heard")}
+    assert "Other words picked" in auto_sheet(cfg, conn, s) and raw["lyrics"] == "plain"
+    assert relay_onto_sheets(conn, cfg) == []  # once
+
+
+def test_two_caracoles_never_fight_over_one_auto_sheet(tmp_path):
+    # The design's §5 walked with two libraries and real takes: A makes; B's nightly leaves it; B's ask makes it again
+    # and B is its maker; A's nightly leaves B's; words re-lay it on either side with its maker kept.
+    from helpers.peer_libraries import Library
+
+    from caracole.autochords.sheet_lyrics import relay_onto_sheets
+    from caracole.peer_sync import own_id
+
+    a, b = Library(tmp_path / "a"), Library(tmp_path / "b")
+    try:
+        for side in (a, b):
+            s = side.song("Nobody", "River Road", sheet=None, lyrics=None)
+            with_audio(side.conn, side.root, s)
+        unit = f"song/{s.key}"
+
+        def find(side):
+            from caracole.songs import find_song
+
+            return find_song(side.conn, s.key)
+
+        def raw_on(side):
+            return auto_raw(side.conn, find(side))
+
+        assert run(a.conn, a.cfg).generated == 1  # A makes it, from its audio
+        b.take(a, [unit])
+        assert raw_on(b)["made_by"] == own_id(a.conn)
+        assert run(b.conn, b.cfg, Refusing(), Refusing()).generated == 0  # B's nightly leaves it (R3)
+        assert a.digests()[unit] == b.digests()[unit]  # nothing to sync
+
+        assert run(b.conn, b.cfg, only={find(b).id}).generated == 1  # B's ask makes it again: B its maker
+        assert raw_on(b)["made_by"] == own_id(b.conn)
+        a.take(b, [unit])
+        assert raw_on(a)["made_by"] == own_id(b.conn)
+        assert run(a.conn, a.cfg, Refusing(), Refusing()).generated == 0  # A's nightly leaves B's
+        assert a.digests()[unit] == b.digests()[unit]
+
+        for side in (a, b):  # LRCLIB's words come to both: each re-lays it alike from what B heard
+            update_song(side.conn, find(side).id, lyrics_status="found", lyrics_json=lyrics_json(plain="Both sides"))
+            assert [x.id for x in relay_onto_sheets(side.conn, side.cfg)] == [find(side).id]
+            assert raw_on(side)["made_by"] == own_id(b.conn)
+        assert a.digests()[unit] == b.digests()[unit]  # one unit: the sync finds nothing
+        for side in (a, b):
+            assert run(side.conn, side.cfg, Refusing(), Refusing()).generated == 0
+    finally:
+        a.close()
+        b.close()

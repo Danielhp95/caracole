@@ -206,13 +206,15 @@ class StagedRun:
     def _autochords_sheet(self) -> tuple[str, str]:
         """auto-chords for this song alone (``autochords_pending``'s ``only``), and what the sheet holds once kept:
         the chords stage's end. A sheet that keeps what was heard, whose words alone changed, is re-laid instead, no
-        model (``_relaid``)."""
+        model (``_relaid``); but one another caracole made is made again here, the job being the owner's ask (a sheet
+        from a video, from an audio file, a transcription: the design's R3), this side its maker."""
         from caracole.autochords.run import autochords_pending
+        from caracole.autochords.sheet_lyrics import auto_made_elsewhere
         from caracole.songs import AUTO_SHEET
         from caracole.versions import get_version
         from caracole.youtube_sheet import holds
 
-        relaid = self._relaid()
+        relaid = None if auto_made_elsewhere(self.conn, self.song.id) else self._relaid()
         if relaid is not None:
             return relaid
         stats = autochords_pending(self.conn, self.cfg, recognizer=self.recognizer, beats_fn=self.beats_fn,

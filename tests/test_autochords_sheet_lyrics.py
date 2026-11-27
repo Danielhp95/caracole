@@ -647,3 +647,39 @@ def test_a_bug_writing_info_json_after_a_re_lay_stops_no_other_song(conn, cfg, t
     assert raw(conn, one)["lyrics"] == "plain" and raw(conn, two)["lyrics"] == "plain"
     assert errors == ["Nobody - River Road: info.json: KeyError: 'a bug'"]
     assert "Traceback" in caplog.text and "KeyError: 'a bug'" in caplog.text
+
+
+# --- a sheet another caracole made, on a side that holds audio of its own (E14) ------------------------------------
+
+def _made_there(conn, song):
+    from caracole.versions import set_raw
+
+    auto = next(f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, auto.version_id, {**get_version(conn, auto.version_id).raw, "made_on": "phone",
+                                    "made_by": "0f1e2d3c4b5a6978"})
+    update_song(conn, song.id, autochords_mtime=None)  # as a take leaves it: this side never made it
+    return get_song(conn, song.id)
+
+
+def test_a_sheet_made_elsewhere_is_re_laid_from_its_own_heard_whatever_audio_this_side_holds(conn, cfg, tmp_path):
+    # It was never heard here, so this side's audio is nothing to it: its words re-lay it from the other side's heard
+    # (the design's R2), its maker kept, no model; this side's transcript, timed against other audio, never goes on it.
+    from test_autochords_sheet import _transcript
+
+    song = _made_there(conn, _heard_sheet(conn, cfg, tmp_path, "no lyrics"))
+    _transcript(conn, song)
+    assert relay_onto_sheets(conn, cfg) == []  # a transcript of this side's audio: not this sheet's words
+    song = _words(conn, song, "synced")
+    render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW)  # its first step re-lays it
+    now = raw(conn, song)
+    assert (now["lyrics"], now["made_by"]) == ("synced", "0f1e2d3c4b5a6978") and "Walking" in sheet(cfg, song)
+    assert "lyrics_source" not in now
+
+
+def test_a_sheet_made_here_from_audio_since_replaced_is_the_models_when_words_arrive(conn, cfg, tmp_path):
+    # The other side of the rule: this side's own sheet, its audio changed since, is never re-laid (as before E14).
+    song = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    update_song(conn, song.id, audio_mtime=song.audio_mtime + 7.0)
+    song = _words(conn, song, "synced")
+    assert relay_onto_sheets(conn, cfg) == []
+    assert _skip_reason(conn, get_song(conn, song.id), Overrides()) is None

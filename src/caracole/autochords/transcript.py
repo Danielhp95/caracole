@@ -62,6 +62,13 @@ PICKED_NONE = "the record you picked ({record}) has given no lyrics: pick anothe
 PICKED_UNREAD = "the record you picked isn't read yet ({record}): tonight's run or a lookup reads it"
 ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
+# Words win (the phone's chords design, §11.5, its recommendation in force until the owner says otherwise): where every
+# lyrics site missed and this side hears words from its own audio of a song whose auto sheet another caracole made
+# over none (the phone's), the nightly pass hears them as any song's (``why_not_offered`` offers it as ever) and its
+# sheet over them, made here from this side's audio, replaces that one (run.py ``_skip_reason``). False: never by
+# itself; the nightly pass hears no words for such a song, and the card's Transcribe the lyrics, an ask, does it by
+# hand.
+WORDS_WIN = True
 
 # The lyrics sites that are switched on: (provider, the kv prefix of the song's miss).
 _SITES = (("megalobiz", "megalobiz:checked:"), ("azlyrics", "azlyrics:checked:"))

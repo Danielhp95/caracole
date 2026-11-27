@@ -569,8 +569,11 @@ def song_state(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: 
     own = _own_audio(song, record)
     if pasted and record.unusable == pasted:
         return SongState(UNUSABLE, Video(pasted), record.unusable_reason, record.video if own else None)
-    if own:
-        made = _kept(conn, song.id, AUTO_SHEET) and song.autochords_mtime == song.audio_mtime
+    if own:  # a sheet another caracole made is done too: no pass here makes it again (autochords/run.py)
+        from caracole.autochords.sheet_lyrics import auto_made_elsewhere
+
+        made = _kept(conn, song.id, AUTO_SHEET) and (song.autochords_mtime == song.audio_mtime
+                                                     or auto_made_elsewhere(conn, song.id))
         return SongState(CHORDS if made else DOWNLOADED, record.video)
     if not pasted and _recent(record.missing_at, now):
         again = stamps.parse(record.missing_at) + RECHECK_AFTER

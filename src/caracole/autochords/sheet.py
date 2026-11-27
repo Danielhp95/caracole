@@ -414,13 +414,23 @@ def noted_in(raw: Mapping[str, object]) -> Noted:
     return Noted(transcript, silent, silent and raw.get("not_sung_by") == "you")
 
 
-def relays_here(song: Song) -> bool:
-    """Whether a song's auto sheet may be laid out again from what was heard on this side: it was heard from the audio
-    this side holds for the song now (``autochords_mtime`` its ``audio_mtime``: run.py ``_skip_reason``'s own notion
-    of "this audio", never the path, which a file moved or relinked changes), or this side holds no audio of the song
-    at all (a sheet taken from another caracole, the one thing this side has of it). Where it holds other audio than
-    the sheet's, the sheet is the models' to make again from it, words or not (``_skip_reason``'s new audio)."""
-    if not song.audio_path:
+def made_by_another(raw: Mapping[str, object], own: str | None) -> bool:
+    """Whether an auto sheet (``raw``, its version's) was made by another caracole than the one whose id is ``own``
+    (kv ``sync:id``): its raw names a maker (``made_by``) that isn't this one. A sheet that names none, made before who
+    made it was kept, is this side's own, as ever (the design's R4)."""
+    by = raw.get("made_by")
+    return isinstance(by, str) and by != own
+
+
+def relays_here(song: Song, elsewhere: bool = False) -> bool:
+    """Whether a song's auto sheet may be laid out again from what was heard on this side: it was made by another
+    caracole (``elsewhere``, ``made_by_another``: this side's audio is nothing to it, never heard here, so its words
+    re-lay it from its own ``heard`` whatever audio this side holds), or it was heard from the audio this side holds for
+    the song now (``autochords_mtime`` its ``audio_mtime``: run.py ``_skip_reason``'s own notion of "this audio", never
+    the path, which a file moved or relinked changes), or this side holds no audio of the song at all (a sheet taken
+    from another caracole, the one thing this side has of it). Where it holds other audio than the sheet this side made
+    was heard from, the sheet is the models' to make again from it, words or not (``_skip_reason``'s new audio)."""
+    if elsewhere or not song.audio_path:
         return True
     return song.autochords_mtime is not None and song.autochords_mtime == song.audio_mtime
 
