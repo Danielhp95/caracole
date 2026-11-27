@@ -190,6 +190,11 @@ class MlChordModels(
         }
     }
 
+    /** Waits, as a hearing does before it binds ([awaitGone], bounded by [PROCESS_GONE_MS]), for the `:ml` process of
+     * the last hearing to be gone, so that nothing writes to [work] after this returns; [ChordsUnavailable] in
+     * [STILL_ENDING]'s words when it outlives the wait. */
+    fun awaitEnded() = awaitGone(::mlPid, System::currentTimeMillis, Thread::sleep) {}
+
     /** Where a hearing of [audio] keeps its checkpoints (its audio hashed: the tests'). */
     fun checkpoints(audio: File): Checkpoints = Checkpoints.of(work, audio)
 

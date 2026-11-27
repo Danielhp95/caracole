@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.ml.HeardSong
 import io.github.danielhp95.caracole.ml.MlChordModels
 import io.github.danielhp95.caracole.ml.Pipeline
 import io.github.danielhp95.caracole.autochords.Checkpoints
+import io.github.danielhp95.caracole.autochords.ChordsUnavailable
 import java.io.File
 import kotlinx.serialization.json.JsonObject
 
@@ -34,6 +35,19 @@ internal object BenchHearings {
     const val STOPPED = "stopped by the owner (Stop) before it was heard whole"
 
     private class Stopped : Exception(STOPPED)
+
+    /** Empties [work] once no `:ml` process can write there: one a Stop cancelled stops only at its next chunk, and
+     * may write a checkpoint after its client gave up, so [gone] (MlChordModels.awaitEnded, bounded) is waited for
+     * first. After the last song nothing else waits for it; a process still ending after the wait leaves the folder
+     * deleted all the same. */
+    internal fun leaveNothing(work: File, gone: () -> Unit) {
+        try {
+            gone()
+        } catch (e: ChordsUnavailable) {
+            // Still ending after the wait: what it wrote until now goes all the same.
+        }
+        work.deleteRecursively()
+    }
 
     fun isAudio(name: String) = name.substringAfterLast('.', "").lowercase() in AUDIO
 
@@ -79,7 +93,7 @@ internal object BenchHearings {
                     "${e.javaClass.simpleName}: ${e.message}")
             } finally {
                 // Its checkpoints (its pcm among them) never left behind, whatever ended it.
-                work.deleteRecursively()
+                leaveNothing(work, chords::awaitEnded)
             }
             heard += song
             say("${file.name}: " + (song.scored?.let { s ->
