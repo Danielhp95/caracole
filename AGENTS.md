@@ -2850,8 +2850,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables, audio_store.py
     (`AudioStore`, below); `sync/`: peer_sync.py, and the phone's sync engine and peer client;
   - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
-    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`, and `catalogues/`
-    (GitHub's release of the site catalogues, below).
+    `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`, `catalogues/`
+    (GitHub's release of the site catalogues, below) and `models/` (the chord models' download, below).
   - testFixtures: `Corpus`, `Fixtures`, `TestDb`: how every Kotlin test reads the corpus and makes a database.
 - `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
@@ -3066,6 +3066,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (`PhoneKinds` CATALOGUES' `otherwise`, its `formerly` words still a wait); the file a killed import left swept as
   the phone starts (`CataloguesRunner.sweep`). The app's Settings row and first-start offer are native
   (`SiteCatalogues`), the shared library page untouched.
+- `core.models` (core/models/), the chord models on core.catalogues' code (`download(gzip = false)`, exact sizes;
+  `CatalogueSource.Api`'s `tag`): `ModelFiles.read()`, models.json's `Pins` (on the classpath of the debug build's
+  `:ml` alone, as BTC's graph: `:core` ships neither; its tests read both), `installed(dir)` (a stat of each file
+  against the `manifest.json` written last: no hash), `verify(dir)` (every byte hashed), `sweep`;
+  `ModelsSource.fetch(http, into, onProgress)`: `into` the `Pins.folder`, `stateDir/models/c<contract>/`, written beside it
+  (`.c1-<16 hex>.part`, each file fsynced, the graph copied from the app) and renamed into place, the old one put
+  aside (`.old`) and deleted; every refusal a `ModelsError` (or `Limited`) leaving it as it was; no room for twice the
+  download and `MARGIN`, nothing asked. ModelsSourceTest over FakeGitHub; ModelFilesTest the authors' real file
+  (`CARACOLE_BTC_WEIGHTS`, android/flake.nix's), skipped without it.
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
@@ -4749,6 +4758,25 @@ picks one).
   prunes by the higher of the uploader's schema and the newest one the names hold (catalogues.py, above).
 - "caracole itself sends it nowhere" (the exports above) stays true: caracole writes the public file and never
   uploads it; the owner's user service does.
+
+#### The chord models, downloaded at a tap
+
+- The design's §6 (android-autochords): the phone's chords from audio need two models' files it downloads once, at
+  a tap, on core.catalogues' code (core.models' `ModelsSource`), with caracole's own user agent: beat_this's float16
+  graph, converted here and re-hosted in this repo's GitHub release `models` (a prerelease, as `indexes`; beat_this is
+  MIT, "code and published weights"), and BTC's checkpoint, never re-hosted: its authors' own file, unchanged, from
+  their repository (jayg996/BTC-ISMIR19 at nix/autochords.nix's commit), beside the APK's BTC graph, which reads it
+  at its offsets. The release is published by the owner, never by caracole ("caracole itself sends it nowhere").
+- Three requests a download, all to api.github.com: `/repos/Danielhp95/caracole/releases/tags/models` (the release
+  listed), its asset's address (`Accept: application/octet-stream`, its one redirect followed to
+  `release-assets.githubusercontent.com` alone, any other host refused, as the catalogues' hop: by the computer's
+  rule a redirect answered is a request sent, so four exchanges), and `/repos/jayg996/BTC-ISMIR19/git/blobs/<sha>`
+  (`Accept: application/vnd.github.raw+json`, answered by the API itself, a redirect refused). A file already there
+  whole is asked for again never; an install whole, nothing at all. A 403 or 429 with no requests left is the
+  catalogues' `Limited`, its time kept as kv `models:not-before`. Each file exactly its pinned size and SHA-256
+  (data/caracole/autochords/models.json), or nothing installed.
+- robots.txt, checked by hand on 2026-11-27: api.github.com and release-assets.githubusercontent.com answer 404, no
+  rules (tests/fixtures/github/); github.com's, which closes `/*/releases/download/`, is never asked.
 
 #### Turning a provider off
 

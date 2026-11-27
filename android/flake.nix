@@ -44,6 +44,9 @@
       # alphaTab's three files (../nix/alphatab.nix, the computer's own fixed-output fetch), for the Guitar Pro
       # page's assets and the tests that read them (lane guitar-alphatab).
       alphatab = pkgs.callPackage ../nix/alphatab.nix { };
+      # BTC's authors' weights (../nix/autochords.nix, the computer's own fixed-output fetch of their file), for
+      # core.models' ModelFilesTest: its SHA-256 and the ranges BTC's graph reads in it.
+      autochordsFiles = pkgs.callPackage ../nix/autochords.nix { };
       # BTC's graph and weights and beat_this's two graphs (../nix/autochords-onnx.nix, the computer's
       # `.#chord-models`), which :ml's ModelParityTest runs on the emulator (scripts/device-test.sh --ml): in the ml
       # shell alone, so the other shells never build them (torch exports them).
@@ -67,6 +70,7 @@
           packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user pkgs.unzip ];
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
+          CARACOLE_BTC_WEIGHTS = "${autochordsFiles.btcWeights}";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;
           # The Android Gradle plugin fetches aapt2 from Maven, a binary NixOS can't run:

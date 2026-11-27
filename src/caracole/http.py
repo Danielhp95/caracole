@@ -311,6 +311,9 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     "forums.irealpro.com": (
         "/search/", "/login/", "/register/", "/members/", "/whats-new/", "/misc/", "/find-new/", "/account/",
     ),
+    # GitHub, which the phone alone asks (its site catalogues and chord models, core.catalogues and core.models):
+    # api.github.com and release-assets.githubusercontent.com have no robots.txt (both 404, checked by hand on
+    # 2026-11-27: tests/fixtures/github/); github.com's, which closes /*/releases/download/, is never asked.
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",

@@ -25,6 +25,11 @@ sourceSets {
         // in the release through :core.
         resources.exclude("caracole/autochords/**")
     }
+    test {
+        // core.models' tests read the pins and BTC's graph as the debug build's :ml puts them on the classpath.
+        resources.srcDir("../../tests/conformance/data")
+        resources.include("caracole/autochords/models.json", "caracole/autochords/btc-graph.onnx")
+    }
 }
 
 dependencies {

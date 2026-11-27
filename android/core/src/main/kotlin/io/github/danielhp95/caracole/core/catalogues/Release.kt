@@ -34,15 +34,16 @@ sealed interface CatalogueSource {
     fun list(): List<Listed>
 
     /**
-     * `GET /repos/{REPO}/releases/tags/{TAG}` (`Accept: application/vnd.github+json`, no redirect followed): its
-     * `assets`, each its API `url` (under [base] alone; asked with `Accept: application/octet-stream` for its bytes),
-     * `uploaded` only for `state: uploaded` with a `digest` (`sha256:` stripped). 404 is [NoRelease]; a 403 or 429
-     * with `x-ratelimit-remaining: 0` [Limited].
+     * `GET /repos/{REPO}/releases/tags/{tag}` (the catalogues' [Catalogues.TAG], the chord models' `models`;
+     * `Accept: application/vnd.github+json`, no redirect followed): its `assets`, each its API `url` (under [base]
+     * alone; asked with `Accept: application/octet-stream` for its bytes), `uploaded` only for `state: uploaded` with
+     * a `digest` (`sha256:` stripped). 404 is [NoRelease]; a 403 or 429 with `x-ratelimit-remaining: 0` [Limited].
      */
     class Api(private val http: Http, override val base: URI = URI("https://api.github.com"),
-              override val redirects: Set<String> = Catalogues.API_REDIRECTS) : CatalogueSource {
+              override val redirects: Set<String> = Catalogues.API_REDIRECTS,
+              private val tag: String = Catalogues.TAG) : CatalogueSource {
         override fun list(): List<Listed> {
-            val uri = URI(root(base) + "/repos/${Catalogues.REPO}/releases/tags/${Catalogues.TAG}")
+            val uri = URI(root(base) + "/repos/${Catalogues.REPO}/releases/tags/$tag")
             val doc = ask(http, uri, "application/vnd.github+json", emptySet()) { answer ->
                 if (answer.status == 404) throw NoRelease()
                 if (answer.status != 200) throw refusal(answer)
