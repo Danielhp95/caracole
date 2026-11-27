@@ -130,6 +130,8 @@ def auto_sheet(cfg, conn, song) -> str:
 
 
 STATUS = "autochords:status"
+# What an auto sheet's raw keeps of what was heard and who made it from what (E12)
+NEW_MEMBERS = ("heard", "made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16")
 
 
 def failed_key(song) -> str:
@@ -206,8 +208,10 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     )
     assert (v.rating, v.votes, v.version, v.label) == (0, 0, 1, None)
     assert v.url == "file://" + s.audio_path
+    new = {member: v.raw.pop(member) for member in NEW_MEMBERS if member in v.raw}
     assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain", "columns": "display",
                      "key": "G", "lyrics_key": "109883467b713436"}  # sha256("Walking down\nSinging on")[:16]
+    assert set(new) == {"heard", "made_on", "made_by", "audio_name", "audio_sha16"}  # a fake recognizer names none
     assert v.fetched_at == "2026-10-18T04:05:00Z"
 
     song = get_song(conn, s.id)
@@ -219,6 +223,130 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     assert [(f["name"], f["provider"], f["kind"]) for f in info["files"]] == [
         (AUTO_SHEET, "auto", "auto")
     ]
+
+
+class NamedRecognizer(FakeRecognizer):
+    name = "btc_large_voca@1673d23f8f9a55ae"
+    runtime = "torch 2.13.0"
+
+
+class NamedBeats(FakeBeats):
+    name = "beat_this final0@8c328b45f59d8dd3"
+
+
+def test_a_sheet_keeps_what_was_heard_and_who_made_it(conn, cfg, tmp_path):
+    import hashlib
+
+    from caracole.peer_sync import own_id
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="River Road.wav")
+    assert run(conn, cfg, NamedRecognizer(), NamedBeats()).generated == 1
+    raw = auto_raw(conn, s)
+    assert raw["heard"] == {"contract": 1, "duration": 10.0, "chords": [[0.0, 5.0, "C"], [5.0, 10.0, "G"]],
+                            "beats": BEATS, "downbeats": DOWNBEATS}
+    assert (raw["made_on"], raw["made_by"]) == ("computer", own_id(conn))
+    assert raw["made_by"]  # kv sync:id, which schema 15 makes for every database
+    assert raw["models"] == {"chords": "btc_large_voca@1673d23f8f9a55ae", "beats": "beat_this final0@8c328b45f59d8dd3"}
+    assert raw["runtime"] == "torch 2.13.0"
+    assert raw["audio_name"] == "River Road.wav"  # its name alone: no path of this machine
+    assert raw["audio_sha16"] == hashlib.sha256(Path(s.audio_path).read_bytes()).hexdigest()[:16]
+    assert list(raw)[-7:] == list(NEW_MEMBERS)
+    assert str(tmp_path) not in json.dumps({m: raw[m] for m in NEW_MEMBERS})
+
+
+def test_a_file_you_gave_and_youtubes_audio_keep_no_audio_name(conn, cfg, tmp_path):
+    # An upload is kept under caracole's own name (<song id>-<sha16><ext>), not the one it was sent under; YouTube's
+    # audio is the video's, which the raw's youtube names.
+    from caracole.audio_store import FOLDER
+
+    given = add_song(conn, "Nobody", "Given")
+    folder = tmp_path / "state" / FOLDER
+    folder.mkdir(parents=True)
+    path = make_wav(folder / f"{given.id}-0123456789abcdef.wav", 10.0)
+    update_song(conn, given.id, audio_path=str(path), audio_mtime=os.stat(path).st_mtime)
+    assert run(conn, cfg).generated == 1
+    raw = auto_raw(conn, given)
+    assert "audio_name" not in raw and len(raw["audio_sha16"]) == 16
+
+
+def test_a_song_keeps_its_one_auto_version_whoever_made_it(conn, cfg, tmp_path):
+    from caracole.versions import auto_version_of, song_versions
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    assert auto_version_of(conn, s.id) is None
+    run(conn, cfg)
+    # As a sync's take leaves it: the sheet another caracole made, under that caracole's tab id
+    conn.execute("UPDATE versions SET tab_id = '42', raw = json_set(raw, '$.made_by', 'theirs') WHERE song_id = ?",
+                 (s.id,))
+    taken = auto_version_of(conn, s.id)
+    assert taken.tab_id == "42"
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)  # your audio changed: made again here
+    assert run(conn, cfg).generated == 1
+    [version] = song_versions(conn, s.id, include_gone=True)
+    assert (version.id, version.tab_id, version.provider) == (taken.id, "42", "auto")
+    assert version.raw["made_by"] != "theirs"
+    [kept] = kept_files(conn, s.id)
+    assert kept.version_id == taken.id
+
+
+def test_a_song_that_held_two_auto_versions_keeps_the_one_with_its_sheet_and_lets_the_other_go(
+    conn, cfg, tmp_path, caplog
+):
+    from caracole.versions import auto_version_of, song_versions
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    [mine] = song_versions(conn, s.id)
+    # Before E12: a sheet taken at a sync under tab 42, then one made here beside it under the song's own id, which the
+    # kept sheet names; the taken one keeps no file.
+    upsert_version(conn, provider="auto", tab_id="42", song_id=s.id, slot="sheet", kind="auto", rating=0, votes=0,
+                   version=1, label=None, url="file:///elsewhere.mp3", raw={"model": "btc_large_voca"},
+                   now="2026-11-01T00:00:00Z")
+    assert auto_version_of(conn, s.id).id == mine.id
+    update_song(conn, s.id, audio_mtime=s.audio_mtime + 5)
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.run"):
+        assert run(conn, cfg).generated == 1
+    [version] = song_versions(conn, s.id, include_gone=True)
+    assert (version.id, version.tab_id) == (mine.id, str(s.id))
+    assert "a second auto version (tab 42" in caplog.text
+
+
+def test_a_sheet_made_before_it_kept_what_was_heard_is_left_as_it_is(conn, cfg, tmp_path):
+    # No mass re-hearing: a sheet an older caracole made, with none of E12's members, is up to date as it was.
+    from caracole.versions import set_raw
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg)
+    [kept] = kept_files(conn, s.id)
+    old = {k: v for k, v in auto_raw(conn, s).items() if k not in NEW_MEMBERS}
+    set_raw(conn, kept.version_id, old)
+    recognizer = FakeRecognizer()
+    stats = run(conn, cfg, recognizer)
+    assert (stats.generated, stats.skipped, recognizer.calls) == (0, 1, [])
+    assert auto_raw(conn, s) == old
+
+
+def test_a_model_file_goes_by_its_name_and_hash_never_its_folder(tmp_path):
+    import hashlib
+
+    from caracole.autochords import beats, btc
+
+    store = tmp_path / "nix" / "store"
+    store.mkdir(parents=True)
+    weights = store / "xgfdvhbsb2idb9l0wn37mxd0imwd5n90-btc_model_large_voca.pt"
+    checkpoint = store / "vvm1q1xipnvz4a0yxh68nxd5zvf1s095-beat_this-final0.ckpt"
+    other = tmp_path / "btc_model.pt"
+    for path in (weights, checkpoint, other):
+        path.write_bytes(path.name.encode())
+    sha = {p: hashlib.sha256(p.name.encode()).hexdigest()[:16] for p in (weights, checkpoint, other)}
+    assert btc.model_name(weights) == f"btc_large_voca@{sha[weights]}"
+    assert btc.model_name(other) == f"btc@{sha[other]}"
+    assert beats.model_name(checkpoint) == f"beat_this final0@{sha[checkpoint]}"
+    plain = tmp_path / "final0.ckpt"
+    plain.write_bytes(b"x")
+    assert beats.model_name(plain) == f"beat_this final0@{hashlib.sha256(b'x').hexdigest()[:16]}"
+    weights.write_bytes(b"changed")  # hashed once a process
+    assert btc.model_name(weights) == f"btc_large_voca@{sha[weights]}"
 
 
 def test_an_auto_sheet_from_youtube_audio_says_which_video_it_came_from(conn, cfg, tmp_path):
@@ -1048,6 +1176,8 @@ def test_default_models_are_built_once_from_the_config(conn, cfg, tmp_path, monk
 
     assert autochords_pending(conn, cfg).generated == 2
     assert built == [(weights, "cuda:1")]
+    sha = __import__("hashlib").sha256(b"checkpoint").hexdigest()[:16]
+    assert {auto_raw(conn, s)["models"]["beats"] for s in songs} == {f"beat_this final0@{sha}"}
     # A test tone first (test_default_models_first_read_a_test_tone), then each song.
     tone, *rest = tracked
     assert tone[1:] == (checkpoint, "cuda:1")
@@ -1832,6 +1962,17 @@ def assert_chords_over_synced_lyrics(conn, cfg, audio: Path) -> None:
     )
     stats = autochords_pending(conn, cfg)
     assert (stats.generated, stats.failed, stats.errors) == (1, 0, [])
+    import torch
+    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS
+
+    raw = auto_raw(conn, s)
+    from caracole.autochords import beats, btc
+
+    assert raw["models"] == {"chords": btc.model_name(BTC_WEIGHTS), "beats": beats.model_name(BEAT_CHECKPOINT)}
+    assert raw["models"]["chords"].startswith("btc_large_voca@") and len(raw["models"]["chords"]) == 31
+    assert raw["models"]["beats"].startswith("beat_this final0@")
+    assert raw["runtime"] == f"torch {torch.__version__}"
+    assert raw["audio_name"] == audio.name and raw["heard"]["contract"] == 1
     lines = auto_sheet(cfg, conn, s).splitlines()
     assert lines[:2] == ["auto-generated, unverified", "Nobody - River Road"]
     i = lines.index("Walking down the river road")

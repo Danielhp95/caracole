@@ -85,6 +85,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from caracole.autochords import beats as beat_this
+from caracole.autochords.audio import sha16
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
 from caracole.autochords.merge import ChordSegment, youtube_credit
@@ -93,6 +95,7 @@ from caracole.autochords.sheet import (
     COLUMNS,
     Heard,
     Made,
+    Maker,
     instrumental,
     make_sheet,
     raw_of,
@@ -118,7 +121,7 @@ from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.stamps import parse as parse_stamp
-from caracole.versions import get_version, upsert_version
+from caracole.versions import AUTO, auto_version_of, auto_versions_beside, get_version, upsert_version
 from caracole.youtube import Video
 from caracole.youtube_fetch import transcribe_problem, youtube_audio
 
@@ -127,7 +130,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-PROVIDER = "auto"
+PROVIDER = AUTO
+MADE_ON = "computer"  # the side an auto sheet made here was made on (its raw's ``made_on``; the phone's "phone")
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
 # What ``autochords_pending`` tells its ``on_step`` as each step starts: a song's chords, then, before them, its words
@@ -139,7 +143,8 @@ TONE_HZ = (261.63, 329.63, 392.0)  # C major: C4, E4 and G4
 
 
 class Recognizer(Protocol):
-    """Timed chords from an audio file, like ``btc.BTCRecognizer``."""
+    """Timed chords from an audio file, like ``btc.BTCRecognizer``, which also says its ``name`` and ``runtime``
+    (an auto sheet's raw keeps them where a recognizer says them)."""
 
     def recognize(self, audio_path: Path | str) -> list[ChordSegment]: ...
 
@@ -550,6 +555,7 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
         return
     told(STEPS[3])
     try:
+        maker = _maker(conn, song, *models, video)  # the audio hashed once a hearing, after the models read it
         transcript = transcript_of(conn, song)
         silent = transcript is None and _heard_nothing(conn, song)
         made = make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
@@ -559,7 +565,7 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
         return
     try:
         _keep(conn, cfg, song, made.text, made.used, made.key, stamp, video=video, shift=made.shift,
-              transcript=made.transcript, silent=made.silent, said=made.said)
+              transcript=made.transcript, silent=made.silent, said=made.said, heard=made.heard, maker=maker)
     except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
         _error(stats, song, e)
         return
@@ -790,8 +796,35 @@ def _default_beats(cfg: Config) -> BeatsFn:
     # detect_beats checks as well, but once per song; this reports it once.
     if not checkpoint.is_file():
         raise ModelsUnavailable(f"beat_this checkpoint not found: {checkpoint}")
-    device = cfg.autochords.device
-    return lambda path: detect_beats(path, checkpoint, device=device)
+    return _Beats(checkpoint, cfg.autochords.device)
+
+
+class _Beats:
+    """beat_this's beats with the configured checkpoint, and its ``name`` for an auto sheet's raw."""
+
+    def __init__(self, checkpoint: Path, device: str):
+        self.checkpoint, self.device = checkpoint, device
+        self.name = beat_this.model_name(checkpoint)
+
+    def __call__(self, path: Path) -> tuple[Sequence[float], Sequence[float]]:
+        return detect_beats(path, self.checkpoint, device=self.device)
+
+
+def _maker(conn: sqlite3.Connection, song: Song, recognizer: Recognizer, beats_fn: BeatsFn,
+           video: Video | None) -> Maker:
+    """Who made the song's auto sheet here, from what: this side, this caracole's id (peer_sync.py ``own_id``), the
+    models' names and runtime where they say them, the audio file's name (none for YouTube's, and none for a file you
+    gave it, whose kept name is caracole's own: audio_store.py, which keeps no name it was sent under) and its bytes'
+    hash, read once."""
+    from caracole.audio_store import given_file
+    from caracole.peer_sync import own_id
+
+    audio = Path(song.audio_path or "")
+    models = {part: name for part, name in (("chords", getattr(recognizer, "name", None)),
+                                            ("beats", getattr(beats_fn, "name", None))) if isinstance(name, str)}
+    runtime = getattr(recognizer, "runtime", None)
+    name = None if video is not None or given_file(song.audio_path) else audio.name
+    return Maker(MADE_ON, own_id(conn), models, runtime if isinstance(runtime, str) else None, name, sha16(audio))
 
 
 def _from_youtube(video: Video | None) -> str | None:
@@ -842,16 +875,24 @@ def _keep(
     transcript: Transcript | None = None,
     silent: bool = False,
     said: bool = False,
+    heard: Heard | None = None,
+    maker: Maker | None = None,
 ) -> None:
-    """Keep one song's auto sheet, under a version of provider ``auto`` whose ``raw`` is sheet.py's ``raw_of``; the
-    song becomes found. Audio from YouTube (``video``) gives the version the video's address, so info.json names it.
-    """
+    """Keep one song's auto sheet, under a version of provider ``auto`` whose ``raw`` is sheet.py's ``raw_of`` (what
+    was ``heard`` and its ``maker`` with it); the song becomes found. Audio from YouTube (``video``) gives the version
+    the video's address, so info.json names it.
+
+    A song keeps one auto version, whoever made it: the sheet goes into the one it has (versions.py
+    ``auto_version_of``: one another caracole made keeps that caracole's tab id), else one of tab id its song id; a
+    second one a song held from before (a sheet made here beside one taken at a sync) that no kept file names is let
+    go of, logged, so that its unit lists the one."""
     audio = Path(song.audio_path or "")
-    raw = raw_of(song, Made(text, used, key, shift, transcript, silent, said), video=video)
+    raw = raw_of(song, Made(text, used, key, shift, transcript, silent, said, heard), video=video, maker=maker)
+    current = auto_version_of(conn, song.id)
     version_id = upsert_version(
         conn,
         provider=PROVIDER,
-        tab_id=str(song.id),
+        tab_id=current.tab_id if current is not None else str(song.id),
         song_id=song.id,
         slot="sheet",
         kind="auto",
@@ -872,6 +913,10 @@ def _keep(
         data=text.encode("utf-8"),
         rank=1,
     )
+    for other in auto_versions_beside(conn, song.id, version_id):
+        conn.execute("DELETE FROM versions WHERE id = ?", (other.id,))
+        log.warning("%s: a second auto version (tab %s, made %s) let go of: the sheet is kept in tab %s, a song keeps "
+                    "one", song.display, other.tab_id, other.fetched_at, current.tab_id if current else song.id)
     refresh_status(conn, song.id, ignored=False)
     write_info(conn, cfg.library_dir, get_song(conn, song.id))
     # Last, so a run cut short anywhere above just does this song again.

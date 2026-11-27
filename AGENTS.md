@@ -224,7 +224,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     page, the song's keys;
   - `read`, `caracole ug --link`'s: the tab's page, its artist's page learned and its lists read, or an artist's
     lists; a budget, a block or an error after the tab's page no failure of the link.
-- rank.py, coverage.py, versions.py.
+- rank.py, coverage.py, versions.py (`auto_version_of`: a song's one auto sheet version, whatever its tab id).
 - sheet_versions.py: a song's UG chords versions in rank order, or its ukulele chords ones when its sheet is one
   (`sheet_kind`, `group_of`).
   - The one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores,
@@ -2431,10 +2431,23 @@ It is rows.js's, shared by both pages:
   a function: `test_the_sheet_half_reads_no_audio_file`), is the sheet half: `Heard(segments, beats, downbeats,
   duration)`, what run.py's `_hear` gives (the models' chords and beats, and `music.read_audio(audio).duration_s`, the
   one length the sheet is laid out against); `make_sheet(song, heard, *, source, transcript, silent, said) -> Made`,
-  `synced_for(song, lyrics, heard) -> Timed | None` (`Timed.note`), `raw_of(song, made, *, video)`, the version's
-  raw; `synced_key`, `song_lyrics_key`, `lyrics_key` and `wider_lines`, what that raw keeps of the song's lyrics.
-  run.py keeps the hearing half: the models, `on_step`, the words' hearing, `_skip_reason`, `_keep`, and calls
-  remeasure.py's `remeasure_once`; the models failing on the audio is the file's (`_unreadable`), the length's read
+  `synced_for(song, lyrics, heard) -> Timed | None` (`Timed.note`), `raw_of(song, made, *, video, maker)`, the
+  version's raw; `synced_key`, `song_lyrics_key`, `lyrics_key` and `wider_lines`, what that raw keeps of the song's
+  lyrics. Since E12 the raw also keeps what was heard and who made it from what (the design's §4.4), after its other
+  members: `heard`, `heard_record(made.heard)` (`{"contract": CONTRACT, "duration", "chords": [[start, end, label],
+  …], "beats", "downbeats"}`, floats as the models gave them, about 20 KB for ten minutes), which `heard_of(raw)`
+  gives back so that `make_sheet` lays out the very bytes again with no model
+  (`test_a_sheet_laid_out_again_from_what_its_raw_kept_is_the_same_bytes`); and a `Maker`'s `made_on` ("computer",
+  run.py `MADE_ON`), `made_by` (kv `sync:id`, peer_sync.py `own_id`), `models` (`chords`, `beats`: btc.py's and
+  beats.py's `model_name(path)`, `name@<sha16 of the file>`, hashed once a process, no folder), `runtime` (the
+  recognizer's, "torch 2.13.0"), `audio_name` (a purchase's file name; none for YouTube's audio, nor for a file you
+  gave, which audio_store.py keeps under its own name) and `audio_sha16` (audio.py `sha16`, read in 1 MiB blocks
+  once a hearing: about 0.05 s for 70 MB), each where known (a fake recognizer names no model). No clock among them.
+  A sheet without them (made before E12) is never due for that alone.
+  run.py keeps the hearing half: the models, `on_step`, the words' hearing, `_skip_reason`, `_keep` (into the song's
+  one auto version, versions.py `auto_version_of`, whoever made it: one taken at a sync keeps the other caracole's
+  tab id, else the song's id; a second one no kept file names, from before E12, let go of with a warning,
+  `auto_versions_beside`), and calls remeasure.py's `remeasure_once`; the models failing on the audio is the file's (`_unreadable`), the length's read
   after them failing caracole's (`_LengthUnread`, `_error`: the song still due, nothing filed against its audio).
   test_autochords_sheet.py pins what each kind of sheet made before the two halves were parted, by the bulk pass and
   a staged job's chords stage, a file that names no length among them.

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 MODEL = "btc_large_voca"
+CONTRACT = 1  # the shape of ``raw["heard"]`` (``heard_record``): a sheet is laid out again from it with no model
 SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 
@@ -54,6 +55,52 @@ class Heard:
     beats: Sequence[float]
     downbeats: Sequence[float]
     duration: float | None
+
+
+def heard_record(heard: Heard) -> dict[str, object]:
+    """What was heard as an auto sheet's raw keeps it (``raw["heard"]``): ``{"contract": CONTRACT, "duration",
+    "chords": [[start, end, label], …], "beats": […], "downbeats": […]}``, every time a float in seconds as the models
+    gave it (BTC's segments rounded to the millisecond by btc.py, beat_this's beats a frame over 50), in their order,
+    so that ``heard_of`` gives back the very ``Heard`` and ``make_sheet`` the very bytes."""
+    return {
+        "contract": CONTRACT,
+        "duration": None if heard.duration is None else float(heard.duration),
+        "chords": [[float(s.start), float(s.end), s.label] for s in heard.segments],
+        "beats": [float(b) for b in heard.beats],
+        "downbeats": [float(d) for d in heard.downbeats],
+    }
+
+
+def heard_of(raw: Mapping[str, object]) -> Heard | None:
+    """The ``Heard`` an auto sheet's raw keeps (``heard_record``'s); None for a raw that keeps none (a sheet made
+    before it was kept), of another contract, or one that can't be read."""
+    record = raw.get("heard")
+    if not isinstance(record, dict) or record.get("contract") != CONTRACT:
+        return None
+    try:
+        duration = record["duration"]
+        segments = [ChordSegment(float(a), float(b), str(label)) for a, b, label in record["chords"]]
+        beats = [float(b) for b in record["beats"]]
+        downbeats = [float(d) for d in record["downbeats"]]
+        return Heard(segments, beats, downbeats, None if duration is None else float(duration))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+@dataclass(frozen=True)
+class Maker:
+    """Who made an auto sheet, and from what, as its raw keeps it: the side (``on``: "computer" or "phone"), its
+    caracole's id (``by``: kv ``sync:id``, as the sync's state names it), the models' names (``models``: "chords",
+    "beats", each ``name@<16 hex of its file's SHA-256>``) and what ran them (``runtime``: "torch 2.13.0"), the audio
+    file's name alone (``audio_name``: a purchase's; none for YouTube's) and the first 16 hex digits of the SHA-256 of
+    its bytes (``audio_sha16``). Never a path of this machine."""
+
+    on: str
+    by: str | None
+    models: Mapping[str, str]
+    runtime: str | None
+    audio_name: str | None
+    audio_sha16: str | None
 
 
 @dataclass(frozen=True)
@@ -91,6 +138,7 @@ class Made:
     transcript: Transcript | None = None
     silent: bool = False
     said: bool = False  # silent by the owner's word, not by what was heard
+    heard: Heard | None = None  # what it was laid out from: ``make_sheet``'s own
 
 
 def instrumental(song: Song) -> bool:
@@ -241,17 +289,19 @@ def make_sheet(song: Song, heard: Heard, *, source: str | None = None, transcrip
         source=note or None,
     )
     shift = timed.shift if timed is not None else None
-    return Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said)
+    return Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said, heard)
 
 
-def raw_of(song: Song, made: Made, *, video: Video | None = None) -> dict:
+def raw_of(song: Song, made: Made, *, video: Video | None = None, maker: Maker | None = None) -> dict:
     """The record an auto sheet's version keeps (its ``raw``). The key heard goes into it, for ``keys.song_key``, and
     so does the shift of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its chord
     lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had, used or not
     (``synced_lyrics``, ``synced_key``); a sheet over those lyrics, the key of their words (``lyrics_key``,
     ``song_lyrics_key``). A sheet made over a transcript keeps it as ``lyrics_source``, ``transcript`` (its LRC, for
     the viewer's sung line) and ``transcript_made_at`` (``_skip_reason`` compares it with the transcript kept now).
-    Audio from YouTube (``video``) keeps the video's fields."""
+    Audio from YouTube (``video``) keeps the video's fields. Then what was heard (``heard``, ``heard_record``'s, from
+    ``made.heard``), and who made it from what (``maker``: ``made_on``, ``made_by``, ``models``, ``runtime``,
+    ``audio_name``, ``audio_sha16``, each where it is known)."""
     raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": made.used, "columns": COLUMNS}
     if made.key is not None:
         raw["key"] = made.key
@@ -273,4 +323,13 @@ def raw_of(song: Song, made: Made, *, video: Video | None = None) -> dict:
         raw["lyrics_key"] = words
     if video is not None:
         raw["youtube"] = video.as_json()
+    if made.heard is not None:
+        raw["heard"] = heard_record(made.heard)
+    if maker is not None:
+        raw["made_on"] = maker.on
+        for member, value in (("made_by", maker.by), ("models", dict(maker.models) or None),
+                              ("runtime", maker.runtime), ("audio_name", maker.audio_name),
+                              ("audio_sha16", maker.audio_sha16)):
+            if value is not None:
+                raw[member] = value
     return raw

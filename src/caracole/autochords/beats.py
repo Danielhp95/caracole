@@ -11,6 +11,8 @@ from __future__ import annotations
 import functools
 from pathlib import Path
 
+from caracole.autochords.audio import file_stem, sha16
+
 
 def detect_beats(
     audio_path: Path | str, checkpoint: Path | str, *, device: str = "cpu"
@@ -24,6 +26,19 @@ def detect_beats(
         raise FileNotFoundError(f"audio file not found: {audio_path}")
     beats, downbeats = _tracker(str(checkpoint), device)(str(audio_path))
     return [float(b) for b in beats], [float(d) for d in downbeats]
+
+
+def model_name(path: Path | str) -> str:
+    """The name a beat_this checkpoint goes by in an auto sheet's raw (``models["beats"]``): ``beat_this
+    final0@<16 hex of the file's SHA-256>`` (its file's name less ``beat_this-``; no folder: never a path of this
+    machine). Hashed once a process."""
+    return _model_name(str(path))
+
+
+@functools.cache
+def _model_name(path: str) -> str:
+    stem = file_stem(path)
+    return f"beat_this {stem.removeprefix('beat_this-')}@{sha16(path)}"
 
 
 @functools.lru_cache(maxsize=2)
