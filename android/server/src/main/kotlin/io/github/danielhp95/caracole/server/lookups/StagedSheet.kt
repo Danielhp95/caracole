@@ -101,6 +101,11 @@ internal abstract class StagedSheet(
     /** The auto version's address: the audio's file (run.py's `_keep`), or the video's. */
     protected open fun versionUrl(audio: File): String = "file://" + audio.absolutePath
 
+    /** Whether the song's auto sheet was made of the audio the audio stage gave (run.py `_skip_reason`: its
+     * `autochords_mtime` the audio's `audio_mtime`); a job may know it otherwise (YouTubeSheetRunner: a sheet of the
+     * very video asked for, whose audio the phone let go). */
+    protected open fun madeOfThisAudio(s: SongRow): Boolean = s.autochordsMtime != null && s.autochordsMtime == s.audioMtime
+
     /** After the pages stage, the sheet kept or not ([sheetKept]), in no write. */
     protected open fun afterPages() {}
 
@@ -360,7 +365,7 @@ internal abstract class StagedSheet(
         val s = again(db)
         val auto = Kept.keptFiles(db, s.id).firstOrNull { it.name == Versions.SHEET_FILE_NAMES[1] } ?: return null
         val version = Versions.get(db, auto.versionId) ?: return null
-        if (s.autochordsMtime == null || s.autochordsMtime != s.audioMtime || Relay.madeElsewhere(db, version.raw)) {
+        if (!madeOfThisAudio(s) || Relay.madeElsewhere(db, version.raw)) {
             return null
         }
         if (Relay.due(s, version.raw, Relay.notedOf(db, s, version.raw)) == null) {

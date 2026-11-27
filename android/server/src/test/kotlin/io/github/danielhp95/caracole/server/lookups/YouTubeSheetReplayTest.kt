@@ -21,7 +21,7 @@ class YouTubeSheetReplayTest {
         val misses = Misses("youtube-sheet")
         YouTubeSheetReplay.replay(misses)
         misses.assertNone()
-        assertEquals(13, YouTubeSheetReplay.cases().size)
+        assertEquals(18, YouTubeSheetReplay.cases().size)
     }
 
     /** Its stages are youtube_sheet.py's as recorded, the queue's YOUTUBE_SHEET_STAGES. */
@@ -46,6 +46,7 @@ class YouTubeSheetReplayTest {
             "an event" to edited(first, listOf("out", "events"), JsonArray(emptyList())),
             "the cache" to edited(first, listOf("out", "youtube"), JsonObject(mapOf("x.m4a" to JsonPrimitive("0")))),
             "the progress" to edited(first, listOf("out", "result", "progress"), JsonArray(emptyList())),
+            "the done line" to edited(first, listOf("out", "sent"), JsonPrimitive("3 yt-dlp runs")),
         )
         for ((what, record) in strays) {
             assertTrue(YouTubeSheetReplay.one(record).isNotEmpty(), "a record whose $what strays passed")

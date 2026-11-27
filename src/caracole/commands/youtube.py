@@ -231,10 +231,16 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
     artist, _, title = display.partition(" - ")
     with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
         result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
-        sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
-                         for p, n in result.requests.items() if n)
+        sent = sent_words(result.requests)
         _common.staged_end(reporter, result, progress=progress, refused="No sheet made",
                            done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
+
+
+def sent_words(requests: dict[str, int]) -> str:
+    """What ``--sheet``'s done line says it sent ("1 yt-dlp run, 2 LRCLIB requests"): each provider's count, yt-dlp's
+    runs by their name and every other's as LRCLIB requests, those of none left out; "" for none."""
+    return ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
+                     for p, n in requests.items() if n)
 
 
 NOT_SEARCHED = "Not searched: "

@@ -34,6 +34,7 @@ helpers/fake_ytdlp.py's ``FakeYtDlp`` (never a real one), the models E21's fake 
 - ``out.youtube``: the files of ``cache_dir/youtube/`` after, each by its SHA-256; ``out.store``: ``state_dir/audio/``'s
   after (E21's ``store_after``);
 - ``out.maker``: the auto sheet's maker members Python wrote, each side's own, out of the ``versions`` rows' raw;
+- ``out.sent``: what the command's done line says it sent (commands/youtube.py ``sent_words``), its time aside;
 - ``apart``: what the replay compares apart, by design: ``lyrics`` (get.py's words at the lookup pace on the phone),
   ``events_run`` and ``pauses`` (the bulk pace's against the lookup's), and ``kv`` the phone never writes
   (``autochords:status``, ``autochords:failed:``) or the computer doesn't (``http:last_request:youtube``: the
@@ -47,7 +48,10 @@ pass-over: unusable); a searched one with none (passed over into ``skip``), then
 taken); an unavailable video; YouTube blocking the download (one run, the cooldown recorded, the chords skipped);
 YouTube cooling down (nothing run); a song with an audio file of its own given (refused); a human sheet kept, and an
 audio file of the owner's given, while the job let a lookup go first before the chords (refused there); and the same
-job again once the video's audio is kept (nothing run, the sheet up to date).
+job again once the video's audio is kept (nothing run, the sheet up to date), and that job on the phone's own state
+instead, once its sheet was kept and the video's audio let go (``let_go``: Python's second run its answer, by the
+controller's ruling of 2026-11-27); and the error ladder (youtube_fetch ``_count_failure``): an error of the network
+(counted against nothing), one counted, and a third failure of a pasted and of a searched video (given up).
 
 A pass-over is recorded as the phone reads it: the computer's runner reads "Requested format is not available" as an
 error (its download asks ``bestaudio[ext=m4a]/bestaudio/best``, so it is the network's or the extractor's fault there)
@@ -112,6 +116,10 @@ APART_KV = ["autochords:status", "autochords:failed:", "http:last_request:youtub
 NO_FORMAT = (f"ERROR: [youtube] {PASTED}: Requested format is not available. Use --list-formats for a list of "
              "available formats")
 UNAVAILABLE = f"ERROR: [youtube] {PASTED}: Video unavailable"
+NETWORK = (f"ERROR: [youtube] {PASTED}: Unable to download webpage: <urlopen error [Errno -3] Temporary failure in "
+           "name resolution>")
+BROKE = f"ERROR: [youtube] {PASTED}: fragment 1 not found, unable to continue"  # an error counted against the video
+GIVE_UP = 3  # youtube_fetch.GIVE_UP_AFTER, which test_the_cases_come_to_what_they_say holds it to
 NOT_A_BOT = (f"ERROR: [youtube] {PASTED}: Sign in to confirm you’re not a bot. Use --cookies-from-browser or "
              "--cookies for the authentication.")
 
@@ -220,16 +228,19 @@ def job(w: World, case: str, url: str | None, plan: dict[str, Any], *, reads: st
     """``caracole youtube --song --sheet`` of River Road, recorded (the module's docstring)."""
     from contextlib import ExitStack
 
+    from caracole.commands.youtube import sent_words
     from caracole.youtube_sheet import SheetRequest, make_sheet
 
     heard = Heard()
     cache, store = cache_files(w), store_files(w)
     request = SheetRequest(ARTIST, TITLE, WATCH.format(url) if url else None)
     yielded: dict[str, Any] = {}
+    sent: dict[str, Any] = {}
 
     def call() -> dict[str, Any]:
         result = make_sheet(w.cfg, request, heard, runner=None, recognizer=Recognizer(), beats_fn=Beats(),
                             hears=False, now=NOW, clock=lambda: 0.0)
+        sent["requests"] = dict(result.requests)
         return {"result": {"song_id": result.song_id, "display": result.display, "states": dict(result.states),
                            "details": dict(result.details), "files": dict(result.files),
                            "exit": 0 if result.ok else 1}, "progress": heard.events}
@@ -252,6 +263,7 @@ def job(w: World, case: str, url: str | None, plan: dict[str, Any], *, reads: st
                   if at_yield is not None else None}
     out = made["out"]
     out["result"] = phone_words(out["result"])
+    out["sent"] = sent_words(sent["requests"])
     out["runs"] = runs_of(w)[calls_before:]
     out["youtube"] = cache_after(w)
     out["store"] = store_after(w)
@@ -434,9 +446,77 @@ def kept_already(tmp: Path) -> dict[str, Any]:
                plan)
 
 
+def let_go(made: dict[str, Any], case: str) -> dict[str, Any]:
+    """``made`` (a job of a song whose sheet and audio were kept, Python's) as the phone's own state leaves it before
+    the job: once its sheet was kept the phone let the video's audio go (YouTubeAudio.letGo, the design's §5.4), so
+    its fixture's song has no ``audio_path`` and no ``audio_mtime`` (its ``updated_at`` the first job's), its record no
+    ``audio`` and the cache no file. What the job comes to is Python's own second run's: the phone's, by the ruling of
+    2026-11-27, runs no yt-dlp and no model for a sheet made of the very video asked for and up to date."""
+    out = json.loads(json.dumps(made))
+    out["case"] = case
+    for r in out["fixture"]:
+        if r.get("table") == "songs":
+            r["row"] = {**r["row"], "audio_path": None, "audio_mtime": None, "updated_at": out["now"]}
+        elif r.get("kv", "").startswith("youtube:") and r["kv"][len("youtube:"):].isdigit():
+            r["value"] = json.dumps({**json.loads(r["value"]), "audio": None}, ensure_ascii=False)
+    out["kw"]["cache"] = {}
+    return out
+
+
+def kept_after_let_go(kept: dict[str, Any]) -> dict[str, Any]:
+    return let_go(kept, "the same job again on the phone's state once its sheet was kept and the video's "
+                                     "audio let go: nothing run, no model, its sheet up to date")
+
+
+def _seeded(w: World, record: Any) -> None:
+    from caracole.youtube_fetch import _save
+
+    _save(w.conn, 1, record)
+
+
+def network_error(tmp: Path) -> dict[str, Any]:
+    w = world(tmp, "network")
+    w.song()
+    plan = plan_of({PASTED: video(w, stderr=NETWORK, exit=1)})
+    return job(w, "a pasted video's download the network failed: an error, nothing counted against the video", PASTED,
+               plan)
+
+
+def counted_error(tmp: Path) -> dict[str, Any]:
+    w = world(tmp, "counted")
+    w.song()
+    plan = plan_of({PASTED: video(w, stderr=BROKE, exit=1)})
+    return job(w, "a pasted video's download that failed: the error counted once against the video", PASTED, plan)
+
+
+def given_up_pasted(tmp: Path) -> dict[str, Any]:
+    from caracole.youtube_fetch import Record
+
+    w = world(tmp, "given-up-pasted")
+    w.song()
+    _seeded(w, Record(failures={PASTED: GIVE_UP - 1}))
+    plan = plan_of({PASTED: video(w, stderr=BROKE, exit=1)})
+    return job(w, "a pasted video's download failing for the third time: the video given up, unusable", PASTED, plan)
+
+
+def given_up_searched(tmp: Path) -> dict[str, Any]:
+    from caracole.youtube import Video
+    from caracole.youtube_fetch import Record
+
+    w = world(tmp, "given-up-searched")
+    w.song()
+    _seeded(w, Record(video=Video(PICKED, f"{ARTIST} - {TITLE} (Official Audio)", ARTIST, float(LENGTH)),
+                      source="search", query=query(), failures={PICKED: GIVE_UP - 1}))
+    plan = plan_of({PICKED: video(w, PICKED, stderr=BROKE.replace(PASTED, PICKED), exit=1)})
+    return job(w, "a searched video's download failing for the third time: the video given up into skip", None, plan)
+
+
 def records(tmp: Path) -> list[dict[str, Any]]:
+    kept = kept_already(tmp)
     return [pasted(tmp), picked(tmp), none_fits(tmp), pass_over(tmp), *searched_pass_over(tmp), unavailable(tmp),
-            blocked(tmp), cooling(tmp), upload(tmp), human_sheet(tmp), upload_meanwhile(tmp), kept_already(tmp)]
+            blocked(tmp), cooling(tmp), upload(tmp), human_sheet(tmp), upload_meanwhile(tmp), kept,
+            kept_after_let_go(kept), network_error(tmp), counted_error(tmp), given_up_pasted(tmp),
+            given_up_searched(tmp)]
 
 
 @pytest.fixture(scope="module")
@@ -512,6 +592,32 @@ def test_the_cases_come_to_what_they_say(made):
     assert _ends(again)["audio"] == ["done", f"has the audio of {watch} already"]
     assert _ends(again)["chords"] == ["done", "up to date: chords over the lyrics"]
     assert again["out"]["runs"] == [] and again["kw"]["cache"]
-    for r in made:  # a refusal or a video that can't be had exits 1; a block or a cooldown is a wait, 0
+    let_go_again = by["the same job again on the phone's state once its sheet was kept and the video's audio let go"]
+    assert let_go_again["out"] == again["out"] and let_go_again["kw"]["cache"] == {}
+    [song] = [r["row"] for r in let_go_again["fixture"] if r.get("table") == "songs"]
+    assert song["audio_path"] is None and song["autochords_mtime"] is not None
+    from caracole.youtube_fetch import GIVE_UP_AFTER
+
+    assert GIVE_UP == GIVE_UP_AFTER
+
+    def record_of(case: str) -> dict[str, Any]:
+        return json.loads(by[case]["out"]["kv"]["youtube:1"])
+
+    network = "a pasted video's download the network failed"
+    assert _ends(by[network])["audio"] == ["failed", "download failed; try again later"]
+    assert record_of(network)["failures"] == {} and "Temporary failure" in record_of(network)["error"]
+    counted = "a pasted video's download that failed"
+    assert _ends(by[counted])["audio"] == ["failed", "download failed; try again later"]
+    assert record_of(counted)["failures"] == {PASTED: 1}
+    pasted_up = record_of("a pasted video's download failing for the third time")
+    assert pasted_up["unusable"] == PASTED and pasted_up["failures"] == {}
+    assert pasted_up["unusable_reason"].startswith("its download failed 3 times: ")
+    searched_up = record_of("a searched video's download failing for the third time")
+    assert searched_up["skip"] == [PICKED] and searched_up["video"] is None and searched_up["failures"] == {}
+    assert searched_up["error"].endswith("failed 3 times: the next run picks another)")
+    assert first["out"]["sent"] == "1 yt-dlp run, 1 LRCLIB request" and again["out"]["sent"] == ""
+    waits = {network, counted}  # an error is a wait (exit 0), as a block or a cooldown is
+    for r in made:  # a refusal or a video that can't be had exits 1
         states = r["out"]["result"]["result"]["states"]
-        assert r["out"]["result"]["result"]["exit"] == int("failed" in (states["song"], states["audio"])), r["case"]
+        failed = "failed" in (states["song"], states["audio"]) and r["case"].split(":")[0] not in waits
+        assert r["out"]["result"]["result"]["exit"] == int(failed), r["case"]

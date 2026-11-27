@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
@@ -232,8 +233,57 @@ class YouTubeSheetRunnerTest {
         runBlocking {
             withTimeout(30_000) { while (phone.queue.job(job.id)?.state != Job.INTERRUPTED) kotlinx.coroutines.delay(20) }
         }
-        phone.database.read { db -> assertNull(Songs.byKey(db, "calla-lake/river-road")!!.audioPath) }
+        phone.database.read { db ->
+            assertNull(Songs.byKey(db, "calla-lake/river-road")!!.audioPath)
+            // The run cut off is recorded once, by the runner alone: one error event, its time the next pause's.
+            assertEquals(listOf("error"), db.query("SELECT decision FROM events WHERE provider = 'youtube'") { it.text(0) })
+            assertTrue(db.kvGet("http:last_request:youtube") != null)
+        }
         assertEquals(emptyList(), folder(phone).listFiles().orEmpty().map { it.name })
+    }
+
+    /** yt-dlp out of date, or the app's gate refusing a host, is no fault of the video's (YtDlp's KDoc): the audio
+     * stage ends in their words, a wait (exit 0), nothing counted against the video. */
+    @Test fun anOutOfDateYtDlpOrAGateRefusalIsCountedAgainstNoVideo() {
+        for ((stderr, words) in listOf(
+            "ERROR: [youtube] $video: Unable to extract yt initial data" to "[youtube] $video: Unable to extract yt initial data",
+        )) {
+            val phone = phone()
+            val process = object : YtDlpProcess {
+                override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit) =
+                    Ran(1, "", stderr + "\n")
+            }
+            val job = run(phone, runner(phone, process))
+            assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
+            assertEquals(Job.FAILED to words, ends(job)["audio"])
+            phone.database.read { db -> assertEquals(emptyMap(), Records.load(db, 1).failures) }
+        }
+        val phone = phone()
+        val refusing = object : YouTubeEngine {
+            override fun ready(): String? = null
+            override fun process(): YtDlpProcess = object : YtDlpProcess {
+                override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit) =
+                    Ran(1, "", "ERROR: Unable to download webpage: HTTP Error 403: Forbidden\n")
+            }
+            override fun gate(): YtDlpGate = object : YtDlpGate {
+                private var asked = 0
+                override val proxyArg = "http://test:secret@127.0.0.1:9"
+                override fun log(): Map<String, HostGate.HostUse> =
+                    if (asked++ == 0) emptyMap() else mapOf("ads.example" to HostGate.HostUse(refused = 1))
+                override fun close() {}
+            }
+            override val qjs = File("/qjs")
+            override val cacheDir = File(phone.parts.stateDir, "cache")
+        }
+        val job = run(phone, YouTubeSheetRunner(phone.parts, refusing, Models(heard), phone.store, problem = { null },
+                                                chordsProblem = { null }))
+        assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
+        assertEquals(Job.FAILED, ends(job)["audio"]?.first)
+        assertTrue("ads.example" in ends(job)["audio"]!!.second, "${ends(job)["audio"]}")
+        phone.database.read { db ->
+            assertEquals(emptyMap(), Records.load(db, 1).failures)
+            assertNull(Health.state(db, "youtube").cooldownUntil)  // a refusal of the gate's is never a block
+        }
     }
 
     /** A download the phone can't decode (a fragmented MP4 whose fragments can't be read, Mp4's refusal) fails the

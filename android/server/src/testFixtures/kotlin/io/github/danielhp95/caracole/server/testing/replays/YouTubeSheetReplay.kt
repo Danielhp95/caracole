@@ -193,6 +193,7 @@ object YouTubeSheetReplay : AreaReplay {
      * state: the song unlinked (`updated_at` [stamp]), its record's `audio` none, its file gone from the cache. */
     private fun letGo(songId: Long, stamp: String, rows: MutableMap<String, JsonElement>, kv: MutableMap<String, String?>,
                       youtube: MutableMap<String, JsonElement>) {
+        youtube.keys.removeAll { it.startsWith("$songId-") }  // the song's audio from YouTube, however it was named
         val songs = rows["songs"]?.jsonArray?.map { it.jsonObject }.orEmpty()
         val song = songs.firstOrNull { it["id"] == JsonPrimitive(songId) }
         val record = kv["youtube:$songId"]?.let { PyJson.loads(it).jsonObject } ?: return
@@ -204,7 +205,6 @@ object YouTubeSheetReplay : AreaReplay {
             })
         }
         kv["youtube:$songId"] = PyJson.dumps(JsonObject(record + ("audio" to JsonNull)))
-        youtube.remove(File(audio).name)
     }
 
     /** One `make_sheet` record through the phone's runner; Python's result, as said. */
@@ -216,10 +216,12 @@ object YouTubeSheetReplay : AreaReplay {
                                         audio.getValue("duration").jsonPrimitive.double, emptyMap())
         val store = AudioStore(state, { _, _ -> examined }, freeSpace = { Long.MAX_VALUE })
         val heard = Heard.of(kw.getValue("heard"))
+        var hearings = 0
         val chords = object : ChordModels {
             override fun ready(): String? = null
             override val runtime: String = AudioSheetReplay.RUNTIME
             override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
+                hearings++
                 onStep("setting up the models")
                 onStep("hearing the chords")
                 waiting()
@@ -267,6 +269,12 @@ object YouTubeSheetReplay : AreaReplay {
             val said = done.getValue("result").jsonObject
             val want = said.getValue("result").jsonObject
             check(exit == want.getValue("exit").jsonPrimitive.int) { "exited $exit, Python's ${want["exit"]}: ${told.said}" }
+            // The done line's requests in commands/youtube.py's words (`sent_words`), its time left out.
+            done["sent"]?.jsonPrimitive?.content?.takeIf { exit == 0 }?.let { sent ->
+                val last = told.said.lastOrNull().orEmpty()
+                val wanted = if (sent.isEmpty()) ", asking nothing." else ": $sent."
+                check(last.startsWith("Done in ") && last.endsWith(wanted)) { "its last line “$last”, Python's “…$wanted”" }
+            }
             val wantStates = want.getValue("states").jsonObject
             val wantDetails = want.getValue("details").jsonObject
             val apartStages = setOfNotNull("lyrics".takeIf { apart["lyrics"]?.jsonPrimitive?.content == "true" })
@@ -287,6 +295,11 @@ object YouTubeSheetReplay : AreaReplay {
             fun outside(e: JsonElement): Boolean {
                 val a = e.jsonArray
                 return !(a[0].jsonPrimitive.content == "stage" && a[1].jsonPrimitive.content in apartStages)
+            }
+            // A sheet Python found up to date was heard from nothing: neither are the phone's models run for it.
+            val upToDate = AudioRunner.Words.text("up_to_date").substringBefore("{held}")
+            if (wantDetails["chords"]?.jsonPrimitive?.content?.startsWith(upToDate) == true) {
+                check(hearings == 0) { "the models heard it $hearings times, Python's sheet up to date" }
             }
             val progress = JsonArray(told.events.filter(::outside))
             val wantProgress = JsonArray(said.getValue("progress").jsonArray.filter(::outside))

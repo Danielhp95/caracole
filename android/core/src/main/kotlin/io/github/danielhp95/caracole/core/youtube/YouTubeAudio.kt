@@ -77,7 +77,8 @@ object YouTubeAudio {
     /**
      * The folder swept, in the caller's write: each download's own folder a stopped job left; each song's file
      * downloaded [KEPT_FOR] or more before [now] (its record's `downloaded_at`, else the file's time), or gone from the
-     * folder, let go ([letGo]); then each file no song's `audio_path` or record names. How many files went.
+     * folder, let go ([letGo]); a file of the folder a song links that its record doesn't name, aged by its own time
+     * and so unlinked and deleted; then each file no song's `audio_path` or record names. How many files went.
      */
     fun sweep(db: Db, folder: File, now: Instant, stamp: String): Int {
         if (!folder.isDirectory) return 0
@@ -87,8 +88,21 @@ object YouTubeAudio {
         }
         val named = HashSet<String>()
         for (song in Songs.list(db)) {
-            song.audioPath?.let { named += File(it).name }
             val record = Records.load(db, song.id)
+            val linked = inFolder(folder, song.audioPath)
+            if (linked != null && song.audioPath != record.audio) {
+                // A file of the folder the song links that its record doesn't name: aged by its own time, then
+                // unlinked and deleted, so that no link keeps it for ever.
+                val at = if (linked.isFile) Instant.ofEpochMilli(linked.lastModified()) else null
+                if (at == null || Duration.between(at, now) >= KEPT_FOR) {
+                    Versions.updateSong(db, song.id, mapOf("audio_path" to null, "audio_mtime" to null), stamp)
+                    if (delete(linked)) gone++
+                } else {
+                    named += linked.name
+                }
+            } else {
+                song.audioPath?.let { named += File(it).name }
+            }
             val file = inFolder(folder, record.audio) ?: continue
             val at = record.downloadedAt?.let { Stamps.parse(it) }?.let(Stamps::instant)
                 ?: if (file.isFile) Instant.ofEpochMilli(file.lastModified()) else null

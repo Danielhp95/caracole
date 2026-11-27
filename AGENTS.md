@@ -4477,7 +4477,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - song: found or added, refused with audio of its own (an upload of `AudioStore`'s, or an `audio_path` that isn't its
   `youtube:` record's: `_still_ours`) or `[youtube]` "none" with no video given; `--url` noted under `[youtube]`
   (`OverrideWriters.addYoutube`, overrides.py's `add_youtube`, vectors/library/overrides_writes.jsonl).
-- audio: `YouTubeAudio.sweep` first; the video's audio kept already, done; cooling, skipped in the runner's words;
+- audio: `YouTubeAudio.sweep` first; the video's audio kept already, done; the song's auto sheet made here of the
+  very video asked for (its version's `raw.youtube.id` the pasted video, else the record's downloaded pick), done in
+  the same words, no yt-dlp and no model: the chords stage finds it up to date or lays it out again over new words
+  (`StagedSheet.madeOfThisAudio`), as Python's second run does with the audio it keeps (the controller's ruling of
+  2026-11-27: the phone let the audio go, a re-lay needs none); cooling, skipped in the runner's words;
   else through core.youtube's `YtDlp` over the engine's process (its budget PhoneConfig's `youtube`, the product's,
   never the bench's lifted cap; its pauses; one run at a time; a block recorded by the runner alone, the job sending
   `Alerts.blocked`), the database reached a write a touch (`YtDlp.Writes`), its pauses and its process's wait
@@ -4485,19 +4489,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   pasted video, else the search's pick (`Choose.choose` past `skip`), into `cache/youtube/.part-<id>-…/`, then moved to
   `<id>-<video>.m4a` and linked. A video that can't be had (unavailable, or `PassedOver`: no m4a stream) is unusable
   pasted and into `skip` searched, the stage failed; a run never started (`NotSent`: the bench's run going) a wait in
-  the phone's words, counted against nothing; any other error counted against the video (the data's `network`
-  pattern aside), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
+  the phone's words, counted against nothing; yt-dlp out of date (`ExtractorOutdated`) or the gate's refusal
+  (`GateRefused`), a host's problem, the stage failed in their words, a wait, counted against nothing; any other error
+  counted against the video (the data's `network` pattern aside), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
   nothing. A download the decoder refuses fails the chords "audio the phone can't read: …".
 - chords as `AudioRunner`'s, credited to the video (`AutoSheet.youtubeCredit`), the version's `raw.youtube` and
   `url` the video's, the maker the phone's with no `audio_name`; the decoded length said beside yt-dlp's (the job's
   Output and the `caracole.youtube` log). The sheet kept, the pages stage lets the audio go (`YouTubeAudio.letGo`:
   file, `audio_path`, `audio_mtime`, the record's `audio`); else it stays `YouTubeAudio.KEPT_FOR` (3 days), swept at
-  the next job and as the phone starts; a removal deletes it (`LibraryStore.youtubeDir`, removal.py's
+  the next job and as the phone starts (a file a song links that its record doesn't name aged by its own time); its
+  folder `stateDir/cache/youtube/`, the app's files folder, not Android's cacheDir, which may be cleared under a job
+  whose song still links it: the sweep and the let-go are what keep it small; a removal deletes it (`LibraryStore.youtubeDir`, removal.py's
   `youtube_audio`).
 - vectors/lookup/youtube_sheet.jsonl (`YouTubeSheetReplay`, area `youtube-sheet`): Python's job over FakeYtDlp, fake
   models and the fake lyrics sites, replayed through the runner with a `Plan` of the record's yt-dlp (its runs
   compared) and `at_yield` written at the chords' yield alone; compared apart: AudioSheetReplay's, plus
-  `http:last_request:youtube`, and, where the sheet was kept, the phone's let-go applied to Python's after-state.
+  `http:last_request:youtube`, and, where the sheet was kept, the phone's let-go applied to Python's after-state;
+  the done line's requests (`out.sent`, commands/youtube.py's `sent_words`); no model run where Python's sheet was up
+  to date. Its records hold the error ladder (a network error, a counted one, a third failure pasted and searched) and
+  the same job again on the phone's own state after the let-go (`let_go`), Python's second run its answer.
   YouTubeSheetRunnerTest through the real queue; YouTubeAudioTest the sweep and the removal.
 
 ##### Alerts and backups on the phone

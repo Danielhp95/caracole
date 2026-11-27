@@ -73,6 +73,29 @@ class YouTubeAudioTest {
         }
     }
 
+    /** A file of the folder a song links that its record doesn't name (a record lost or rewritten) is no file kept
+     * for ever: aged by its own time, it goes at three days, the song unlinked; a younger one stays. */
+    @Test fun aFileTheSongLinksButItsRecordDoesntNameStillAgesOut() {
+        val w = world()
+        val old = downloaded(w, "River Road", Duration.ofHours(1))
+        val young = downloaded(w, "Lanterns", Duration.ofHours(1))
+        old.setLastModified(now.minus(Duration.ofDays(4)).toEpochMilli())
+        young.setLastModified(now.minus(Duration.ofDays(1)).toEpochMilli())
+        w.database.writeBlocking { db ->
+            for (song in Songs.list(db)) Records.save(db, song.id, Record(video = Video("RiverRoad0${song.id}")))
+        }
+        val gone = w.database.writeBlocking { db -> YouTubeAudio.sweep(db, w.folder, now, Stamps.of(now)) }
+        assertEquals(1, gone)
+        assertFalse(old.exists())
+        assertTrue(young.exists())
+        w.database.read { db ->
+            val first = Songs.byKey(db, "calla-lake/river-road")!!
+            assertNull(first.audioPath)
+            assertNull(first.audioMtime)
+            assertEquals(young.path, Songs.byKey(db, "calla-lake/lanterns")!!.audioPath)
+        }
+    }
+
     @Test fun aRemovalDeletesTheSongsYouTubeAudioAndNothingOutsideItsFolder() {
         val w = world()
         val file = downloaded(w, "River Road", Duration.ofHours(1))

@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.ProviderBlocked
 import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.library.AudioStore
+import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
@@ -21,6 +22,8 @@ import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.youtube.Choose
+import io.github.danielhp95.caracole.core.youtube.ExtractorOutdated
+import io.github.danielhp95.caracole.core.youtube.GateRefused
 import io.github.danielhp95.caracole.core.youtube.NotSent
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.Record
@@ -42,6 +45,7 @@ import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.Heard
 import io.github.danielhp95.caracole.viewer.autochords.Maker
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -141,6 +145,7 @@ class YouTubeSheetRunner(
     ) : StagedSheet(parts, chords, context, artist, title, names, readOverrides, stages, hold, problem) {
         private val folder = YouTubeAudio.folder(File(parts.stateDir, CACHE))
         private var video: Video? = null
+        private var sheetOfVideo = false  // the song's auto sheet is of the video asked for, made here: no audio needed
 
         override val stageNames: List<String> get() = Words.stages.map { it.first }
 
@@ -165,6 +170,8 @@ class YouTubeSheetRunner(
             }
         }
 
+        override fun madeOfThisAudio(s: SongRow): Boolean = sheetOfVideo || super.madeOfThisAudio(s)
+
         override fun maker(db: Db, s: SongRow, audio: File): Maker =
             Maker(AudioRunner.MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, null,
                   AudioRunner.sha16(audio))
@@ -173,8 +180,10 @@ class YouTubeSheetRunner(
         override fun video(): JsonObject? = video?.let(Records::videoJson)
         override fun versionUrl(audio: File): String = video?.url ?: super.versionUrl(audio)
 
+        /** commands/youtube.py's `sent_words`: yt-dlp's runs by their name, every other provider's as LRCLIB
+         * requests, as the computer's done line says them. */
         override fun sent(provider: String, n: Int): String =
-            if (provider == PROVIDER) "$n yt-dlp run" + (if (n == 1) "" else "s") else super.sent(provider, n)
+            "$n " + (if (provider == PROVIDER) "yt-dlp run" else "LRCLIB request") + (if (n == 1) "" else "s")
 
         override fun heard(heard: Heard) {
             val stated = video?.duration?.let { "${PyFormat.fixed(it, 2)} s" } ?: "no length"
@@ -207,6 +216,16 @@ class YouTubeSheetRunner(
                 keptLength = have.duration
                 return "done" to Words.text("audio_already").replace("{url}", have.url)
             }
+            // Its sheet made here of the very video asked for, whose audio the phone let go once it was kept (the
+            // design's §5.4): asked again, the job answers as Python's second run (its audio "already"), and the
+            // chords stage finds the sheet up to date or lays it out again over new words, neither needing the audio
+            // (the controller's ruling of 2026-11-27): no yt-dlp, no model.
+            parts.database.read { db -> sheetVideo(db, song!!, pasted) }?.let { made ->
+                video = made
+                sheetOfVideo = true
+                keptLength = made.duration
+                return "done" to Words.text("audio_already").replace("{url}", made.url)
+            }
             cooling?.let { return "skipped" to it }
             doing("audio", Words.text(if (pasted != null) "downloading" else "looking"))
             val config = parts.config()
@@ -225,6 +244,12 @@ class YouTubeSheetRunner(
                 Outcome.SPENT
             } catch (e: NotSent) {  // nothing was sent: no error of the video's, no record of it
                 return "failed" to NOT_STARTED.replace("{why}", e.msg.orEmpty())
+            } catch (e: ExtractorOutdated) {  // yt-dlp's or the gate's, never the video's: counted against nothing
+                failed(e)
+                return "failed" to (e.msg ?: e.message.orEmpty())
+            } catch (e: GateRefused) {
+                failed(e)
+                return "failed" to (e.msg ?: e.message.orEmpty())
             } catch (e: GaveUp) {
                 failed(e.cause as ProviderError)
                 Outcome.GAVE_UP
@@ -249,6 +274,18 @@ class YouTubeSheetRunner(
                 Outcome.PASSED_OVER, Outcome.GAVE_UP -> fail(Words.text("cant_download"))
                 Outcome.ERROR -> "failed" to Words.text("download_failed")
             }
+        }
+
+        /** The video the song's auto sheet was made from, where this phone made it and it is the video asked for:
+         * [pasted], else the record's pick once downloaded. Null otherwise: then the audio is downloaded. */
+        private fun sheetVideo(db: Db, s: SongRow, pasted: String?): Video? {
+            val record = Records.load(db, s.id)
+            val wanted = pasted ?: record.video?.id?.takeIf { record.downloadedAt != null } ?: return null
+            val auto = Kept.keptFiles(db, s.id).firstOrNull { it.name == Versions.SHEET_FILE_NAMES[1] } ?: return null
+            val raw = Versions.get(db, auto.versionId)?.raw ?: return null
+            if (Relay.madeElsewhere(db, raw)) return null
+            val made = Records.videoOf(raw["youtube"]) ?: return null
+            return made.takeIf { it.id == wanted }
         }
 
         private enum class Outcome { DOWNLOADED, MISSED, PASSED_OVER, GAVE_UP, ERROR, SPENT }
@@ -293,6 +330,10 @@ class YouTubeSheetRunner(
             } catch (e: ProviderBlocked) {
                 throw e
             } catch (e: NotSent) {
+                throw e
+            } catch (e: ExtractorOutdated) {  // a host's problem, not the video's (YtDlp's KDoc): not counted
+                throw e
+            } catch (e: GateRefused) {
                 throw e
             } catch (e: ProviderError) {
                 val (counted, givenUp) = counted(record, chosen, source, e)
@@ -407,6 +448,12 @@ class YouTubeSheetRunner(
      * process's [Closeable.close]: ProcessYtDlp kills yt-dlp and its qjs) and is rethrown once it ended.
      */
     internal class Yielding(private val real: YtDlpProcess, private val context: JobContext) : YtDlpProcess {
+        private companion object {
+            /** How long a stopped run is waited for before the job goes on without it (the process killed by then). */
+            const val STOP_WAIT_MS = 30_000L
+            val log: Logger = Logger.getLogger("caracole.youtube")
+        }
+
         override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit): Ran {
             val result = CompletableFuture<Ran>()
             val thread = Thread({
@@ -430,7 +477,8 @@ class YouTubeSheetRunner(
             } catch (e: Throwable) {
                 if (!result.isDone) {
                     (real as? Closeable)?.close()
-                    thread.join()
+                    thread.join(STOP_WAIT_MS)
+                    if (thread.isAlive) log.warning("yt-dlp's run didn't end within ${STOP_WAIT_MS / 1000} s of its stop")
                 }
                 throw e
             }
