@@ -160,6 +160,7 @@ class AudioRunner(
         private lateinit var overrides: Overrides
         private var song: SongRow? = null
         private var kept: File? = null  // the file the audio stage kept as the song's audio
+        private var sheetKept = false  // the chords stage left the song a sheet of this audio, whatever it said after
         private var keptLength: Double? = null
 
         /** The job refused, said in the song stage, the stages not ended skipped (staged.py `_refuse`). */
@@ -247,10 +248,11 @@ class AudioRunner(
             context.say("Done in $seconds s" + if (sent.isNotEmpty()) ": $sent." else ", asking nothing.")
         }
 
-        /** The sheet said readable once the chords stage kept it, and again as its viewer comes (get.readable_files). */
+        /** The sheet said readable once the chords stage kept it (its info.json failing after or not), and again as its
+         * viewer comes (get.readable_files). */
         private fun checkReadable() {
             val song = song ?: return
-            if (states["chords"] != "done") return
+            if (!sheetKept) return
             val readable = parts.database.read { db -> readableFiles(db, song) }
             if (readable.isNotEmpty() && readable != files) {
                 files = readable
@@ -443,11 +445,13 @@ class AudioRunner(
                 return null
             }
             if (Relay.due(s, version.raw, Relay.notedOf(db, s, version.raw)) == null) {
+                sheetKept = true
                 return "done" to Words.text("up_to_date").replace("{held}", holds(version.raw))
             }
             val relaid = Relay.onto(db, parts.store.libraryDir, overrides, listOf(s.id))
             relaid.failed[s.id]?.let { return fail(Words.text("relay_failed")) }
             val now = Kept.keptFiles(db, s.id).first { it.name == Versions.SHEET_FILE_NAMES[1] }
+            sheetKept = true
             return "done" to holds(Versions.get(db, now.versionId)!!.raw)
         }
 
@@ -472,6 +476,7 @@ class AudioRunner(
                                "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
                 Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
             }
+            sheetKept = true
             val info = try {
                 InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
                 null
@@ -493,7 +498,7 @@ class AudioRunner(
         // --- the pages --------------------------------------------------------------------------------------------
 
         private fun pdf(): Pair<String, String> {
-            if (states["chords"] != "done") return "skipped" to Words.text("no_sheet")
+            if (!sheetKept) return "skipped" to Words.text("no_sheet")
             if (parts.pages === SongPages.NONE) return "skipped" to LookupWords.NO_PDFS
             val id = song!!.id
             val stats = parts.database.writeBlocking { db -> parts.pages.render(db, listOf(id), null) }

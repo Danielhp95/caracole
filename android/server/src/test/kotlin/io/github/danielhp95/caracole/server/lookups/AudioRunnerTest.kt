@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -194,6 +195,11 @@ class AudioRunnerTest {
         assertTrue(said.startsWith("the sheet was kept (chords only, no lyrics), but its info.json couldn't be written: "),
                    said)
         assertTrue(autoSheet(phone))
+        // A sheet was kept: the later stages go by it, never by the chords stage's state (its pages made, the sheet
+        // announced readable).
+        assertEquals(Job.SKIPPED to LookupWords.NO_PDFS, ends(job)["pdf"])
+        assertEquals("done" to LookupWords.LIBRARY_PAGE, ends(job)["pages"])
+        assertEquals("Calla Lake/River Road/sheet (auto).txt", job.files["sheet"])
         val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
         assertEquals(song.audioMtime, song.autochordsMtime)
         val models = Models()

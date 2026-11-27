@@ -4297,10 +4297,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   is up to date or re-laid (`Relay.onto`); else `ChordModels.hear` holding no write, `yieldToQueued` every second;
   read again; then in one write `SheetHalf.make` and run.py's `_keep` (the song's one auto version, `refreshStatus`,
   info.json, `autochords_mtime` last; info.json failing after the keep fails the stage "the sheet was kept (…), but
-  its info.json couldn't be written", `autochords_mtime` set, so it isn't heard again), the maker the phone's (`made_on` "phone", kv `sync:id`, `ModelsRunner.names()`,
-  models.json's names, `ChordModels.runtime`, kv `audio:name:`, the file's sha16). Failures: `AudioUnreadable` "audio
-  the phone can't read: …", `ChordsUnavailable` in its words, a bug laying out "a bug in caracole: …"; each exit 1,
-  nothing recorded against the song (no `autochords:failed:`: the phone tries again at Try again).
+  its info.json couldn't be written", `autochords_mtime` set, so it isn't heard again, and pdf, pages and the readable
+  sheet go by the sheet kept, never by the chords stage's state), the maker the phone's (`made_on` "phone", kv
+  `sync:id`, `ModelsRunner.names()`, models.json's names, `ChordModels.runtime`, kv `audio:name:`, the file's sha16).
+  Failures: `AudioUnreadable` "audio the phone can't read: …", `ChordsUnavailable` in its words, a bug laying out "a
+  bug in caracole: …"; each exit 1, nothing recorded against the song (no `autochords:failed:`: the phone tries again
+  at Try again).
 - The queue's yield passes over a lookup of the running job's own song (`JobCommands.songOfJob`, jobs.song_of_job:
   a song never has two jobs running): it waits for the job's end. `ModelsRunner.USES` holds `audio:`, so the models'
   remove is refused while a sheet waits or runs (a remove between a job's queueing and its `hear` is not closed yet:
