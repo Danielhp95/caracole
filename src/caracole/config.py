@@ -84,9 +84,9 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # No Crawl-delay asked; the bulk pace of the other sites.
     "ireal": ProviderPolicy(budget=20, delay=(2.5, 5.0)),
     # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
-    # each a search or a download, so six are three songs a night. A run sends several requests,
+    # each a search or a download, so fifty are twenty-five songs a night (six until 2026-11-27, the owner's choice). A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.
-    "youtube": ProviderPolicy(budget=6, delay=(3.75, 7.5)),
+    "youtube": ProviderPolicy(budget=50, delay=(3.75, 7.5)),
     # YouTube's image host, i.ytimg.com: the thumbnail of a video the library page suggests for a search, one image a
     # video, never asked twice (youtube_search.py). No pause, the owner's choice of 2026-10-29: a provider of its own,
     # so that YouTube's pause between yt-dlp runs never holds it back, and a block of either cools the other nothing.

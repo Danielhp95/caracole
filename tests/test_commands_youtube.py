@@ -167,7 +167,7 @@ def test_by_hand_the_pass_counts_its_yt_dlp_runs_on_a_live_line(tmp_path, ntfy, 
     screen = on_screen(monkeypatch)
     result = invoke(write_config(tmp_path, fake))
     assert result.exit_code == 0, result.output
-    assert screen.shown() == ["YouTube · 1 of up to 6 yt-dlp runs", "YouTube · 2 of up to 6 yt-dlp runs"]
+    assert screen.shown() == ["YouTube · 1 of up to 50 yt-dlp runs", "YouTube · 2 of up to 50 yt-dlp runs"]
     assert screen.getvalue().endswith("\r")
     assert "Radiohead - Creep: downloaded Creep" in result.stdout and "up to 6" not in result.stdout
 

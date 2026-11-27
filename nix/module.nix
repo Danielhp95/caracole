@@ -705,8 +705,9 @@ in
           # of what they were before 2026-11-03, the owner's choice): 60 UG, 30 LaCuerda,
           # 20 gtptabs.com, 20 harptabs.com, 20 iReal Pro forum and 10 MuseScore requests 2.5-5 s apart, 20 gametabs.net
           # ones 0.25 s apart, 200 LRCLIB ones 0.25-0.5 s apart, 60 Megalobiz ones 0.5-1 s
-          # apart, 6 yt-dlp runs 3.75-7.5 s apart. AZLyrics has no pause. The answers, yt-dlp's downloads (up to about 50 minutes more at
-          # their time limits), the PDFs and the lookups the run hands its lock to
+          # apart; 50 yt-dlp runs 3.75-7.5 s apart add about 4 minutes, 6 at most (50 since 2026-11-27, 6 before). AZLyrics has no pause.
+          # The answers, yt-dlp's downloads (a usual song under a minute; at their time limits, 17 minutes a song,
+          # 25 songs would pass this timeout: such a night is cut here and its songs wait for the next), the PDFs and the lookups the run hands its lock to
           # come on top; a hung run must not hold the next night's.
           TimeoutStartSec = "3h";
         };
