@@ -33,7 +33,9 @@ import java.util.concurrent.TimeUnit
  * whether the client [killed] it (a timeout, [timedOut] then, a cancel or a close; [exit] is then -1 and the rest is
  * what it wrote until then, or nothing for a run stopped before it began), and how long, from the client's bind, the
  * `:youtube` process took to start ([processStartMs]) and Python to be ready with yt-dlp imported and the argv
- * checked ([pythonReadyMs]); -1 for what never was. Every text the gate's `--proxy` is in is redacted ([YtDlpClient]).
+ * checked ([pythonReadyMs]); -1 for what never was; and whether its request was [sent] to the service at all (false for
+ * a run stopped while it waited for its turn: nothing began). Every text the gate's `--proxy` is in is redacted
+ * ([YtDlpClient]).
  */
 data class Ran(
     val exit: Int,
@@ -43,6 +45,7 @@ data class Ran(
     val timedOut: Boolean,
     val processStartMs: Long,
     val pythonReadyMs: Long,
+    val sent: Boolean = true,
 ) {
     companion object {
         const val STDERR_TAIL = 64 * 1024
@@ -84,6 +87,12 @@ class Refused(val words: String) : IOException(words)
  *   (KillTest measured it). NEVER a process-group kill: every process of the app's uid, the main one included,
  *   shares one group (zygote's).
  * - Every answer carries its run's id: an answer of another run is never read as this one's.
+ * - An interrupt of the thread in [run] is a stop too: the run under way killed as [cancel] kills it, then
+ *   InterruptedException thrown (the flag cleared, as that exception says); one while it waits for its turn starts
+ *   nothing: [YtDlpNotStarted] in [INTERRUPTED_WAITING]'s words, the thread's interrupt set again.
+ * - A gate-shaped address in the argv ([HostGate.PROXY_PATTERN]) that is no open gate of the app's ([HostGate.isOpen]
+ *   in this process, else asked of [GateService], the main process's, where every gate is) is [Refused] in
+ *   [NOT_OUR_GATE]'s words before anything is bound: another app's proxy on 127.0.0.1 never takes yt-dlp's traffic.
  * - The process gone before its answer, unasked: [YtDlpStopped]; none started: [YtDlpNotStarted]; a refusal:
  *   [Refused].
  * - [run] blocks; never on the main thread, whose looper delivers the binding.
@@ -149,12 +158,18 @@ class YtDlpClient(
             runs[run.id] = run
         }
         try {
+            checkGates(argv)
             if (!ONE_AT_A_TIME.tryAcquire()) {
                 waiting()
-                ONE_AT_A_TIME.acquire()
+                try {
+                    ONE_AT_A_TIME.acquire()
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw YtDlpNotStarted(INTERRUPTED_WAITING)
+                }
             }
             try {
-                if (run.stopped || closed) return Ran(-1, "", "", true, false, -1, -1)
+                if (run.stopped || closed) return Ran(-1, "", "", true, false, -1, -1, sent = false)
                 return acrossProcesses { runAlone(run, argv, folders, verbose, timeoutS, Redact(argv), onLine) }
             } finally {
                 ONE_AT_A_TIME.release()
@@ -165,6 +180,21 @@ class YtDlpClient(
                 active--
                 if (closed && active == 0) replies.quitSafely()
             }
+        }
+    }
+
+    /** Each gate-shaped address of [argv] an open gate's of the app, else [Refused] ([NOT_OUR_GATE]). */
+    private fun checkGates(argv: List<String>) {
+        val shape = Regex(HostGate.PROXY_PATTERN)
+        for (arg in argv) for (found in shape.findAll(arg)) {
+            val (port, user) = HostGate.portAndUser(found.value) ?: throw Refused(NOT_OUR_GATE)
+            if (HostGate.isOpen(port, user)) continue
+            val there = try {
+                GateService.Client(context).use { it.isOpen(port, user) }
+            } catch (_: IOException) {
+                false
+            }
+            if (!there) throw Refused(NOT_OUR_GATE)
         }
     }
 
@@ -243,6 +273,7 @@ class YtDlpClient(
         var killed = false
         var timedOut = false
         var sent = false
+        var interrupted = false
         try {
             while (exit == null) {
                 tail.read()
@@ -252,7 +283,14 @@ class YtDlpClient(
                     timedOut = !run.stopped
                     break
                 }
-                when (val event = events.poll(minOf(POLL_MS, deadline - now), TimeUnit.MILLISECONDS)) {
+                val event = try {
+                    events.poll(minOf(POLL_MS, deadline - now), TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    interrupted = true // a stop, as cancel's: killed below, then said
+                    run.stopped = true
+                    continue
+                }
+                when (event) {
                     null, Event.Stop -> Unit
                     is Event.Connected -> {
                         binder = event.binder.also { it.linkToDeath(death, 0) }
@@ -300,6 +338,7 @@ class YtDlpClient(
             }
             tail.read()
             tail.end()
+            if (interrupted) throw InterruptedException(INTERRUPTED)
             return Ran(
                 exit = if (killed) -1 else exit!!,
                 stdout = redact(read(out)),
@@ -308,6 +347,7 @@ class YtDlpClient(
                 timedOut = timedOut,
                 processStartMs = if (started >= 0) started - t0 else -1,
                 pythonReadyMs = if (ready >= 0) ready - t0 else -1,
+                sent = sent,
             )
         } finally {
             binder?.unlinkToDeath(death, 0)
@@ -440,6 +480,9 @@ class YtDlpClient(
         const val STOPPED = "yt-dlp stopped (the phone may have run out of memory)"
         const val NOT_STARTED = "yt-dlp couldn't be started: its service wouldn't bind"
         const val ANOTHER_RUN = "another run is going: yt-dlp runs one at a time on the phone"
+        const val NOT_OUR_GATE = "yt-dlp is given the app's own gate as its proxy, and no other"
+        const val INTERRUPTED = "yt-dlp was stopped: its job was interrupted"
+        const val INTERRUPTED_WAITING = "yt-dlp wasn't started: its job was interrupted while it waited for its turn"
 
         /** The file in `filesDir` whose lock a client holds for the whole of a run, across the app's processes. */
         const val LOCK = "youtube-run.lock"

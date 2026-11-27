@@ -529,6 +529,14 @@ EDGES = [
     "  WARNING:  [youtube] n challenge solving failed\n" + NO_FORMAT,
 ]
 OK = [VERBOSE, "", f"WARNING: [youtube] {ID}: n challenge solving failed: Some formats may be missing."]
+# What the owner's phone printed in Gate Y0's sessions (2026-11-27): every download's warning (no FFmpeg there), never a
+# failure, nor what makes a pass-over out of date; and a search a lossy Wi-Fi cut in its TLS handshake, an error that
+# is neither a block nor out of date (the cause's repr, which the session's report elided, written as yt-dlp's).
+DASH = (f"WARNING: {ID}: writing DASH m4a. Only some players support this container. Install ffmpeg to fix this "
+        "automatically")
+HANDSHAKE = ("ERROR: Unable to download API page: _ssl.c:1015: The handshake operation timed out (caused by "
+             "TransportError('_ssl.c:1015: The handshake operation timed out'))")
+SEEN = [HANDSHAKE, f"{DASH}\n{HANDSHAKE}", f"{DASH}\n{NO_FORMAT}"]
 
 
 def test_the_classify_corpus():
@@ -539,6 +547,10 @@ def test_the_classify_corpus():
         records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": PROVISIONAL} for s in texts]
     records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": None} for s in EDGES]
     records += [{"stderr": s, "exit": 0, "class": "ok", "provisional": PROVISIONAL if s else None} for s in OK]
+    records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": None} for s in SEEN]
+    records += [{"stderr": DASH, "exit": 0, "class": "ok", "provisional": None}]
+    assert [youtube.classify(s) for s in SEEN] == ["error", "error", "pass_over"]
+    assert youtube.classify(DASH) == "error"  # read only for a run that failed: an ok run is ok whatever it warns
     assert all(r["class"] == "outdated" for r in records[len(COMPUTERS):len(COMPUTERS) + len(SOLVER_BROKE)])
     assert {youtube.classify(s) for s in PASSED_OVER} == {"pass_over"}
     assert {youtube.classify(s) for s in GATE} == {"error"}

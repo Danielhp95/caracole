@@ -156,7 +156,13 @@ class GateServiceTest {
     @Test
     fun aLoopbackGateIsLoopbacksWhateverTheProcesssMode() {
         val modes = java.util.Collections.synchronizedList(mutableListOf<String>())
-        GateService.makeGate = { mode -> modes += mode.name; HostGate(mode, HostGate.HostRule.YOUTUBE) }
+        // A NETWORK gate under the tests' loopback names a resolver and a connector of its own (HostGate refuses the
+        // system's there): these reach nothing.
+        GateService.makeGate = { mode ->
+            modes += mode.name
+            HostGate(mode, HostGate.HostRule.YOUTUBE, { host, _ -> throw java.io.IOException("no lookup of $host") },
+                     connector = { _, address, _ -> throw java.io.IOException("no dial of $address") })
+        }
         GateService.makeLoopbackGate = { modes += "kill check"; loopbackMade() }
         GateService.modeOf = { HostGate.Mode.NETWORK }
         GateService.Client(context).use { client ->

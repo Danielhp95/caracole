@@ -117,6 +117,11 @@ class YtDlpServiceTest {
         refused(listOf("--ignore-config", "--version"))
         refused(Runs.version("http://10.0.2.2:3128"))
         refused(Runs.version("http://someone:else@10.0.2.2:3128"))
+        // A gate-shaped address that is no open gate of the app's: refused by the client before it binds anything.
+        val closed = gates.open().also { it.close() }
+        assertEquals(YtDlpClient.NOT_OUR_GATE, refused(Runs.version(closed.proxyArg)))
+        val user = gate.proxyArg.substringAfter("://").substringBefore(':')
+        assertEquals(YtDlpClient.NOT_OUR_GATE, refused(Runs.version(gate.proxyArg.replace(user, "0".repeat(user.length)))))
     }
 
     @Test

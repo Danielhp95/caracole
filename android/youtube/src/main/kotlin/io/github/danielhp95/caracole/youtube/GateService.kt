@@ -39,7 +39,9 @@ import java.util.concurrent.atomic.AtomicLong
  * pid), so it guards against a mistake inside the app's own uid, never against another process of the app; the bench
  * asks it from its button alone; [OPEN_LOOPBACK] a gate of LOOPBACK's mode whatever this process's, which can reach
  * 127.0.0.1 alone ([HostGate.KILL_CHECK_HOSTS]: never 10.0.2.2, a routable private address on some real networks; the
- * bench's kill check, on the owner's phone too: always safe to open); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
+ * bench's kill check, on the owner's phone too: always safe to open); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [IS_OPEN]
+ * whether a port and a user are an open gate's of this process ([HostGate.isOpen]: a [YtDlpClient] of another process
+ * asks it before it hands yt-dlp a `--proxy`); [CLOSE] closes one;
  * [CLOSE_ALL] a client's every gate (its close), each gate is closed too when the process that asked for it dies, and
  * every gate when the service ends. Nothing it is asked throws on its thread (where an uncaught
  * exception would end the main process, its server and queue with it): a gate that won't start is said in the answer,
@@ -103,6 +105,7 @@ class GateService : Service() {
         var opened = -1
         when (msg.what) {
             MODE -> answer.putString(MODE_NAME, mode().name)
+            IS_OPEN -> answer.putBoolean(OPEN_NOW, HostGate.isOpen(msg.data.getInt(PORT, -1), msg.data.getString(USER) ?: ""))
             OPEN, OPEN_OBSERVING, OPEN_LOOPBACK -> {
                 if (msg.what == OPEN_OBSERVING) {
                     observeRefusal(msg.data.getInt(PID, -1))?.let { why ->
@@ -176,7 +179,7 @@ class GateService : Service() {
         }
     }
 
-    private fun mode(): HostGate.Mode = modeOf?.invoke() ?: HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))
+    private fun mode(): HostGate.Mode = gatesMode()
 
     /** Why an OBSERVE gate isn't opened for the asker of [pid], or null: the bench's own process asks, under the
      * network's mode. */
@@ -260,6 +263,12 @@ class GateService : Service() {
         /** The gates' mode, the main process's. */
         fun mode(): HostGate.Mode = HostGate.Mode.valueOf(requireNotNull(ask(MODE, -1).getString(MODE_NAME)))
 
+        /** Whether [port] and [user] are those of a gate open now in the main process (where every gate of the app is). */
+        fun isOpen(port: Int, user: String): Boolean = ask(IS_OPEN, -1) {
+            putInt(PORT, port)
+            putString(USER, user)
+        }.getBoolean(OPEN_NOW)
+
         private fun gate(answer: Bundle) =
             Gate(this, answer.getInt(ID), answer.getInt(PORT), requireNotNull(answer.getString(PROXY)))
 
@@ -331,6 +340,7 @@ class GateService : Service() {
         const val MODE = 5
         const val OPEN_OBSERVING = 6
         const val OPEN_LOOPBACK = 7
+        const val IS_OPEN = 8
 
         /** The bench's process, after the package's name (the debug app's manifest). */
         const val BENCH_PROCESS = ":ytbench"
@@ -346,6 +356,8 @@ class GateService : Service() {
         private const val REFUSED_ANY = "refusedAny"
         private const val PID = "pid"
         private const val MODE_NAME = "mode"
+        private const val USER = "user"
+        private const val OPEN_NOW = "open"
         private const val WAIT_S = 10L
 
         /** How a gate is made: a test's seam (a gate that won't start). */
@@ -359,6 +371,24 @@ class GateService : Service() {
         /** A test's seam: the gates' mode in place of `caracole.network`'s (null, in production: the property's). A
          * test never clears that property, the guard that keeps every client of its process on loopback. */
         @Volatile internal var modeOf: (() -> HostGate.Mode)? = null
+
+        /** The one place the app decides its gates' mode, in the main process: [modeOf], else `caracole.network`'s
+         * ([HostGate.Mode.of]): every gate of the app is of it, this service's for another process and the app's
+         * own jobs' ([gate]). */
+        fun gatesMode(): HostGate.Mode = modeOf?.invoke() ?: HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))
+
+        /** A fresh gate of the app's, started, for a run of this, the main process (the app's jobs, [YtDlpEngine]):
+         * [makeGate] of [gatesMode], rule YOUTUBE's, as an [OPEN] makes one for another process. Never on a process but
+         * the main one: a gate of another process is asked of this service. */
+        fun gate(): HostGate.Opened {
+            val gate = makeGate(gatesMode())
+            return try {
+                gate.start()
+            } catch (e: Exception) {
+                gate.close()
+                throw e
+            }
+        }
 
         /** How an OBSERVE gate is made (only once [observeRefusal] passed: the network's mode). */
         private val makeObserving: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.OBSERVE) }

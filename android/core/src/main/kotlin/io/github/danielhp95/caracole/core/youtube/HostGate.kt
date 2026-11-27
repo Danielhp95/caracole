@@ -40,7 +40,12 @@ import java.util.concurrent.atomic.AtomicLong
  *   tunnel or a relay in which nothing moves either way for [idleTimeoutMs] (a read or a write, both pumps stuck in
  *   writes too) is closed.
  * - A relayed answer's head is checked as a request's is: a control character but a tab, or a bare CR, is 502.
- * - The gate reads no property: the main process passes the mode ([Mode.of] `caracole.network`'s value).
+ * - The gate never takes its mode from a property: the main process passes it ([Mode.of] `caracole.network`'s value).
+ *   The property is a guard alone: while it is `loopback` (every test, JVM or device), a [Mode.NETWORK] gate, of any
+ *   rule, OBSERVE's too, is refused ([NETWORK_UNDER_LOOPBACK]) unless it names a resolver and a connector of its own
+ *   (a test's, which reach loopback or nothing), never [Resolver.SYSTEM] or [Connector.DIRECT].
+ * - The gates this process has open, by port and user ([isOpen]): a client hands yt-dlp no `--proxy` of a gate-shaped
+ *   address that isn't one of them (another app's proxy on 127.0.0.1 never takes yt-dlp's traffic).
  * - The secret is kept as a digest; only [Opened.proxyArg] holds it, and no `toString`, log or message here names it.
  */
 class HostGate(
@@ -57,6 +62,10 @@ class HostGate(
     init {
         require(loopbackHosts.isNotEmpty() && loopbackHosts.all { it in LOOPBACK_NAMES }) {
             "a gate's loopback hosts are some of ${LOOPBACK_NAMES.joinToString(", ")}"
+        }
+        if (mode == Mode.NETWORK && System.getProperty(io.github.danielhp95.caracole.core.http.RealTransport.NETWORK) ==
+            LOOPBACK_PROPERTY) {
+            require(resolver !== Resolver.SYSTEM && connector !== Connector.DIRECT) { NETWORK_UNDER_LOOPBACK }
         }
     }
 
@@ -190,6 +199,8 @@ class HostGate(
     private var server: ServerSocket? = null
     private var acceptor: Thread? = null
     private var expected: ByteArray? = null
+    /** This gate's key in [OPEN] while it is started and not closed. */
+    private var registered: String? = null
 
     /** A test's seam: run first on each connection's thread (a handler that throws stands for a bug there). */
     @Volatile internal var beforeServing: (() -> Unit)? = null
@@ -210,6 +221,7 @@ class HostGate(
         val socket = ServerSocket(0, 50, LOOPBACK_ADDRESS)
         server = socket
         val port = socket.localPort
+        registered = key(port, user).also { OPEN += it }
         acceptor = spawn("caracole-gate-$port-accept") {
             try {
                 accept(socket)
@@ -237,6 +249,7 @@ class HostGate(
         val toJoin: List<Thread>
         synchronized(this) {
             closed = true
+            registered?.let { OPEN -= it }
             try {
                 server?.close()
             } catch (_: IOException) {
@@ -675,6 +688,32 @@ class HostGate(
 
         /** The user's and the secret's random bytes. */
         const val TOKEN_BYTES = 16
+
+        /** `caracole.network`'s value under every test runner and Gradle test task. */
+        const val LOOPBACK_PROPERTY = "loopback"
+
+        /** Why a [Mode.NETWORK] gate isn't made while `caracole.network` is `loopback`. */
+        const val NETWORK_UNDER_LOOPBACK = "no gate to the network while caracole.network is loopback (a test's gate " +
+            "names a resolver and a connector of its own)"
+
+        /** The open gates of this process, each by its port and user: started, not yet closed. */
+        private val OPEN: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+        private fun key(port: Int, user: String) = "$port:$user"
+
+        /** Whether [port] and [user] are those of a gate of this process that is open now. */
+        fun isOpen(port: Int, user: String): Boolean = key(port, user) in OPEN
+
+        /** [proxy]'s port and user, for an address of [PROXY_PATTERN]'s shape whole; else null. */
+        fun portAndUser(proxy: String): Pair<Int, String>? {
+            if (!Regex(PROXY_PATTERN).matches(proxy)) return null
+            val port = proxy.substringAfterLast(':').toIntOrNull() ?: return null
+            return port to proxy.substringAfter("://").substringBefore(':')
+        }
+
+        /** Whether [proxy] is the `--proxy` of a gate of this process that is open now ([Opened.proxyArg]'s shape, its
+         * port and user an open gate's). The secret isn't compared: a gate keeps only its digest. */
+        fun isOpen(proxy: String): Boolean = portAndUser(proxy)?.let { (port, user) -> isOpen(port, user) } ?: false
 
         /**
          * Whether [ip] is a public address: not loopback, any-local, link-local, site-local or multicast (the JDK's

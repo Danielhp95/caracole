@@ -27,8 +27,9 @@
 #                   among its runtimes; one yt-dlp run in the :youtube process, through the test process's gate, over a
 #                   clip the test serves on 127.0.0.1 (HTTP and HTTPS), its refusals, a stop that leaves no
 #                   process, and one run at a time across two processes of the app; then the app's YouTubeBenchTest
-#                   (the debug build's YouTube bench), its query a clip served on the host as 10.0.2.2; no request
-#                   leaves the device (CARACOLE_YOUTUBE_REPEAT=CLASS:N runs one of :youtube's classes N times)
+#                   (the debug build's YouTube bench), its query a clip served on the host as 10.0.2.2, and
+#                   YtDlpEngineTest (the app's yt-dlp, PhoneDeps.youtube, under core.youtube's runner) over it; no
+#                   request leaves the device (CARACOLE_YOUTUBE_REPEAT=CLASS:N runs one of :youtube's classes N times)
 #   --tcpdump FILE  the gate that caracole sends nothing to any host but 10.0.2.2 (and loopback) while the classes
 #                   run, by caracole's own uids: on the rooted emulator (`su 0`), a chain of iptables and ip6tables
 #                   rules at the head of OUTPUT (caracole_own) counts, for each of caracole's packages installed (the
@@ -412,6 +413,8 @@ if [ "$want_youtube" = 1 ]; then
         sleep 0.2
     done
     run_class YouTubeBenchTest -e clip "http://10.0.2.2:$clip_port/clip.m4a"
+    # The app's yt-dlp (PhoneDeps.youtube) under core.youtube's runner, over the same clip.
+    run_class YtDlpEngineTest -e clip "http://10.0.2.2:$clip_port/clip.m4a"
 fi
 
 if [ "$want_app" = 1 ]; then

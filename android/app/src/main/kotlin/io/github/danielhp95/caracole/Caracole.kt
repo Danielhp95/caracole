@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.Phone
@@ -38,8 +39,8 @@ import java.util.Locale
  * the mirror's `blobs/` and `manifest.json`. A lookup reaches the sites through [transport], [RealTransport] in the
  * app, read on every request.
  *
- * All of it is the main process's. The debug build's `:youtube` process (:youtube's YtDlpService, one yt-dlp run a
- * process) starts none of it: the app has no Application class, its providers are the main process's, and that service
+ * All of it is the main process's, the app's yt-dlp's gates ([youtube]) among it. The debug build's `:youtube`
+ * process (:youtube's YtDlpService, one yt-dlp run a process) starts none of it: the app has no Application class, its providers are the main process's, and that service
  * touches nothing here, so no database, server or queue opens there.
  */
 object Caracole {
@@ -138,6 +139,7 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
+                youtube = youtube(context),
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the
@@ -182,6 +184,24 @@ object Caracole {
     }
 
     fun cacheDir(context: Context): File = File(context.applicationContext.filesDir, "state/cache")
+
+    /**
+     * The app's yt-dlp for the phone's jobs: the debug build's `:youtube` (src/debug's DebugYouTube, reached by its
+     * name alone, so this source set names no `:youtube` class), its runner's folder `files/state/cache/youtube`; null
+     * in a release, which carries none (android/scripts/release-check.sh).
+     */
+    internal fun youtube(context: Context): YouTubeEngine? {
+        if (!BuildConfig.DEBUG) return null
+        return try {
+            Class.forName("$PACKAGE.DebugYouTube").getMethod("engine", Context::class.java, File::class.java)
+                .invoke(null, context.applicationContext, File(cacheDir(context), YOUTUBE)) as YouTubeEngine
+        } catch (_: ClassNotFoundException) {
+            null
+        }
+    }
+
+    private const val PACKAGE = "io.github.danielhp95.caracole"
+    private const val YOUTUBE = "youtube"
 
     /**
      * Whether [path] of the library ("Estopa/Tu calorro/sheet.pdf") is a file another app opens rather than a page the

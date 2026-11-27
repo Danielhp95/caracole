@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.ServerAddress
@@ -100,7 +101,9 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * reaches a site by accident). [searchesLacuerda] false: `/api/search`'s `lacuerda_search` null, as the computer's
  * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
  * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
- * now, read as the job runs (the app's ConnectivityManager; none metered by default).
+ * now, read as the job runs (the app's ConnectivityManager; none metered by default). [youtube]: the app's yt-dlp (the
+ * debug build's :youtube, `ProcessYtDlp` through `YtDlpClient`, one gate a run opened in the main process), null in a
+ * build without it.
  */
 data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir: File, val mirror: Mirror?,
                      val scope: CoroutineScope, val settings: SyncSettings, val secret: String, val csrf: String,
@@ -108,7 +111,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
                      val alerts: Alerts = Alerts.NONE, val pacing: Pacing = Pacing.REAL,
                      val searchesLacuerda: Boolean = true,
                      val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
-                     val metered: () -> Boolean = { false })
+                     val metered: () -> Boolean = { false },
+                     val youtube: YouTubeEngine? = null)
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
@@ -149,6 +153,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                              deps.pacing)
 
     val parts: PhoneParts
+
+    /** The app's yt-dlp ([PhoneDeps.youtube]): null in a build that carries none (the release, until stage Y5). */
+    val youtube: YouTubeEngine? = deps.youtube
 
     /** The site catalogues' job (`catalogues`), which the app queues ([CataloguesRunner.spec]): GitHub's release read
      * through its API (the owner's choice S1; [PhoneDeps.catalogues], a test's GitHub), asked with caracole's user

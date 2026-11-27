@@ -2905,6 +2905,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     ask naming `:ytbench` and never under loopback (GateService
     `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
     request's `verbose` leave.
+  - The engine (Y1.5): `PhoneDeps.youtube: YouTubeEngine?` (core.youtube: `ready()`, `process()`, `gate()`, `qjs`,
+    `cacheDir`), the debug build's `YtDlpEngine` (src/debug's `DebugYouTube`, which `Caracole.youtube` reaches by name,
+    so the main source set names no `:youtube` class), null in a release. `process()` is a `ProcessYtDlp`, core's
+    `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with it: the argv the runner built, its
+    folders read off the templates; `Ran` its exit, stdout and stderr (its first 64 KiB, then the client's tail);
+    `NotStarted` for nothing sent (no bind, a refusal, another process's run, a stop before its turn); cut off, thrown
+    as it is (`YtDlpStopped`, a `close` or `cancel` a CancellationException, an interrupt an InterruptedException, the
+    process killed first), for the runner to count and log. `gate()` a `GateService.gate()`, opened in the main
+    process in the app's one mode (`GateService.gatesMode`), closed by the runner after each run. One run at a time
+    with the bench's (the client's turn and file lock: a run while `:ytbench` runs one is `NotStarted`, "another run is
+    going"). The client refuses (`Refused`, `NOT_OUR_GATE`) a gate-shaped `--proxy` that is no open gate of the app's
+    (`HostGate.isOpen` here, `GateService` `IS_OPEN` from another process) before it binds, and stops a run whose thread
+    is interrupted as `cancel` does. `YtDlpEngineTest` (`device-test.sh --youtube`): the real runner's download of the
+    host's clip, its argv the template filled, the gate's log 10.0.2.2 alone, one `events` row; a redirect to a host
+    the gate refuses, `GateRefused` in the data's words, no strike; the turn held, nothing started; an interrupt and a
+    close mid-download, cut off and counted; after each no process, thread, open gate or run file left, and the secret
+    nowhere.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -3308,7 +3325,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     core.keys.Normalize, patterns through PyRegex;
   - `Classify`: `of` (classify), `ofRun` (the exit status first), `OK_EXIT`, `OK`, `GATE` (the runner's, before both);
   - `HostGate.HostRule.YOUTUBE`: youtube.py's `PHONE_GATE` (youtube.json's `gate`: names, suffixes, port, the hosts
-    reported apart, those refused by name, the refusal's words); the computer has no gate;
+    reported apart, those refused by name, the refusal's words); the computer has no gate; `HostGate.isOpen`, this
+    process's open gates by port and user; a NETWORK gate refused while `caracole.network` is `loopback` unless it
+    names a resolver and a connector of its own (`NETWORK_UNDER_LOOPBACK`);
   - `YtDlp` (Y1.3), youtube.py's `YtDlp` over a `YtDlpProcess` (`Ran`; `NotStarted`, nothing sent): `budget` runs
     (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), the pause
     after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the

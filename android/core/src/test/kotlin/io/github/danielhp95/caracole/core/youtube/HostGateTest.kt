@@ -63,6 +63,10 @@ class HostGateTest {
 
     private val never = HostGate.Resolver { host, port -> fail("the gate looked up $host:$port") }
 
+    /** A connector that fails the test if the gate dials at all: a NETWORK gate under the tests' loopback names its own
+     * resolver and connector (HostGate refuses SYSTEM's and DIRECT's there). */
+    private val noDial = HostGate.Connector { _, address, _ -> fail("the gate dialled $address") }
+
     private fun gate(
         mode: HostGate.Mode,
         rule: HostGate.HostRule,
@@ -72,7 +76,8 @@ class HostGateTest {
         headTimeoutMs: Int = HostGate.HEAD_TIMEOUT_MS,
     ): Pair<HostGate, HostGate.Opened> {
         val gate = HostGate(mode, rule, resolver, maxConnections, HostGate.CONNECT_TIMEOUT_MS, idleTimeoutMs, headTimeoutMs,
-                            connector = resolver as? HostGate.Connector ?: HostGate.Connector.DIRECT)
+                            connector = resolver as? HostGate.Connector
+                                ?: if (mode == HostGate.Mode.NETWORK) noDial else HostGate.Connector.DIRECT)
         gates += gate
         return gate to gate.start()
     }
@@ -1029,5 +1034,37 @@ class HostGateTest {
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(was)
         }
+    }
+
+    // Y1.5: the gates this process has open, and no NETWORK gate under the tests' loopback with the system's resolver
+    // or a direct connector.
+
+    @Test
+    fun aStartedGateIsOpenByItsPortAndUserUntilItCloses() {
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        assertTrue(HostGate.isOpen(opened.proxyArg))
+        val (user, secret) = credentials(opened)
+        val otherUser = "0".repeat(32)
+        assertFalse(HostGate.isOpen("http://$otherUser:$secret@127.0.0.1:${opened.port}"), "another user")
+        assertFalse(HostGate.isOpen("http://$user:$secret@127.0.0.1:${opened.port + 1}"), "another port")
+        assertFalse(HostGate.isOpen("http://127.0.0.1:${opened.port}"), "no credentials: not a gate's shape")
+        assertFalse(HostGate.isOpen("http://$user:$secret@10.0.2.2:${opened.port}"), "another host")
+        assertTrue(HostGate.isOpen(opened.port, user))
+        gate.close()
+        assertFalse(HostGate.isOpen(opened.proxyArg), "closed")
+        assertFalse(HostGate.isOpen(opened.port, user))
+    }
+
+    @Test
+    fun aNetworkGateUnderTheTestsLoopbackIsRefusedWithTheSystemsResolverOrADirectConnector() {
+        assertEquals("loopback", System.getProperty("caracole.network"))
+        for (rule in listOf(HostGate.HostRule.YOUTUBE, HostGate.HostRule.OBSERVE)) {
+            val plain = assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule) }
+            assertEquals(HostGate.NETWORK_UNDER_LOOPBACK, plain.message)
+            assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule, resolver = never) }
+            assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule, connector = noDial) }
+            HostGate(HostGate.Mode.NETWORK, rule, never, connector = noDial).close()
+        }
+        HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE).close()
     }
 }
