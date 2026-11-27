@@ -8,10 +8,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** The debug build carries ONNX Runtime (`:ml`, a debugImplementation) without what would make it phone home: its
- * AAR's `ai.onnxruntime.TelemetryInitializer`, a content provider that starts at the app's start and hands the
- * runtime's native telemetry an HTTP client, is removed by `:ml`'s manifest, so no provider of the runtime's is
- * declared by the app as installed. */
+/** The debug build carries ONNX Runtime (`:ml`, a debugImplementation) without what would make it phone home: built
+ * from its source (nix/onnxruntime-android.nix), its AAR declares no provider (Maven's declared
+ * `ai.onnxruntime.TelemetryInitializer`, which hands the runtime's native telemetry an HTTP client at the app's start),
+ * so no provider of the runtime's is declared by the app as installed. */
 @RunWith(AndroidJUnit4::class)
 class NoTelemetryTest {
     @Test fun theInstalledAppDeclaresNoProviderOfTheRuntimes() {

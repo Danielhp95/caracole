@@ -23,7 +23,7 @@ import java.io.IOException
  *   sheet heard of it is kept, never before: a keep that fails leaves them, so that Try again hears nothing again.
  *   Never throws; none to let go by default.
  * - [phoneProblem]: [ready]'s answer of the phone itself, the files aside.
- * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.32.0"); null where it says none.
+ * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.27.1"); null where it says none.
  */
 interface ChordModels {
     fun ready(): String?

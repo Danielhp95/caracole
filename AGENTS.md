@@ -2907,18 +2907,38 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
-- `:ml` (Android library, stage B0 of the chords-on-the-phone design): BTC and beat_this on ONNX Runtime 1.32.0's
-  Maven AAR (`OrtModels`: `chords`, `beats`, a chunk at a time, `padding` the graph's mean, `RUNTIME`), the app's
-  `debugImplementation` alone, so no release carries a runtime; its manifest removes the AAR's
-  `ai.onnxruntime.TelemetryInitializer` (a provider that gives the runtime's 1DS telemetry an HTTP client at the app's
-  start), `ORT_DISABLE_TELEMETRY` set before the first environment (the app's `NoTelemetryTest`); no arena and no
-  memory pattern by default (beat_this's peak RSS halved on the emulator), ORT's own with `arena = true`. Its
-  `ModelParityTest` (its own test APK) holds it to vectors/autochords/models.jsonl on the emulator, every threshold the
-  records' `gates`, beat_this's chunking, postprocessor and F-measure through `BeatThis`, which keeps no copy: it
-  delegates to `:autochords`' `Chunks`, `Peaks` and `Scores` (`BeatThisTest`), the models `.#chord-models`
-  (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test APK runs under
-  AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries `caracole/autochords/`
-  (BTC's graph, models.json), which `:core` leaves out.
+- `:ml` (Android library, the chords-on-the-phone design): BTC and beat_this on ONNX Runtime 1.27.1 built from its
+  source (`OrtModels`: `chords`, `beats`, a chunk at a time, `padding` the graph's mean, `RUNTIME` "onnxruntime
+  1.27.1"; Gate R, the owner's "Build 1.27.1" of 2026-11-27), the app's `debugImplementation` alone, so no release
+  carries a runtime; and only in the `./android#ml` shell, whose `CARACOLE_ONNXRUNTIME` names the runtime's Maven folder:
+  without it settings.gradle.kts includes no `:ml`, and the app's debug build takes src/release's `PhoneChords` (none),
+  no Chords bench (`BuildConfig.CHORDS_BENCH`), and leaves out src/debugMl, src/testDebugMl and src/androidTestMl, so
+  the other shells build and test the rest with no ONNX Runtime.
+  - The runtime: nix/onnxruntime-android.nix, with no network: nixpkgs' pin of the v1.27.1 source
+    (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, cache.nixos.org's: github.com/microsoft/onnxruntime answers
+    404), its CMake dependencies deps.txt's zips by SHA-256 in a local mirror; android/scripts/build-onnxruntime.sh's
+    `java` (the bindings by javac, once: ORT's own Java path runs Gradle, which fetches), `native` (an ABI, arm64-v8a
+    and x86_64, NDK r28c, the CPU provider alone, telemetry off: 1.27.1's is opt-in, never set; the kernels of
+    android/ml/onnxruntime-ops.config's ops alone; at most 8 jobs; paths mapped, no build id, `EPOCH` its one date:
+    two folders give the same bytes) and `aar` (no provider, no permission, every zip's entries sorted). No Maven AAR and
+    no TelemetryInitializer to remove: `ORT_DISABLE_TELEMETRY` is still set before the first environment, for a later
+    runtime (the app's `NoTelemetryTest`); `ApkScanTest` scans the AAR in the ml shell's `gradle test` (skipped,
+    saying so, elsewhere) and both APKs by `gradle :app:apkScan`. Built once a machine (about ten minutes an ABI), the ml
+    shell's entry roots it (`$XDG_STATE_HOME/caracole/gcroots/onnxruntime-android`), as `nix build
+    ./android#onnxruntime-android -o PATH` does.
+  - Its ops: android/scripts/onnxruntime-ops.sh (`--check` holds the committed list to the graphs) over `.#chord-models`'
+    three graphs, as they are and as ONNX Runtime 1.27.1 (nixpkgs' python3Packages.onnxruntime at the android flake's
+    pin, `./android#onnxruntime-ops-python`) optimizes them, ORT_ENABLE_ALL and ORT_ENABLE_EXTENDED, on x86_64 and on
+    aarch64 under qemu-user (`./android#onnxruntime-ops-aarch64`, cache.nixos.org's aarch64 build: the phone's CPU's
+    fusions), read by ORT's own tools/python. An op left out fails loudly at session load, never silently; Android's own
+    arm64 build is the one thing the list was not read on, which the owner's bench on the phone checks.
+  - Its sessions: no arena and no memory pattern by default (beat_this's peak RSS halved on the emulator), ORT's own
+    with `arena = true`. Its `ModelParityTest` (its own test APK) holds it to vectors/autochords/models.jsonl on the
+    emulator, every threshold the records' `gates`, beat_this's chunking, postprocessor and F-measure through
+    `BeatThis`, which keeps no copy: it delegates to `:autochords`' `Chunks`, `Peaks` and `Scores` (`BeatThisTest`), the
+    models `.#chord-models` (`./android#ml`'s `CARACOLE_CHORD_MODELS`), pushed by `device-test.sh --ml`; its test APK
+    runs under AndroidJUnitRunner (no HTTP code there, so no `caracole.network=loopback`). `:ml` carries
+    `caracole/autochords/` (BTC's graph, models.json), which `:core` leaves out.
   - **The Chords bench** (§9.1, Gate B0's numbers from the owner's phone, run by hand): `Bench.session` (one model on
     one thread count and arena setting: its load timed apart, then each file `passes` times back to back; the model's
     time alone, a look every second at the process's PSS and the phone's `Heat`, each run's true peak RSS or null where
@@ -2937,7 +2957,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     in `summary.gates`, the warm runs' steady peak beside it; each session's `pid` and `fresh`; a later session's parity
     that differs from the first's in `differs`; `Parity` against the computer: BTC's frame agreement but near ties,
     fp32's logits, fp16's beats F, each file and setting once), held by `BenchReportTest` on the JVM. The app's
-    src/debug alone has its screen (`ChordsBenchActivity`, Settings' Chords bench row under `BuildConfig.DEBUG`) and its
+    src/debugMl alone has its screen (`ChordsBenchActivity`, Settings' Chords bench row under
+    `BuildConfig.CHORDS_BENCH`) and its
     foreground service (`BenchService`, a special use, a partial wake lock, the screen-off round, the report saved after
     each session), in process `:bench`; each session in a fresh process, `:benchrun` (`BenchSessions.run` binds
     `BenchWorkerService` a session, its result a file, unbound and gone before the next; given up after no write for
@@ -2958,8 +2979,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `android/scripts/release-check.sh` holds the release to none of it: no onnxruntime or `:ml` on its runtime classpath
     (which names `:core`: read), no `libonnxruntime*`, class under `ai/onnxruntime/` or of `:ml`, bench name or
     Settings' row's words in its dex, `caracole/autochords/` or `assets/autochords/` entry, model file (`.onnx`, `.pt`),
-    TelemetryInitializer or bench entry in its manifest; each APK by output-metadata.json's name; the controls: the
-    debug classpath and APK (no weights' file there either), `.#chord-models`' names, the AAR's own manifest. It handles
+    TelemetryInitializer or bench entry in its manifest; each APK by output-metadata.json's name, both built in the ml
+    shell (the debug build with `:ml`); the controls: the debug classpath and APK (no weights' file there either),
+    `.#chord-models`' names, the runtime's AAR declaring no provider, and `gradle :app:apkScan` (ApkScanTest's control
+    finding each string where it would be). It handles
     no text: no ForbiddenApiTest.
   - Its native build (stage B1): `externalNativeBuild` of autochords/native/CMakeLists.txt for arm64-v8a and x86_64,
     NDK r28c (`ndkVersion`, the app's too, whose strip needs it; android/flake.nix's `ndkVersion` and `cmakeVersion`
@@ -4406,12 +4429,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - The phone notes no transcript or nothing-sung verdict of its own: `Relay.notedOf` of its own audio is the empty
   `Noted`, which is `notedIn` of a phone-made raw (it holds neither), so the computer's re-lay of a phone-made sheet
   is the phone's.
-- The app's chords (E22): `PhoneDeps.chords` is `PhoneChords.of` (src/debug's: `:ml`'s `MlChordModels` over the
+- The app's chords (E22): `PhoneDeps.chords` is `PhoneChords.of` (src/debugMl's, the ml shell's debug build: `:ml`'s `MlChordModels` over the
   folder the models' job installs, `forgetHeard`, the device's reasons; src/release's: null, so the release's main
   source set names nothing of `:ml`, a debugImplementation, and `audioProblem()` says auto-chords isn't on the phone,
   release-check.sh holding the APK to it); `PhoneDeps.models` is its default (`ModelFiles.carried()`: the debug's
   pins). `PhoneChords.sweep` after `Phone.start`, a failure logged (`guarded`). A device test sets
-  `PhoneChords.anyPhoneHearsForTests` (src/debug's, the emulator's 2 GB) and `Caracole.examinerForTests`.
+  `PhoneChords.anyPhoneHearsForTests` (src/debugMl's, the emulator's 2 GB) and `Caracole.examinerForTests`.
   ChordsEndToEndTest (`device-test.sh --models --sites chords
   ChordsEndToEndTest`; `--models` pushes the models with none of `:ml`'s classes) installs the pushed models through
   the models' job (copied into `stateDir/models/.c1.kept/`, hashed again by `ModelsSource.fetch`, nothing asked, the
@@ -4422,8 +4445,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   answering; and `hear`'s contract on the real process (what `waiting` throws, as itself; `BUSY`).
 - `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file); `tidy`
   runs as the phone starts and after a sync's take, a write of its own, never under `held`.
-- The app's examiner, `PhoneExaminer`, the debug build's alone (src/debug, as `:autochords` is a debugImplementation;
-  src/release's refuses every file, its routes refusing first anyway): its length `:autochords`' `AudioLengths` by
+- The app's examiner, `PhoneExaminer`, the debug build's with `:ml` alone (src/debugMl, as `:autochords` is a
+  debugImplementation; src/release's refuses every file, its routes refusing first anyway): its length `:autochords`' `AudioLengths` by
   the format the store gives (a spool has no extension): an MP3's `MpegFrames` count (mpeg_frames.py's port) where
   its first frame names none, else `MpegHeader`'s; an M4A's sound track's `mdhd` (`Mp4.Track.sound`: none with no
   sound track, refused); FLAC's STREAMINFO; `Ogg`; `Pcm`. Its tags Android's (MediaMetadataRetriever: artist, then
@@ -4569,6 +4592,7 @@ pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first
 pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
 nix develop .#autochords -c pytest -m autochords   # the model tests
 nix develop ./android -c gradle -p android test    # the Android side: :mirror, :core, :server, :app, :e2e on the JVM
+nix develop ./android#ml -c gradle -p android test # the same and :ml (the runtime built from source: once a machine)
 CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # the phone and the computer synced
 ```
 
@@ -4667,6 +4691,7 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
 nix develop -c pytest -q
 nix develop .#autochords -c pytest -m autochords   # when auto-chords is touched
 nix develop ./android -c gradle -p android test    # when android/ or the corpus is touched
+nix develop ./android#ml -c gradle -p android test # when :ml, the chords' debug sources or the runtime are touched
 CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # when sync, android/ or the corpus is
 android/scripts/release-check.sh   # android/'s native code or packaging: the release's exclusions, native-check.sh
 nix flake check
@@ -4741,7 +4766,8 @@ nix flake check
   choice of 2026-11-10: emulator-5554, -5556, -5558, each one caller at a time) and holds its lock (emulator-5554's
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
   port) while it installs and runs, and starts that emulator if it isn't up (each read-only, so several run on the one
-  AVD).
+  AVD). It builds `--ml`, `--models`, `--data` and the corpus's `autochords` area in the `ml` shell (the debug build
+  with `:ml`), every other run in the default one.
 - **Leave nothing running**, the owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them
   for testing or development. same thing for gradle biuld and adb servers."
   - device-test.sh stops, as it ends on any path (a pass, a failure, an interrupt: an EXIT trap), the emulator it

@@ -1,4 +1,5 @@
-// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime (the design's §3.5 prototype), an
+// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime 1.27.1 built from its source (the design's
+// §3.5, Gate R), an
 // Android library linked into the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries a
 // runtime before the owner chooses the one that ships. Its device test, ModelParityTest, holds the runtime's logits to
 // the computer's (tests/conformance/vectors/autochords/models.jsonl), DecoderTest its Decoder's PCM to the computer's
@@ -11,9 +12,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-/** ONNX Runtime's Android build, from Maven Central; [OrtModels.RUNTIME] names it, and ModelParityTest checks the
+/** ONNX Runtime's Android build, from its source (../nix/onnxruntime-android.nix: its AAR in the Maven folder
+ * settings.gradle.kts reads, $CARACOLE_ONNXRUNTIME); [OrtModels.RUNTIME] names it, and ModelParityTest checks the
  * library loaded is this one. */
-val onnxRuntime = "1.32.0"
+val onnxRuntime = "1.27.1"
 
 android {
     namespace = "io.github.danielhp95.caracole.ml"
@@ -25,7 +27,7 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // The app's two ABIs (app/build.gradle.kts): ORT's AAR also brings 32-bit ARM and x86, which no APK keeps.
+        // The app's two ABIs (app/build.gradle.kts), the two the runtime is built for.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         buildConfigField("String", "ONNX_RUNTIME", "\"$onnxRuntime\"")
     }
@@ -96,7 +98,7 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // Pcm (a WAV's or an AIFF's PCM, read with no codec), for Decoder.
     implementation(project(":autochords"))
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntime")
+    implementation("io.github.danielhp95.caracole:onnxruntime-android:$onnxRuntime")
     // The Chords bench's report (BenchReport), as the rest of the app writes JSON (:core's, the same version).
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 

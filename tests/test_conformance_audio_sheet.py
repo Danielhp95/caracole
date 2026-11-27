@@ -489,7 +489,7 @@ def phone_made_relaid(tmp: Path) -> dict[str, Any]:
         heard = Hearing([ChordSegment(*c) for c in CHORDS], BEATS, DOWNBEATS, LENGTH)
         made = make_sheet(song, heard)
         maker = Maker("phone", PHONE_ID, {"chords": Recognizer.name, "beats": Beats.name + " fp16"},
-                      "onnxruntime 1.32.0", "river road.m4a", hashlib.sha256(path.read_bytes()).hexdigest()[:16])
+                      "onnxruntime 1.27.1", "river road.m4a", hashlib.sha256(path.read_bytes()).hexdigest()[:16])
         run._keep(w.conn, w.cfg, song, made.text, made.used, made.key, STAMP, heard=made.heard, maker=maker)
         w.conn.execute("UPDATE files SET created_at = ?", (STAMP,))
         song = get_song(w.conn, song.id)

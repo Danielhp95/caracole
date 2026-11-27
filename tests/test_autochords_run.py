@@ -2788,7 +2788,7 @@ def made_there(conn, song, *, by=PHONE, mtime_kept=False):
     caracole, under its tab id; this side's ``autochords_mtime`` none (a take writes none), unless ``mtime_kept`` (this
     side made one before it took the other's)."""
     version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
-    raw = {**get_version(conn, version_id).raw, "made_on": "phone", "made_by": by, "runtime": "onnxruntime 1.32.0",
+    raw = {**get_version(conn, version_id).raw, "made_on": "phone", "made_by": by, "runtime": "onnxruntime 1.27.1",
            "audio": "/data/user/0/phone/files/audio/7-0123456789abcdef.mp3", "audio_name": "river road.mp3"}
     from caracole.versions import set_raw
 

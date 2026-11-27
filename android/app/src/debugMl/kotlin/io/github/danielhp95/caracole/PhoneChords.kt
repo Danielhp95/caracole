@@ -7,7 +7,7 @@ import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import java.io.File
 
 /**
- * The phone's chord models in the debug build (src/debug; src/release's PhoneChords has none, so that the release's
+ * The phone's chord models in the debug build with :ml (src/debugMl; src/release's PhoneChords has none, so that the release's
  * main source set names nothing of `:ml`, a debugImplementation): `:ml`'s [MlChordModels] over the folder the models'
  * job installs, `stateDir/models/c<contract>/` (ModelFiles.installed its judge, ModelsRunner.ready's one answer), its
  * checkpoints in `stateDir/cache/autochords/` and removed once a song is heard, the phone's own reasons not to hear

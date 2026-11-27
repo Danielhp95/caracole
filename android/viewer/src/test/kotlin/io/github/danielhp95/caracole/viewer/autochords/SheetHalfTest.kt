@@ -66,7 +66,7 @@ class SheetHalfTest {
         val made = SheetHalf.make(song(lyrics), lyrics, heard)
         assertEquals("synced", made.used)
         val maker = Maker("phone", "f0f0f0f0f0f0f0f0", mapOf("chords" to "btc_large_voca@0123456789abcdef"),
-                          "onnxruntime 1.32.0", "song.mp3", "00112233aabbccdd")
+                          "onnxruntime 1.27.1", "song.mp3", "00112233aabbccdd")
         val raw = SheetHalf.raw(song(lyrics), lyrics, made, maker = maker)
         assertEquals(listOf("audio", "model", "lyrics", "columns", "key", "synced_lyrics", "lyrics_key", "heard",
                             "made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16"), raw.keys.toList())
