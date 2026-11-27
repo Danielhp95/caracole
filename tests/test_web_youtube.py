@@ -200,9 +200,22 @@ def test_the_library_page_offers_it_where_chords_can_be_made(able, queue, conn):
     body, data = page_data(app_for(able, queue))
     assert data["server"]["youtube"] == {"ok": True, "why": None, "off": False}
     assert '<input name="youtube"' in body  # the request form's field
-    assert '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>' in body
     cards = {s["id"]: s for s in data["songs"]}
     assert cards[none_yet.id]["youtubeSheet"] is True and cards[charted.id]["youtubeSheet"] is False
+
+
+@pytest.mark.parametrize("hears", [True, False])
+def test_the_request_forms_line_says_the_lyrics_are_heard_only_where_this_caracole_transcribes(
+        able, queue, conn, monkeypatch, hears):
+    import caracole.library_page as lp
+
+    monkeypatch.setattr(lp, "transcribe_reason", lambda cfg: None if hears else "Whisper isn't installed")
+    add_song(conn, "Nick Cani", "Vikingos veganos")
+    body, data = page_data(app_for(able, queue))
+    assert data["server"]["transcribe"]["ok"] is hears
+    heard = '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>'
+    sites = '<p class="hint">Sheet made from the video, its lyrics from the lyrics sites</p>'
+    assert (heard in body, sites in body) == (hears, not hears)
 
 
 def test_where_it_cant_the_request_form_says_why_and_offers_no_field(cfg, queue, conn, monkeypatch):

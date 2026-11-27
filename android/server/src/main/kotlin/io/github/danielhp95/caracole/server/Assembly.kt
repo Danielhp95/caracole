@@ -247,7 +247,10 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /** Why the library page offers no sheet from a YouTube video now (`server.youtube.why`, the design's §5.6), null
      * where it does: [youtubeProblem]'s reasons, then YouTube cooling down after a block, "YouTube refused caracole;
      * asked again after …" ("Out of date" offers it all the same: its audio stage says so). */
-    fun youtubeOffered(): String? = deps.database.read { db -> YouTubeRoutes.offered(youtubeProblem(), db, Instant.now()) }
+    fun youtubeOffered(): String? {
+        val problem = youtubeProblem()  // its config read first: no read nested in the one below
+        return deps.database.read { db -> YouTubeRoutes.offered(problem, db, Instant.now()) }
+    }
 
     /** YouTubeAudio.sweep of the phone's YouTube audio, in a write of its own. */
     private fun sweepYouTube() {

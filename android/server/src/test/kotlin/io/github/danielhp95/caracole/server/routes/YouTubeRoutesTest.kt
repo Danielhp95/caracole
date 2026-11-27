@@ -175,6 +175,49 @@ class YouTubeRoutesTest {
         assertTrue("youtube-field" !in form, form)
     }
 
+    /** A song whose audio is a file of its own given caracole (an upload: AudioStore's kept file, its `audio_path`) is
+     * refused a sheet from a video, in `caracole youtube --sheet`'s words, nothing queued: an upload always wins. */
+    @Test fun aSongWithAnUploadOfItsOwnIsRefusedASheetFromAVideo() {
+        val store = io.github.danielhp95.caracole.core.library.AudioStore(phone.parts.stateDir,
+                                                                           PhoneDeps.NO_EXAMINER)
+        val kept = File(File(phone.parts.stateDir, "audio").apply { mkdirs() }, "1-0123456789abcdef.m4a")
+        kept.writeBytes(ByteArray(64))
+        phone.parts.database.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.library.Versions.updateSong(db, 1, mapOf("audio_path" to kept.path))
+        }
+        val song = phone.parts.database.read { db -> io.github.danielhp95.caracole.core.library.Songs.byId(db, 1)!! }
+        assertEquals(kept.path, store.uploaded(song)?.path, "the store knows it as an upload")
+        val routes = YouTubeRoutes(phone.parts, store, problem = { null })
+        val refused = kotlin.runCatching {
+            routes.sheetFromYoutube(mapOf("youtube" to "https://youtu.be/lzN7Thn3FV4", "song" to "1"))
+        }.exceptionOrNull() as io.github.danielhp95.caracole.server.http.Refused
+        assertEquals(409, refused.status)
+        assertEquals("Nick Cani - Vikingos veganos has its own audio (bought or given); auto-chords uses that.", refused.message)
+        assertEquals(0, phone.queue.snapshot().size)
+    }
+
+    /** The page's `server.youtube` as the phone assembles it: here no yt-dlp and no chords, so `ok` false with
+     * Phone.youtubeProblem's why and YouTube on; the computer's settings turning YouTube off (a sync's) make it
+     * "off", in the design's §5.6 words. */
+    @Test fun thePhonesPageSaysServerYoutubeAndOffAsAssembled() {
+        fun member(): Any? {
+            val page = phone.app.handle(TestApp.request("GET", "/", mapOf("sec-fetch-site" to "same-origin"), ByteArray(0),
+                                                        TestApp.SECRET)).bytes().toString(Charsets.UTF_8)
+            val block = page.substringAfter("<script type=\"application/json\" id=\"songs\">").substringBefore("</script>")
+            return kotlinx.serialization.json.Json.parseToJsonElement(block).jsonObject.getValue("server").jsonObject
+                .getValue("youtube")
+        }
+        val why = phone.youtubeProblem()!!
+        assertEquals(kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"ok": false, "why": ${kotlinx.serialization.json.JsonPrimitive(why)}, "off": false}"""), member())
+        phone.parts.database.writeBlocking { db ->
+            db.kvSet(PhoneConfig.SETTINGS_KV, """{"providers": {"youtube": {"enabled": false}}}""")
+        }
+        assertEquals(kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"ok": false, "why": ${kotlinx.serialization.json.JsonPrimitive(YouTubeSheetRunner.OFF)}, "off": true}"""),
+            member())
+    }
+
     private object LibraryPageWords {
         const val AUDIO = io.github.danielhp95.caracole.server.page.LibraryPage.AUDIO_PROBLEM
     }

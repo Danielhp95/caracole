@@ -82,6 +82,11 @@ class LibraryPageTest {
     }
 
     @Test
+    fun `the phone's reason for no lyrics transcribed is the vector's`() {
+        assertEquals(vector.getValue("transcribe_problem").jsonPrimitive.content, LibraryPage.TRANSCRIBE_PROBLEM)
+    }
+
+    @Test
     fun `the server's member is build_library_page's for the same controls`() {
         val server = vector.getValue("server").jsonObject
         val of = server.getValue("controls").jsonObject
@@ -113,7 +118,7 @@ class LibraryPageTest {
         assertEquals(obj("csrf" to "tok", "busy" to listOf(3, 9), "active" to 2, "removing" to listOf(5),
                          "jobs" to listOf(obj("id" to 1, "kind" to "sync")), "guitar" to false,
                          "youtube" to obj("ok" to false, "why" to LibraryPage.YOUTUBE_PROBLEM, "off" to true),
-                         "transcribe" to obj("ok" to false, "why" to LibraryPage.YOUTUBE_PROBLEM,
+                         "transcribe" to obj("ok" to false, "why" to LibraryPage.TRANSCRIBE_PROBLEM,
                                              "songs" to emptyList<Int>(), "nothing" to emptyList<Int>(),
                                              "unsung" to emptyList<Int>(), "transcribed" to emptyList<Int>(),
                                              "time" to ""),

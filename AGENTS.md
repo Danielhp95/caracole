@@ -4479,7 +4479,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Before any stage `Phone.youtubeProblem()` (`YouTubeSheetRunner.problemOf`: YouTube off in the computer's settings,
   `AudioRunner.problemOf`'s reasons, no `PhoneDeps.youtube`, `YouTubeEngine.ready()`) refuses "caracole makes no sheet
   from YouTube here: …", exit 1.
-- song: found or added, refused with audio of its own (an upload of `AudioStore`'s, or an `audio_path` that isn't its
+- song: found or added (a song by name added with the album and length its request named, `JobSpec.song` read as
+  `JobContext.adds`, never the argv, as wanted.txt's line keeps them on the computer: `_the_song(album=,
+  duration_ms=)`, so LRCLIB is asked with that length), refused with audio of its own (an upload of `AudioStore`'s, or an `audio_path` that isn't its
   `youtube:` record's: `_still_ours`) or `[youtube]` "none" with no video given; `--url` noted under `[youtube]`
   (`OverrideWriters.addYoutube`, overrides.py's `add_youtube`, vectors/library/overrides_writes.jsonl).
 - audio: `YouTubeAudio.sweep` first; the video's audio kept already, done; the song's auto sheet made here of the
@@ -4527,15 +4529,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   record's answers; apart, `http:last_request:`, `songs:key_version` and the events' times.
 - server/routes' `YouTubeRoutes`, web/youtube_routes.py on the phone: `POST /youtube` (`youtube --sheet --progress
   --url=… --song=…` queued under `youtube:<key>`, a song by its id and `identity` or by name, the job adding one the
-  library hasn't: no wanted.txt, so no note), `POST /request` with `youtube` handed to it by LibraryRoutes,
+  library hasn't, its album and length on the spec (`JobSpec.song`): no wanted.txt, so no note; asked again while it
+  waits, that job the answer), `POST /request` with `youtube` handed to it by LibraryRoutes,
   `GET /api/youtube/video` (no request: the gate, the video read, the name guessed by `SongNames.readNames`, the
   library's song by its record, its `[youtube]` or the name), `POST /youtube/video` (`youtube --video` queued under
   `youtube-search:video:<id>` when `auto`), `GET /youtube/thumb/<id>.jpg` (`Thumbs.read`, a policy that runs
   nothing); refused as caracole serve refuses, `Phone.youtubeProblem()` its reason ("No sheets from YouTube here:
   …"); form routes, so App's cross-origin check and token hold. `server.youtube` `{ok, why, off}` and the request
   form's YouTube field where ok (`ServerControls.youtube`: `Phone.youtubeOffered()`, the design's §5.6, YouTube
-  cooling down after the problem's reasons, `YouTubeRoutes.COOLING`). vectors/web/youtube_routes.jsonl
-  (`WebReplay.youtubeRoutes`, YouTubeRoutesReplay), library_page.json's cases with `youtube` (the field drawn, a why).
+  cooling down after the problem's reasons, `YouTubeRoutes.COOLING`), its line "its lyrics from the lyrics sites"
+  (library_page.py's `_request_form(hears=)`: the lyrics heard from the video only where `server.transcribe.ok`,
+  never on the phone, whose `transcribe.why` is "Whisper isn't installed", `LibraryPage.TRANSCRIBE_PROBLEM`; library.js
+  says so in Make sheet's title too). vectors/web/youtube_routes.jsonl (`WebReplay.youtubeRoutes`,
+  YouTubeRoutesReplay: each answer's member order too, the song the job adds against wanted.txt's line there),
+  library_page.json's cases with `youtube` (the field drawn, a why).
 
 ##### Alerts and backups on the phone
 

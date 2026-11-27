@@ -23,6 +23,7 @@ import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
+import io.github.danielhp95.caracole.server.routes.library.NamedSong
 import io.github.danielhp95.caracole.server.testing.TestParts
 import io.github.danielhp95.caracole.viewer.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
@@ -195,6 +196,29 @@ class YouTubeSheetRunnerTest {
             assertFalse("audio_name" in raw)
         }
         assertEquals(emptyList(), folder(phone).listFiles().orEmpty().map { it.name })
+    }
+
+    /** A sheet from a video asked for by name, of a song the library hasn't: the job adds it with the album and the
+     * length the request named (its spec's song, as caracole serve's wanted.txt line keeps them), so LRCLIB is asked
+     * with that length; a request's song of another name adds nothing of it. */
+    @Test fun aSongAddedByNameKeepsTheAlbumAndLengthItsRequestNamed() {
+        val phone = phone()
+        val named = "Nueva Banda - Canción"
+        val commands = listOf(Command("Making the sheet",
+                                      listOf("youtube", "--sheet", "--progress", "--url=$url", "--song=$named")))
+        val spec = JobSpec("Sheet from YouTube: $named", JobCommands.YOUTUBE_SHEET + "nueva-banda/cancion", "song",
+                           JobCommands.stages(commands.map { it.args }), display = named, commands = commands,
+                           song = NamedSong("Nueva Banda", "Canción", "Un Disco", 225_000))
+        phone.runners[YouTubeSheetRunner.COMMAND] = runner(phone, Downloader())
+        val job = runBlocking { withTimeout(60_000) { phone.queue.await(phone.queue.submit(spec).first.id) } }
+        assertEquals("done", ends(job)["song"]?.first, "${job.steps.single().output}")
+        phone.database.read { db ->
+            val song = Songs.byKey(db, "nueva-banda/cancion")!!
+            assertEquals("Un Disco", song.album)
+            assertEquals(225_000L, song.durationMs)
+            val asked = db.query("SELECT url FROM events WHERE provider = 'lrclib'") { it.text(0)!! }
+            assertTrue(asked.isNotEmpty() && asked.all { "duration=225" in it }, "$asked")
+        }
     }
 
     /** One run at a time across the app: a run the debug bench holds is NotStarted, a wait in words that say to try

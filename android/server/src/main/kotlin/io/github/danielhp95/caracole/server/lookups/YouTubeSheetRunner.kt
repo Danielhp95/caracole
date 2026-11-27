@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.http.ProviderBlocked
 import io.github.danielhp95.caracole.core.http.ProviderError
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.OverrideUrls
@@ -146,6 +147,13 @@ class YouTubeSheetRunner(
         private val folder = YouTubeAudio.folder(File(parts.stateDir, CACHE))
         private var video: Video? = null
         private var sheetOfVideo = false  // the song's auto sheet is of the video asked for, made here: no audio needed
+
+        /** The song its request named, should the job add it (JobContext.adds: a sheet from a video asked for by
+         * name), its album and length as wanted.txt's line keeps them on the computer: `_the_song(album=,
+         * duration_ms=)`, so LRCLIB is asked with the length typed. None for a request of another song's. */
+        private val adds = context.adds?.takeIf { it.key == Normalize.identityKey(artist, title) }
+        override val album: String? get() = adds?.album
+        override val duration: Double? get() = adds?.durationMs?.let { it / 1000.0 }
 
         override val stageNames: List<String> get() = Words.stages.map { it.first }
 

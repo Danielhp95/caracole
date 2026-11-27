@@ -244,19 +244,21 @@ def test_a_songs_card_makes_its_sheet_from_the_video_pasted_and_its_line_follows
 
 
 SITES_FIRST = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes."
+SITES_ONLY = "Chords from its audio; lyrics from the lyrics sites. A few minutes."  # where no words are heard
 SLOW = " (up to half an hour when they're heard)"
 
 
 @pytest.mark.parametrize("member, title", [
     ({"ok": True, "why": None, "songs": [], "time": "up to half an hour"}, SITES_FIRST + SLOW),
     ({"ok": True, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_FIRST),
-    ({"ok": False, "why": "no GPU", "songs": [], "time": ""}, SITES_FIRST),
-    (None, SITES_FIRST),
+    ({"ok": False, "why": "no GPU", "songs": [], "time": ""}, SITES_ONLY),
+    (None, SITES_ONLY),
 ], ids=["cpu", "gpu", "cannot", "no-member"])
 def test_the_form_titles_its_button_by_where_the_words_are_heard(able, live, sheet, browser, monkeypatch, member,
                                                                  title):
     # ``server.transcribe`` (library_page.transcribe_member) says whether and how long a transcription takes here;
-    # only a CPU's "up to half an hour" is added to the button's title, never where it can't or the member is absent.
+    # only a CPU's "up to half an hour" is added to the button's title, never where it can't or the member is absent;
+    # and the words are said heard from the audio only where it transcribes (never on the phone).
     import caracole.library_page as library_page
 
     monkeypatch.setattr(library_page, "transcribe_member", lambda conn, cfg, overrides: member)

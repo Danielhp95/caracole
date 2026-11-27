@@ -6,8 +6,9 @@
   ``library_assets.read``), and the templates are filled in by name.
 - ``vectors/web/library_page.json``: the hashes the page's policy allows its script and its style by
   (``script_hash``, ``style_hash``: ``inline.sha256_source`` of the concatenated files), the served page's policy
-  (``csp``), the reason the request form gives for no sheet from YouTube on the phone (``youtube_problem``), the
-  library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
+  (``csp``), the reason the request form gives for no sheet from YouTube on the phone (``youtube_problem``), why the
+  phone transcribes no lyrics (``transcribe_problem``, ``server.transcribe.why``; its request form's line then says
+  the lyrics come from the lyrics sites alone), the library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
   characters a JSON block must escape, one with no songs; each object's keys sorted, as the vector keeps them, so
   that its JSON block is the one a reader of the vector writes) and the server's controls (``controls``: the form
   token, the badge, the sync, ``sync``: ``"sheet"``, the phone's, the sheet alone, ``"tab"``, caracole serve's, the
@@ -93,6 +94,9 @@ CARDS = VECTORS / "web" / "cards.jsonl"
 # What the phone's page says where caracole serve's says why this caracole makes no sheet from a YouTube video
 # (youtube_fetch.route_reason): the request form's line, "No sheets from YouTube here: YouTube isn't on the phone."
 YOUTUBE_PROBLEM = "YouTube isn't on the phone"
+# Why the phone transcribes no lyrics (``server.transcribe.why``): youtube_fetch.transcribe_reason's words for a caracole
+# built without Whisper, as the phone is; its request form's line says the lyrics come from the lyrics sites alone.
+TRANSCRIBE_PROBLEM = "Whisper isn't installed"
 AUDIO_PROBLEM = "auto-chords isn't on the phone"  # LibraryPage.kt AUDIO_PROBLEM: no sheet from an audio file
 LIBRARY_NAME = "Phone"
 # A form token with every character html.escape writes otherwise, so the request form's escape is checked too.
@@ -147,14 +151,14 @@ SERVER_CONTROLS = WebControls(CSRF, busy=frozenset({3, 1}), active=2, held=froze
 
 def server_member(controls: WebControls) -> dict[str, Any]:
     """``build_library_page``'s ``server`` for ``controls`` on the phone: no Guitar Pro page, no sheet from YouTube
-    (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (for the same reason: no song offered one, no time
+    (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (``TRANSCRIBE_PROBLEM``: no song offered one, no time
     said), no sheet from an audio file (``AUDIO_PROBLEM``: no "+"), and no lyrics looked up under another name
     (``lyricsSearch`` false: computer only) (checked against build_library_page itself:
     ``test_the_server_member_is_build_library_pages``)."""
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
-            "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
+            "transcribe": {"ok": False, "why": TRANSCRIBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
                            "transcribed": [], "time": ""},
             "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""}, "lyricsSearch": False}
 
@@ -314,6 +318,7 @@ def library_page_json(conn, cfg) -> str:
         "style_hash": sha256_source(library_page._PAGE_STYLE),
         "csp": served_csp,
         "youtube_problem": YOUTUBE_PROBLEM,
+        "transcribe_problem": TRANSCRIBE_PROBLEM,
         "library_name": LIBRARY_NAME,
         "cases": cases,
         "server": {"controls": {"csrf": SERVER_CONTROLS.csrf, "busy": sorted(SERVER_CONTROLS.busy),
@@ -482,12 +487,12 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
 
 def test_the_server_member_is_build_library_pages(conn, cfg):
     # The phone's server member is the one build_library_page writes for the same controls, with no Guitar Pro page,
-    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (the same reason).
+    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (no Whisper).
     youtube = cfg.provider("youtube")
     off = mock.patch.object(type(cfg), "provider", lambda self, name: (
         type(youtube)(**{**youtube.__dict__, "enabled": False}) if name == "youtube" else youtube))
     with (off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM),
-          mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM),
+          mock.patch.object(library_page, "transcribe_reason", lambda cfg: TRANSCRIBE_PROBLEM),
           mock.patch.object(library_page, "audio_member",
                             lambda cfg: {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""})):
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVER_CONTROLS)

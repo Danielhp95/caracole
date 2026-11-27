@@ -491,7 +491,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     data["sites"] = sites_data(conn, cfg, songs, now)  # the Sites tab's (sites.js draws it)
     if note is not None:
         note(data)
-    return assemble_page(data, controls, problem=problem, library_name=cfg.library_name)
+    hears = controls is not None and (data["server"].get("transcribe") or {}).get("ok") is True
+    return assemble_page(data, controls, problem=problem, library_name=cfg.library_name, hears=hears)
 
 
 def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
@@ -527,14 +528,15 @@ def audio_member(cfg: Config) -> dict[str, Any]:
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,
-                  library_name: str | None) -> str:
+                  library_name: str | None, hears: bool = False) -> str:
     """The page around its ``data``: the templates of library_assets/ filled in, the stylesheets and scripts inlined,
     the data as its JSON block. A pure function of its arguments and the assets, which the phone's server builds the
     same way (android/server's ``LibraryPage``, from the same files).
 
     ``controls``, as ``build_library_page`` takes them (None: the file on disk); ``problem``, why this caracole makes
-    no sheet from a YouTube video (``youtube_fetch.route_problem``), for the request form; ``library_name``, the
-    configured name (``Config.library_name``).
+    no sheet from a YouTube video (``youtube_fetch.route_problem``), for the request form, and ``hears``, whether it
+    transcribes a song's words (``youtube_fetch.transcribe_reason`` None: never on the phone), for its line;
+    ``library_name``, the configured name (``Config.library_name``).
     """
     # The page caracole serve serves may also ask it how its requests go (connect-src), and show the thumbnail of a
     # video it suggests for a search (img-src 'self': web/youtube_routes.py's); the file can't.
@@ -548,7 +550,7 @@ def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, prob
         + _BODY.replace("__MARK__", page_mark()).replace("__LIBRARY__", "" if controls is not None and controls.in_app else shown.markup("p"))
         .replace("__TABSYNC__", _sync_tab(controls)).replace("__TABREQUESTS__", _requests_tab(controls))
         .replace("__SYNC__", _sync_panel(controls))
-        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem))
+        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem, hears))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
@@ -1318,16 +1320,20 @@ _YOUTUBE_FIELD = (
     '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
     'placeholder="youtube.com/watch?v=…"></label>'
 )
+# Its line: the lyrics heard from the video only where this caracole transcribes (``transcribe_reason`` None), else
+# the lyrics sites' alone (the phone's, which hears no words).
 _YOUTUBE_HINT = '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>'
+_YOUTUBE_HINT_SITES = '<p class="hint">Sheet made from the video, its lyrics from the lyrics sites</p>'
 
 
-def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:
-    """The request form, served: with its YouTube video field where this caracole makes a sheet from one, else a
-    line that says why not (``youtube_fetch.route_problem``); on the file, none."""
+def _request_form(controls: WebControls | None, youtube_problem: str | None = None, hears: bool = False) -> str:
+    """The request form, served: with its YouTube video field where this caracole makes a sheet from one, its line
+    saying where the lyrics come from (``hears``: this caracole transcribes words), else a line that says why not
+    (``youtube_fetch.route_problem``); on the file, none."""
     if controls is None:
         return ""
     if youtube_problem is None:
-        field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT
+        field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT if hears else _YOUTUBE_HINT_SITES
     else:
         field = ""
         hint = f'<p class="hint">No sheets from YouTube here: {html_text.escape(youtube_problem)}.</p>'

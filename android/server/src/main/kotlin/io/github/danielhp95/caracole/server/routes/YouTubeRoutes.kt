@@ -96,13 +96,13 @@ class YouTubeRoutes(
     fun sheetFromYoutube(form: Map<String, String>): Response {
         val url = videoField(form)
         problem()?.let { throw Refused(409, "Not here", "$NOT_HERE: $it.") }
-        val (display, key) = parts.database.read { db ->
+        val (display, key, adds) = parts.database.read { db ->
             val overrides = LookupForms.overrides(db)
             if (Py.strip(form["song"].orEmpty()).isNotEmpty()) {
                 val song = LookupForms.song(db, LookupForms.songId(form.getValue("song")))
                 LookupForms.sameSong(song, form)
                 youtubeIsFor(db, song, overrides)
-                song.display to song.key
+                Triple(song.display, song.key, null)
             } else {
                 val artist = Py.strip(form["artist"].orEmpty())
                 val title = Py.strip(form["title"].orEmpty())
@@ -110,11 +110,12 @@ class YouTubeRoutes(
                     Songs.byKey(db, Normalize.identityKey(artist, title))?.let { youtubeIsFor(db, it, overrides) }
                 }
                 val line = SongForm.song(form, picks = false)
-                line.display to line.key
+                Triple(line.display, line.key, line)
             }
         }
+        // a song by name: its album and length on the spec, as wanted.txt's line keeps them there, for the job to add
         val spec = LookupForms.spec("Sheet from YouTube: $display", JobCommands.YOUTUBE_SHEET + key,
-                                    JobCommands.youtubeSheetSteps(display, url), display = display)
+                                    JobCommands.youtubeSheetSteps(display, url), display = display).copy(song = adds)
         val job = parts.queue.submitOrRefuse(spec, FULL).first
         return Answers.queued(LookupForms.view(parts.database, parts.queue, parts.cards, job, clock()))
     }
@@ -156,9 +157,10 @@ class YouTubeRoutes(
         val videoId = pastedId(asked["url"].orEmpty(), asked["id"].orEmpty())
         val now = clock()
         val config = parts.config()
+        val why = problem()  // read before: no read nested in the one below (the pool's four)
         val answer = parts.database.read { db ->
             val overrides = LookupForms.overrides(db)
-            val said = SearchGate.videoGate(config, db, videoId, now, problem())
+            val said = SearchGate.videoGate(config, db, videoId, now, why)
             val video = said.asked?.get("video") as? JsonObject
             var (artist, title) = if (video != null) {
                 SongNames.readNames(db, orEmpty(video["title"]), Songs.list(db), channel = orEmpty(video["channel"]))
@@ -173,13 +175,13 @@ class YouTubeRoutes(
             }
             val hasSheet = song != null &&
                 db.one("SELECT 1 FROM files WHERE song_id = ? AND name = ?", song.id, HUMAN_SHEET) { true } != null
-            val why = said.why.ifEmpty {
+            val shown = said.why.ifEmpty {
                 if (said.state == NONE && said.asked != null) "YouTube won't give it (${Videos.shown(said.asked!!["unavailable"])})"
                 else ""
             }
             val out = linkedMapOf<String, JsonElement>("id" to JsonPrimitive(videoId),
                 "url" to JsonPrimitive(YouTubeData.read().watchUrl(videoId)), "state" to JsonPrimitive(said.state))
-            if (why.isNotEmpty()) out["why"] = JsonPrimitive(why)
+            if (shown.isNotEmpty()) out["why"] = JsonPrimitive(shown)
             out["video"] = if (video == null) JsonNull else JsonObject(linkedMapOf(
                 "title" to (video["title"]?.takeIf(::truthy) ?: JsonPrimitive("")),
                 "channel" to (video["channel"]?.takeIf(::truthy) ?: JsonPrimitive("")),
@@ -202,7 +204,8 @@ class YouTubeRoutes(
         val videoId = pastedId(form["url"].orEmpty(), form["id"].orEmpty())
         val now = clock()
         val config = parts.config()
-        val said = parts.database.read { db -> SearchGate.videoGate(config, db, videoId, now, problem()) }
+        val why = problem()  // read before: no read nested in the one below
+        val said = parts.database.read { db -> SearchGate.videoGate(config, db, videoId, now, why) }
         when (said.state) {
             FOUND, NONE -> throw Refused(409, "Read already", "Read already this month.")
             OFF -> throw Refused(409, "Not here", "$NOT_HERE: ${said.why}.")

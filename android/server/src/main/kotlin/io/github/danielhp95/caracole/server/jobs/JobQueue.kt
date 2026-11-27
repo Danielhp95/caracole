@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.Refused
+import io.github.danielhp95.caracole.server.routes.library.NamedSong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -34,12 +35,14 @@ import java.time.Instant
  * stages are JobCommands.stages', after [stages]. [run], when given, runs first (an add, a removal, a sync, an index
  * import of the phone's own), then the commands a request joined to it. [fetching]: whether it fetches its song (a
  * lookup's), [note] what Job.asJson's `note` says. [join] false: a job of the key that waits or runs is its answer,
- * left as it is (web/jobs.py's `join=False`).
+ * left as it is (web/jobs.py's `join=False`). [song]: the song a request names that its job adds should the library
+ * not have it, as caracole serve's request wrote wanted.txt's line (its album and length too: a sheet from a YouTube
+ * video asked for by name), which a command reads as [JobContext.adds], never from its argv.
  */
 data class JobSpec(val title: String, val key: String, val kind: String, val stages: List<Pair<String, String>>,
                    val display: String = "", val songId: Long? = null, val join: Boolean = true,
                    val doneLine: String? = null, val commands: List<Command> = emptyList(),
-                   val fetching: Boolean = false, val note: String = "",
+                   val fetching: Boolean = false, val note: String = "", val song: NamedSong? = null,
                    val run: (suspend (JobContext) -> Unit)? = null)
 
 /** What a running job tells its view: a stage's state and what it says now, a line of its output (an `error: …`
@@ -55,6 +58,9 @@ interface JobContext {
     fun outcome(value: JsonObject)
     val isCancelled: Boolean
     fun song(id: Long, display: String) {}
+
+    /** The song its request named for it to add, should the library not have it ([JobSpec.song]); null for none. */
+    val adds: NamedSong? get() = null
 
     /** The files a reader can open already, and how long they took (get.py's `readable` event). */
     fun readable(files: Map<String, String>, seconds: Double) {}
@@ -825,6 +831,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         override fun outcome(value: JsonObject) = synchronized(lock) { job.outcome = value }
 
         override val isCancelled: Boolean get() = worker?.isCancelled == true
+        override val adds: NamedSong? get() = job.spec.song
 
         override fun song(id: Long, display: String) {
             if (asLine(JsonObject(linkedMapOf("song" to JsonObject(linkedMapOf(

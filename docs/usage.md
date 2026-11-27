@@ -2975,7 +2975,9 @@ with no purchase linked has the same in its card, **From a YouTube video**, whos
 replaces any YouTube audio it had.
 
 The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Words, Chords and PDF. Words is the lyrics
-heard from the audio, only when no lyrics site has them. The audio and the
+heard from the audio, only when no lyrics site has them and only where this caracole transcribes (the form's
+line says which: "its lyrics heard from it when no site has them", else "its lyrics from the lyrics sites"). The
+audio and the
 chords say what they are doing ("Chords · 4 of 5 · finding the beats"). When it is Ready,
 the title opens `sheet (auto).html` and the Journal says what the sheet holds ("Chords over the
 lyrics.", "Chords only, no lyrics."), or why the lyrics wait. If the words couldn't be heard here

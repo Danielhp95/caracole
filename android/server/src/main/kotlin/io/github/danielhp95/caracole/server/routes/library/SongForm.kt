@@ -13,7 +13,7 @@ import io.github.danielhp95.caracole.server.http.Refused
 /** A song a form names, as library_routes.py reads one (`named_form`, `wanted_line`) and the phone adds it: its
  * names as wanted.txt's line writes them (wanted._clean: NFC, single spaces, no stray zero-width characters at the
  * ends), its album so too, its length in milliseconds, and its identity key, the job's key. */
-internal data class NamedSong(val artist: String, val title: String, val album: String?, val durationMs: Long?) {
+data class NamedSong(val artist: String, val title: String, val album: String?, val durationMs: Long?) {
     val display: String get() = "$artist - $title"
     val key: String get() = Normalize.identityKey(artist, title)
 }

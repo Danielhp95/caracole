@@ -119,6 +119,9 @@ object YouTubeRoutesReplay {
                 if ("body" !in out) return misses.check(false) { "$case: answered ${answer.status}, caracole serve refused $out" }
                 misses.check(answer.status == 200) { "$case: status ${answer.status}" }
                 WebJson.difference(out.getValue("body"), json(answer))?.let { misses.check(false) { "$case: its answer at $it" } }
+                misses.check(order(out) == keyOrder(json(answer))) {
+                    "$case: its members in another order: ${keyOrder(json(answer))}, caracole serve's ${order(out)}"
+                }
             }
             "GET /youtube/thumb/" -> {
                 val target = YouTubeRoutes.THUMB + r.getValue("name").jsonPrimitive.content
@@ -143,6 +146,7 @@ object YouTubeRoutesReplay {
                 val asked = TestApp.request("POST", path, if (wants) mapOf("accept" to "application/json") else emptyMap(),
                                             ByteArray(0), TestApp.SECRET)
                 val answer: Response = try {
+                    if (r["twice"]?.jsonPrimitive?.boolean == true) route.post!!.answer(asked, form)  // its job waits
                     route.post!!.answer(asked, form)
                 } catch (e: Refused) {
                     return refused(misses, case, out, e)
@@ -171,6 +175,7 @@ object YouTubeRoutesReplay {
             (Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)) as? JsonObject)?.let { JsonObject(it - "view") }
         } ?: JsonNull
         WebJson.difference(out.getValue("body"), body)?.let { misses.check(false) { "$case: its answer at $it" } }
+        misses.check(order(out) == keyOrder(body)) { "$case: its answer's members in another order: ${keyOrder(body)}" }
         val jobs = queue.snapshot()
         if (jobs.size != 1) return misses.check(false) { "$case: ${jobs.size} jobs queued" }
         val job = jobs.single()
@@ -184,6 +189,28 @@ object YouTubeRoutesReplay {
         // the phone writes no wanted.txt: no line to name
         val expected = if (wanted) JsonObject(python + ("note" to JsonPrimitive(""))) else python
         WebJson.difference(expected, phone)?.let { misses.check(false) { "$case: its job at $it: $phone" } }
+        // The song wanted.txt's line made there is the one the phone's job adds (its spec's), album and length too.
+        val adds = job.spec.song?.let { s ->
+            JsonObject(linkedMapOf("artist" to JsonPrimitive(s.artist), "title" to JsonPrimitive(s.title),
+                                   "album" to (s.album?.let(::JsonPrimitive) ?: JsonNull),
+                                   "duration_ms" to (s.durationMs?.let(::JsonPrimitive) ?: JsonNull)))
+        } ?: JsonNull
+        val song = out["song"] ?: JsonNull
+        misses.check(adds == song) { "$case: the song its job adds $adds, wanted.txt's line there $song" }
+    }
+
+    /** The order caracole serve's answer wrote its members in (the vector's own keys are sorted). */
+    private fun order(out: JsonObject): List<String> = out.getValue("order").jsonArray.map { it.jsonPrimitive.content }
+
+    /** Every object's members in order, by their path, as the generator's `_order` writes them: what a comparison of
+     * values alone passes over. */
+    private fun keyOrder(value: JsonElement, at: String = "", into: MutableList<String> = mutableListOf()): List<String> {
+        when (value) {
+            is JsonObject -> for ((k, v) in value) { into += "$at.$k"; keyOrder(v, "$at.$k", into) }
+            is JsonArray -> value.forEachIndexed { i, v -> keyOrder(v, "$at[$i]", into) }
+            else -> {}
+        }
+        return into
     }
 
     private fun json(answer: Response): JsonElement = Json.parseToJsonElement(answer.bytes.toString(Charsets.UTF_8))

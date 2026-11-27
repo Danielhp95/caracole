@@ -69,7 +69,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /**
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
-     * Guitar Pro page, a sheet from YouTube where [ServerControls.youtube] says so, none from an audio file on the phone, no lyrics looked up under another
+     * Guitar Pro page, a sheet from YouTube where [ServerControls.youtube] says so, no lyrics transcribed
+     * ([TRANSCRIBE_PROBLEM]), none from an audio file on the phone, no lyrics looked up under another
      * name (`lyricsSearch` false), and the tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
@@ -87,7 +88,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("youtube", JsonObject(linkedMapOf("ok" to JsonPrimitive(controls.youtube == null),
                                                   "why" to (controls.youtube?.let(::JsonPrimitive) ?: JsonNull),
                                                   "off" to JsonPrimitive(controls.youtubeOff))))
-            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
+            // No lyrics transcribed: no Whisper on the phone.
+            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(TRANSCRIBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
@@ -130,12 +132,17 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
          * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
 
-        /** library_page._YOUTUBE_FIELD and _YOUTUBE_HINT: the request form's YouTube video field and its line, where
-         * the phone makes a sheet from a video (vectors/web/library_page.json's cases hold the page byte for byte). */
+        /** library_page._YOUTUBE_FIELD and _YOUTUBE_HINT_SITES: the request form's YouTube video field and its line,
+         * where the phone makes a sheet from a video: its lyrics from the lyrics sites alone, as the phone hears no
+         * words (vectors/web/library_page.json's cases hold the page byte for byte). */
         const val YOUTUBE_FIELD = "<label class=\"f youtube-field\"><span>YouTube video <em>(optional)</em></span>" +
             "<input name=\"youtube\" maxlength=\"600\" autocomplete=\"off\" inputmode=\"url\" spellcheck=\"false\" " +
             "placeholder=\"youtube.com/watch?v=…\"></label>"
-        const val YOUTUBE_HINT = "<p class=\"hint\">Sheet made from the video, its lyrics heard from it when no site has them</p>"
+        const val YOUTUBE_HINT = "<p class=\"hint\">Sheet made from the video, its lyrics from the lyrics sites</p>"
+
+        /** Why the phone transcribes no lyrics (the server member's `transcribe.why`): youtube_fetch.transcribe_reason's
+         * words for a caracole built without Whisper, as the phone is. */
+        const val TRANSCRIBE_PROBLEM = "Whisper isn't installed"
 
         /** Why the phone makes no sheet from an audio file (the server member's `audio.why`): its page has no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"
