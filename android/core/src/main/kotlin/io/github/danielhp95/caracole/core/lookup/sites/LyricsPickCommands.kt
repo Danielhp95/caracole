@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.LyricsRecord
 import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SharedFolder
@@ -234,6 +235,54 @@ object LyricsPickCommands {
             said += "; the audio is $gap s ${if (audio > gapOf) "longer" else "shorter"}"
         }
         return said
+    }
+
+    /** lyrics_pick.CLEARED, how [clearPick]'s line begins; NOTHING_TO_CLEAR, `--clear`'s refusal after the song. */
+    const val CLEARED = "Cleared the record you picked"
+    const val NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
+
+    /** lyrics_pick._gave: whether the song's stored [lyrics] came from [record]. */
+    private fun gave(lyrics: Lyrics?, record: LyricsRecord): Boolean {
+        if (lyrics == null || lyrics.provider != record.site) return false
+        return when (record.site) {
+            Lrclib.PROVIDER -> lyrics.lrclibId != null && lyrics.lrclibId.toString() == record.id
+            Megalobiz.PROVIDER -> (PyValues.string(lyrics.raw["id"]) ?: PyValues.repr(lyrics.raw["id"])) == record.id
+            else -> lyrics.url == record.page
+        }
+    }
+
+    /**
+     * lyrics_pick.clear_pick: the record you picked taken out of the song's `[lyrics]` (its `as` kept), with no
+     * request: the question asked anew, and the lyrics that record gave dropped (their files too), the song pending, its
+     * auto sheet made due where the models are to make it again; its line, or null for a song with no record picked.
+     * The phone's info.json and pages are its render's (the caller makes them).
+     */
+    fun clearPick(db: Db, lib: LibraryStore, song: SongRow, overrides: Overrides, now: Instant): String? {
+        val record = Lyrics.pickedRecord(song, overrides.lyrics) ?: return null
+        OverrideWriters.clearLyricsRecord(db, song.display)
+        val gave = gave(readable(song), record)
+        db.savepoint("lyrics_clear") {
+            if (gave) {
+                val columns = linkedMapOf<String, Any?>("lyrics_status" to "pending", "lyrics_json" to null,
+                                                        "lyrics_at" to null)
+                if (modelsRemake(db, song)) columns["autochords_mtime"] = null
+                Versions.updateSong(db, song.id, columns, Stamps.of(now))
+            }
+            LyricsSearchCommands.askAnew(db, Songs.byId(db, song.id) ?: song, now)
+        }
+        var stuck = ""
+        if (gave) {
+            val folder = lib.folderOf(song)
+            for (name in listOf("lyrics.txt", "lyrics.lrc")) {
+                val file = File(folder, name)
+                if (file.exists() && !file.delete()) stuck += "; $name couldn't be removed"
+            }
+        }
+        val named = Lyrics.askedName(song, Overrides.read(db).lyrics)
+        val under = if (named != null) "under “$named”" else "under its own name"
+        val dropped = if (gave) "; its lyrics from it dropped" else ""
+        return "$CLEARED for ${song.display} (${record.site} ${record.id})$dropped$stuck; every lyrics site is asked " +
+            "again $under, tonight or at a lookup."
     }
 
     private fun possessive(name: String): String = if (name.endsWith("s")) "$name'" else "$name's"

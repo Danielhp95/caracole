@@ -77,8 +77,8 @@ class AssemblyTest {
 
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
-                            "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "SongbookRoutes", "VersionsRoutes",
-                            "HarmonicaRoutes",
+                            "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "LyricsRoutes", "SongbookRoutes",
+                            "VersionsRoutes", "HarmonicaRoutes",
                             "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
                      phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }

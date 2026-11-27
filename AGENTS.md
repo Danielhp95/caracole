@@ -184,7 +184,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     a lyric file that can't be removed is said, the clear standing.
   - A search's reset, a pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at`
     (peer_sync.py `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's.
-    On the phone, the search and `--record` run (android/'s "Lookups on the phone"); `--clear` doesn't yet.
+    On the phone, the search, `--record` and `--clear` run (android/'s "Lookups on the phone").
 
 #### megalobiz
 
@@ -2215,11 +2215,12 @@ It is rows.js's, shared by both pages:
   search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
   `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
   /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
-  `same_song`, 409 ignored. The phone has none of them (lyrics are searched on the computer, for now): its page offers
-  no control for them, as for Transcribe (test_web_lyrics_routes.py).
+  `same_song`, 409 ignored (test_web_lyrics_routes.py). The phone answers the four alike (server/routes'
+  `LyricsRoutes`, vectors/web/lyrics_routes.jsonl, WebReplay.lyricsRoutes), its searches, picks and clears run by
+  LyricsRunner.
   - The card's panel (library.js `lyricsPanel`, card.css `details.lyrics-search`) is served where the data's
     `server.lyricsSearch` is true (`WebControls.lyrics_search`, which library_routes.py sets; last in the member, the
-    phone's LibraryPage.kt `false` at the same place; the cards' own data unchanged), for a song not ignored with no
+    phone's LibraryPage.kt `true` at the same place; the cards' own data unchanged), for a song not ignored with no
     request of it waiting or running (`freeToAsk`): open in what needs you, before `transcribeOffer`, for a song with
     lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened
     it reads the GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening,
@@ -3410,6 +3411,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   queue's): its chords `Relay.onto` where the auto sheet keeps what was heard, else the phone's own audio through
   `ChordModels` (`AudioRunner.keepAutoSheet`, the audio job's keep), else skipped in lyrics_pick.py's words; pdf and
   pages PhoneRender's. tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
+  `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request), then the song's pages.
+- The card's lyrics panel on the phone (E31): server/routes' `LyricsRoutes` (`POST /lyrics/search`, `GET
+  /api/lyrics/search`, `POST /lyrics/pick`, `POST /lyrics/clear`, web/lyrics_routes.py's answers and refusals, the
+  audio's length by the phone's examiner), `server.lyricsSearch` true (LibraryPage.kt);
+  tests/test_conformance_lyrics_routes.py writes vectors/web/lyrics_routes.jsonl; LyricsSearchTest on the emulator
+  (`device-test.sh --sites lookups LyricsSearchTest`) searches, lists, takes a record and re-lays the auto sheet.
 - harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):

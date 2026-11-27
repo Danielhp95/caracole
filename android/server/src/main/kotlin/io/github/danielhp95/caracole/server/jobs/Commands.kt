@@ -256,6 +256,11 @@ object JobCommands {
     fun lyricsPickSteps(display: String, record: String): List<Command> =
         listOf(Command("Taking the lyrics", listOf("lyrics", "--song=$display", "--record=$record", "--progress")))
 
+    /** Take the record picked for a song's lyrics back now: `caracole lyrics --song --clear`, no request, no stages
+     * (jobs.lyrics_clear_steps). */
+    fun lyricsClearSteps(display: String): List<Command> =
+        listOf(Command("Clearing the lyrics record you picked", listOf("lyrics", "--song=$display", "--clear")))
+
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
         listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))

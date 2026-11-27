@@ -77,6 +77,7 @@ import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.LyricsRoutes
 import io.github.danielhp95.caracole.server.routes.UgLinkRoutes
 import io.github.danielhp95.caracole.server.routes.sync.Exports
 import io.github.danielhp95.caracole.server.routes.sync.Imports
@@ -136,7 +137,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
- * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * box), LyricsRoutes (a song's lyrics looked up under a name typed), then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
@@ -283,6 +284,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         UgLinkRoutes(parts),
+        LyricsRoutes(parts, fileLength = { path ->
+            java.io.File(path).takeIf { it.isFile }?.let { runCatching { audio.formatAndLength(it).second }.getOrNull() }
+        }),
         SongbookRoutes(parts),
         VersionsRoutes(parts, deps.csrf),
         HarmonicaRoutes(parts, deps.csrf),

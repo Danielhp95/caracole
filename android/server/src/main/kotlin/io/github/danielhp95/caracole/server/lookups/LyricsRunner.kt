@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.lookup.sites.LyricsPickCommands
 import io.github.danielhp95.caracole.core.lookup.sites.LyricsSearchCommands
 import io.github.danielhp95.caracole.core.py.PyStr
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -54,7 +55,7 @@ class LyricsRunner(
         when (asks.single()) {
             "--as" -> search(display, o.getValue("--as").orEmpty(), args, context)
             "--record", "--pick" -> pick(display, o["--record"], o["--pick"], args, context)
-            else -> throw CommandExit(2, "caracole lyrics ${asks.single()} isn't on the phone yet")
+            else -> clear(display, context)
         }
     }
 
@@ -76,6 +77,20 @@ class LyricsRunner(
         val artist = Py.strip(display.substringBefore(" - "))
         val title = Py.strip(display.substringAfter(" - "))
         LyricsPickJob(parts, args, context, artist, title, record, n, chords, problem, names, hold, store, ::fileLength).run()
+    }
+
+    /** commands/lyrics.py's `_lyrics_clear`: the record picked taken out (LyricsPickCommands.clearPick), with no
+     * request; then the song's pages; exit 1 for a song with no record picked. */
+    private fun clear(display: String, context: JobContext) {
+        val said = parts.database.writeBlocking { db ->
+            val overrides = LookupJobs.overrides(db)
+            val song = LookupJobs.songNamed(parts, db, display, overrides)
+            val said = LyricsPickCommands.clearPick(db, parts.store, song, overrides, LookupJobs.now(parts))
+                ?: throw CommandExit(1, "${song.display} ${LyricsPickCommands.NOTHING_TO_CLEAR}")
+            parts.pages.render(db, listOf(song.id), null)
+            said
+        }
+        context.say(said)
     }
 
     /** commands/lyrics.py's `_lyrics_as`: the name read, the song found, the sites asked, the lines said. */

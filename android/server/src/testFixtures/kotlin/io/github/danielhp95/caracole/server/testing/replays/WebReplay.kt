@@ -104,7 +104,11 @@ object WebReplay : AreaReplay {
         syncFileRoutes(misses)
         downloads(misses)
         security(misses)
+        lyricsRoutes(misses)
     }
+
+    /** lyrics_routes.jsonl: the phone's LyricsRoutes over each scene (LyricsRoutesReplay). */
+    fun lyricsRoutes(misses: Misses) = LyricsRoutesReplay.replay(misses)
 
     // --- api_search.jsonl -------------------------------------------------------------------------------------------
 

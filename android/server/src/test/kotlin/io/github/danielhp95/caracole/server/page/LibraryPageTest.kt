@@ -71,7 +71,7 @@ class LibraryPageTest {
         assertEquals(listOf("csrf", "busy", "active", "removing", "jobs", "guitar", "youtube", "transcribe", "audio",
                             "lyricsSearch"),
                      member.keys.toList())
-        assertEquals(JsonPrimitive(false), member.getValue("lyricsSearch"))  // lyrics searched on the computer alone
+        assertEquals(JsonPrimitive(true), member.getValue("lyricsSearch"))  // lyrics searched under a name: LyricsRoutes
         assertEquals(listOf("ok", "why", "off"), member.getValue("youtube").jsonObject.keys.toList())
         assertEquals(listOf("ok", "why", "songs", "nothing", "unsung", "transcribed", "time"),
                      member.getValue("transcribe").jsonObject.keys.toList())
@@ -95,7 +95,7 @@ class LibraryPageTest {
                                              "time" to ""),
                          "audio" to obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0,
                                         "too_big" to ""),
-                         "lyricsSearch" to false),
+                         "lyricsSearch" to true),
                      served.getValue("server"))
         for (name in data.keys - "songs") assertEquals(data.getValue(name), served.getValue(name), name)
     }
