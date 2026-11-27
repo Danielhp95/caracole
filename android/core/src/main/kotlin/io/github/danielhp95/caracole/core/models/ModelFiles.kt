@@ -37,8 +37,11 @@ sealed interface From {
 /** One file the chords are worked out with: its [name] in the models' folder, its exact [bytes] and [sha256]. */
 data class Pin(val name: String, val bytes: Long, val sha256: String, val from: From)
 
-/** models.json's pins: the [contract], the GitHub release's tag ([release]) and the [files] the hearing reads. */
-data class Pins(val contract: Int, val release: String, val files: List<Pin>) {
+/** models.json's pins: the [contract], the GitHub release's tag ([release]) and the [files] the hearing reads; and
+ * [models], the names the models go by in an auto sheet's `raw["models"]` (`chords`: BTC's weights', btc.py
+ * `model_name`; `beats`: the float16 graph's, beats.py `model_name` and " fp16"), models.json's `model`s. */
+data class Pins(val contract: Int, val release: String, val files: List<Pin>,
+                val models: Map<String, String> = emptyMap()) {
     /** The folder the files are installed in, `stateDir/models/c<contract>` (MlChordModels' `models`). */
     fun folder(stateDir: File): File = File(File(stateDir, ModelFiles.FOLDER), "c$contract")
 
@@ -106,6 +109,7 @@ object ModelFiles {
                                        weights.str("git_blob"))),
                 pin(beats, From.Release(beats.str("asset"))),
             ),
+            models = linkedMapOf("chords" to btc.str("model"), "beats" to beats.str("model")),
         )
     }
 

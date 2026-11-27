@@ -42,6 +42,7 @@ import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
+import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
@@ -92,6 +93,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -107,7 +109,10 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * now, read as the job runs (the app's ConnectivityManager; none metered by default). [models]: where the chord
  * models' job downloads them from, with this build's pins (ModelFiles.carried(): the debug build's `:ml` puts them on
  * the classpath; a device test's GitHub on loopback and pins of its own), null for a build that carries none (the
- * release's), whose job and Settings say so.
+ * release's), whose job and Settings say so. [chords]: the chord models that hear a song's audio (the debug app's
+ * `:ml`, E22's), null where nothing can hear (the release, a test's): the audio job then refuses in its words.
+ * [examiner]: the reader of an audio file's length and tags the audio store needs (the app's, E24's); by default one
+ * that reads none ([NO_EXAMINER]: every file refused as audio caracole doesn't read here).
  */
 data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir: File, val mirror: Mirror?,
                      val scope: CoroutineScope, val settings: SyncSettings, val secret: String, val csrf: String,
@@ -116,7 +121,14 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
                      val searchesLacuerda: Boolean = true,
                      val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
                      val metered: () -> Boolean = { false },
-                     val models: ModelsSource? = ModelFiles.carried()?.let { pins -> ModelsSource(pins = { pins }) })
+                     val models: ModelsSource? = ModelFiles.carried()?.let { pins -> ModelsSource(pins = { pins }) },
+                     val chords: ChordModels? = null, val examiner: AudioStore.Examiner = NO_EXAMINER) {
+    companion object {
+        /** An examiner that reads no audio: what it is handed is refused (AudioStore's NOT_AUDIO), as a phone whose app
+         * gave none reads no file. */
+        val NO_EXAMINER = AudioStore.Examiner { _, _ -> throw IllegalStateException("not audio caracole reads here") }
+    }
+}
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
@@ -129,7 +141,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
- * `models`: [models]), and
+ * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords]), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -171,6 +183,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * catalogues do ([PhoneDeps.metered]). */
     val models: ModelsRunner
 
+    /** The audio the owner gave, `stateDir/audio/` ([AudioStore], the audio job's and the audio routes'). */
+    val audio: AudioStore
+
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
@@ -196,6 +211,17 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         models = ModelsRunner(parts, deps.models, metered = deps.metered)
         models.sweep()  // what a download killed in its middle left beside the models' folder
         commands[ModelsRunner.COMMAND] = models
+        audio = AudioStore(deps.stateDir, deps.examiner)
+        commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio,
+                                                    ready = { models.ready() ?: deps.chords?.ready() },
+                                                    names = models::names)
+        tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
+    }
+
+    /** The kept audio files no song names deleted (audio_store.tidy, the computer's scan step's): at the phone's start
+     * and after a sync's take, in a write of their own, never under the store's lock. */
+    private fun tidyAudio() {
+        deps.database.writeBlocking { db -> audio.tidy(db) }
     }
 
     /** The files shared to the app that wait for a song, tried again after each job. */
@@ -295,6 +321,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * with none owed, those songbook pages made again now (SongbookPagesImpl.renderOwn: a song the take moved, its
      * sheet the mirror's now). A full queue leaves them owed, for the next start's or take's render job. */
     internal fun afterSync() {
+        tidyAudio()  // a song the take removed, or merged into another, leaves its given audio to go
         deps.mirror?.reload()
         val owed = render.afterSync()
         if (!owed) deps.database.writeBlocking { db -> songbookPages.renderOwn(db) }

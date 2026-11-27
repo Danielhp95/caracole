@@ -114,6 +114,11 @@ def holds(raw: dict[str, object]) -> str:
         used = str(raw.get("lyrics"))
     return HOLDS.get(used, "chords")
 NO_AUDIO = "no audio"
+IGNORED = "{display} is ignored (overrides.toml)"  # the song stage's refusal of an ignored song
+HAS_SHEET = "{display} already has a sheet"  # its refusal of a song with a human sheet
+IN_BOOK = "in the book"  # the song stage's end for a song the library has
+NOT_OFFERED = "not transcribed: {why}"  # the vocals' skip in the offer's words (transcript.py ``why_not_offered``)
+NOT_HERE = "not transcribed here: {reason}"  # the vocals' skip where this caracole can't transcribe
 
 
 @dataclass(frozen=True)
@@ -167,7 +172,7 @@ class _Sheet(HearsWords, StagedRun):
         if self.hears is False or (self.hears is None and not self.cfg.autochords.transcribe):
             return TURNED_OFF
         if self.hears is None and (reason := transcribe_reason(self.cfg)) is not None:
-            return f"not transcribed here: {reason}"
+            return NOT_HERE.format(reason=reason)
         return self._not_offered()
 
     def _still_to_hear(self) -> str | None:
@@ -181,7 +186,7 @@ class _Sheet(HearsWords, StagedRun):
         from caracole.autochords.transcript import why_not_offered
 
         why = why_not_offered(self.conn, self.cfg, self.song, self.overrides)
-        return None if why is None else f"not transcribed: {why}"
+        return None if why is None else NOT_OFFERED.format(why=why)
 
     # --- the stages -------------------------------------------------------------------------------
 
@@ -198,10 +203,10 @@ class _Sheet(HearsWords, StagedRun):
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
-            raise _Stop(f"{req.display} is ignored (overrides.toml)")
+            raise _Stop(IGNORED.format(display=req.display))
         song = find_song(self.conn, key)
         if song is not None:
-            return song, "in the book"
+            return song, IN_BOOK
         try:
             line = append_wanted(self.cfg.wanted_file, req.artist, req.title, album, duration_ms)
         except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
@@ -251,9 +256,9 @@ class _Sheet(HearsWords, StagedRun):
         from caracole.songs import HUMAN_SHEET
 
         if song.status == "ignored" or song.key in self.overrides.ignore:
-            raise _Stop(f"{song.display} is ignored (overrides.toml)")
+            raise _Stop(IGNORED.format(display=song.display))
         if self.conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
-            raise _Stop(f"{song.display} already has a sheet")
+            raise _Stop(HAS_SHEET.format(display=song.display))
 
     def audio(self) -> tuple[str, str] | str:
         from caracole.commands._common import alert_block, make_youtube

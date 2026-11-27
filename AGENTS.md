@@ -3036,7 +3036,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   "tetrads")` over BTC's Harte labels, never common names, its sums numpy's pairwise ones, so mir_eval's to the bit;
   `beatF`, `f_measure` alone, and `trimBeats`; its tables scores.json's); `LabelsTest`, `PeaksTest`, `ChunksTest` and
   `ScoresTest` replay labels, peaks, chunks and scores.jsonl, which the area's replay holds on the device too.
-  `ChordModels` (`ready()`, `hear(audio, onStep, waiting)`), `AudioUnreadable`, `ChordsUnavailable`, `Heard` (the
+  `ChordModels` (`ready()`, `hear(audio, onStep, waiting)`, `runtime`; viewer.autochords', named here by typealias),
+  `AudioUnreadable`, `ChordsUnavailable`, `Heard` (the
   design's §4.4 `heard`: contract 1, the stated duration, `recognize`'s chords, beats, downbeats; `json`, `read` of
   that contract alone), `Labels.recognized` (`recognize`'s common names, a run joined), `Checkpoints` and `Stages`
   (`resample`, `chords`, `beats` over files, through `ChordsGraph` and `BeatsGraph`; their buffers fixed by the rates
@@ -4269,6 +4270,49 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   test_audio_store.py builds and edges, the shown name, the patterns' matches, kept names, the record's and marker's
   texts and reads, `given_file` over trees, and `merge`; AudioStoreTest (each of a cut-off keep's states, a stage of
   100 MiB under an allocation bound) and LibraryRoutesTest's removal.
+
+##### A sheet from an audio file on the phone
+
+- server/lookups' `AudioRunner`, `caracole audio --progress --upload=ID --song="A - T"` (`commands["audio"]`,
+  `JobCommands.audioSheetSteps`, key `audio:<song key>`), audio_sheet.py's job on the queue's worker, its stages,
+  lines and outcome the computer's (Status, Outcomes' `AUDIO_STEPS`), its words audio_sheet.py's, youtube_sheet.py's,
+  staged.py's, transcript.py's and commands/audio.py's from data/caracole/library/audio_sheet.json
+  (tests/test_conformance_audio_sheet.py). Before any stage, as the command: no `PhoneDeps.chords` (the release, no
+  `:ml` wired: `LibraryPage.AUDIO_PROBLEM`) or the models not downloaded (`ModelsRunner.ready()`: "the chord models
+  aren't downloaded (Settings › Chords from audio)") refuses "caracole makes no sheet from an audio file here: …",
+  exit 1; the upload read as the command reads it (its staged record, or the kept file its marker names), the store's
+  refusal exit 2 (400) or 1. `--song` is required: the routes always give it.
+- song (found or `LibraryStore.add` with the file's album and length, get.py's `ADDED`; refused ignored or with a
+  human sheet), audio (`AudioStore.keep`, `adopt` by the marker, "has this file's audio already" once done), lyrics
+  (core.lookup's `Lookup.lyrics`: the lookup's three stages alone, LRCLIB and Megalobiz asked with the audio's length,
+  `StageContext.length`, at the lookup pace and in get.py's words, where the computer's job asks at the bulk pace in
+  youtube_sheet.py's: by design), vocals and words skipped (where every site missed "not transcribed here: the phone
+  hears no words", `transcript.PHONE`; else the offer's words, "not transcribed: its lyrics are found"; "no vocals"),
+  chords, pdf and pages (get.py's `NO_PDFS`/`PAGES_MADE`, `LIBRARY_PAGE`, staged.py re-exporting them).
+- chords: the queued lookups go first (`yieldToQueued`), the song read again and still the job's (not ignored, no
+  human sheet, its `audio_path` the file kept, else a refusal that ends the job); a sheet already made of this audio
+  is up to date or re-laid (`Relay.onto`); else `ChordModels.hear` holding no write, `yieldToQueued` every second;
+  read again; then in one write `SheetHalf.make` and run.py's `_keep` (the song's one auto version, `refreshStatus`,
+  info.json, `autochords_mtime` last), the maker the phone's (`made_on` "phone", kv `sync:id`, `ModelsRunner.names()`,
+  models.json's names, `ChordModels.runtime`, kv `audio:name:`, the file's sha16). Failures: `AudioUnreadable` "audio
+  the phone can't read: …", `ChordsUnavailable` in its words, a bug laying out "a bug in caracole: …"; each exit 1,
+  nothing recorded against the song (no `autochords:failed:`: the phone tries again at Try again).
+- The queue's yield passes over a lookup of the running job's own song (`JobCommands.songOfJob`, jobs.song_of_job:
+  a song never has two jobs running): it waits for the job's end. `ModelsRunner.USES` holds `audio:`, so the models'
+  remove is refused while a sheet waits or runs.
+- `ChordModels`, `AudioUnreadable` and `ChordsUnavailable` live in :viewer's viewer.autochords (`:autochords` names
+  them by typealias): :server, which the release ships, never depends on `:autochords`, whose `caracole/autochords/`
+  data release-check.sh keeps out of the release.
+- The phone notes no transcript or nothing-sung verdict of its own: `Relay.notedOf` of its own audio is the empty
+  `Noted`, which is `notedIn` of a phone-made raw (it holds neither), so the computer's re-lay of a phone-made sheet
+  is the phone's.
+- `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file: the app's
+  reader is E24's); `tidy` runs as the phone starts and after a sync's take, a write of its own, never under `held`.
+- vectors/lookup/audio_sheet.jsonl (`AudioSheetReplay`, area `audio-sheet`): Python's job with fake models over the
+  fake lyrics sites, replayed through AudioRunner with a fake ChordModels answering the record's `heard`; compared
+  apart: the lyrics stage's words, a failing hearing's chords words, the events' runs, the pauses, the maker's side
+  and the kv the phone never writes; and a phone-made sheet re-laid alike on both sides. AudioRunnerTest through the
+  real queue.
 
 ##### Alerts and backups on the phone
 

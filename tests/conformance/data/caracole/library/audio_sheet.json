@@ -1,0 +1,82 @@
+{
+ "stages": [
+  [
+   "song",
+   "Find the song"
+  ],
+  [
+   "audio",
+   "Your audio file"
+  ],
+  [
+   "lyrics",
+   "Lyrics"
+  ],
+  [
+   "vocals",
+   "Where the singing is"
+  ],
+  [
+   "words",
+   "Transcribing the lyrics"
+  ],
+  [
+   "chords",
+   "Chords from the audio"
+  ],
+  [
+   "pdf",
+   "PDF"
+  ],
+  [
+   "pages",
+   "The logbook page"
+  ]
+ ],
+ "steps": [
+  "setting up the models",
+  "hearing the chords",
+  "finding the beats",
+  "writing the sheet",
+  "separating the vocals",
+  "hearing the words"
+ ],
+ "holds": {
+  "synced": "chords over the lyrics",
+  "plain": "chords, then the lyrics",
+  "none": "chords only, no lyrics",
+  "silent": "chords only: nothing sung was heard",
+  "said": "chords only: you said it isn't sung",
+  "transcript": "chords over the transcribed lyrics"
+ },
+ "words": {
+  "same_file": "has this file's audio already",
+  "kept_as": "kept as its audio: {format}, {length}",
+  "replaces": "; it replaces {replaced} as the song's source",
+  "given_before": "the file given before",
+  "cant_keep": "can't keep {what}: {why}",
+  "the_upload": "the upload",
+  "ignored": "{display} is ignored (overrides.toml)",
+  "has_sheet": "{display} already has a sheet",
+  "in_book": "in the book",
+  "not_offered": "not transcribed: {why}",
+  "not_here": "not transcribed here: {reason}",
+  "no_audio": "no audio",
+  "phone": "the phone hears no words",
+  "lyrics_are": "its lyrics are {status}",
+  "no_vocals": "no vocals",
+  "left": "{display} left the book while {making} (removed, or merged into a song of the same name)",
+  "making": "its sheet was made",
+  "bug": "a bug in caracole: {error}",
+  "up_to_date": "up to date: {held}",
+  "no_sheet": "no sheet",
+  "relay_failed": "its auto sheet couldn't be laid out again over its words (see the log)",
+  "no_chords": "caracole makes no sheet from an audio file here: {problem}",
+  "refused": "No sheet made"
+ },
+ "pdf": {
+  "no_pdfs": "no PDFs on this scribe",
+  "pages_made": "pages made; no PDFs on this scribe",
+  "library_page": "the logbook shows it as it is now"
+ }
+}

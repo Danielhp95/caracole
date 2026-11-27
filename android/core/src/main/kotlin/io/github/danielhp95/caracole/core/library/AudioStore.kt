@@ -141,6 +141,12 @@ class AudioStore(
 
     private class Examined(val format: String, val durationS: Double, val tags: Map<String, String?>)
 
+    /** audio_store.examine of a file of the folder (a kept one): its format and its length in seconds, as the store
+     * judges the examiner's read; [AudioError] for one that isn't audio caracole reads, an IOException the disk's.
+     * What a job says of the file it kept ("kept as its audio: MP3, 3:18"), its length the lyrics sites are asked
+     * with. */
+    fun formatAndLength(file: File): Pair<String, Double> = examine(file, onDisk = true).let { it.format to it.durationS }
+
     // --- a staged upload --------------------------------------------------------------------------------------------
 
     /**

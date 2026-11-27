@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
+import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
@@ -80,6 +81,10 @@ class ModelsRunner(
 
     /** Held by a run and by [remove], so that the files are never deleted under a download. */
     private val busy = Mutex()
+
+    /** The names the models go by in an auto sheet's `raw["models"]` (models.json's), none in a build that carries
+     * none: a sheet's maker (AudioRunner). */
+    fun names(): Map<String, String> = pins?.models.orEmpty()
 
     /** The folder the models are installed in, `stateDir/models/c<contract>/`; null in a build that carries none. */
     fun folder(): File? = pins?.folder(parts.stateDir)
@@ -239,8 +244,8 @@ class ModelsRunner(
         const val NOT_BEFORE = "models:not-before"
 
         /** The keys of the jobs that use the models, while one of which waits or runs [remove] is refused: their
-         * download; the chords job (E21's) joins it. */
-        val USES: List<String> = listOf(PhoneKinds.MODELS.key)
+         * download, and a sheet from an audio file (AudioRunner's, `audio:<song key>`). */
+        val USES: List<String> = listOf(PhoneKinds.MODELS.key, JobCommands.AUDIO_SHEET)
 
         /** This build's words for a build with no models (core.models' ModelsNotCarried's): asked of [ModelFiles.carried]
          * where the phone is assembled, never caught. */

@@ -34,9 +34,21 @@ from datetime import datetime
 from typing import Any
 
 from caracole.config import Config
-from caracole.get import Progress, readable_files
+from caracole.get import LIBRARY_PAGE, NO_PDFS, PAGES_MADE, Progress, readable_files  # noqa: F401 - the three re-exported
 
 log = logging.getLogger(__name__)
+
+LEFT = "{display} left the book while {making} (removed, or merged into a song of the same name)"  # _song_again
+BUG = "a bug in caracole: {error}"  # a stage that raised: ``{error}`` its type and its words
+CANT_RUN = "auto-chords can't run here ({error})"  # the chords stage's failure of the models' setup
+CANT_READ = "auto-chords can't read the audio"  # its failure of audio the models can't read
+NO_SHEET_MADE = "auto-chords made no sheet (see the log)"  # its failure of a sheet not kept (a bug laying it out)
+UP_TO_DATE = "up to date: {held}"  # its end for a sheet already made of this audio
+NO_SHEET = "no sheet"  # the pdf stage's skip without one
+RELAY_FAILED = "its auto sheet couldn't be laid out again over its words (see the log)"  # the chords stage's, a re-lay's
+# get.py's NO_PDFS, PAGES_MADE and LIBRARY_PAGE, imported above: the words of a caracole that makes no PDF (the
+# phone's), its pdf stage skipped or done and its pages stage, which a staged job there says as the phone's lookups
+# do; used by nothing here but the conformance corpus (tests/test_conformance_audio_sheet.py).
 
 
 @dataclass
@@ -110,7 +122,7 @@ class StagedRun:
             log.error("The %s stage failed: %s: %s. That's a bug in caracole; its traceback follows.", name,
                       type(e).__name__, e, exc_info=True)
             self.result.bug = self.result.bug or f"{name}: {type(e).__name__}: {e}"
-            self._report(name, "failed", f"a bug in caracole: {type(e).__name__}: {e}")
+            self._report(name, "failed", BUG.format(error=f"{type(e).__name__}: {e}"))
             return
         state, detail = out if isinstance(out, tuple) else ("done", out or "")
         self._report(name, state, detail)
@@ -168,8 +180,7 @@ class StagedRun:
         try:
             self.song = get_song(self.conn, self.song.id)
         except KeyError:
-            raise _Stop(f"{self.song.display} left the book while {self.MAKING} (removed, or merged into a song "
-                        "of the same name)") from None
+            raise _Stop(LEFT.format(display=self.song.display, making=self.MAKING)) from None
 
     def _audio_length(self) -> float | None:
         """The song's length in seconds, by lyrics_search.py's one rule (``audio_length``: its line's, else as yt-dlp
@@ -198,7 +209,7 @@ class StagedRun:
         if relay_reason(self.conn, self.song, get_version(self.conn, files[AUTO_SHEET].version_id).raw) is None:
             return None
         if not relay_onto_sheets(self.conn, self.cfg, self.overrides, only={self.song.id}):
-            return self._fail("its auto sheet couldn't be laid out again over its words (see the log)")
+            return self._fail(RELAY_FAILED)
         self._song_again()
         version_id = next(f.version_id for f in kept_files(self.conn, self.song.id) if f.name == AUTO_SHEET)
         return "done", holds(get_version(self.conn, version_id).raw)
@@ -222,22 +233,22 @@ class StagedRun:
                                    on_step=lambda said: self._doing("chords", said))
         self._song_again()
         if stats.errors:
-            return self._fail(f"auto-chords can't run here ({stats.errors[0]})")
+            return self._fail(CANT_RUN.format(error=stats.errors[0]))
         if stats.failures:
-            return self._fail("auto-chords can't read the audio")
+            return self._fail(CANT_READ)
         kept = self.conn.execute(
             "SELECT version_id FROM files WHERE song_id = ? AND name = ?", (self.song.id, AUTO_SHEET)).fetchone()
         made = kept is not None and self.song.autochords_mtime == self.song.audio_mtime
         if not made:
-            return self._fail("auto-chords made no sheet (see the log)")
+            return self._fail(NO_SHEET_MADE)
         held = holds(get_version(self.conn, kept[0]).raw)
-        return "done", held if stats.generated else f"up to date: {held}"
+        return "done", held if stats.generated else UP_TO_DATE.format(held=held)
 
     def pdf(self) -> tuple[str, str] | str:
         from caracole.render import render_all
 
         if self.result.states.get("chords") != "done":
-            return "skipped", "no sheet"
+            return "skipped", NO_SHEET
         stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
                            song_ids={self.song.id})
         if stats.font_error:

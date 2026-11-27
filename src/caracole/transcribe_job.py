@@ -67,6 +67,7 @@ from caracole.get import Progress
 from caracole.staged import StagedResult, StagedRun, _Stop
 
 log = logging.getLogger(__name__)
+NO_VOCALS = "no vocals"  # the words stage's skip once the vocals weren't separated
 
 STAGES = (
     ("song", "Find the song"),
@@ -163,7 +164,7 @@ class HearsWords:
 
     def words(self) -> tuple[str, str] | str:
         if self.result.states.get("vocals") != "done" or self.voiced is None:
-            return "skipped", "no vocals"
+            return "skipped", NO_VOCALS
         self._after_a_lookup()
         self._same_audio()
         if (why := self._still_to_hear()) is not None:
