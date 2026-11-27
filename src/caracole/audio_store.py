@@ -98,7 +98,8 @@ _MARKER = re.compile(r"\.upload-(?P<id>[0-9a-f]{16})\.kept")  # a moved upload's
 # come later than that. A few dozen bytes each.
 MARKED = 30 * 86400
 KEPT = re.compile(rf"[0-9]+-[0-9a-f]{{16}}(?:{_EXT})")  # a kept file: <song id>-<sha256 16 hex><ext>
-_PART = re.compile(rf"{re.escape(_COPY)}[0-9a-f]{{16}}{re.escape(_COPY_END)}")  # a copy into the folder, until it is whole
+# A copy into the folder, until it is whole.
+_PART = re.compile(rf"{re.escape(_COPY)}[0-9a-f]{{16}}{re.escape(_COPY_END)}")
 _RECORD_MAX = 64 * 1024  # a staged upload's record's bytes, at most
 _SHA256 = re.compile(r"[0-9a-f]{64}")  # a record's digest
 _SPLIT = re.compile(r"[/\\]")  # a name's parts, of which the last is the name to show

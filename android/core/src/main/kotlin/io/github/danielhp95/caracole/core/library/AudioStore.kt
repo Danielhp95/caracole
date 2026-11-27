@@ -53,8 +53,9 @@ import kotlin.concurrent.withLock
  *
  * Where the phone departs from the computer: [stage] spools a stream (Python's takes the bytes a route read whole),
  * its partial file `.upload-<id>.part`, refused as soon as it is known (its head no audio, past [AUDIO_MAX], the
- * room running out), the room checked exactly once the bytes are all there; and the store reads no audio itself: the release app ships `:core`, so an [Examiner] the app gives reads the
- * length and the tags, the store judging what Python judges around mutagen's read ([Examiner]'s contract).
+ * room running out), the room checked exactly once the bytes are all there; and the store reads no audio itself:
+ * the release app ships `:core`, so an [Examiner] the app gives reads the length and the tags, the store judging
+ * what Python judges around mutagen's read ([Examiner]'s contract).
  *
  * The store's lock ([held]) is one for the process, as audio_store's `_lock` is caracole serve's: the phone runs one.
  */
@@ -147,9 +148,10 @@ class AudioStore(
      * them ([keep]). [NO_NAME] (400) before a byte is read. Spooled into `.upload-<id>.part`, a chunk at a time, and
      * refused as soon as it is known, the partial file deleted each time: [NOT_AUDIO] (415) once the first [HEAD]
      * bytes are in and [sniff] names no format; [TOO_BIG] (413) at the first byte past [AUDIO_MAX]; [NO_ROOM] (507),
-     * checked every MiB, as soon as the disk's free bytes and those of every staged upload a stage may let go are
-     * fewer than the bytes spooled and [ROOM] (a condition Python's check needs: free before ≥ 2 × size + ROOM implies
-     * free now ≥ size + ROOM, so it refuses nothing Python accepts); [EMPTY] (400) with none. Then read as
+     * checked every MiB, as soon as the disk's free bytes and those of every staged upload a stage may let go (the
+     * folder listed again at each check) are fewer than the bytes spooled and [ROOM] (a condition Python's check
+     * needs: free before ≥ 2 × size + ROOM implies free now ≥ size + ROOM, so it refuses nothing Python accepts);
+     * [EMPTY] (400) with none. Then read as
      * audio_store._examine reads one (415, 422), and under the store's lock every other staged upload [named]
      * (called under it) doesn't hold goes and the room is checked exactly as audio_store._room checks it (the disk's
      * free bytes now, the spooled ones counted free, under twice them and [ROOM]); the file takes its name, its record
@@ -175,7 +177,11 @@ class AudioStore(
             val head = ByteArray(HEAD)
             var size = 0L
             var format: String? = null
-            val freeable = held { stagedIds().sumOf { id -> pieces(id).sumOf { attributes(it)?.size() ?: 0L } } }
+            // What the stage may let go at its end: the other staged uploads as they are now, listed again at each
+            // check (another tab's staged meanwhile counts), never this one's own spool.
+            fun freeable() = held {
+                (stagedIds() - id).sumOf { other -> pieces(other).sumOf { attributes(it)?.size() ?: 0L } }
+            }
             var checked = 0L
             FileChannel.open(spool.toPath(), StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { out ->
                 val buffer = ByteArray(CHUNK)
@@ -184,7 +190,9 @@ class AudioStore(
                     if (n < 0) break
                     if (n == 0) throw IOException("the upload's stream read nothing into a buffer with room: broken")
                     if (size + n > AUDIO_MAX) throw refusal("too_big")
-                    if (size < HEAD) System.arraycopy(buffer, 0, head, size.toInt(), minOf(n.toLong(), HEAD - size).toInt())
+                    if (size < HEAD) {
+                        System.arraycopy(buffer, 0, head, size.toInt(), minOf(n.toLong(), HEAD - size).toInt())
+                    }
                     digest.update(buffer, 0, n)
                     val bytes = ByteBuffer.wrap(buffer, 0, n)
                     while (bytes.hasRemaining()) out.write(bytes)
@@ -192,7 +200,7 @@ class AudioStore(
                     if (format == null && size >= HEAD) format = sniff(head) ?: throw refusal("not_audio")
                     if (size - checked >= ROOM_EVERY) {
                         checked = size
-                        if (freeSpace(root) + freeable < size + ROOM) throw refusal("no_room")
+                        if (freeSpace(root) + freeable() < size + ROOM) throw refusal("no_room")
                     }
                 }
             }
@@ -480,7 +488,10 @@ class AudioStore(
         }
         private fun rule(name: String) = RULES.getValue(name)
         private fun text(name: String) = rule(name).jsonPrimitive.content
-        private val PATTERNS by lazy { rule("patterns").jsonObject.mapValues { PyRegex.compile(it.value.jsonPrimitive.content) } }
+        private fun texts(name: String) = rule(name).jsonArray.map { it.jsonPrimitive.content }
+        private val PATTERNS by lazy {
+            rule("patterns").jsonObject.mapValues { PyRegex.compile(it.value.jsonPrimitive.content) }
+        }
         private val NAMES by lazy { rule("names").jsonObject.mapValues { it.value.jsonPrimitive.content } }
 
         /** audio_store.FOLDER: the store's folder in the state directory. */
@@ -501,10 +512,10 @@ class AudioStore(
         val FORMATS: Map<String, String> by lazy {
             rule("formats").jsonObject.entries.associateTo(LinkedHashMap()) { it.key to it.value.jsonPrimitive.content }
         }
-        private val MP4_BRANDS: Set<String> by lazy { rule("mp4_brands").jsonArray.map { it.jsonPrimitive.content }.toSet() }
+        private val MP4_BRANDS: Set<String> by lazy { texts("mp4_brands").toSet() }
         private val TAGS: List<String> by lazy { rule("tags").jsonArray.map { it.jsonPrimitive.content } }
-        private val RECORD_FIELDS: List<String> by lazy { rule("record_fields").jsonArray.map { it.jsonPrimitive.content } }
-        private val MARKER_FIELDS: List<String> by lazy { rule("marker_fields").jsonArray.map { it.jsonPrimitive.content } }
+        private val RECORD_FIELDS: List<String> by lazy { texts("record_fields") }
+        private val MARKER_FIELDS: List<String> by lazy { texts("marker_fields") }
 
         /** Every refusal's words, by their name in audio_store.json (`not_audio`, `too_big`…), and their statuses. */
         val WORDS: Map<String, String> by lazy { rule("words").jsonObject.mapValues { it.value.jsonPrimitive.content } }
@@ -719,7 +730,8 @@ class AudioStore(
          * name, however a row spells the folder). */
         fun namedByAnother(db: Db, file: File, songId: Long): Boolean {
             val tail = "/" + file.name
-            return db.one("SELECT 1 FROM songs WHERE id != ? AND (audio_path = ? OR substr(audio_path, -?) = ?) LIMIT 1",
+            return db.one("SELECT 1 FROM songs WHERE id != ? AND (audio_path = ? OR substr(audio_path, -?) = ?)"
+                          + " LIMIT 1",
                           songId, file.path, tail.length, tail) { true } ?: false
         }
 
@@ -788,7 +800,8 @@ class AudioStore(
         /** os.open(O_CREAT | O_EXCL | O_NOFOLLOW, 0600): [file] made new and private; false when its place is taken. */
         private fun createPrivate(file: File): Boolean = try {
             try {
-                Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+                val mode = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
+                Files.createFile(file.toPath(), mode)
             } catch (_: UnsupportedOperationException) {
                 Files.createFile(file.toPath())
                 privateMode(file.toPath(), "rw-------")

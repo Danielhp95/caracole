@@ -204,10 +204,31 @@ class AudioStoreTest {
         // Python lets the other go before it checks: what it frees is room an early check mustn't refuse for.
         free = AudioStore.ROOM + (2L shl 20)
         var read = 0L
-        val store = AudioStore(w.state, examiner, { free - read + if (w.store.root.list()!!.any { it.startsWith(".upload-${other.id}.") }) 0 else (3L shl 20) }, { clock })
+        val store = AudioStore(w.state, examiner, {
+            free - read + if (w.store.root.list()!!.any { it.startsWith(".upload-${other.id}.") }) 0 else (3L shl 20)
+        }, { clock })
         val up = store.stage(generated(2L shl 20) { read = it }, "two.wav", emptySet())
         assertEquals(2L shl 20, up.size)
         refused(404) { w.store.staged(other.id) }
+    }
+
+    @Test
+    fun anUploadAnotherTabStagesWhileThisOneSpoolsIsRoomTheEarlyCheckCountsToo() {
+        val w = World()
+        // Python's check passes for 4 MiB on a disk of ROOM and 8 MiB free once the other tab's 3 MiB go: every early
+        // check must too, though those 3 MiB arrived after this upload's first MiB, and are let go only at its end.
+        val start = AudioStore.ROOM + (8L shl 20)
+        var read = 0L
+        var other: String? = null
+        fun there(id: String?) = id != null && w.store.root.list()!!.any { it.startsWith(".upload-$id.") }
+        val store = AudioStore(w.state, examiner, { start - read - if (there(other)) 3L shl 20 else 0 }, { clock })
+        val body = generated(4L shl 20) {
+            read = it
+            if (other == null && it > (1L shl 20) + (1L shl 16)) other = w.stage(mp3.copyOf(3 shl 20), "other.mp3").id
+        }
+        val up = store.stage(body, "four.wav", emptySet())
+        assertEquals(4L shl 20, up.size)
+        refused(404) { w.store.staged(other!!) }
     }
 
     @Test

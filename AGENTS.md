@@ -4220,7 +4220,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `sweep` lets go an hour after its last write), its SHA-256 streamed, refused as soon as it is known: NOT_AUDIO once
   its first `HEAD` bytes are in (a non-audio body past `AUDIO_MAX` is NOT_AUDIO here, TOO_BIG on the computer), at
   the first byte past `AUDIO_MAX`, NO_ROOM every MiB once the free bytes and those of the staged uploads it may let go
-  are under the spooled ones and `ROOM` (needed for Python's check to pass: it refuses nothing Python takes); then
+  (listed again at each check) are under the spooled ones and `ROOM` (needed for Python's check to pass: it refuses
+  nothing Python takes; so an early NO_ROOM comes before TOO_BIG, TOO_LONG and the examiner's NOT_AUDIO, which Python
+  says first); then
   exactly, under the lock after the others go (the free bytes with the spooled ones counted free, under twice them and
   `ROOM`: Python's check before its write). A refusal leaves the stream unread and open (the route drains or closes
   it); a read of 0 bytes is a broken stream, an IOException. `keep(db, song, staged)` moves a staged upload alone (a
