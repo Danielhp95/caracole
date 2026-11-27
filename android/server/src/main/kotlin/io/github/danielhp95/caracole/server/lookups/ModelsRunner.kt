@@ -37,6 +37,8 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
 
 /**
  * `caracole models [--metered-ok]` (the phone's own command, PhoneKinds' models kind): the chord models downloaded
@@ -82,6 +84,14 @@ class ModelsRunner(
     /** Held by a run and by [remove], so that the files are never deleted under a download. */
     private val busy = Mutex()
 
+    /** Read by each hearing ([holding]), written by [remove]: the files are never deleted under a hearing. */
+    private val files = ReentrantReadWriteLock()
+
+    /** [block] (a hearing: the audio job's `ChordModels.hear`, which asks [ready] again first) run with the models'
+     * files held, so that [remove] is refused while it runs: the audio job's key ([USES]) covers the job while the
+     * queue lists it, this the hearing itself, whatever remove looked at before (a job queued as it looked). */
+    fun <T> holding(block: () -> T): T = files.read(block)
+
     /** The names the models go by in an auto sheet's `raw["models"]` (models.json's), none in a build that carries
      * none: a sheet's maker (AudioRunner). */
     fun names(): Map<String, String> = pins?.models.orEmpty()
@@ -109,13 +119,18 @@ class ModelsRunner(
      * The chord models removed (Settings' Remove): `stateDir/models/` whole (every contract's folder, the files kept
      * for a next try, what a fetch cut off left), no link followed, then kv [INSTALLED]; kv [NOT_BEFORE], GitHub's
      * time, kept. Null once removed (or nothing there); [IN_USE] while a job that uses the models ([USES]: their
-     * download) waits or runs, nothing deleted; [NOT_CARRIED] in a build that carries none; the storage's failure in
+     * download, a sheet from an audio file) waits or runs, or a hearing holds them ([holding]), nothing deleted; [NOT_CARRIED] in a build that carries none; the storage's failure in
      * words (what is left, and the record, kept).
      */
     fun remove(): String? {
         if (pins == null) return NOT_CARRIED
         if (inUse()) return IN_USE
         if (!busy.tryLock()) return IN_USE
+        val write = files.writeLock()
+        if (!write.tryLock()) {
+            busy.unlock()
+            return IN_USE  // a hearing holds them
+        }
         try {
             if (inUse()) return IN_USE
             try {
@@ -126,6 +141,7 @@ class ModelsRunner(
             parts.database.writeBlocking { db -> db.kvDelete(INSTALLED) }
             return null
         } finally {
+            write.unlock()
             busy.unlock()
         }
     }
@@ -244,10 +260,9 @@ class ModelsRunner(
         const val NOT_BEFORE = "models:not-before"
 
         /** The keys of the jobs that use the models, while one of which waits or runs [remove] is refused: their
-         * download, and a sheet from an audio file (AudioRunner's, `audio:<song key>`). Not closed yet, the next
-         * tasks' (the `:ml` wiring, Settings): [remove] can slip in between an audio job's queueing and its
-         * `ChordModels.hear`, as the `inUse` check here holds nothing the audio job takes (the job then fails in the
-         * models' own words, nothing kept but its audio). */
+         * download, and a sheet from an audio file (AudioRunner's, `audio:<song key>`). A remove between a job's
+         * queueing and its hearing is closed by [holding]: the hearing holds the files and asks [ready] again under
+         * them (the job then fails "the chord models aren't downloaded …", nothing kept but its audio). */
         val USES: List<String> = listOf(PhoneKinds.MODELS.key, JobCommands.AUDIO_SHEET)
 
         /** This build's words for a build with no models (core.models' ModelsNotCarried's): asked of [ModelFiles.carried]

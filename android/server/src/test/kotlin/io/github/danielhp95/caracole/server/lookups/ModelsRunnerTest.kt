@@ -390,6 +390,24 @@ class ModelsRunnerTest {
         runBlocking { withTimeout(30_000) { phone.queue.await(blocker.id); phone.queue.await(waiting.id) } }
     }
 
+    /** A hearing holds the models' files ([ModelsRunner.holding], the audio job's around `ChordModels.hear`): remove
+     * is refused while it does, even for a job no queue lists (one queued as remove looked), and goes once it is
+     * over; a hearing that comes after a remove reads the files gone. */
+    @Test fun removeIsRefusedWhileAHearingHoldsTheFiles() {
+        served()
+        val phone = phone()
+        run(phone)
+        val held = phone.runner.holding {
+            assertNull(phone.runner.ready())
+            assertEquals(ModelsRunner.IN_USE, phone.runner.remove())
+            assertTrue(File(phone.stateDir, ModelFiles.FOLDER).exists())
+            "heard"
+        }
+        assertEquals("heard", held)
+        assertNull(phone.runner.remove())
+        assertEquals("The chord models aren't on the phone.", phone.runner.holding { phone.runner.ready() })
+    }
+
     // --- the phone's start --------------------------------------------------------------------------------------------
 
     /** What a download killed in its middle left is swept as the phone starts; an install a kill left aside between

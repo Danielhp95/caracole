@@ -906,7 +906,33 @@ phone), plus what grows with the song: BTC's features, 0.37 MB a minute (11 MB f
 690 MB), its mixdown (345 MB) and the 22,050 Hz pcm (159 MB), each gone once the next is made, the pcm once the beats
 are kept.
 
-## Chords from audio: the front ends
+## Chords from audio: a sheet from a file (debug build)
+
+In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
+(src/debug's `PhoneChords`; the release has none, and says auto-chords isn't on the phone). The models are those
+Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
+holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
+removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app
+sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 or x86_64 processor.
+
+`ChordsEndToEndTest` runs it whole on the emulator: the models `device-test.sh` pushes installed by the phone's own
+models' job (nothing asked of GitHub), the committed 20 s clip `tests/fixtures/autochords/hearing.mp3` staged and its
+job queued, LRCLIB the fake sites server's scenario `chords`, which times the clip's song:
+
+    android/scripts/device-test.sh --models --sites chords ChordsEndToEndTest
+
+It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's WCSR against the computer's hearing of
+the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
+the emulator (2026-11-27): queued to Ready in 4.9-6.1 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
+
+### Gate B2 on your phone
+
+Once the library page offers the "+" (the audio routes, a later task): install a debug build
+(`android/scripts/phone-install.sh`), download the chord models in Settings › Chords from audio, charge the phone
+above 15 %, then on the library page tap "+", pick a song of yours whose lyrics LRCLIB has timed, and Make sheet.
+The gate: from the tap to Ready, with "chords over the lyrics", within 90 s. The Journal's entry gives the job's
+times; say the song's length and the phone.
+
 
 `:autochords` makes the models' inputs from 22,050 Hz samples as the computer does: `Cqt.logFeatures(y)`, BTC's
 log-CQT (btc.py's `cqt_features`: librosa 1.0's CQT in 10 s chunks, `[frames, 144]`), and `Mel.logMel(y)`,

@@ -10,6 +10,7 @@ import io.github.danielhp95.caracole.core.health.Alerts
 import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.Phone
@@ -79,6 +80,14 @@ object Caracole {
 
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
+
+    /** A device test's: the chord models hear on this phone whatever its own reasons not to (the emulator's 2 GB),
+     * read each time the debug build's PhoneChords is asked. */
+    @Volatile var anyPhoneHearsForTests: Boolean = false
+
+    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none (every
+     * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
+    @Volatile var examinerForTests: AudioStore.Examiner? = null
 
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
     private fun catalogues(http: Http): CatalogueSource =
@@ -151,6 +160,10 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
+                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
+                // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
+                chords = PhoneChords.of(context, state),
+                examiner = { file, format -> (examinerForTests ?: PhoneDeps.NO_EXAMINER).examine(file, format) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the
@@ -162,6 +175,7 @@ object Caracole {
             this.working = working
             // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
             phone.start()
+            runCatching { PhoneChords.sweep(state) }  // a hearing's checkpoints a killed app left a day ago
             return phone
         } catch (e: Throwable) {
             database.close()

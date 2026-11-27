@@ -2976,13 +2976,22 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `.part`, forced to the disk and renamed, the folder then forced too (`Checkpoints.syncFolder` on a JVM, `Os.fsync`
     in `:ml`; quiet where refused); one that won't parse, or a pcm shorter than its meta, is made again;
     what a cut-off stage left anywhere under the folder is swept as a hearing starts. `MlChordModels` is
-    `ChordModels` in the main process: `ready()` checks the three files (BTC's graph and weights, beat_this fp16) by
-    models.json's sizes and SHA-256 (hashed once a process; the download is a later task's, the emulator's are
-    device-test.sh's push); `hear` waits for an earlier `:ml` to end (`awaitGone`: 10 s, then refused in words,
-    `STILL_ENDING`), binds the service, sends paths over a
-    `Messenger` (`MlProtocol`), polls its replies a second at a time calling `waiting`, holds `caracole:chords`'s
-    wake lock (its 10 minutes begun again each step and minute), cancels on its way out unanswered, and reads a dead
-    process as `ChordsUnavailable` (`MlChordModels.DIED`); a bug in the process is an IllegalStateException "a bug in
+    `ChordModels` in the main process: `ready()` says its `device` reasons first (the app's `deviceProblem`, §8.1:
+    Android 13, an ABI it carries, `LEAST_MEMORY` 5 GiB of `totalMem`, "6 GB" as phones are sold; none for the bench
+    and the tests), then its `installed` judge (the app's: `ModelFiles.installed` of `stateDir/models/c1/`), or with
+    none the three files (BTC's graph and weights, beat_this fp16) by models.json's sizes and SHA-256, hashed once a
+    process (the bench's folder, device-test.sh's push); `runtime` is `OrtModels.RUNTIME`. `hear` asks `ready()`,
+    then (`guarded`, `HearingGuardTest` on the JVM) refuses under the battery floor (`HeatRules.start` over its
+    `gauge`, before any process), takes the one turn of the app's processes (`turn`, an flock of `files/chords.lock`:
+    a job's hearing and the Chords bench's, which bind the same `:ml`, never at once; `BUSY` in words) and holds
+    `caracole:chords`'s partial wake lock (its 10 minutes begun again each step and minute), both let go on every
+    path and what it throws thrown as itself; waits for an earlier `:ml` to end (`awaitGone`: 10 s, then refused in
+    words, `STILL_ENDING`), binds the service, sends paths over a
+    `Messenger` (`MlProtocol`), polls its replies a second at a time calling `waiting`, cancels on its way out
+    unanswered (the unbind ending `:ml` at its next chunk), and reads a dead process as `ChordsUnavailable`
+    (`MlChordModels.DIED`). With `forgetHeard` (the app's) a song's checkpoints go once it is heard and its process
+    gone; a hearing that fails keeps them for Try again, and `sweepOld` takes those a day old as the app starts; a
+    bug in the process is an IllegalStateException "a bug in
     caracole: …", an OutOfMemoryError said as one, an IOException too (`MlProtocol.NO_ROOM` for a full disk, else
     `CANT_WRITE`). A cancel is asked in the decode's, the mixdown's and the resample's loops and at each reading of a
     heat waited out, as before each chunk. `HeatRules` (Heat.kt, the design's §3.4 table over a
@@ -4305,8 +4314,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   at Try again).
 - The queue's yield passes over a lookup of the running job's own song (`JobCommands.songOfJob`, jobs.song_of_job:
   a song never has two jobs running): it waits for the job's end. `ModelsRunner.USES` holds `audio:`, so the models'
-  remove is refused while a sheet waits or runs (a remove between a job's queueing and its `hear` is not closed yet:
-  the next tasks'). What `waiting` throws (the queue's stop) propagates through `hear` as itself, never as
+  remove is refused while a sheet waits or runs; the hearing itself holds the files (`ModelsRunner.holding`, a read
+  lock that `remove` must take for writing, AudioRunner's `hold`) and asks `Phone.audioProblem()` again under it, so
+  a remove after the job was queued fails its chords "the chord models aren't downloaded …". What `waiting` throws (the queue's stop) propagates through `hear` as itself, never as
   `ChordsUnavailable`: the job ends as the queue's stop, its audio kept, no sheet.
 - `ChordModels`, `AudioUnreadable` and `ChordsUnavailable` live in :viewer's viewer.autochords (`:autochords` names
   them by typealias): :server, which the release ships, never depends on `:autochords`, whose `caracole/autochords/`
@@ -4314,6 +4324,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - The phone notes no transcript or nothing-sung verdict of its own: `Relay.notedOf` of its own audio is the empty
   `Noted`, which is `notedIn` of a phone-made raw (it holds neither), so the computer's re-lay of a phone-made sheet
   is the phone's.
+- The app's chords (E22): `PhoneDeps.chords` is `PhoneChords.of` (src/debug's: `:ml`'s `MlChordModels` over the
+  folder the models' job installs, `forgetHeard`, the device's reasons; src/release's: null, so the release's main
+  source set names nothing of `:ml`, a debugImplementation, and `audioProblem()` says auto-chords isn't on the phone,
+  release-check.sh holding the APK to it); `PhoneDeps.models` is its default (`ModelFiles.carried()`: the debug's
+  pins). `PhoneChords.sweep` after `Phone.start`. A device test sets `Caracole.anyPhoneHearsForTests` (the emulator's
+  2 GB) and `Caracole.examinerForTests`. ChordsEndToEndTest (`device-test.sh --models --sites chords
+  ChordsEndToEndTest`; `--models` pushes the models with none of `:ml`'s classes) installs the pushed models through
+  the models' job (copied into `stateDir/models/.c1.kept/`, hashed again by `ModelsSource.fetch`, nothing asked, the
+  real manifest written), stages hearing.mp3 through `Phone.audio`, queues its job on the real queue against
+  fake_sites' `chords` (LRCLIB timing the clip's song): Ready, "chords over the lyrics", the sheet's `heard` back to
+  Harte labels at B1's WCSR and beats F against models.jsonl's hearing, LRCLIB's requests alone, the maker's members,
+  the checkpoints gone; `:ml` killed mid-job (long.wav) fails the chords in `DIED`'s words, the library page
+  answering; and `hear`'s contract on the real process (what `waiting` throws, as itself; `BUSY`).
 - `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file: the app's
   reader is E24's); `tidy` runs as the phone starts and after a sync's take, a write of its own, never under `held`.
 - vectors/lookup/audio_sheet.jsonl (`AudioSheetReplay`, area `audio-sheet`): Python's job with fake models over the
@@ -4590,7 +4613,8 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest, DecoderTest and PipelineTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest, DecoderTest and PipelineTest and the app's ChordsBenchTest, `--models` the
+  models alone pushed and named to the classes (`-e models`), `CLASS[=DIR]` for its own;
   `--tcpdump FILE` the gate on caracole's own uids, iptables and ip6tables owner rules counting what the debug app and
   the test APKs send to any host but 10.0.2.2 or loopback, a control sent as the app before and after the classes each counted on its own (the counters read just before each), the chain still first in OUTPUT; it proves nothing those uids sent left, not what another
   uid sends for them (a name lookup through Android's resolver among it); the emulator's whole capture beside it as

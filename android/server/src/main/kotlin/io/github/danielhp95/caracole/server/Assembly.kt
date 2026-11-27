@@ -213,7 +213,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands[ModelsRunner.COMMAND] = models
         audio = AudioStore(deps.stateDir, deps.examiner)
         commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio, problem = ::audioProblem,
-                                                    names = models::names)
+                                                    names = models::names, hold = { hearing -> models.holding(hearing) })
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
     }
 

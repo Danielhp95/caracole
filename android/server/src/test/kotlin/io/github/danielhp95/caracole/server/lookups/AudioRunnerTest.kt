@@ -323,4 +323,25 @@ class AudioRunnerTest {
         assertEquals(1, job.steps.single().code)
         assertFalse(autoSheet(phone))
     }
+
+    /** The models removed after the job was queued (Settings' Remove, before the job held them): the hearing holds
+     * the models' files ([AudioRunner]'s `hold`, ModelsRunner.holding) and asks again under it, so the chords stage
+     * fails in the one answer's words, Try again once they are downloaded, the models never asked and nothing kept
+     * but its audio. */
+    @Test fun theModelsRemovedOnceTheJobWasQueuedFailItsChordsInWordsAndHearNothing() {
+        val phone = phone()
+        val models = Models()
+        var asked = 0
+        var holds = 0
+        val job = run(phone, AudioRunner(phone.parts, models, phone.store,
+                                         problem = { if (asked++ == 0) null else AudioRunner.NOT_DOWNLOADED },
+                                         hold = { block -> holds++; block() }))
+        assertEquals(Job.FAILED, job.state)
+        assertEquals(Job.FAILED to AudioRunner.NOT_DOWNLOADED, ends(job)["chords"])
+        assertEquals(1, holds)
+        assertTrue(models.heardOf.isEmpty())
+        assertFalse(autoSheet(phone))
+        val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
+        assertTrue(phone.store.uploaded(song)?.isFile == true, "the audio kept")
+    }
 }

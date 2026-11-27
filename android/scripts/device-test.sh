@@ -3,7 +3,7 @@
 # here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [--ml]
-#                                  [--data DIR] [--tcpdump FILE] [CLASS[=DIR]]...
+#                                  [--models] [--data DIR] [--tcpdump FILE] [CLASS[=DIR]]...
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server, viewer and autochords.testing's Replays); "all" or an
 #                   empty list: every one
@@ -24,6 +24,9 @@
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
+#   --models        those chord and beat models pushed as --ml pushes them, and named to every class run
+#                   (`-e models`), with none of :ml's own classes: ChordsEndToEndTest's (`--models --sites chords
+#                   ChordsEndToEndTest`)
 #   --data DIR      :ml's ParityRunTest, B1's gates over audio of a folder outside the repository (the owner's own
 #                   songs) with the computer's hearing of each beside it (tests/helpers/autochords_reference.py
 #                   --hearings: meta.json and <stem>.hearing.json): its files (a link pushed as the file it names, under
@@ -82,6 +85,7 @@ areas=""
 want_areas=0
 want_app=0
 want_ml=0
+want_models=0
 data=""
 tcpdump=""
 computer=""
@@ -96,6 +100,7 @@ while [ $# -gt 0 ]; do
         --area=*) want_areas=1; areas="${1#--area=}"; shift ;;
         --app) want_app=1; shift ;;
         --ml) want_ml=1; shift ;;
+        --models) want_models=1; shift ;;
         --data) data="${2-}"; [ -n "$data" ] || usage; shift 2 ;;
         --tcpdump) tcpdump="${2-}"; [ -n "$tcpdump" ] || usage; shift 2 ;;
         --computer) computer="${2-}"; [ -n "$computer" ] || usage; shift 2 ;;
@@ -112,13 +117,17 @@ if [ -n "$data" ]; then
     data="$(realpath "$data")"
 fi
 models_needed=0
-{ [ "$want_ml" = 1 ] || [ -n "$data" ]; } && models_needed=1
+ml_tests=0
+{ [ "$want_ml" = 1 ] || [ -n "$data" ]; } && ml_tests=1
+{ [ "$ml_tests" = 1 ] || [ "$want_models" = 1 ]; } && models_needed=1
+model_args=()
+[ "$want_models" = 1 ] && model_args=(-e models /data/local/tmp/caracole-models)
 [ "$areas" = all ] && areas=""
 [ -z "$tcpdump" ] || tcpdump="$(realpath -m "$tcpdump")"
 
 # 1. The build, outside the lock, so a lane that builds never holds the emulator.
 tasks=(assembleDebug assembleDebugAndroidTest)
-[ "$models_needed" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
+[ "$ml_tests" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
 (cd "$repo" && nix develop ./android -c gradle -p android "${tasks[@]}" --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
@@ -186,7 +195,7 @@ adb() { adb_cmd -s "$serial" "$@"; }
 adb install -r -t "$apk" >/dev/null
 adb install -r -t "$test_apk" >/dev/null
 if [ "$models_needed" = 1 ]; then
-    adb install -r -t "$ml_apk" >/dev/null
+    [ "$ml_tests" = 1 ] && adb install -r -t "$ml_apk" >/dev/null
     adb shell mkdir -p "$ml_models"
     for file in "$models"/*; do
         name="$(basename "$file")"
@@ -360,7 +369,8 @@ control
 run_class() {
     local name="$1"; shift
     local out
-    out="$(adb shell am instrument -w -e class "$ns.$name" "$@" ${site_args[@]+"${site_args[@]}"} "$runner" 2>&1 \
+    out="$(adb shell am instrument -w -e class "$ns.$name" "$@" ${site_args[@]+"${site_args[@]}"} \
+        ${model_args[@]+"${model_args[@]}"} "$runner" 2>&1 \
         | tr -d '\r')" || true
     echo "$out"
     if grep -q '^OK (' <<<"$out" && ! grep -qE 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed' <<<"$out"; then

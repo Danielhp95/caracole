@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 from conftest import subprocess_pythonpath
 from helpers.fake_sites import (
+    CHORDS,
     LOOKUPS,
     OWNERS_PORT,
     VOTES_PER_READ,
@@ -151,6 +152,28 @@ def test_lrclib_has_the_get_it_songs_timed_lyrics_and_none_else(sites):
     status, body = fetch(sites, f"https://lrclib.net/api/search?{query}")
     assert (status, json.loads(body)) == (200, [])
     assert all(r["known"] for r in sites.requests)
+
+
+def test_the_chords_scenarios_lrclib_times_the_committed_clips_song_within_its_length():
+    """The scenario ``chords`` (ChordsEndToEndTest's): LRCLIB's timed lyrics of the song a committed clip is made the
+    sheet of (tests/fixtures/autochords/hearing.mp3, 20 s), their duration the clip's as the computer reads it
+    (models.jsonl's hearing record), so that a lookup asked with the clip's length takes them, each line within it;
+    and nothing else of any site."""
+    (song,) = CHORDS
+    record = next(r for r in map(json.loads, (REPO / "tests/conformance/vectors/autochords/models.jsonl").open())
+                  if r.get("kind") == "hearing" and r["file"]["fixture"] == "autochords/hearing.mp3")
+    with FakeSites("chords") as fake:
+        query = urllib.parse.urlencode({"artist_name": song.artist.name, "track_name": song.title,
+                                        "duration": round(record["duration"])})
+        status, body = fetch(fake, f"https://lrclib.net/api/get?{query}")
+        assert status == 200
+        got = json.loads(body)
+        assert got["duration"] == round(record["duration"])
+        times = [float(line[1:9].split(":")[0]) * 60 + float(line[4:9]) for line in got["syncedLyrics"].splitlines()]
+        assert times == sorted(times) and len(times) >= 4 and times[-1] < record["duration"]
+        assert got["plainLyrics"].splitlines()[0] in got["syncedLyrics"]
+        assert fetch(fake, "https://tabs.ultimate-guitar.com/tab/thomas-moore/the-minstrel-boy-chords-7000001")[0] == 404
+        assert fake.document()["songs"]["hearing"]["lyrics"] is True
 
 
 def test_a_gtptabs_artist_page_lists_none_of_the_scenarios_songs(sites):

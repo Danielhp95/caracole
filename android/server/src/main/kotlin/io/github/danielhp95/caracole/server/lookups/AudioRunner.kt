@@ -101,6 +101,7 @@ class AudioRunner(
     private val names: () -> Map<String, String> = { emptyMap() },
     private val readOverrides: (Db) -> Overrides = Overrides::read,
     private val stages: SiteStages = SiteStages.ALL,
+    private val hold: (() -> Heard) -> Heard = { it() },
 ) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
         val line = LookupJobs.line(args, setOf("--upload", "--song"))
@@ -126,7 +127,8 @@ class AudioRunner(
         }
         val artist = Py.strip(display.substringBefore(" - "))
         val title = Py.strip(display.substringAfter(" - ", ""))
-        Job(parts, store, chords!!, context, upload, artist, title, given, names, readOverrides, stages).run()
+        Job(parts, store, chords!!, context, upload, artist, title, given, names, readOverrides, stages, hold,
+            this.problem).run()
     }
 
     /** What the command reads of the upload before any stage (commands/audio.py `_given_already`, then `staged`): the
@@ -145,6 +147,7 @@ class AudioRunner(
         val parts: PhoneParts, val store: AudioStore, val chords: ChordModels, val context: JobContext,
         val upload: String, val artist: String, val title: String, val given: Given,
         val names: () -> Map<String, String>, val readOverrides: (Db) -> Overrides, val stages: SiteStages,
+        val hold: (() -> Heard) -> Heard, val problem: () -> String?,
     ) {
         private val started = parts.pacing.monotonic()
         private val now = parts.pacing.clock().truncatedTo(ChronoUnit.SECONDS)
@@ -414,7 +417,12 @@ class AudioRunner(
             parts.database.writeBlocking { db -> upToDate(db) }?.let { return it }
             val audio = kept ?: return fail(Words.text("no_audio"))
             val heard = try {
-                chords.hear(audio, { step -> doing("chords", step) }, { context.yieldToQueued() })
+                // The models' files held while they hear (ModelsRunner.holding), asked about again under them: a
+                // remove after the job was queued fails it here, in the one answer's words.
+                hold {
+                    problem()?.let { throw ChordsUnavailable(it) }
+                    chords.hear(audio, { step -> doing("chords", step) }, { context.yieldToQueued() })
+                }
             } catch (e: AudioUnreadable) {
                 return fail(UNREADABLE + (e.message ?: e.javaClass.simpleName))
             } catch (e: ChordsUnavailable) {

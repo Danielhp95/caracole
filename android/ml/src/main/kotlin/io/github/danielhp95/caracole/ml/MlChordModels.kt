@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
@@ -23,6 +24,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
+import java.nio.channels.OverlappingFileLockException
 import java.security.MessageDigest
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -39,15 +43,30 @@ import java.util.concurrent.TimeUnit
  * [hear] stopped before its answer (`waiting` throwing, its thread interrupted) sends [MlProtocol.CANCEL] and lets
  * go. A bug of caracole's in the process is an IllegalStateException in its words.
  *
- * [ready]: the three files the hearing runs on ([OrtModels.BTC_GRAPH], [OrtModels.BTC_WEIGHTS] beside it,
- * [OrtModels.BEATS_FP16]) in [models], each of the size and SHA-256 models.json pins (`:ml`'s resource), each file's
- * answer kept while its size and time stay; else why not, in words. Where the files come from is a later task's (the
- * models' download); on the emulator they are pushed to `/data/local/tmp/caracole-models` (device-test.sh `--ml`).
+ * Around it ([guarded]): the battery floor first (under [HeatRules.LOW_BATTERY] % and not charging, refused in
+ * [HeatRules.CHARGE_FIRST]'s words before any process starts), then the one turn of the app's processes ([turn], a
+ * lock on `files/chords.lock`: the app's jobs and the debug build's Chords bench bind the same `:ml`, so a hearing
+ * while another goes on is refused in [BUSY]'s words), and the wake lock only while the hearing runs, let go on
+ * every path; whatever the hearing throws (`waiting`'s own exception among it) goes on as itself.
+ *
+ * [ready]: the phone's own reasons first ([device]: the app's [deviceProblem], the design's §8.1; none by default, the
+ * bench's and the tests'), then the models' files: [installed], the app's judge (ModelFiles.installed of the folder
+ * the models' job installs, `stateDir/models/c<contract>/`, ModelsRunner.ready's one answer), or with none the three
+ * files the hearing runs on ([OrtModels.BTC_GRAPH], [OrtModels.BTC_WEIGHTS] beside it, [OrtModels.BEATS_FP16]) in
+ * [models], each of the size and SHA-256 models.json pins (`:ml`'s resource), each file's answer kept while its size
+ * and time stay (the bench's folder, and `/data/local/tmp/caracole-models` that device-test.sh `--ml` pushes). [hear]
+ * asks it first. [forgetHeard] (the app's): the song's checkpoints removed once it is heard whole and its answer read,
+ * the process gone; a hearing that fails keeps them, for Try again to go on from, and [sweepOld] takes those a day old
+ * at the app's start. [gauge] reads the battery ([Heat]).
  */
 class MlChordModels(
     context: Context, private val models: File, private val work: File, private val threads: Int = 0,
+    private val installed: (() -> String?)? = null, private val device: () -> String? = { null },
+    private val forgetHeard: Boolean = false, private val gauge: HeatGauge = Heat(context),
 ) : ChordModels {
     private val app = context.applicationContext
+
+    override val runtime: String get() = OrtModels.RUNTIME
 
     /** The `:ml` process's peak RSS, in kB, while it heard the last song (`VmHWM`); null before one was heard. */
     @Volatile var lastPeakKb: Long? = null
@@ -62,7 +81,15 @@ class MlChordModels(
     @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
         private set
 
-    override fun ready(): String? = synchronized(checked) {
+    override fun ready(): String? {
+        device()?.let { return it }
+        val judge = installed ?: return pinned()
+        return judge()
+    }
+
+    /** The three files in [models] as models.json pins them, each hashed once a process while its size and time
+     * stay. */
+    private fun pinned(): String? = synchronized(checked) {
         val doc = Json.parseToJsonElement(pins()).jsonObject
         val btc = doc["btc"]!!.jsonObject
         val pins = listOf(btc["graph"]!!, btc["weights"]!!, doc["beats"]!!.jsonObject["fp16"]!!).map { it.jsonObject }
@@ -89,6 +116,12 @@ class MlChordModels(
         lastPeakSplitKb = null
         lastStagesNanos = emptyMap()
         ready()?.let { throw ChordsUnavailable(it) }
+        return guarded(gauge, { turn(File(app.filesDir, TURN)) }, AndroidWake(app)) { wake ->
+            heard(audio, onStep, waiting, wake)
+        }
+    }
+
+    private fun heard(audio: File, onStep: (String) -> Unit, waiting: () -> Unit, lock: Wake): Heard {
         // The process of an earlier hearing ends once its client let go of it: a bind meanwhile could reach it as
         // it goes, so it is let finish first, or the hearing refused in words.
         awaitGone(::mlPid, System::currentTimeMillis, Thread::sleep, waiting)
@@ -104,12 +137,10 @@ class MlChordModels(
             override fun onBindingDied(name: ComponentName?) = died(replies)
             override fun onNullBinding(name: ComponentName?) = died(replies)
         }
-        val lock = app.getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG).apply { setReferenceCounted(false) }
-        lock.acquire(WAKE_MS)
         var bound = false
         var service: Messenger? = null
         var answered = false
+        var heardIn: File? = null
         try {
             bound = app.bindService(Intent(app, MlService::class.java), connection,
                 Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
@@ -142,13 +173,13 @@ class MlChordModels(
                 val m = replies.poll(1, TimeUnit.SECONDS)
                 if (m == null) {
                     // The wake lock's 10 minutes begin again each minute the models work, and at each step.
-                    if (++quiet % 60 == 0) lock.acquire(WAKE_MS)
+                    if (++quiet % 60 == 0) lock.hold(WAKE_MS)
                     waiting()
                     continue
                 }
                 when (m.what) {
                     MlProtocol.STEP -> {
-                        lock.acquire(WAKE_MS)
+                        lock.hold(WAKE_MS)
                         onStep(m.data.getString(MlProtocol.WORDS)!!)
                     }
                     MlProtocol.DONE -> {
@@ -159,7 +190,8 @@ class MlChordModels(
                         val names = m.data.getStringArray(MlProtocol.STAGES).orEmpty()
                         val nanos = m.data.getLongArray(MlProtocol.STAGE_NANOS) ?: LongArray(0)
                         lastStagesNanos = names.zip(nanos.toList()).toMap()
-                        return Heard.read(File(m.data.getString(MlProtocol.HEARD)!!).readText(Charsets.UTF_8))
+                        val file = File(m.data.getString(MlProtocol.HEARD)!!)
+                        return Heard.read(file.readText(Charsets.UTF_8)).also { heardIn = file.parentFile }
                     }
                     MlProtocol.FAILED -> {
                         answered = true
@@ -186,7 +218,11 @@ class MlChordModels(
             }
             if (bound) app.unbindService(connection)
             looper.quitSafely()
-            if (lock.isHeld) lock.release()
+            // Heard whole and read: its checkpoints go (the app's), once its process is gone, so nothing writes there
+            // after; a process still ending keeps them for the start's sweep.
+            heardIn?.takeIf { forgetHeard && it.parentFile?.canonicalFile == work.canonicalFile }?.let { folder ->
+                if (runCatching { awaitEnded() }.isSuccess) folder.deleteRecursively()
+            }
         }
     }
 
@@ -207,7 +243,127 @@ class MlChordModels(
     private fun mlPid(): Int? = app.getSystemService(ActivityManager::class.java).runningAppProcesses.orEmpty()
         .firstOrNull { it.processName == app.packageName + MlProtocol.PROCESS_SUFFIX }?.pid
 
+    /** A partial wake lock, as a hearing holds it ([guarded]); Android's is [AndroidWake]. */
+    interface Wake {
+        /** Held, for [ms] from now (again: [ms] from now). */
+        fun hold(ms: Long)
+
+        fun release()
+    }
+
+    /** PowerManager's partial wake lock [WAKE_TAG], not reference counted. */
+    private class AndroidWake(context: Context) : Wake {
+        private val lock = context.getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG).apply { setReferenceCounted(false) }
+
+        override fun hold(ms: Long) = lock.acquire(ms)
+
+        override fun release() {
+            if (lock.isHeld) lock.release()
+        }
+    }
+
     companion object {
+        /** The one turn of the app's processes to hear a song (the app's jobs, the debug build's bench), its lock's
+         * file in the app's files. */
+        const val TURN = "chords.lock"
+
+        const val BUSY = "the chord models are hearing another song (a sheet being made, or the Chords bench's); " +
+            "try again once it's done"
+
+        /**
+         * [block], the hearing, run: refused first under the battery floor ([HeatRules.start] over [gauge]: nothing
+         * taken), then once another holds the turn ([take] null: [BUSY]); else with the turn held and [wake] held for
+         * [WAKE_MS] (the hearing holds it again at each step and each minute), both let go however [block] ends, and
+         * whatever it throws thrown as itself.
+         */
+        internal fun <T> guarded(gauge: HeatGauge, take: () -> AutoCloseable?, wake: Wake, block: (Wake) -> T): T {
+            HeatRules.start(gauge.read())?.let { throw ChordsUnavailable(it) }
+            val turn = take() ?: throw ChordsUnavailable(BUSY)
+            try {
+                wake.hold(WAKE_MS)
+                try {
+                    return block(wake)
+                } finally {
+                    wake.release()
+                }
+            } finally {
+                turn.close()
+            }
+        }
+
+        /** The turn of [file]'s lock, taken (closed to give it back), or null while another holds it: another process
+         * (an flock, which its end gives back), or another hearing of this process. */
+        internal fun turn(file: File): AutoCloseable? {
+            val channel = try {
+                file.parentFile?.mkdirs()
+                RandomAccessFile(file, "rw").channel
+            } catch (e: IOException) {
+                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+            }
+            val lock = try {
+                channel.tryLock()
+            } catch (e: OverlappingFileLockException) {
+                null
+            } catch (e: IOException) {
+                channel.close()
+                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+            }
+            if (lock == null) {
+                channel.close()
+                return null
+            }
+            return AutoCloseable {
+                try {
+                    lock.release()
+                } finally {
+                    channel.close()
+                }
+            }
+        }
+
+        private const val CANT_TAKE_TURN = "the chord models' turn can't be taken"
+
+        /** The phone's reasons not to hear here (the design's §8.1), the first that holds: Android before 13 (API 33),
+         * no processor the app carries the libraries of ([ABIS]), under [LEAST_MEMORY] of memory; null for none. */
+        fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>): String? = when {
+            sdk < LEAST_SDK -> "chords from audio need Android 13 or later"
+            abis.none { it in ABIS } -> "no chord models for this phone's processor"
+            totalMem < LEAST_MEMORY -> "chords from audio need 6 GB of memory or more"
+            else -> null
+        }
+
+        /** [deviceProblem] of this phone: its Android, its ABIs, its memory as ActivityManager tells it. */
+        fun deviceProblem(context: Context): String? {
+            val memory = ActivityManager.MemoryInfo()
+            context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
+            return deviceProblem(Build.VERSION.SDK_INT, memory.totalMem, Build.SUPPORTED_ABIS.toList())
+        }
+
+        const val LEAST_SDK = 33
+
+        /** "6 GB of memory": a phone sold with 6 GB tells about 5.5 GB (`MemoryInfo.totalMem`, the kernel's and the
+         * modem's carve-outs left out), so the floor is 5 GiB. */
+        const val LEAST_MEMORY = 5L shl 30
+
+        /** The ABIs the debug build carries the libraries of (app/build.gradle.kts's abiFilters). */
+        val ABIS = setOf("arm64-v8a", "x86_64")
+
+        const val DAY_MS = 24 * 60 * 60_000L
+
+        /** The songs' checkpoint folders in [work] a hearing last wrote to a day or more before [now] (a killed app's,
+         * or one whose job failed and was never tried again), deleted: called at the app's start. Their names. */
+        fun sweepOld(work: File, now: Long): List<String> {
+            val old = work.listFiles().orEmpty().filter { it.isDirectory && now - newest(it) >= DAY_MS }
+                .sortedBy { it.name }
+            for (folder in old) folder.deleteRecursively()
+            return old.map { it.name }
+        }
+
+        /** The newest time of [folder] and its files. */
+        private fun newest(folder: File): Long =
+            (listOf(folder.lastModified()) + folder.listFiles().orEmpty().map { it.lastModified() }).max()
+
         const val DIED = "the chord models stopped (the phone may have run out of memory); try again"
 
         /** How long a hearing waits for the process of the one before it to end. */
