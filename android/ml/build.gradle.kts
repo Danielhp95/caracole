@@ -1,8 +1,9 @@
 // ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime (the design's §3.5 prototype), an
 // Android library linked into the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries a
 // runtime before the owner chooses the one that ships. Its device test, ModelParityTest, holds the runtime's logits to
-// the computer's (tests/conformance/vectors/autochords/models.jsonl), and DecoderTest its Decoder's PCM to the
-// computer's decode (decode.jsonl), both run by `android/scripts/device-test.sh --ml`.
+// the computer's (tests/conformance/vectors/autochords/models.jsonl), DecoderTest its Decoder's PCM to the computer's
+// decode (decode.jsonl), and PipelineTest the whole hearing in the :ml process (Pipeline, MlService, MlChordModels) to
+// the computer's over the committed clips, each run by `android/scripts/device-test.sh --ml`.
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -61,9 +62,10 @@ val copyModelVectors by tasks.registering(Sync::class) {
         include("models.jsonl", "frontend.jsonl", "decode.jsonl")
         into("autochords")
     }
-    // DecoderTest's files, the computer's decode of which decode.jsonl holds.
+    // DecoderTest's files, the computer's decode of which decode.jsonl holds, and PipelineTest's clips, the
+    // computer's hearing of which models.jsonl holds.
     from("../../tests/fixtures/autochords") {
-        include("decode*.*")
+        include("decode*.*", "steady.wav", "tempo-change.wav", "silence.wav", "long.wav")
         into("autochords")
     }
 }

@@ -758,7 +758,8 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
-then the app's `ChordsBenchTest` (the Chords bench, below) over the same files.
+`DecoderTest` and `PipelineTest` (below), then the app's `ChordsBenchTest` (the Chords bench, below) over the same
+files.
 `--tcpdump FILE` gates on what caracole's own uids send. Before the classes, on the rooted emulator (`su 0`), it puts a
 chain of iptables and ip6tables rules at the head of OUTPUT that counts the packets of each of caracole's packages
 installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to loopback
@@ -867,6 +868,19 @@ packaging. It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and
 `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
 prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
 `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.
+
+## Chords from audio: the hearing
+
+The phone hears a song in a process of its own, `:ml` (`MlService`, debug builds alone), so the models' memory, a
+crash or Android's low-memory killer never touch the app's server: `MlChordModels.hear(audio, onStep, waiting)` sends
+the service the file's path and waits, saying run.py's steps ("setting up the models", "hearing the chords", "finding
+the beats", and "waiting for the phone to cool"). The service's `Pipeline` decodes, mixes down and resamples to 22,050
+Hz, runs BTC, then beat_this, one model at a time, and keeps each step's answer in
+`files/state/cache/autochords/<sha16>-c1/`, so a hearing cut off goes on from its chords. A dead `:ml` is
+`ChordsUnavailable`. The phone's heat and battery decide its threads, a wait or a stop (`HeatRules`). `PipelineTest`
+holds the whole to the computer's hearing of the committed clips (`gates.end_to_end` of `models.jsonl`) and kills the
+process mid-hearing; `device-test.sh --ml` runs it. On the emulator (2026-11-26) every clip's WCSR and F are 1.0
+(to the last bit but one), each heard in 2-9 s, `:ml` at 300-350 MB at its peak.
 
 ## Chords from audio: the front ends
 

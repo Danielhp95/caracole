@@ -15,8 +15,10 @@
 #   --computer DIR  one computer for every class that names none
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
-#   --ml            :ml's ModelParityTest and DecoderTest (its own test APK, io.github.danielhp95.caracole.ml.test;
-#                   DecoderTest, the decode gate, needs no model), then the app's
+#   --ml            :ml's ModelParityTest, DecoderTest and PipelineTest (its own test APK,
+#                   io.github.danielhp95.caracole.ml.test; DecoderTest, the decode gate, needs no model; PipelineTest,
+#                   the whole hearing in the :ml process, says each clip's scores, time and that process's peak RSS),
+#                   then the app's
 #                   ChordsBenchTest (the debug build's Chords bench), over the chord and beat models in
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
@@ -351,7 +353,7 @@ run_with_computer() {
 }
 
 if [ "$want_ml" = 1 ]; then
-    for name in ModelParityTest DecoderTest; do
+    for name in ModelParityTest DecoderTest PipelineTest; do
         out="$(adb shell am instrument -w -e class "$ns.ml.$name" -e models "$ml_models" \
             "$ns.ml.test/androidx.test.runner.AndroidJUnitRunner" 2>&1 | tr -d '\r')" || true
         echo "$out"

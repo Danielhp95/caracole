@@ -157,11 +157,16 @@ def exports(_models, tmp_path_factory):
 # test_onnx_runtime_meets_the_gates_on_the_stored_inputs reads back: BTC's argmax equal on every frame but where its
 # stored top-two margin is under ``margin_under``, its logits within ``logits_max_abs``; beat_this's fp32 logits
 # within theirs; the fp16-stored file's beats and downbeats at F ≥ ``f_measure_min`` (mir_eval's, ``window`` either
-# side, the first ``trim`` seconds left out), with no bound on its logits (None).
+# side, the first ``trim`` seconds left out), with no bound on its logits (None). ``end_to_end``, the design's B1 gate
+# for the phone's whole hearing of each clip's audio (android/ml's PipelineTest): its chords' WCSR against the chords
+# these records' argmax names (Harte labels spelled for the key, mir_eval's rules) at ``wcsr_majmin_min`` and
+# ``wcsr_tetrads_min``, its beats' and downbeats' F as the fp16 gate's.
 GATES = {
     "btc": {"argmax": "equal", "margin_under": 1e-3, "logits_max_abs": 1e-4},
     "beats_fp32": {"logits_max_abs": 1e-3},
     "beats_fp16": {"logits_max_abs": None, "f_measure_min": 0.99, "window": 0.07, "trim": 5.0},
+    "end_to_end": {"wcsr_majmin_min": 0.99, "wcsr_tetrads_min": 0.98, "f_measure_min": 0.99, "window": 0.07,
+                   "trim": 5.0},
 }
 
 

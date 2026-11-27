@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole
 
+import android.app.Application
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.Build
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -108,8 +110,23 @@ object Caracole {
      * the main one: it opens the database, migrating and seeding it on the first start, and binds the port).
      */
     fun phone(context: Context, starting: () -> Unit = {}): Phone = phone ?: synchronized(this) {
+        check(!isModelsProcess(processName(), context.packageName)) {
+            "the phone's caracole doesn't start in the chord models' process"
+        }
         phone ?: start(context.applicationContext, starting).also { phone = it }
     }
+
+    /** The chord models' process's name's end (the debug build's `:ml`, its MlService's): nothing of the phone's
+     * caracole (its database, its queue, its server) starts there, so the models' memory and their end are theirs
+     * alone. Named, never the class, which the release doesn't have. */
+    const val MODELS_PROCESS = ":ml"
+
+    /** Whether the process [name] of [packageName] is the chord models' ([MODELS_PROCESS]). */
+    internal fun isModelsProcess(name: String, packageName: String): Boolean = name == packageName + MODELS_PROCESS
+
+    /** This process's name: Android's, else its command line's first part (before Android 9). */
+    private fun processName(): String = if (Build.VERSION.SDK_INT >= 28) Application.getProcessName()
+        else File("/proc/self/cmdline").readText(Charsets.UTF_8).substringBefore('\u0000')
 
     /** The library's database file, which the opening screen reads the header of (OpeningSteps.updating). */
     fun databaseFile(context: Context): File = File(context.filesDir, DATABASE)

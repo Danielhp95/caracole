@@ -2846,6 +2846,27 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     meta's `gates`: the lossless files sample for sample (a 24-bit FLAC, which Android gives as 16-bit, by the 16-bit
     gate), the lossy ones at offset 0 and SNR ≥ 60 dB whole and each second, every file's frames the computer's and
     its stated length within 2 samples; android/README.md says what it doesn't cover.
+  - The whole hearing (E9), in a process of its own: `MlService` (`:ml`'s manifest, `android:process=":ml"`, not
+    exported, the debug build's alone) runs `Pipeline.hear(audio, work, say)`, the computer's path step for step
+    (tests/helpers/autochords_reference.py): `Decoder`, `Mixdown`, libsoxr HQ to 22,050 Hz where the file is at another
+    rate (beat_this's own float64 resample on the computer: the same samples at 22,050 Hz, float32's last bits else);
+    btc.py's 10 s CQT chunks read from the memory-mapped pcm, BTC in windows of 108 (the last padded with the
+    features' mean, `BTC_BATCH` a run), argmax, `Labels`; the mel whole, beat_this's chunks, `Peaks`. One model at a
+    time, each session closed with its stage, BTC's first. Checkpoints (`:autochords`' `Checkpoints`,
+    `stateDir/cache/autochords/<sha16>-c<contract>/`: `pcm.json`, `pcm.f32`, `chords.json` (Harte labels, before
+    common names), `beats.json`, `heard.json`), each written to a `.part` and renamed, so a hearing killed goes on
+    from the last whole one. `MlChordModels` is `ChordModels` in the main process: `ready()` checks the three files
+    (BTC's graph and weights, beat_this fp16) by models.json's sizes and SHA-256 (the download is a later task's;
+    the emulator's are device-test.sh's push); `hear` binds the service, sends paths over a `Messenger`
+    (`MlProtocol`), polls its replies a second at a time calling `waiting`, holds `caracole:chords`'s wake lock, and
+    reads a dead process as `ChordsUnavailable` (`MlChordModels.DIED`). `HeatRules` (Heat.kt, the design's §3.4
+    table over a `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom
+    ≥ 0.85 or Battery Saver; severe waits between stages (10 s polls, 5 minutes at most); critical stops at the next
+    window batch or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml`
+    process, by its name (`MODELS_PROCESS`), never its class. `PipelineTest` (`device-test.sh --ml`) hears each
+    committed clip through the process against models.jsonl's meta `gates.end_to_end` (WCSR majmin and tetrads of
+    the Harte labels, beats and downbeats F after the 5 s trim), kills `:ml` mid-hearing (`ChordsUnavailable`, this
+    process still answering, the next hearing from `chords.json`), and checks every decode file's pcm length.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
@@ -2875,6 +2896,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   "tetrads")` over BTC's Harte labels, never common names, its sums numpy's pairwise ones, so mir_eval's to the bit;
   `beatF`, `f_measure` alone, and `trimBeats`; its tables scores.json's); `LabelsTest`, `PeaksTest`, `ChunksTest` and
   `ScoresTest` replay labels, peaks, chunks and scores.jsonl, which the area's replay holds on the device too.
+  `ChordModels` (`ready()`, `hear(audio, onStep, waiting)`), `AudioUnreadable`, `ChordsUnavailable`, `Heard` (the
+  design's §4.4 `heard`: contract 1, the stated duration, `recognize`'s chords, beats, downbeats; `json`, `read` of
+  that contract alone), `Labels.recognized` (`recognize`'s common names, a run joined) and `Checkpoints`; `HeardTest`
+  (recognized over models.jsonl's argmax gives its segments).
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
@@ -4212,7 +4237,7 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and DecoderTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest, DecoderTest and PipelineTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
   `--tcpdump FILE` the gate on caracole's own uids, iptables and ip6tables owner rules counting what the debug app and
   the test APKs send to any host but 10.0.2.2 or loopback, a control sent as the app before and after the classes each counted on its own (the counters read just before each), the chain still first in OUTPUT; it proves nothing those uids sent left, not what another
   uid sends for them (a name lookup through Android's resolver among it); the emulator's whole capture beside it as

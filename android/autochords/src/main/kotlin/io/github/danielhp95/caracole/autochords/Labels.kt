@@ -86,6 +86,18 @@ object Labels {
         }
     }
 
+    /** btc.py `recognize`'s last step: each of [segments] (spelled for the key) in its [commonName], a run of one
+     * name joined into one segment. */
+    fun recognized(segments: List<ChordSegment>): List<ChordSegment> {
+        val out = ArrayList<ChordSegment>()
+        for (s in segments) {
+            val label = commonName(s.label)
+            if (out.isNotEmpty() && out.last().label == label) out[out.size - 1] = out.last().copy(end = s.end)
+            else out += s.copy(label = label)
+        }
+        return out
+    }
+
     /** Runs of equal frame [predictions] as timed segments named from [names], each time [time]'s. */
     fun framesToSegments(predictions: IntArray, frameSeconds: Double, names: List<String>): List<ChordSegment> {
         val out = ArrayList<ChordSegment>()
