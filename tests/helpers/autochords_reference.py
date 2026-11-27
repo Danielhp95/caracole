@@ -19,7 +19,10 @@
   of the one file ``IN``), each as ``OUT/<name>.json`` (``reference_name``: the audio's stem, what a phone's shared
   storage refuses in a name, a colon among them, made a hyphen; two files of one name refused before any is read), the
   arrays base64 of little-endian float32, as the corpus writes them (``encoded``), for songs that are never committed:
-  the owner's own, kept outside the repository.
+  the owner's own, kept outside the repository. A reference whose lengths disagree (``lengths_disagree``: the decoded
+  samples', the mel's frames' and the duration, more than ``AGREE_WITHIN`` s apart, as a headerless MP3's did once,
+  mutagen's guess or libsndfile's part of it) is not written, saying which, and the command exits 1: a bench would
+  measure a speed against a wrong length.
 
 torch, librosa, numpy and beat_this are imported inside the functions: only the auto-chords environment has them.
 """
@@ -164,6 +167,27 @@ def reference(path: Path | str, *, btc: Path | str | None = None, beats: Path | 
                      duration=read_audio(path).duration_s)
 
 
+DECODED_RATE = 22050  # BTC's samples a second (btc.py SAMPLE_RATE)
+MEL_FPS = 50  # beat_this's mel frames a second (22,050 Hz over its hop of 441)
+AGREE_WITHIN = 0.1  # seconds: a mel's centred frames run 0.02 s past the samples they are of
+
+
+def lengths_disagree(ref: Reference) -> str | None:
+    """None where the reference's lengths agree within ``AGREE_WITHIN``: its decoded samples' (at ``DECODED_RATE``),
+    its mel's frames' (at ``MEL_FPS``) and its duration (where it has one); else which of them stands apart, in
+    words."""
+    lengths = {"its decoded samples": len(ref.decoded) / DECODED_RATE, "its mel's frames": len(ref.mel) / MEL_FPS}
+    if ref.duration is not None:
+        lengths["its duration"] = ref.duration
+    if max(lengths.values()) - min(lengths.values()) <= AGREE_WITHIN:
+        return None
+    values = sorted(lengths.values())
+    median = values[len(values) // 2]
+    odd = max(lengths, key=lambda k: abs(lengths[k] - median))
+    others = ", ".join(f"{k} {v:.3f} s" for k, v in lengths.items() if k != odd)
+    return f"{odd}, {lengths[odd]:.3f} s, disagrees with {others} (more than {AGREE_WITHIN} s)"
+
+
 def array(a, dtype: str = "float32") -> dict:
     """An array as the corpus writes one: its dtype, its shape, and base64 of its little-endian bytes, row-major."""
     import numpy as np
@@ -198,11 +222,17 @@ def main(argv: list[str]) -> int:
                   "them apart", file=sys.stderr)
             return 2
     out.mkdir(parents=True, exist_ok=True)
+    refused = 0
     for f in files:
-        doc = {"file": f.name, **encoded(reference(f, threads=os.cpu_count() or 1))}
+        ref = reference(f, threads=os.cpu_count() or 1)
+        if (why := lengths_disagree(ref)) is not None:
+            print(f"{f.name}: not written: {why}", file=sys.stderr)
+            refused += 1
+            continue
+        doc = {"file": f.name, **encoded(ref)}
         (out / reference_name(f)).write_text(json.dumps(doc, sort_keys=True) + "\n", encoding="utf-8")
         print(f"{f.name}: {len(doc['segments'])} chords, {len(doc['beats'])} beats", file=sys.stderr)
-    return 0
+    return 1 if refused else 0
 
 
 if __name__ == "__main__":

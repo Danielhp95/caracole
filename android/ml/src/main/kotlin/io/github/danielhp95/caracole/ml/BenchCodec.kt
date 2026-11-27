@@ -53,6 +53,7 @@ object BenchCodec {
                 }))
                 put("reset", run.reset); put("rss_peak_kb", run.rssPeakKb)
                 put("battery_start_uah", run.batteryStartUah); put("battery_end_uah", run.batteryEndUah)
+                put("length_note", run.lengthNote)
             }
         }))
         put("btc", JsonArray(r.btc.map { b ->
@@ -88,7 +89,8 @@ object BenchCodec {
                         Sample(x.long("pss_kb"), x.str("thermal"), x.getValue("headroom").jsonPrimitive.floatOrNull)
                     },
                     reset = r.bool("reset"), rssPeakKb = r.long("rss_peak_kb"),
-                    batteryStartUah = r.long("battery_start_uah"), batteryEndUah = r.long("battery_end_uah"))
+                    batteryStartUah = r.long("battery_start_uah"), batteryEndUah = r.long("battery_end_uah"),
+                    lengthNote = r.strOrNull("length_note"))
             },
             btc = o.getValue("btc").jsonArray.map { it.jsonObject }.map { b ->
                 BtcParity(b.str("file"), b.int("threads"), b.bool("arena"), b.int("frames"), b.double("agreement")!!,

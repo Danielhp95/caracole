@@ -27,10 +27,10 @@ class BenchReportTest {
                     seconds: Double = 2.5, duration: Double = 10.0, screen: String = "on",
                     samples: List<Sample> = listOf(Sample(100_000, "none", 0.2f)),
                     rss: Long? = 400_000, battery: Pair<Long?, Long?> = 1_000_000L to 990_000L,
-                    kind: String = BenchInput.REFERENCE, reset: Boolean = true) =
+                    kind: String = BenchInput.REFERENCE, reset: Boolean = true, lengthNote: String? = null) =
         Run(file = file, kind = kind, model = model, pass = pass, threads = 4, arena = false, screen = screen,
             cold = cold, nanos = (seconds * 1e9).toLong(), duration = duration, samples = samples, reset = reset,
-            rssPeakKb = rss, batteryStartUah = battery.first, batteryEndUah = battery.second)
+            rssPeakKb = rss, batteryStartUah = battery.first, batteryEndUah = battery.second, lengthNote = lengthNote)
 
     private val gates = Gates(btcMarginUnder = 1e-3, btcLogitsMaxAbs = 1e-4, fp32LogitsMaxAbs = 1e-3,
         fp16FMin = 0.99, trim = 5.0, window = 0.07)
@@ -41,6 +41,27 @@ class BenchReportTest {
 
     private fun summary(out: JsonObject, kind: String) =
         out.getValue("summary").jsonObject.getValue(kind).jsonArray.map { it.jsonObject }
+
+    @Test fun aReferenceWhoseDurationTheMelDisagreesWithIsTimedByTheMelAndFlagged() {
+        // 12,000 frames at 50 a second: 240 s heard; a duration of 130 s, mutagen's guess of a headerless MP3.
+        val (wrong, note) = BenchInput.lengthOf("song.json", 130.0, 12_000, 50)
+        assertEquals(240.0, wrong, 0.0)
+        assertTrue(note!!, note.contains("130.000 s") && note.contains("240.000 s"))
+        assertEquals(240.01 to null, BenchInput.lengthOf("song.json", 240.01, 12_000, 50))
+        assertEquals(240.0 to null, BenchInput.lengthOf("song.json", null, 12_000, 50))
+    }
+
+    @Test fun aRunsLengthNoteIsInTheReportOnceAFile() {
+        val note = "its duration, 130.000 s, disagrees with its mel's frames, 240.000 s"
+        val out = report(listOf(run(file = "song", lengthNote = note), run(file = "song", pass = 2, lengthNote = note),
+            run(file = "other")))
+        val runs = out.getValue("runs").jsonArray.map { it.jsonObject }
+        assertEquals(note, runs[0].str("length_note"))
+        assertTrue(runs[2]["length_note"] is JsonNull)
+        val flags = out.getValue("length_flags").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("song"), flags.map { it.str("file") })
+        assertEquals(note, flags.single().str("note"))
+    }
 
     @Test fun aRunsRtfIsItsSecondsOverTheAudiosAndItsPeaksTheLargestSamples() {
         val samples = listOf(Sample(100_000, "none", 0.31f), Sample(300_000, "none", 0.52f),
@@ -252,7 +273,7 @@ class BenchReportTest {
 
     @Test fun aSessionsResultCrossesFromItsProcessUnchanged() {
         val r = run(samples = listOf(Sample(100_000, "none", 0.25f), Sample(null, "light", null)), reset = false,
-            battery = null to 5L, kind = BenchInput.CLIP)
+            battery = null to 5L, kind = BenchInput.CLIP, lengthNote = "steady: its duration disagrees")
         val btc = BtcParity("steady", 4, true, 130, 0.99, listOf(0.0005f), 1.5e-5f)
         val beat = BeatParity("long", BenchReport.BEATS_FP16, 4, true, 0.39f, 1.0, null)
         val session = Session(BenchReport.BEATS_FP16, 4, true, "off", 2.5, 900_000, 1, 2, null, "hot", pid = 99,
@@ -390,8 +411,8 @@ class BenchReportTest {
         val parity = Parity(gates, listOf(BtcParity.of("steady", 4, false, want.copyOf(), want,
             BtcParity.margins(want, 1), 1)), emptyList())
         val out = report(listOf(run()), parity)
-        assertEquals(setOf("bench", "made", "device", "soc", "android", "runtime", "app", "battery", "sessions", "runs",
-            "summary", "parity"), out.keys)
+        assertEquals(setOf("bench", "made", "device", "soc", "android", "runtime", "app", "battery", "sessions",
+            "length_flags", "runs", "summary", "parity"), out.keys)
         assertEquals(BenchReport.FORMAT, out.getValue("bench").jsonPrimitive.int)
         assertEquals("2026-11-25T21:00:00Z", out.str("made"))
         assertEquals("Sony XQ-DQ72", out.str("device"))

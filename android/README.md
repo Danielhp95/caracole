@@ -907,7 +907,9 @@ setting's `memory_ok` is null, or false when it ran out of memory.
 
    The second command writes one `.json` a song: what the computer's models made of it. Five songs are enough for
    B0; a reference keeps the decoded audio too, about 40 MB for four minutes. The model files are 138 MB. A
-   reference is named after its audio, with each character the phone's shared storage refuses (a colon, and
+   reference whose decoded length, mel and duration disagree by more than 0.1 s is not written: the command names
+   it and exits 1; the bench, given an older one whose duration its mel disagrees with, times it by the mel and says
+   so in its log and the report's `length_flags`. A reference is named after its audio, with each character the phone's shared storage refuses (a colon, and
    `*?"<>|\`) made a hyphen: `adb push` can't copy a file whose name holds one ("remote couldn't create file"), so
    a file you rename yourself must keep them out too.
 3. **Copy it to the phone**: `adb push ~/caracole-bench /sdcard/Download/` (add `-s SERIAL` as above).

@@ -2586,7 +2586,9 @@ It is rows.js's, shared by both pages:
   `render(spec, seed)`, pure Python, their README's table each one's spec), and PyTorch's answers on them, on one
   thread, as its sums' order moves the last bits with the threads (tests/helpers/autochords_reference.py,
   `reference(path)`: the computer's every step, BTC's and beat_this's own code; `python -m
-  tests.helpers.autochords_reference IN OUT` the same for the owner's songs, never committed):
+  tests.helpers.autochords_reference IN OUT` the same for the owner's songs, never committed; its length read_audio's,
+  and a song whose decoded samples, mel frames and length disagree by more than 0.1 s not written, saying which,
+  `lengths_disagree`):
   - `vectors/autochords/frontend.jsonl`: each clip's log-CQT (float32) and log-mel (stored as float16), their frames'
     norms, its samples' SHA-256 and mutagen's length; three excerpts' log-CQT (long.wav's 2048, 2049 and 4095 samples
     from its second chunk on, btc.py's last chunk alone); its meta's `gates`, the design's B1 feature gate
@@ -2777,7 +2779,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     its reset didn't take; the heat guard stops it at critical; anything thrown, OOM too, its failure, an OOM known as
     one; the session written whole after each run, so whatever ends it loses only the run in flight), `BenchInputs` (the
     committed clips' records, kind `clip`; an `autochords_reference` JSON of the owner's, kind `reference`, streamed,
-    its decoded samples dropped), `Heat` (thermal status from API 29, headroom from 30 at most every 10 s, the battery's
+    its decoded samples dropped; one whose duration its mel's frames disagree with by more than 0.1 s timed by the
+    mel's length and flagged, `BenchInput.lengthOf`, the report's `length_flags` and each run's `length_note`, and
+    a line on the screen's log), `Heat` (thermal status from API 29, headroom from 30 at most every 10 s, the battery's
     charge counter, plugged, Battery Saver: unknown or null where the phone gives none), `BenchCodec` (a session's
     result across processes), `BenchReport.of` and `ofSessions` (`caracole-bench-<UTC>.json`: device, SoC, Android,
     runtime, app; the whole battery; each session; each run's seconds, RTF, PSS, reset and RSS peak, thermal states,

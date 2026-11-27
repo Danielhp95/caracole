@@ -37,12 +37,13 @@ data class Sample(val pssKb: Long?, val thermal: String, val headroom: Float?)
  * inputs read before), [duration] the audio's seconds; [samples] the looks taken while it ran, one a second (a run of
  * BTC's lasts a tenth of that: its PSS is a look taken around the call); [rssPeakKb] the process's true peak RSS over
  * it (VmHWM, reset as it began), kept only where [reset] says the reset took (else it may be an earlier run's); the
- * battery's charge counter, µAh, before and after.
+ * battery's charge counter, µAh, before and after; [lengthNote], its input's ([BenchInput.lengthNote]).
  */
 data class Run(
     val file: String, val kind: String, val model: String, val pass: Int, val threads: Int, val arena: Boolean,
     val screen: String, val cold: Boolean, val nanos: Long, val duration: Double, val samples: List<Sample>,
     val reset: Boolean, val rssPeakKb: Long?, val batteryStartUah: Long?, val batteryEndUah: Long?,
+    val lengthNote: String? = null,
 ) {
     val seconds: Double get() = nanos / 1e9
     val rtf: Double get() = seconds / duration
@@ -225,6 +226,13 @@ object BenchReport {
             }
         } ?: JsonNull)
         put("sessions", JsonArray(sessions.map(::session)))
+        // The references whose duration their mel disagreed with, a file once: timed by the mel's length instead.
+        put("length_flags", JsonArray(runs.filter { it.lengthNote != null }.distinctBy { it.file }.map { r ->
+            buildJsonObject {
+                put("file", r.file)
+                put("note", r.lengthNote)
+            }
+        }))
         put("runs", JsonArray(runs.map(::run)))
         put("summary", buildJsonObject {
             put("gates", buildJsonObject {
@@ -321,6 +329,7 @@ object BenchReport {
             ?.let { JsonPrimitive(rounded(it.toDouble(), 1000)) } ?: JsonNull)
         put("battery_uah", if (r.batteryStartUah != null && r.batteryEndUah != null)
             JsonPrimitive(r.batteryEndUah - r.batteryStartUah) else JsonNull)
+        put("length_note", r.lengthNote)
     }
 
     /** The warm runs a setting and screen state; with [gate], Gate B0's flags beside (the references': the clips'
