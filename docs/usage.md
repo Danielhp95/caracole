@@ -3008,7 +3008,7 @@ song keeps its own) and press **Make sheet**: a line under the bar, or the song'
 it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
 file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
 and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
-file on disk and the phone have no +.
+file on disk has no +.
 
 The file goes up in one
 request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
@@ -3029,6 +3029,11 @@ meanwhile, the one queued is the answer and the second file is deleted.
 - Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
   "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
 - Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
+
+The phone's debug build does the same once Settings › Chords from audio has downloaded the models (the release says
+"auto-chords isn't on the phone"), and takes an audio file shared to it from another app too: the job is `caracole
+audio --upload ID --song …` there, its chords and beats heard on the phone. It hears no words: Words is always
+skipped, and where every lyrics site missed the sheet is chords only ([On the phone](autochords.md#on-the-phone)).
 
 #### Lyrics under another name, from a card
 
@@ -3059,7 +3064,11 @@ none, and neither has a song while a request of it waits or runs.
   tonight's run asks every site again. Transcribe the lyrics is offered only once they have all
   answered.
 - A refusal is said in the panel ("Search again: that record isn't among its last search's, …").
-  The phone and the page opened as a file have no panel.
+  The page opened as a file has no panel.
+
+The phone's card has the same panel, its search, pick and clear the same commands on the phone's queue. A pick there
+lays an auto sheet out again from what was heard, with no model; with no words found, the phone offers no
+transcription (it hears none).
 
 #### Transcribing the lyrics from a card
 

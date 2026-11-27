@@ -982,8 +982,9 @@ lyrics site missed), the Journal's Ready then says "Chords only, no lyrics.", an
 has its words. The computer hears them from its own audio of this song." Its card's lyrics panel (Look them up under
 another name) searches the three lyrics sites under the name you type and takes the row you pick, as on the computer
 (`caracole lyrics --song --as`, `--record`, `--clear` on the phone's queue, LyricsRoutes); a pick lays the auto sheet
-out again from what was heard, with no model. The audio stays in `files/state/audio/`, never synced; the sheet syncs,
-and the computer keeps it as the phone made it ([docs/autochords.md](../docs/autochords.md#on-the-phone)).
+out again from what was heard, with no model. The audio never leaves the phone (in `files/state/audio/`, never synced);
+the sheet syncs, naming the file, and the computer keeps it as the phone made it
+([docs/autochords.md](../docs/autochords.md#on-the-phone)).
 
 ### Gate B2 on your phone
 
