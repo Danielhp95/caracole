@@ -87,7 +87,7 @@ def test_too_few_words_are_nothing_sung_and_noted_with_why(conn, cfg, words, why
     assert len(transcriber.calls) == 1  # Whisper heard them: too few to be lyrics
     assert kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
     assert noted(conn, song) == {"audio": song.audio_path, "audio_mtime": song.audio_mtime,
-                                 **audio_key(song.audio_path), "at": STAMP, "why": why, "by": "caracole"}
+                                 **audio_key(song.audio_path, song.audio_mtime), "at": STAMP, "why": why, "by": "caracole"}
     assert heard_nothing(conn, song) and why_not_offered(conn, cfg, song, Overrides()) == "nothing sung was heard"
 
 
@@ -169,7 +169,7 @@ def test_audio_whisper_cant_read_is_noted_as_whispers_alone(conn, cfg):
     assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
     assert kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}") == {
-        "audio": song.audio_path, "audio_mtime": song.audio_mtime, **audio_key(song.audio_path), "at": STAMP,
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, **audio_key(song.audio_path, song.audio_mtime), "at": STAMP,
         "error": "RuntimeError: Failed to load audio: moov atom not found"}
     song = get_song(conn, song.id)
     assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
