@@ -40,6 +40,14 @@ row-major; every number in a record a float32's value or an int, written as JSON
   from 22,050 to 11,025 Hz (the CQT's halvings), 44,100 and 48,000 to 22,050 Hz; one of 120,000 samples, past
   python-soxr's chunk of 96,000 inputs. Needs only numpy, soundfile and soxr, and no CPU's kernels: never skipped
   for them.
+- ``vectors/autochords/decode.jsonl``: a ``meta`` record (the libraries; ``DECODE_GATES``, the design's B1 decode
+  gate), then a record for each of the decode gate's files (``DECODE_FILES``, tests/fixtures/autochords/encode.sh's):
+  its format as audio_store.py ``sniff`` names it, its rate and channels, which reader the computer took
+  (``libsndfile``, or ``ffmpeg`` for an M4A and for an MP3 libsndfile reads only in part), its decode as
+  autochords/audio.py ``load_mono`` gives it at the file's own rate (its frames, the SHA-256 of its float32 samples,
+  and, of a lossy file, those samples as 16-bit, ``pcm16``; of a lossless one, the SHA-256 of soundfile's float32
+  channels interleaved, ``interleaved_sha256``, which the phone's must equal), and its length by music.py
+  ``read_audio`` (its frames counted for an MP3 that names none). Needs no model and no CPU's kernels.
 - ``data/caracole/autochords/btc-graph.onnx``: export.py's BTC graph, the APK's.
 - ``data/caracole/autochords/frontend.json``: what the phone's front ends apply (``frontend_json``): librosa's CQT as it
   ran over a chunk, step by step, its sparse bases and lengths, and beat_this's mel window, norm and filterbank.
@@ -56,6 +64,7 @@ skipped, saying why; there, as for the phone's ONNX Runtime, the check that coun
 
 from __future__ import annotations
 
+import base64
 import functools
 import hashlib
 import json
@@ -636,6 +645,112 @@ def test_soxr_vectors():
         pytest.skip("needs numpy, soundfile and soxr: nix develop .#autochords")
     (text,) = _child_texts(_SOXR_TEXT, ("soxr.jsonl",))
     check(AREA / "soxr.jsonl", text)
+
+
+# The decode gate's files (tests/fixtures/autochords/encode.sh), each the format audio_store.py ``sniff`` names it.
+DECODE_FILES = (("decode.mp3", "MP3"), ("decode-headerless.mp3", "MP3"), ("decode.m4a", "M4A"),
+                ("decode.ogg", "Ogg"), ("decode-opus.ogg", "Ogg"), ("decode.flac", "FLAC"), ("decode.wav", "WAV"),
+                ("decode.aiff", "AIFF"))
+# The design's B1 decode gate: no sample offset (by cross-correlation within ``offset_search`` samples either way),
+# an SNR of ``snr_db_min`` or more against the computer's decode at the file's rate, and the length the phone states
+# within ``length_within`` s of music.py read_audio's (its frames counted for an MP3 that names no length). Its
+# decoded samples' count is held within ``decoded_within`` s of the computer's apart: read_audio's length is the
+# container's, a LAME MP3's or an M4A's with the encoder's delay and padding that the decoders trim (0.06 s and 0.05 s
+# here), so the computer's own decode is no nearer to it than that. The lossless forms are held closer: sample for
+# sample (``exact``).
+DECODE_GATES = {"offset": 0, "offset_search": 2048, "snr_db_min": 60.0, "length_within": 0.05, "decoded_within": 0.05}
+_LOSSLESS = ("FLAC", "WAV", "AIFF")
+
+
+def _sha256(a) -> str:
+    import numpy as np
+
+    return hashlib.sha256(np.ascontiguousarray(a, dtype="<f4").tobytes()).hexdigest()
+
+
+def _deltas(pcm) -> dict:
+    """16-bit samples as decode.jsonl keeps them, a quarter smaller than an ``array``'s: each sample less the one
+    before (the first less 0), wrapped to int16, deflated (zlib), in base64; a cumulative sum in int16 gives them back."""
+    import zlib
+
+    import numpy as np
+
+    deltas = np.diff(pcm.astype(np.int32), prepend=0).astype("<i2")
+    assert np.array_equal(np.cumsum(deltas, dtype=np.int16), pcm)
+    return {"dtype": "int16", "shape": [len(pcm)], "coding": "deltas, zlib",
+            "base64": base64.b64encode(zlib.compress(deltas.tobytes(), 9)).decode("ascii")}
+
+
+def decode_records() -> list[dict]:
+    """decode.jsonl's records: each file decoded as the computer decodes it, autochords/audio.py ``load_mono`` at the
+    file's own rate (so with no resampling), and its length as run.py reads it (music.py ``read_audio``)."""
+    import librosa
+    import mutagen
+    import numpy as np
+    import soundfile
+    import torchaudio
+
+    from caracole import audio_store
+    from caracole.autochords import audio
+    from caracole.music import read_audio
+    from helpers.corpus import fixture_ref
+
+    records: list[dict] = [{
+        "kind": "meta", "gates": DECODE_GATES,
+        "samples": "pcm16: round(y * 32768), clipped to int16, of load_mono's float32 y, each less the one before, "
+                   "deflated (zlib); *_sha256: SHA-256 of little-endian float32 samples",
+        "libraries": {"numpy": np.__version__, "soundfile": soundfile.__version__,
+                      "libsndfile": soundfile.__libsndfile_version__, "librosa": librosa.__version__,
+                      "torchaudio": torchaudio.__version__, "mutagen": mutagen.version_string},
+    }]
+    for name, form in DECODE_FILES:
+        path = CLIPS / name
+        assert audio_store.sniff(path.read_bytes()[:64]) == form, name
+        try:
+            info = soundfile.info(path)
+            rate, channels = info.samplerate, info.channels
+        except RuntimeError:  # no format libsndfile reads: FFmpeg's, as load_mono reads it
+            waveform, rate = torchaudio.load(str(path))
+            channels = waveform.shape[0]
+        read = []
+        ffmpeg = audio._ffmpeg
+        audio._ffmpeg = lambda *a, **kw: read.append("ffmpeg") or ffmpeg(*a, **kw)
+        try:
+            y = audio.load_mono(path, rate)
+        finally:
+            audio._ffmpeg = ffmpeg
+        assert y.dtype == np.float32
+        record = {"kind": "file", "file": fixture_ref(path), "format": form, "rate": rate, "channels": channels,
+                  "reader": read[-1] if read else "libsndfile", "frames": len(y),
+                  "duration": read_audio(path).duration_s, "mono_sha256": _sha256(y)}
+        if form in _LOSSLESS:
+            samples, _ = soundfile.read(path, dtype="float32", always_2d=True)
+            record["exact"] = True
+            record["interleaved_sha256"] = _sha256(samples)
+        else:
+            record["exact"] = False
+            record["pcm16"] = _deltas(np.clip(np.round(y * 32768.0), -32768, 32767).astype(np.int16))
+        records.append(record)
+    return records
+
+
+_DECODE_TEXT = """
+import pathlib, sys
+sys.path[:0] = ["tests"]
+import test_conformance_autochords_models as m
+from helpers.corpus import jsonl
+text = jsonl(m.decode_records(), corpus="autochords/decode", made_by=m.MADE_BY)
+pathlib.Path(sys.argv[1], "decode.jsonl").write_text(text, encoding="utf-8")
+"""
+
+
+@pytest.mark.autochords
+def test_decode_vectors():
+    """The computer's decode of each of the decode gate's files, made in a fresh process as the models' records are."""
+    if not _installed("numpy", "soundfile", "librosa", "torchaudio", "mutagen"):
+        pytest.skip("needs numpy, soundfile, librosa, torchaudio and mutagen: nix develop .#autochords")
+    (text,) = _child_texts(_DECODE_TEXT, ("decode.jsonl",))
+    check(AREA / "decode.jsonl", text)
 
 
 _TEXTS = """

@@ -33,6 +33,9 @@ the check that counts is the gates', which `vectors/autochords/models.jsonl`'s m
 argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).
 `vectors/autochords/soxr.jsonl` (python-soxr's HQ resampling, which the phone's libsoxr is held to within 1e-6) needs
 only python-soxr, on any CPU: it is never skipped there.
+`vectors/autochords/decode.jsonl` (the computer's decode of tests/fixtures/autochords/decode*.*, `load_mono` at each
+file's rate, a lossy one's as 16-bit deltas deflated, a lossless one's by SHA-256, and read_audio's length, which the
+phone's decoder is held to by its meta's `gates`) needs no model and no CPU's kernels either.
 `vectors/autochords/frontend.jsonl`'s meta holds the gate the phone's front ends are held to (`gates`: equal frames, a
 cosine per frame), and `data/caracole/autochords/frontend.json` what those front ends apply: librosa's CQT as it ran,
 its sparse bases, and beat_this's mel filterbank, never recomputed on the phone.

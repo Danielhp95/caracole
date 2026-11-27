@@ -21,6 +21,10 @@ the computer's models make of them into tests/conformance/vectors/autochords/.
 - `silence`: 1.5 s of silence, then a bar of silence between chords; 10.05 s, a tail shorter than a CQT hop.
 - `long`: sevenths in 4, then triads in 3, its last bar cut; 40 s, four whole windows of BTC's, two chunks of beat_this's.
 
+The decode gate's files, `decode*.*` (CC0 too), are steady.wav's first 6 s encoded by FFmpeg (LAME, libvorbis,
+libopus, its own AAC and FLAC) in each form the computer takes, written once by `encode.sh`, which says what each one
+is; tests/test_conformance_autochords_models.py writes the computer's decode of each into decode.jsonl.
+
 Regenerate them (never by hand) in two halves: the clips and this README in the default shell,
 `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`; then, after any
 clip changes, the models' outputs over them in the auto-chords shell,

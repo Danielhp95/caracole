@@ -795,6 +795,27 @@ APK by the name its `output-metadata.json` gives, and checks that the release's 
 (which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
 makes, and the runtime's own AAR, whose manifest declares the provider.
 
+## Chords from audio: the decoder
+
+The phone decodes a song's audio as the computer does (autochords/audio.py `load_mono`, at the file's own rate):
+`:ml`'s `Decoder.decode(file, into)` writes interleaved float32 PCM to a file, a buffer at a time. A WAV or an AIFF is
+read by `:autochords`' `Pcm`, with no codec, as libsndfile reads it; anything else goes through MediaExtractor and
+Android's own software decoders (`c2.android.*`, never a vendor's), the encoder's delay and padding trimmed as the
+container states them. `Mixdown.mono` means the channels as numpy does. `DecoderTest` holds it to the computer's
+decode of eight files (`tests/fixtures/autochords/encode.sh`: MP3 with LAME's header and without one, AAC, Vorbis,
+Opus, FLAC, WAV, AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
+
+    android/scripts/device-test.sh --ml
+
+On the emulator (2026-11-26) the lossless three come out sample for sample, the lossy five at offset 0 and 72 to 83
+dB of SNR (the gate is 60). Three things it does that a plain MediaCodec loop doesn't: it takes the delay and padding
+out of the codec's format (this emulator's codecs trim them themselves, so they'd go twice); it feeds Android's MP3
+decoder a frame of silence before a file with no LAME header, since that decoder always drops the first 529 samples
+it makes, where FFmpeg keeps them; and it turns the AAC decoder's loudness normalization and DRC off. An AAC that uses
+perceptual noise substitution can't be matched by any decoder (each fills those bands with noise of its own): the
+fixture is encoded without it. What a real phone's decoders do is unmeasured here: they are the same `c2.android.*`
+sources, but the platform's handling of the format's delay may differ by version, which is why it is trimmed here.
+
 ## Chords from audio: the resampler
 
 The computer resamples audio for its models with python-soxr, librosa's resampler, which runs libsoxr 0.1.3; the phone

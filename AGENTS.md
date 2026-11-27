@@ -2811,7 +2811,21 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     the CMakeLists' (§7: `-ffile-prefix-map` of the source and the binary folders, `--build-id=none`,
     `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
     `android/scripts/native-check.sh` checks the debug APK's (aligned, stripped, no build path, its SHA-256).
-- `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`.
+  - **The decoder** (stage B1, E7): `Decoder.decode(file, into)`, audio.py `load_mono` at the file's own rate, into
+    interleaved little-endian float32 written a buffer at a time (`Decoded`: rate, frames, channels, the length the
+    container states, else the frames', where it is within `GUESS_OFF` of them; the codec; what was trimmed): a WAV
+    or an AIFF by `autochords.frontend.Pcm`, no codec; else MediaExtractor and Android's own software decoder
+    (`c2.android.*`, `softwareDecoder`), float PCM asked for (but `audio/raw`, a FLAC the extractor decodes itself);
+    `encoder-delay` and `encoder-padding` trimmed here and taken out of the codec's format (Android 15's codecs trim
+    them themselves); an MP3 stating none kept whole as FFmpeg keeps it, the MP3 decoder's own 529 samples, which it
+    always drops, made a `silentFrame`'s; an AAC with no loudness normalization or DRC. `Mixdown.mono`, numpy's
+    float32 mean of the channels, an array's or a file's. `DecoderTest` (`device-test.sh --ml`) holds it to
+    vectors/autochords/decode.jsonl, every threshold its meta's `gates`: the lossless files sample for sample, the
+    lossy ones at offset 0 and SNR ≥ 60 dB, every stated length within 0.05 s of read_audio's; `MixdownTest` on the
+    JVM.
+- `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
+  `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time),
+  `PcmTest` holding it to decode.jsonl's lossless files sample for sample.
   `Cqt.logFeatures(y)` is btc.py's `cqt_features` (`[frames, 144]`, its 10 s chunks and tail rule), each chunk
   frontend.json's steps replayed: a resample by `Soxr` (librosa's length fix to `ceil(n · ratio)` and its √ratio
   scale on top, the samples kept float32), an octave's STFT in librosa 1.0's centred framing (`Stft.librosa`: only
@@ -4166,7 +4180,7 @@ nix flake check
   transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
   test builds names its transport.
 - **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
-  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
+  corpus area, `--app` for the app's classes, `--ml` for `:ml`'s ModelParityTest and DecoderTest and the app's ChordsBenchTest, `CLASS[=DIR]` for its own;
   `--tcpdump FILE` the gate on caracole's own uids, iptables and ip6tables owner rules counting what the debug app and
   the test APKs send to any host but 10.0.2.2 or loopback, a control sent as the app before and after the classes each counted on its own (the counters read just before each), the chain still first in OUTPUT; it proves nothing those uids sent left, not what another
   uid sends for them (a name lookup through Android's resolver among it); the emulator's whole capture beside it as
