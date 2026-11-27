@@ -68,7 +68,8 @@ class YtDlpTest {
 
     private fun runner(db: Db, fake: FakeYtDlpProcess, budget: Int = 6, beforeRun: () -> String? = { null },
                        heard: MutableList<Event>? = null, lines: MutableList<String>? = null) =
-        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { opened }, db, pacing, budget = budget, runId = "youtube-test",
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { YtDlpGate.keptOpen(opened) }, db, pacing, budget = budget,
+              runId = "youtube-test",
               beforeRun = beforeRun, onEvent = heard?.let { h -> { e: Event -> h += e } },
               onLine = { line -> lines?.add(line) })
 
@@ -250,5 +251,121 @@ class YtDlpTest {
         val e = assertFailsWith<ProviderError> { yt.download(id, into) }
         assertEquals(YouTubeData.fillAll(data.text("no_audio_left", data.runner), mapOf("folder" to "into")), e.msg)
         assertTrue(fake.argvs.all { it.any { a -> a.startsWith(into.path + "/") } })
+    }
+
+    // Fix round 1 of Y1.3's review.
+
+    /** A gate a run, each started fresh, kept for the test to look at once closed. */
+    private class Fresh : () -> YtDlpGate {
+        val opened = mutableListOf<HostGate.Opened>()
+        override fun invoke(): YtDlpGate =
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE).start().also { opened += it }
+    }
+
+    private fun freshRunner(db: Db, fake: FakeYtDlpProcess, gates: () -> YtDlpGate, budget: Int = 6) =
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", gates, db, pacing, budget = budget, runId = "youtube-test")
+
+    /** Whether the gate is gone: its port refuses, and no thread of it is left. */
+    private fun closed(opened: HostGate.Opened): Boolean {
+        val refuses = try {
+            Socket(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), opened.port).close()
+            false
+        } catch (_: java.net.ConnectException) {
+            true
+        }
+        val threads = Thread.getAllStackTraces().keys.filter { it.isAlive && it.name.startsWith("caracole-gate-${opened.port}-") }
+        return refuses && threads.isEmpty()
+    }
+
+    @Test
+    fun theGateARunOpenedIsClosedAfterItOnEveryPath() = db { db ->
+        val gates = Fresh()
+        val fake = FakeYtDlpProcess(listOf(
+            Planned(ok()),
+            Planned(failed("ERROR: x"), during = { throw IllegalStateException("the process broke") }),
+            Planned(ok(), notStarted = "no :youtube process"),
+            Planned(Ran.timedOut()),
+            Planned(failed("ERROR: unable to download video data: HTTP Error 403: Forbidden"),
+                    during = { argv -> asksThrough(argv, "jnn-pa.googleapis.com:443") }),
+        ))
+        val yt = freshRunner(db, fake, gates)
+        yt.search("ok")
+        assertFailsWith<YouTubeData.Refused> { yt.search("a NUL \u0000 in it") }
+        assertFailsWith<ProviderError> { yt.search("broken") }
+        assertFailsWith<ProviderError> { yt.search("not started") }
+        assertFailsWith<ProviderError> { yt.search("slow") }
+        assertFailsWith<GateRefused> { yt.search("refused") }
+        assertEquals(6, gates.opened.size, "one gate a run, the refused argv's too")
+        for (g in gates.opened) assertTrue(closed(g), "the gate at ${g.port} is closed")
+        assertEquals(0, fake.unmade)
+    }
+
+    /** As [asks], through the gate whose address is in [argv]. */
+    private fun asksThrough(argv: List<String>, target: String) {
+        val arg = argv.first { it.startsWith("http://") && '@' in it }
+        val port = arg.substringAfterLast(':').toInt()
+        val credentials = arg.substringAfter("//").substringBefore('@')
+        Socket(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), port).use { s ->
+            s.soTimeout = 10_000
+            s.getOutputStream().write(("CONNECT $target HTTP/1.1\r\nProxy-Authorization: Basic " +
+                Base64.getEncoder().encodeToString(credentials.toByteArray()) + "\r\n\r\n").toByteArray())
+            s.getInputStream().read()
+        }
+    }
+
+    @Test
+    fun aGateKeptOpenForTheJobIsNotClosedByARun() = db { db ->
+        val yt = runner(db, FakeYtDlpProcess.of(ok(), ok()))
+        yt.search("a")
+        yt.search("b")
+        assertFalse(closed(opened), "the job's gate is still open")
+    }
+
+    @Test
+    fun aProviderCoolingFromAnEarlierJobRefusesTheFirstRunWithNothingStarted() = db { db ->
+        Health.recordBlock(db, "youtube", started.minusSeconds(3600), "youtube: 429: an earlier job's block")
+        val before = Health.state(db, "youtube")
+        val fake = FakeYtDlpProcess(emptyList())
+        val yt = freshRunner(db, fake, { throw AssertionError("a gate opened for a run that can't be") })
+        val e = assertFailsWith<ProviderBlocked> { yt.search("a") }
+        assertEquals("youtube: ytsearch8:a: waiting out YouTube until 2026-11-27 13:00 UTC", e.message)
+        assertEquals(emptyList(), fake.argvs)
+        assertEquals(emptyList(), events(db))
+        assertNull(db.kvGet(Pace.LAST_SENT + "youtube"))
+        assertEquals(before, Health.state(db, "youtube"), "no new strike")
+        assertEquals(0, yt.requestsMade)
+    }
+
+    @Test
+    fun aBlockTheRunnerRecordsIsOneStrikeAndTheNextJobsRunnerRefusesWithoutAnother() = db { db ->
+        val first = runner(db, FakeYtDlpProcess.of(failed("ERROR: unable to download video data: HTTP Error 429: Too Many Requests")))
+        assertFailsWith<ProviderBlocked> { first.search("a") }
+        val after = Health.state(db, "youtube")
+        assertEquals(java.math.BigInteger.ONE, after.strikes)
+        val fake = FakeYtDlpProcess(emptyList())
+        assertFailsWith<ProviderBlocked> { runner(db, fake).search("b") }
+        assertEquals(after, Health.state(db, "youtube"))
+        assertEquals(emptyList(), fake.argvs)
+        assertEquals(1, events(db).size)
+    }
+
+    @Test
+    fun aRunCutOffByAnExceptionIsCountedLoggedAndSaidWithoutTheSecret() = db { db ->
+        val (user, key) = opened.proxyArg.substringAfter("//").substringBefore('@').split(':')
+        val fake = FakeYtDlpProcess(listOf(
+            Planned(ok(), during = { throw IllegalStateException("the service died running ${opened.proxyArg}") }),
+            Planned(ok(), during = { throw InterruptedException("stopped: $user:$key") }),
+        ))
+        val yt = runner(db, fake)
+        val broken = assertFailsWith<ProviderError> { yt.search("a") }
+        val stopped = assertFailsWith<InterruptedException> { yt.search("b") }
+        assertTrue(Thread.interrupted(), "the interrupt is kept")
+        assertEquals(2, yt.requestsMade, "each was started: the day's budget counts them")
+        val rows = events(db)
+        assertEquals(listOf("error", "error"), rows.map { it[2] })
+        assertTrue(db.kvGet(Pace.LAST_SENT + "youtube") != null, "the next job's pause sees them")
+        for (text in listOf(broken.message, stopped.message) + rows.map { it[3] as String? }) {
+            for (secret in listOf(user, key, opened.proxyArg)) assertFalse(text!!.contains(secret), "the secret in: $text")
+        }
     }
 }

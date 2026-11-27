@@ -141,12 +141,14 @@ class HostGate(
 
     /**
      * A started gate: its port, and the `--proxy` value yt-dlp is given, which holds the user and the secret; and its
-     * gate's [log] and [refusedAny], which a run reads before anything else (YtDlp).
+     * gate's [log] and [refusedAny], which a run reads before anything else (YtDlp); [close] closes its gate.
      */
-    class Opened internal constructor(val port: Int, val proxyArg: String, private val gate: HostGate) {
-        fun log(): Map<String, HostUse> = gate.log()
+    class Opened internal constructor(val port: Int, override val proxyArg: String, private val gate: HostGate) : YtDlpGate {
+        override fun log(): Map<String, HostUse> = gate.log()
 
         fun refusedAny(): Boolean = gate.refusedAny()
+
+        override fun close() = gate.close()
 
         override fun toString() = "HostGate.Opened(127.0.0.1:$port)"
     }
@@ -174,6 +176,9 @@ class HostGate(
     private var server: ServerSocket? = null
     private var acceptor: Thread? = null
     private var expected: ByteArray? = null
+
+    /** A test's seam: run first on each connection's thread (a handler that throws stands for a bug there). */
+    @Volatile internal var beforeServing: (() -> Unit)? = null
 
     /** The address it listens on: 127.0.0.1, never another. */
     internal val boundAddress: InetAddress? get() = server?.inetAddress
@@ -261,6 +266,7 @@ class HostGate(
      * trickles is closed at it, with no answer), then its request.
      */
     private fun serve(client: Socket, acceptedAt: Long) {
+        beforeServing?.invoke()
         val (input, output) = try {
             BufferedInputStream(client.getInputStream()) to client.getOutputStream()
         } catch (_: IOException) {
@@ -459,15 +465,19 @@ class HostGate(
             try {
                 pump(upstream.getInputStream(), client.getOutputStream(), upstream, use.down, activity, stop)
             } catch (_: IOException) {
+            } finally {
+                stop()
             }
-            stop()
         } ?: throw IOException("closed")
         val up = spawn("caracole-gate-${server?.localPort}-${serial.incrementAndGet()}-up") {
+            var ended = false
             try {
                 pump(input, upstream.getOutputStream(), client, use.up, activity, stop)
                 upstream.shutdownOutput()
+                ended = true
             } catch (_: IOException) {
-                stop()
+            } finally {
+                if (!ended) stop()
             }
         }
         if (up == null) {
@@ -485,8 +495,9 @@ class HostGate(
      */
     private fun awaitOrStop(pumping: List<Thread>, activity: AtomicLong, stop: () -> Unit) {
         val tick = minOf(idleTimeoutMs, TICK_MS).toLong()
-        while (pumping.any { it.isAlive }) {
-            pumping.first { it.isAlive }.join(tick)
+        while (true) {
+            val alive = pumping.firstOrNull { it.isAlive } ?: break // one snapshot: none alive between two reads is the end
+            alive.join(tick)
             if (pumping.any { it.isAlive } && System.nanoTime() - activity.get() > idleTimeoutMs * 1_000_000L) stop()
         }
     }
@@ -534,12 +545,22 @@ class HostGate(
         }
     }
 
-    /** A daemon thread of the gate, or none once closed (under the lock [close] sets `closed` under). */
+    /**
+     * A daemon thread of the gate, or none once closed (under the lock [close] sets `closed` under). Whatever its
+     * [body] throws ends that thread alone, said nowhere (it may hold a request's words): no bug on a connection's
+     * thread reaches the default handler, which on Android ends the app's main process, where the gate runs. Each body
+     * closes its own sockets in its `finally` (serve's client, a pump's [stop]).
+     */
     @Synchronized
     private fun spawn(name: String, body: () -> Unit): Thread? {
         if (closed) return null
         threads.removeIf { !it.isAlive }
-        val t = Thread(body, name)
+        val t = Thread({
+            try {
+                body()
+            } catch (_: Throwable) {
+            }
+        }, name)
         t.isDaemon = true
         threads += t
         t.start()
