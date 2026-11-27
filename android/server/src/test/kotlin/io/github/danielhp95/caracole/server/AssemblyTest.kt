@@ -262,7 +262,10 @@ class AssemblyTest {
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
         assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
-                           "inbox", "backup", "catalogues"), phone.queue.commands.runners.keys)
+                           "inbox", "backup", "catalogues", "models"), phone.queue.commands.runners.keys)
+        // The JVM's classpath carries no models.json, as the release's: the models' job is offered and says so.
+        assertEquals(null, phone.models.folder())
+        assertEquals("This build carries no chord models.", phone.models.ready())
         // The site catalogues listed through GitHub's API, the one source.
         assertTrue(phone.catalogues.source(io.github.danielhp95.caracole.mirror.Http()) is
                        io.github.danielhp95.caracole.core.catalogues.CatalogueSource.Api)

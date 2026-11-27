@@ -3078,7 +3078,24 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   checked kept beside it (`.c1.kept`, hashed again by the next fetch); a Content-Length other than the pin's refused
   before its body; no room for twice the download and `MARGIN`, nothing asked. ModelsSourceTest over FakeGitHub; ModelFilesTest the authors' real file
   (`CARACOLE_BTC_WEIGHTS`, android/flake.nix's), skipped without it.
-- The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues), are one table with their
+- server/lookups' `ModelsRunner`, `caracole models [--metered-ok]` (`Phone.models`, `commands["models"]`): the
+  download as a job of PhoneKinds' `MODELS` kind (`spec()`, key `models:`, the go-ahead's `models:go`, `join` false:
+  a request while one waits or runs answered by that one; the queue's one worker and nothing else calling `fetch`
+  are its "one fetch at a time"), modelled on `CataloguesRunner`: its one stage says "Asking GitHub for the chord
+  models…", "Downloading the chord models · 21 of 54 MB" (its done and total the stage's progress too) and "Checking
+  the chord models…" through `Paced`, then "Chord models ready · 54 MB"; a folder installed whole asks nothing; the
+  lookups queued meanwhile let go first before and after `fetch`, never between its requests; a metered network's
+  stop the catalogues' own (`otherwise`, a wait), a `Limited` a wait too in its own words (the kind's `pauses`), kept
+  in kv `models:not-before`; any other refusal "Not downloaded: WHY". `PhoneDeps.models` (a `ModelsSource`, this
+  build's `ModelFiles.carried()` pins) is null in a build that carries none (the release's): the job is offered
+  all the same and fails "Not downloaded: This build carries no chord models.", `ready()` and `remove()` say so, with
+  no request. `ready()` (null, or why not) is the one answer to whether they are here: the files judge
+  (`ModelFiles.installed`), never kv `models:installed`, which is a note; `folder()` where they are. `remove()`
+  deletes `stateDir/models/` whole (every contract's folder, `.c*.kept`, `.part`, `.old`), no link followed, then kv
+  `models:installed`, refused while a job of `USES` (the download; the chords job joins it) waits or runs; `sweep()`
+  as the phone starts (ModelFiles.sweep, only beside a folder that is there: a lone `.old` is the next fetch's to put
+  back). ModelsRunnerTest over FakeGitHub, ModelsTest on the device.
+- The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues, models), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
   `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays`,
@@ -3086,7 +3103,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncSheetTest`, `ExportImportTest` and `PhoneEndToEndTest`, and
   milestones 4–6's: `ColdSearchTest`, `LookupOfflineTest`, `NoNetworkTest`, `RealTransportOnDeviceTest`,
   `LookupOnDeviceTest` and `PagesOnDeviceTest` (with `--sites`), `PagesServedTest`, `SongbooksOnDeviceTest`,
-  `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`.
+  `VersionsPageTest`, `GuitarPageTest`, `PrintTest`, `ShareTest`, `ShareLinkTest`, `BackupsTest` and `AlertsTest`;
+  and `ModelsTest` (the chord models' job against a GitHub on loopback, with pins of its own).
 
 ##### core.http, core.health, core.config
 
@@ -4292,7 +4310,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
     which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index
     tables took last, GitHub's ask-again time, a download waiting for a go-ahead, the offer made: a restore never
-    touches those tables, so a tap after one says Up to date exactly when they hold the newest file), and each song's
+    touches those tables, so a tap after one says Up to date exactly when they hold the newest file), the chord
+    models' (`models:`: what was installed, a note beside files no backup holds and a restore never touches, and
+    GitHub's ask-again time), and each song's
     records that gate a request (`SONGS`:
     `megalobiz:checked:` and the other 30-day checks, `ug:artist_page_checked:`) by the song's identity key; the rest
     of kv, and the songs' own columns, are the library's;
@@ -4781,6 +4801,13 @@ picks one).
   (data/caracole/autochords/models.json), or nothing installed.
 - robots.txt, checked by hand on 2026-11-27: api.github.com and release-assets.githubusercontent.com answer 404, no
   rules (tests/fixtures/github/); github.com's, which closes `/*/releases/download/`, is never asked.
+- A download is a job of the phone's own (server/lookups' `ModelsRunner`), queued by a tap alone: never by itself, one
+  at a time. A `Limited` keeps GitHub's time in kv `models:not-before`, and nothing is asked before it (one more than
+  two hours ahead of the clock passed over, `CataloguesRunner.MOST_AHEAD`): the job ends as a wait in `Limited`'s
+  words. On a metered network it asks nothing and waits for the go-ahead given in Settings, as the catalogues do
+  (`--metered-ok`, a job of its own key). Once the folder is judged whole, kv `models:installed` (`{"contract",
+  "files", "bytes", "when"}`, kv_set_json's text) notes it; both records are the phone's own, kept by a restore
+  (OwnRecords' `models:`).
 
 #### Turning a provider off
 

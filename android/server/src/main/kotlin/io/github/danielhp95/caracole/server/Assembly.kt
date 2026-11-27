@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server
 
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
+import io.github.danielhp95.caracole.core.models.ModelFiles
+import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -40,6 +42,7 @@ import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
+import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
 import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
@@ -101,7 +104,10 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * reaches a site by accident). [searchesLacuerda] false: `/api/search`'s `lacuerda_search` null, as the computer's
  * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
  * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
- * now, read as the job runs (the app's ConnectivityManager; none metered by default).
+ * now, read as the job runs (the app's ConnectivityManager; none metered by default). [models]: where the chord
+ * models' job downloads them from, with this build's pins (ModelFiles.carried(): the debug build's `:ml` puts them on
+ * the classpath; a device test's GitHub on loopback and pins of its own), null for a build that carries none (the
+ * release's), whose job and Settings say so.
  */
 data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir: File, val mirror: Mirror?,
                      val scope: CoroutineScope, val settings: SyncSettings, val secret: String, val csrf: String,
@@ -109,7 +115,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
                      val alerts: Alerts = Alerts.NONE, val pacing: Pacing = Pacing.REAL,
                      val searchesLacuerda: Boolean = true,
                      val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
-                     val metered: () -> Boolean = { false })
+                     val metered: () -> Boolean = { false },
+                     val models: ModelsSource? = ModelFiles.carried()?.let { pins -> ModelsSource(pins = { pins }) })
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
@@ -121,7 +128,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
- * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues]), and
+ * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
+ * `models`: [models]), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -157,6 +165,12 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * metered ([PhoneDeps.metered]). */
     val catalogues: CataloguesRunner
 
+    /** The chord models' job (`models`), which the app queues ([ModelsRunner.spec]) and removes ([ModelsRunner.remove]),
+     * and the one answer to whether they are here ([ModelsRunner.ready]): [PhoneDeps.models] (null, a build that
+     * carries none: the job refuses in its words), stopping for the owner's go-ahead on a metered network as the
+     * catalogues do ([PhoneDeps.metered]). */
+    val models: ModelsRunner
+
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
@@ -179,6 +193,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                       forget = { search.invalidate() })
         catalogues.sweep()  // the file an import killed in its middle left (up to the whole unpacked index)
         commands[CataloguesRunner.COMMAND] = catalogues
+        models = ModelsRunner(parts, deps.models, metered = deps.metered)
+        models.sweep()  // what a download killed in its middle left beside the models' folder
+        commands[ModelsRunner.COMMAND] = models
     }
 
     /** The files shared to the app that wait for a song, tried again after each job. */

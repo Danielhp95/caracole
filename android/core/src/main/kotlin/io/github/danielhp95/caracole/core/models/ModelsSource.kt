@@ -35,13 +35,13 @@ class Installed(val dir: File, val pins: Pins, val fetched: List<String>, val by
  * (`release-assets.githubusercontent.com`, an asset's bytes), a 403 or 429 with none of the hour's requests left a
  * [Limited]. [pins] are models.json's (by default this build's: [ModelFiles.read], which requires them, throwing
  * [ModelsNotCarried] at the first [fetch] in a build that carries none: ask [ModelFiles.carried] first where the build
- * may lack them), [free] the room on a disk, [app] the app's own files (BTC's graph). No BTC weights are re-hosted:
+ * may lack them; the job that fetches reads them too, for the folder it judges), [free] the room on a disk, [app] the app's own files (BTC's graph). No BTC weights are re-hosted:
  * BTC's authors' file is read from their repository, unchanged.
  */
 class ModelsSource(
     private val base: URI = URI("https://api.github.com"),
     private val redirects: Set<String> = Catalogues.API_REDIRECTS,
-    private val pins: () -> Pins = { ModelFiles.read() },
+    val pins: () -> Pins = { ModelFiles.read() },
     private val free: (File) -> Long = File::getUsableSpace,
     private val app: (String) -> InputStream? = { ModelFiles.resource("caracole/autochords/$it") },
 ) {
