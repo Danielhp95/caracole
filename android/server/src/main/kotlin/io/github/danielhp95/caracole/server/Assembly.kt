@@ -22,6 +22,8 @@ import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.youtube.YouTubeAudio
 import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
@@ -44,6 +46,7 @@ import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
 import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
@@ -145,7 +148,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
- * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords]), and
+ * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords], `youtube`: YouTubeSheetRunner over
+ * [PhoneDeps.youtube] and the same), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -155,7 +159,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  */
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
-    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER))
+    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER),
+                                     YouTubeAudio.folder(File(deps.stateDir, "cache")))
     private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */
@@ -223,6 +228,22 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                                     names = models::names,
                                                     hold = { hearing -> models.holding(hearing) })
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
+        commands[YouTubeSheetRunner.COMMAND] = YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio,
+                                                                  problem = ::youtubeProblem, names = models::names,
+                                                                  hold = { hearing -> models.holding(hearing) },
+                                                                  chordsProblem = ::audioProblem)
+        sweepYouTube()  // the YouTube audio past its days, and what a stopped download left, as the phone starts
+    }
+
+    /** Why this phone makes no sheet from a YouTube video now, or null (YouTubeSheetRunner.problemOf over the
+     * settings, [PhoneDeps.chords], [ModelsRunner.ready] and [PhoneDeps.youtube]): the job's refusal. */
+    fun youtubeProblem(): String? = YouTubeSheetRunner.problemOf(config(), deps.youtube, deps.chords, models.ready())
+
+    /** YouTubeAudio.sweep of the phone's YouTube audio, in a write of its own. */
+    private fun sweepYouTube() {
+        deps.database.writeBlocking { db ->
+            YouTubeAudio.sweep(db, YouTubeAudio.folder(File(deps.stateDir, "cache")), Instant.now(), Stamps.now())
+        }
     }
 
     /** Why this phone makes no sheet from an audio file now, or null (AudioRunner.problemOf over [PhoneDeps.chords]

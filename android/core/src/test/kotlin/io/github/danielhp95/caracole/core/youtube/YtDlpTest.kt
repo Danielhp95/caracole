@@ -68,7 +68,7 @@ class YtDlpTest {
 
     private fun runner(db: Db, fake: FakeYtDlpProcess, budget: Int = 6, beforeRun: () -> String? = { null },
                        heard: MutableList<Event>? = null, lines: MutableList<String>? = null) =
-        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { YtDlpGate.keptOpen(opened) }, db, pacing, budget = budget,
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { YtDlpGate.keptOpen(opened) }, YtDlp.Writes.of(db), pacing, budget = budget,
               runId = "youtube-test",
               beforeRun = beforeRun, onEvent = heard?.let { h -> { e: Event -> h += e } },
               onLine = { line -> lines?.add(line) })
@@ -217,7 +217,7 @@ class YtDlpTest {
     @Test
     fun aYtDlpThatCantStartIsAnErrorThatSpendsNothing() = db { db ->
         val yt = runner(db, FakeYtDlpProcess(listOf(Planned(ok(), notStarted = "no :youtube process"))))
-        assertEquals("youtube: ytsearch8:a: no :youtube process", assertFailsWith<ProviderError> { yt.search("a") }.message)
+        assertEquals("youtube: ytsearch8:a: no :youtube process", assertFailsWith<NotSent> { yt.search("a") }.message)
         assertEquals(0, yt.requestsMade)
         assertEquals(emptyList(), events(db))
     }
@@ -263,7 +263,7 @@ class YtDlpTest {
     }
 
     private fun freshRunner(db: Db, fake: FakeYtDlpProcess, gates: () -> YtDlpGate, budget: Int = 6) =
-        YtDlp(fake, policy, File(dir, "cache"), "/qjs", gates, db, pacing, budget = budget, runId = "youtube-test")
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", gates, YtDlp.Writes.of(db), pacing, budget = budget, runId = "youtube-test")
 
     /** Whether the gate is gone: its port refuses, and no thread of it is left. */
     private fun closed(opened: HostGate.Opened): Boolean {

@@ -249,7 +249,7 @@ object YouTubeReplay : AreaReplay {
                         )
                     }
                     val fake = FakeYtDlpProcess(planned)
-                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, db, pacing,
+                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, YtDlp.Writes.of(db), pacing,
                                    budget = budget, runId = "youtube-replay", timeouts = timeouts)
                     var made = 0
                     for (c in calls) {

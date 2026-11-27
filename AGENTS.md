@@ -4463,6 +4463,42 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   job's bulk pass none); and a phone-made sheet re-laid alike on both sides. AudioRunnerTest through the
   real queue.
 
+##### A sheet from a YouTube video on the phone
+
+- server/lookups' `YouTubeSheetRunner`, `caracole youtube --sheet --progress [--url=URL] --song="A - T"`
+  (`commands["youtube"]`, key `youtube:<song key>`), youtube_sheet.py's job: `StagedSheet`, the stages it shares with
+  `AudioRunner` (song, lyrics, vocals, words, chords, pdf, pages: one class, `AudioRunner` and it its subclasses), its
+  audio stage youtube_fetch.py's `_one` for the song; its words youtube_sheet.py's constants from
+  data/caracole/library/youtube_sheet.json (tests/test_conformance_youtube_sheet.py), the rest audio_sheet.json's.
+  Before any stage `Phone.youtubeProblem()` (`YouTubeSheetRunner.problemOf`: YouTube off in the computer's settings,
+  `AudioRunner.problemOf`'s reasons, no `PhoneDeps.youtube`, `YouTubeEngine.ready()`) refuses "caracole makes no sheet
+  from YouTube here: …", exit 1.
+- song: found or added, refused with audio of its own (an upload of `AudioStore`'s, or an `audio_path` that isn't its
+  `youtube:` record's: `_still_ours`) or `[youtube]` "none" with no video given; `--url` noted under `[youtube]`
+  (`OverrideWriters.addYoutube`, overrides.py's `add_youtube`, vectors/library/overrides_writes.jsonl).
+- audio: `YouTubeAudio.sweep` first; the video's audio kept already, done; cooling, skipped in the runner's words;
+  else through core.youtube's `YtDlp` over the engine's process (its budget PhoneConfig's `youtube`, the product's,
+  never the bench's lifted cap; its pauses; one run at a time; a block recorded by the runner alone, the job sending
+  `Alerts.blocked`), the database reached a write a touch (`YtDlp.Writes`), its pauses and its process's wait
+  (`YouTubeSheetRunner.Yielding`, the run on a thread of its own) letting the queued lookups go first each second; the
+  pasted video, else the search's pick (`Choose.choose` past `skip`), into `cache/youtube/.part-<id>-…/`, then moved to
+  `<id>-<video>.m4a` and linked. A video that can't be had (unavailable, or `PassedOver`: no m4a stream) is unusable
+  pasted and into `skip` searched, the stage failed; a run never started (`NotSent`: the bench's run going) a wait in
+  the phone's words, counted against nothing; any other error counted against the video (the data's `network`
+  pattern aside), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
+  nothing. A download the decoder refuses fails the chords "audio the phone can't read: …".
+- chords as `AudioRunner`'s, credited to the video (`AutoSheet.youtubeCredit`), the version's `raw.youtube` and
+  `url` the video's, the maker the phone's with no `audio_name`; the decoded length said beside yt-dlp's (the job's
+  Output and the `caracole.youtube` log). The sheet kept, the pages stage lets the audio go (`YouTubeAudio.letGo`:
+  file, `audio_path`, `audio_mtime`, the record's `audio`); else it stays `YouTubeAudio.KEPT_FOR` (3 days), swept at
+  the next job and as the phone starts; a removal deletes it (`LibraryStore.youtubeDir`, removal.py's
+  `youtube_audio`).
+- vectors/lookup/youtube_sheet.jsonl (`YouTubeSheetReplay`, area `youtube-sheet`): Python's job over FakeYtDlp, fake
+  models and the fake lyrics sites, replayed through the runner with a `Plan` of the record's yt-dlp (its runs
+  compared) and `at_yield` written at the chords' yield alone; compared apart: AudioSheetReplay's, plus
+  `http:last_request:youtube`, and, where the sheet was kept, the phone's let-go applied to Python's after-state.
+  YouTubeSheetRunnerTest through the real queue; YouTubeAudioTest the sweep and the removal.
+
 ##### Alerts and backups on the phone
 
 - **Alerts** (the app's `AndroidAlerts`, core.health's `Alerts`, Caracole's from the phone's start), notifications on

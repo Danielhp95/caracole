@@ -2,6 +2,12 @@
 phone-YouTube plan's Y2.3) to agree with, as test_conformance_audio_sheet.py records ``caracole audio`` (E21's record
 shape, whose docstring this one follows and whose helpers it shares).
 
+**Data** (``data/caracole/library/youtube_sheet.json``, ``youtube_sheet_json``): youtube_sheet.py's ``STAGES`` and
+the words of its song and audio stages the phone says as the computer does, by their constants (``OWN_AUDIO``,
+``DECLINED``, ``CANT_NOTE``, ``NOTED``, ``DOWNLOADING``, ``LOOKING``, ``AUDIO_ALREADY``, ``TURNED_BACK``,
+``NO_RUNS_LEFT``, ``DOWNLOADED``, ``NO_VIDEO_FITS``, ``CANT_DOWNLOAD``, ``DOWNLOAD_FAILED``, ``COOLING_LATER``); the
+rest of its words are audio_sheet.json's.
+
 **Vectors** (``vectors/lookup/youtube_sheet.jsonl``), a header, then a record a line, each a scenario record
 (helpers/scenario.py ``record_lookup``) of youtube_sheet.py's ``make_sheet`` over a world of
 test_conformance_lookup_scenarios.py's (``World``: Calla Lake's River Road, the fake lyrics sites by address), yt-dlp
@@ -17,7 +23,8 @@ helpers/fake_ytdlp.py's ``FakeYtDlp`` (never a real one), the models E21's fake 
   ``cache`` (``{name: {base64, mtime}}``, the files of ``cache_dir/youtube/`` before the job), ``store`` (the files of
   ``state_dir/audio/`` before it, as E21's) and ``at_yield`` (null, or ``{"stage": "chords", "fixture": [records]}``:
   what another caracole wrote while the job let a waiting lookup go first, before that stage's models, fixture records
-  as ``fixture`` holds them, which the replay writes at its yield there);
+  as ``fixture`` holds them, which the replay writes at its yield there, and ``store``, the files of
+  ``state_dir/audio/`` once it wrote, as ``store`` holds them);
 - ``out.result``: ``{result, progress, python}`` as E21's (``phone_words``: the song stage of a song added
   ``get.ADDED``, vocals and words the phone's skip, the pdf ``get.NO_PDFS``, the pages ``get.LIBRARY_PAGE``; Python's
   own in ``python``);
@@ -35,17 +42,21 @@ helpers/fake_ytdlp.py's ``FakeYtDlp`` (never a real one), the models E21's fake 
 Every path under the world's state folder is written ``{state}``, under its cache folder ``{cache}``.
 
 The cases: a video pasted (``--url``) for a song new to the library, its timed lyrics found and the chords over them;
-a search's pick for a song of the library; a search none of whose videos fits; a video with no m4a stream (a
-pass-over); an unavailable video; YouTube blocking the download (the cooldown recorded, the chords skipped); YouTube
-cooling down (nothing run); a song with an audio file of its own given (refused); a human sheet kept while the job let
-a lookup go first before the chords (refused there); and the same job again once the video's audio is kept (nothing
-run, the sheet up to date).
+a search's pick for a song of the library; a search none of whose videos fits; a pasted video with no m4a stream (a
+pass-over: unusable); a searched one with none (passed over into ``skip``), then the same job again (the next pick
+taken); an unavailable video; YouTube blocking the download (one run, the cooldown recorded, the chords skipped);
+YouTube cooling down (nothing run); a song with an audio file of its own given (refused); a human sheet kept, and an
+audio file of the owner's given, while the job let a lookup go first before the chords (refused there); and the same
+job again once the video's audio is kept (nothing run, the sheet up to date).
 
 A pass-over is recorded as the phone reads it: the computer's runner reads "Requested format is not available" as an
 error (its download asks ``bestaudio[ext=m4a]/bestaudio/best``, so it is the network's or the extractor's fault there)
 and counts it against the video, where the phone's asks m4a alone (``youtube.PHONE_FORMAT``) and passes the video over
 (``core.youtube.PassedOver``, a VideoUnavailable, its event an ``error`` with the reason, as the computer's). The record
-runs the computer's job with that one reading swapped (``_passed_over``), and says so (``kw.reads`` "phone").
+runs the computer's job with that one reading swapped (``_passed_over``), and says so (``kw.reads`` "phone"). The swap
+reads ``PHONE_PASS_OVER`` over the error's message, which is ``_reason``'s, the last ERROR line, where the phone's
+``classify`` reads it over that line and passes a degraded WARNING to "outdated": the same reading for a run with no
+WARNING, which every pass-over record is.
 
 Regenerate with ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_youtube_sheet.py``.
 """
@@ -63,7 +74,7 @@ from unittest import mock
 
 import pytest
 from helpers.audio_files import audio, given
-from helpers.corpus import VECTORS, check, dump_fixture, jsonl
+from helpers.corpus import DATA, VECTORS, check, dump_fixture, jsonl
 from helpers.fake_ytdlp import FakeYtDlp, entry
 from helpers.scenario import LEAVES_OUT, record_lookup
 from test_conformance_audio_sheet import (
@@ -89,6 +100,8 @@ VECTOR = VECTORS / "lookup" / "youtube_sheet.jsonl"
 
 PASTED = "RiverRoad01"  # the video pasted
 PICKED = "RiverRoad02"  # the one a search picks
+NEXT = "RiverRoad03"  # the one a search picks next, once its first pick is passed over
+YOUTUBE_SHEET_JSON = DATA / "library" / "youtube_sheet.json"
 OTHER = "SomethingEl"  # a video of another song
 WATCH = "https://www.youtube.com/watch?v={}"
 PROVIDERS = {"youtube": {"delay": (0.0, 0.0)}}
@@ -101,6 +114,15 @@ NO_FORMAT = (f"ERROR: [youtube] {PASTED}: Requested format is not available. Use
 UNAVAILABLE = f"ERROR: [youtube] {PASTED}: Video unavailable"
 NOT_A_BOT = (f"ERROR: [youtube] {PASTED}: Sign in to confirm you’re not a bot. Use --cookies-from-browser or "
              "--cookies for the authentication.")
+
+
+def youtube_sheet_json() -> str:
+    from caracole import youtube_sheet as ys
+
+    names = ("OWN_AUDIO", "DECLINED", "CANT_NOTE", "NOTED", "DOWNLOADING", "LOOKING", "AUDIO_ALREADY", "TURNED_BACK",
+             "NO_RUNS_LEFT", "DOWNLOADED", "NO_VIDEO_FITS", "CANT_DOWNLOAD", "DOWNLOAD_FAILED", "COOLING_LATER")
+    data = {"stages": [list(s) for s in ys.STAGES], "words": {n.lower(): getattr(ys, n) for n in names}}
+    return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
 
 def world(tmp: Path, name: str) -> World:
@@ -184,6 +206,7 @@ def _yielding(w: World, write: Callable[[Any], None], holder: dict[str, Any]):
         before = dump_fixture(self.conn, w.cfg.library_dir)
         write(self.conn)
         holder["fixture"] = [r for r in dump_fixture(self.conn, w.cfg.library_dir) if r not in before]
+        holder["store"] = store_files(w)
         for r in holder["fixture"]:  # kept at SQLite's clock: at the record's time, as the settle puts it after
             if r.get("table") == "files":
                 r["row"] = {**r["row"], "created_at": STAMP}
@@ -225,7 +248,8 @@ def job(w: World, case: str, url: str | None, plan: dict[str, Any], *, reads: st
     made["kw"] = {"own": OWN, "request": {"artist": ARTIST, "title": TITLE, "url": request.url},
                   "providers": PROVIDERS, "reads": reads, "heard": heard_of(LENGTH), "hearing": "ok",
                   "audio": {"format": "M4A", "duration": LENGTH}, "ytdlp": plan, "cache": cache, "store": store,
-                  "at_yield": {"stage": "chords", "fixture": yielded["fixture"]} if at_yield is not None else None}
+                  "at_yield": {"stage": "chords", "fixture": yielded["fixture"], "store": yielded["store"]}
+                  if at_yield is not None else None}
     out = made["out"]
     out["result"] = phone_words(out["result"])
     out["runs"] = runs_of(w)[calls_before:]
@@ -303,6 +327,20 @@ def pass_over(tmp: Path) -> dict[str, Any]:
                plan, reads="phone")
 
 
+def searched_pass_over(tmp: Path) -> list[dict[str, Any]]:
+    w = world(tmp, "searched-pass-over")
+    w.song()
+    searched = search(w, entry(PICKED, f"{ARTIST} - {TITLE} (Official Audio)", ARTIST, LENGTH),
+                      entry(NEXT, f"{ARTIST} - {TITLE}", ARTIST, LENGTH))
+    plan = plan_of({PICKED: video(w, PICKED, stderr=NO_FORMAT.replace(PASTED, PICKED), exit=1),
+                    NEXT: video(w, NEXT)}, searched)
+    first = job(w, "a searched video with no m4a stream: passed over as the phone reads it, kept in skip", None,
+                plan, reads="phone")
+    then = job(w, "the same job again once its first pick was passed over: the search's next pick downloaded", None,
+               plan, reads="phone")
+    return [first, then]
+
+
 def unavailable(tmp: Path) -> dict[str, Any]:
     w = world(tmp, "unavailable")
     w.song()
@@ -366,6 +404,26 @@ def human_sheet(tmp: Path) -> dict[str, Any]:
                   "and lyrics kept", PASTED, plan, at_yield=keep)
 
 
+def upload_meanwhile(tmp: Path) -> dict[str, Any]:
+    import os
+
+    from caracole.normalize import identity_key
+    from caracole.songs import find_song, update_song
+
+    w = world(tmp, "upload-meanwhile")
+    w.song()
+
+    def upload(conn) -> None:  # the owner's audio file kept for the song meanwhile (another caracole's `audio`)
+        song = find_song(conn, identity_key(ARTIST, TITLE))
+        path = given(conn, w.cfg.state_dir, song, "M4A", LENGTH)
+        os.utime(path, (MTIME, MTIME))
+        update_song(conn, song.id, audio_mtime=float(MTIME))
+
+    plan = plan_of({PASTED: video(w)})
+    return job(w, "an audio file of the owner's kept while the job let a lookup go first before its chords: refused "
+                  "there, the video's audio kept for its days", PASTED, plan, at_yield=upload)
+
+
 def kept_already(tmp: Path) -> dict[str, Any]:
     w = world(tmp, "kept")
     w.song()
@@ -377,13 +435,17 @@ def kept_already(tmp: Path) -> dict[str, Any]:
 
 
 def records(tmp: Path) -> list[dict[str, Any]]:
-    return [pasted(tmp), picked(tmp), none_fits(tmp), pass_over(tmp), unavailable(tmp), blocked(tmp), cooling(tmp),
-            upload(tmp), human_sheet(tmp), kept_already(tmp)]
+    return [pasted(tmp), picked(tmp), none_fits(tmp), pass_over(tmp), *searched_pass_over(tmp), unavailable(tmp),
+            blocked(tmp), cooling(tmp), upload(tmp), human_sheet(tmp), upload_meanwhile(tmp), kept_already(tmp)]
 
 
 @pytest.fixture(scope="module")
 def made(tmp_path_factory) -> list[dict[str, Any]]:
     return records(tmp_path_factory.mktemp("youtube-sheet"))
+
+
+def test_youtube_sheet_json_is_the_jobs_words():
+    check(YOUTUBE_SHEET_JSON, youtube_sheet_json())
 
 
 def test_the_vector_is_what_caracole_youtube_sheet_does(made):
@@ -419,7 +481,15 @@ def test_the_cases_come_to_what_they_say(made):
         assert _ends(by[case])["audio"] == ["failed", "can't download this video; try another"], case
         assert json.loads(by[case]["out"]["kv"]["youtube:1"])["unusable"] == PASTED, case
     assert by["a pasted video with no m4a stream"]["out"]["events"][0][4] == "error"
+    skipped = by["a searched video with no m4a stream"]
+    assert _ends(skipped)["audio"] == ["failed", "can't download this video; try another"]
+    assert json.loads(skipped["out"]["kv"]["youtube:1"])["skip"] == [PICKED]
+    assert [r["what"] for r in skipped["out"]["runs"]] == ["search", "download"]
+    after = by["the same job again once its first pick was passed over"]
+    assert [r["target"] for r in after["out"]["runs"]] == [f"ytsearch8:{query()}", WATCH.format(NEXT)]
+    assert _ends(after)["audio"][0] == "done" and _ends(after)["chords"][0] == "done"
     block = by["YouTube blocking the download"]
+    assert len(block["out"]["runs"]) == 1, "a block stops the runs: no second"
     assert _ends(block)["audio"][1].startswith("YouTube turned us back; waiting until ")
     assert json.loads(block["out"]["kv"]["provider:youtube"])["strikes"] == 1
     assert _ends(block)["chords"] == ["skipped", "no audio"] and _ends(block)["pdf"][0] == "skipped"
@@ -433,6 +503,11 @@ def test_the_cases_come_to_what_they_say(made):
     assert _ends(human)["song"] == ["failed", f"{ARTIST} - {TITLE} already has a sheet"]
     assert _ends(human)["audio"][0] == "done" and _ends(human)["chords"][0] == "skipped"
     assert any(r.get("table") == "files" for r in human["kw"]["at_yield"]["fixture"]) and human["out"]["maker"] is None
+    meanwhile = by["an audio file of the owner's kept while the job let a lookup go first before its chords"]
+    assert _ends(meanwhile)["song"] == ["failed", f"{ARTIST} - {TITLE} has its own audio (bought or given); "
+                                                  "auto-chords uses that"]
+    assert _ends(meanwhile)["audio"][0] == "done" and _ends(meanwhile)["chords"][0] == "skipped"
+    assert meanwhile["kw"]["at_yield"]["store"] and meanwhile["out"]["youtube"]
     again = by["the same job again once the video's audio is kept"]
     assert _ends(again)["audio"] == ["done", f"has the audio of {watch} already"]
     assert _ends(again)["chords"] == ["done", "up to date: chords over the lyrics"]

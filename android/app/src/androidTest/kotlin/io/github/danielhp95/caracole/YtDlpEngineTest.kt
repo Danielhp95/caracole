@@ -216,7 +216,7 @@ class YtDlpEngineTest {
     private fun <T> withRunner(process: YtDlpProcess, runId: String, made: (YtDlp) -> Unit = {}, body: (YtDlp) -> T): T =
         database.writeBlocking { db ->
             val runner = YtDlp(process, PhoneConfig.read(db).provider("youtube"), engine.cacheDir, engine.qjs.path,
-                               { engine.gate().also { gates += it } }, db, Pacing.REAL, budget = 6, runId = runId,
+                               { engine.gate().also { gates += it } }, YtDlp.Writes.of(db), Pacing.REAL, budget = 6, runId = runId,
                                onLine = { lines += it })
             made(runner)
             body(runner)

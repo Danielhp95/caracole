@@ -186,7 +186,7 @@ object AudioSheetReplay : AreaReplay {
     }
 
     private const val RELAY = "caracole.autochords.sheet_lyrics.relay_onto_sheets"
-    private val MAKER = listOf("made_on", "made_by", "models", "runtime")
+    internal val MAKER = listOf("made_on", "made_by", "models", "runtime")
 
     /** The fake models' names and runtime, the phone's side of a sheet's maker. */
     val NAMES = linkedMapOf("chords" to "btc_large_voca@1673d23f8f9a55ae",
@@ -285,7 +285,7 @@ object AudioSheetReplay : AreaReplay {
     }
 
     /** A job's context that keeps what it is told. */
-    private class Told : JobContext {
+    internal class Told : JobContext {
         val said = ArrayList<String>()
         val events = ArrayList<JsonElement>()
         val states = LinkedHashMap<String, String>()
@@ -295,6 +295,7 @@ object AudioSheetReplay : AreaReplay {
 
         override fun stage(name: String, state: String, detail: String) {
             events.add(JsonArray(listOf("stage", name, state, detail).map(::JsonPrimitive)))
+            running = if (state == "running") name else null
             if (state == "running") return
             states[name] = state
             details[name] = detail
@@ -316,11 +317,17 @@ object AudioSheetReplay : AreaReplay {
 
         override fun outcome(value: JsonObject) {}
         override val isCancelled: Boolean = false
+
+        /** The stage running now, and what a yield to the queued lookups does (nothing, unless a replay says). */
+        var running: String? = null
+        var onYield: (Told) -> Unit = {}
+
+        override fun yieldToQueued() = onYield(this)
     }
 
     /** A row as the record carries it: the state folder written `{state}`; a job's auto version's raw less the maker's
      * side ([strip]: a job's records carry it apart, a re-lay's raw keeps its maker as it was). */
-    private fun unmade(row: JsonObject, state: String, strip: Boolean): JsonObject = JsonObject(row.mapValues { (column, value) ->
+    internal fun unmade(row: JsonObject, state: String, strip: Boolean): JsonObject = JsonObject(row.mapValues { (column, value) ->
         if (value !is JsonPrimitive || !value.isString) return@mapValues value
         var text = value.content.replace(state, "{state}")
         if (strip && column == "raw" && row["provider"] == JsonPrimitive("auto")) {
@@ -330,7 +337,7 @@ object AudioSheetReplay : AreaReplay {
         JsonPrimitive(text)
     })
 
-    private fun writeStore(root: File, files: JsonObject) {
+    internal fun writeStore(root: File, files: JsonObject) {
         if (files.isEmpty()) return
         root.mkdirs()
         for ((name, spec) in files) {
@@ -342,7 +349,7 @@ object AudioSheetReplay : AreaReplay {
         }
     }
 
-    private fun storeAfter(root: File): JsonObject = JsonObject(
+    internal fun storeAfter(root: File): JsonObject = JsonObject(
         (root.listFiles()?.sortedBy { it.name } ?: emptyList()).associate { f ->
             f.name to JsonPrimitive(when {
                 f.name.endsWith(".json") -> "record"
@@ -351,7 +358,7 @@ object AudioSheetReplay : AreaReplay {
             })
         })
 
-    private fun answers(record: JsonObject): Map<String, HttpAnswer> = record.mapValues { (_, a) ->
+    internal fun answers(record: JsonObject): Map<String, HttpAnswer> = record.mapValues { (_, a) ->
         val o = a.jsonObject
         HttpAnswer(o.getValue("status").jsonPrimitive.int,
                    (o["headers"] as? JsonArray ?: JsonArray(emptyList())).map { h ->
@@ -359,19 +366,19 @@ object AudioSheetReplay : AreaReplay {
                    }, Scenarios.body(o["body"] ?: JsonObject(mapOf("text" to JsonPrimitive("")))))
     }
 
-    private fun sha256(data: ByteArray): String = java.security.MessageDigest.getInstance("SHA-256").digest(data)
+    internal fun sha256(data: ByteArray): String = java.security.MessageDigest.getInstance("SHA-256").digest(data)
         .joinToString("") { b -> "0123456789abcdef"[(b.toInt() shr 4) and 15].toString() + "0123456789abcdef"[b.toInt() and 15] }
 
-    private fun kv(db: Db, leftOut: List<String>): Map<String, String> =
+    internal fun kv(db: Db, leftOut: List<String>): Map<String, String> =
         db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0)!! to it.text(1)!! }
             .filter { (k, _) -> k != "sync:id" && !k.startsWith(Reads.READ) && leftOut.none { k.startsWith(it) } }.toMap()
 
-    private fun files(library: File, leftOut: Set<String>): Map<String, String> = library.walkTopDown()
+    internal fun files(library: File, leftOut: Set<String>): Map<String, String> = library.walkTopDown()
         .filter { it.isFile && it.name !in leftOut }
         .associate { it.relativeTo(library).invariantSeparatorsPath to sha256(it.readBytes()) }
 
     /** The tables a job may change, as dump_fixture reads them. */
-    private object Tables {
+    internal object Tables {
         val NAMES = listOf("songs", "versions", "files", "removed", "events", "phone_overrides")
 
         private fun quoted(name: String) = "\"" + name.replace("\"", "\"\"") + "\""

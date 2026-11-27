@@ -57,6 +57,6 @@ class M6SkeletonTest {
         assertEquals(areas.distinct(), areas)
         val m6 = listOf("cards", "songbook-tab", "choices", "guitar", "export", "review")
         assertEquals(m6, areas.subList(areas.indexOf("cards"), areas.indexOf("cards") + m6.size))
-        assertEquals(listOf("ug-link", "audio-sheet"), areas.takeLast(2))  // a UG link pasted, then a sheet from a file
+        assertEquals(listOf("ug-link", "audio-sheet", "youtube-sheet"), areas.takeLast(3))  // a UG link, the audio sheets
     }
 }

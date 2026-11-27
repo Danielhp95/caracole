@@ -1,0 +1,52 @@
+{
+ "stages": [
+  [
+   "song",
+   "Find the song"
+  ],
+  [
+   "audio",
+   "Audio from YouTube"
+  ],
+  [
+   "lyrics",
+   "Lyrics"
+  ],
+  [
+   "vocals",
+   "Where the singing is"
+  ],
+  [
+   "words",
+   "Transcribing the lyrics"
+  ],
+  [
+   "chords",
+   "Chords from the audio"
+  ],
+  [
+   "pdf",
+   "PDF"
+  ],
+  [
+   "pages",
+   "The logbook page"
+  ]
+ ],
+ "words": {
+  "own_audio": "{display} has its own audio (bought or given); auto-chords uses that",
+  "declined": "[youtube] says \"none\" for {display}: give it a video",
+  "cant_note": "couldn't note the video in overrides.toml: {error}",
+  "noted": "; noted under [youtube]: {url}",
+  "downloading": "downloading the video's audio",
+  "looking": "looking for a video on YouTube",
+  "audio_already": "has the audio of {url} already",
+  "turned_back": "YouTube turned us back; waiting until {until}",
+  "no_runs_left": "no YouTube runs left ({budget} spent); try again later",
+  "downloaded": "downloaded {named}, {url}",
+  "no_video_fits": "no video fits; give it one",
+  "cant_download": "can't download this video; try another",
+  "download_failed": "download failed; try again later",
+  "cooling_later": "later"
+ }
+}

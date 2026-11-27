@@ -303,7 +303,9 @@
  "phone_format": "bestaudio[ext=m4a]",
  "fetch": {
   "recheck_after_days": 30,
-  "give_up_after": 3
+  "give_up_after": 3,
+  "audio_folder": "youtube",
+  "part_prefix": ".part-"
  },
  "answers": {
   "provider": "youtube",

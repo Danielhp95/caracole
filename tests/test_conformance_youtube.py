@@ -49,7 +49,9 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
   ``variant`` (``_VARIANT``, ``{variant}`` title_variant's word), the words (``decoration``, ``cjk_decoration`` as
   compact(slug_key) makes them, ``own_channel``), ``cjk_width``, the lengths (seconds) and ``exact`` and ``alone``,
   and ``key``, in words, the order of the videos that fit;
-- ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``) and ``give_up_after`` (``GIVE_UP_AFTER``);
+- ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``), ``give_up_after`` (``GIVE_UP_AFTER``),
+  ``audio_folder`` (``AUDIO_FOLDER``, the downloads' folder under the cache) and ``part_prefix`` (``_PART_PREFIX``, a
+  download's own folder there until its file is in place);
 - ``search``: youtube_search.py's ``searches_per_hour``, ``asked_for_days`` (``ASKED_FOR``, the 30 days),
   ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
 - ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
@@ -230,7 +232,8 @@ def youtube_json() -> str:
         "audio_format": youtube.AUDIO_FORMAT,
         "phone_format": youtube.PHONE_FORMAT,
         "fetch": {"recheck_after_days": youtube_fetch.RECHECK_AFTER.days,
-                  "give_up_after": youtube_fetch.GIVE_UP_AFTER},
+                  "give_up_after": youtube_fetch.GIVE_UP_AFTER, "audio_folder": youtube_fetch.AUDIO_FOLDER,
+                  "part_prefix": youtube_fetch._PART_PREFIX},
         "answers": {"provider": youtube.PROVIDER, "live_statuses": list(youtube.LIVE_STATUSES),
                     "shorts_path": youtube.SHORTS_PATH, "search_not_json": youtube.SEARCH_NOT_JSON,
                     "video_not_json": youtube.VIDEO_NOT_JSON, "no_such_video": youtube.NO_SUCH_VIDEO},

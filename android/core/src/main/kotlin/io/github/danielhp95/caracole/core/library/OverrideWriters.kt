@@ -87,6 +87,15 @@ object OverrideWriters {
         setEntry(db, "gametabs", key, display, JsonPrimitive(Addresses.gametabsPickFromUrl(JsonPrimitive(url)).url))
     }
 
+    /** overrides.add_youtube: the song's `[youtube]`, the video at [url] (a YouTube address, as youtube_urls'
+     * video_id_from_url reads one: a bare id is none) written as its plain address, or "none"; the same video, or
+     * "none" again, writes nothing (each row holds its value as song_entries yields it). */
+    fun addYoutube(db: Db, display: String, url: String) {
+        val key = Addresses.overrideKey(display)
+        val video = Readers.video(JsonPrimitive(url), "[youtube] ${PyStr.repr(display)}")
+        setEntry(db, "youtube", key, display, JsonPrimitive(video?.let(Addresses::watchUrl) ?: Readers.NO_VIDEO))
+    }
+
     /** overrides.add_reject: the UG songs [refs] (`"ug-artist/ug-song"`) added to the song's `[reject]`, keeping
      * those there; one rejected already isn't added again, and none writes nothing. */
     fun addReject(db: Db, display: String, refs: List<String>) {
