@@ -1,9 +1,9 @@
 package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.catalogues.CatalogueError
+import io.github.danielhp95.caracole.core.catalogues.Catalogues
 import io.github.danielhp95.caracole.core.catalogues.Limited
 import io.github.danielhp95.caracole.core.config.PhoneConfig
-import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.Stamps
@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,7 +48,7 @@ import java.time.Instant
  *    stage S): "Not downloaded: This build carries no chord models.", no request, nothing written;
  * 2. the folder already installed whole ([ModelFiles.installed], the judge: the files, never the record): "Chord models
  *    ready · 54 MB", no request (kv [INSTALLED] written where it was lost);
- * 3. a time GitHub said to ask again after (kv [NOT_BEFORE]) still to come, up to [CataloguesRunner.MOST_AHEAD]
+ * 3. a time GitHub said to ask again after (kv [NOT_BEFORE]) still to come, up to [Catalogues.MOST_AHEAD]
  *    ahead (further, a clock that was wrong, passed over): its [Limited]'s words, a wait (the kind's
  *    [PhoneKinds.Kind.pauses]), no request;
  * 4. on a metered network ([metered]) with no `--metered-ok`: "54 MB to download: waiting for your go-ahead in
@@ -61,7 +62,8 @@ import java.time.Instant
  *    first again (never between its requests: a connection held open while a lookup runs);
  * 6. the folder judged again ([ModelFiles.installed]), then kv [INSTALLED] written, and "Chord models ready · 54 MB".
  *
- * A [Limited] anywhere keeps its time in kv [NOT_BEFORE] and ends the job as a wait in its own words. Any other
+ * A [Limited] anywhere keeps its time in kv [NOT_BEFORE] (a database that fails there passed over, as the catalogues'
+ * do: the wait is said all the same) and ends the job as a wait in its own words (where the catalogues' job fails). Any other
  * refusal (a [CatalogueError] or core.models' ModelsError: no release, no room, a digest that differs, the storage)
  * fails it "Not downloaded: WHY", the command's exit 1. Each run asks GitHub with caracole's user agent as the phone's
  * settings say it then (PhoneConfig.read). [clock], [metered] and [ticks] are the app's (a test's).
@@ -148,7 +150,7 @@ class ModelsRunner(
                 try {
                     download(pins, source, meteredOk, context)
                 } catch (e: Limited) {
-                    parts.database.write { db -> db.kvSet(NOT_BEFORE, Stamps.of(e.until)) }
+                    quietly { parts.database.write { db -> db.kvSet(NOT_BEFORE, Stamps.of(e.until)) } }
                     context.stage(STAGE, "done", e.message.orEmpty())
                 } catch (e: CatalogueError) {
                     fail(context, e.message.orEmpty())
@@ -164,9 +166,10 @@ class ModelsRunner(
                           ticks = ticks)
         context.stage(STAGE, "running")
         if (ModelFiles.installed(folder, pins) == null) return installed(pins, context)
-        val (until, agent) = parts.database.read { db -> notBefore(db) to PhoneConfig.read(db).userAgent }
-        val at = clock()
-        if (until != null && until.isAfter(at) && !until.isAfter(at.plus(CataloguesRunner.MOST_AHEAD))) throw Limited(until)
+        val (until, agent) = parts.database.read { db ->
+            Catalogues.notBefore(db, NOT_BEFORE) to PhoneConfig.read(db).userAgent
+        }
+        Catalogues.holdBack(until, clock())
         if (metered() && !meteredOk) {
             val asked = pins.files.filter { it.from !is From.App }.sumOf { it.bytes }
             context.stage(STAGE, "done", PhoneKinds.fill(kind.otherwise!!, "size" to Sizes.size(asked)))
@@ -202,11 +205,15 @@ class ModelsRunner(
         context.stage(STAGE, "done", PhoneKinds.fill(PhoneKinds.MODELS.done, "size" to Sizes.size(pins.bytes)))
     }
 
-    /** kv [NOT_BEFORE] as a time; none for no record, or one that isn't a time Stamps reads. */
-    private fun notBefore(db: Db): Instant? = try {
-        db.kvGet(NOT_BEFORE)?.let(Stamps::parse)?.let(Stamps::instant)
-    } catch (e: ArithmeticException) {
-        null  // a time out of range
+    /** [block] run, a failure of it passed over, but a cancellation's (CataloguesRunner's). */
+    private inline fun quietly(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // nothing more to do: the record keeps a request from being sent too soon, the wait is said all the same
+        }
     }
 
     /** The job's stage failed with the kind's words for [why], and the command with them. */

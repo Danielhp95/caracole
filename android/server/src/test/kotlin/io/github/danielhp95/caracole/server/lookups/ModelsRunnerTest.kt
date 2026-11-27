@@ -193,7 +193,9 @@ class ModelsRunnerTest {
                     val stage = seen.stages.single()
                     if (stage.detail.isNotEmpty() && said.lastOrNull() != stage.detail) said += stage.detail
                     shares += stage.done to stage.total
-                    if (stage.detail.startsWith("Downloading the chord models · 0.5 of 0.8 MB")) break
+                    // beat_this's last byte in (491,520 of them already say "0.5 of 0.8 MB"), BTC's held.
+                    if (stage.detail.startsWith("Downloading the chord models · 0.5 of 0.8 MB") &&
+                        stage.done == 500_000L) break
                     Thread.sleep(5)
                 }
             }
@@ -290,6 +292,47 @@ class ModelsRunnerTest {
         assertEquals(Line("failed", line, details = "#tab=requests&job=${failed.id}"), JobViews.line(failed))
         assertNull(phone.kv(ModelsRunner.INSTALLED))
         assertEquals("The chord models aren't on the phone.", phone.runner.ready())
+
+        // A plain 403 (GitHub's secondary limit, a block): a failure, Try again later, no time kept.
+        val blocked = phone()
+        github.route(listPath, Reply(403))
+        val refused = run(blocked)
+        val words = "Not downloaded: GitHub answered HTTP 403. Try again later."
+        assertEquals(Job.FAILED, refused.state)
+        assertEquals(words, detail(refused))
+        // The Journal's line, its first sentence (Status's cut of a failure), as every failure says it.
+        assertEquals(Line("failed", "Not downloaded: GitHub answered HTTP 403.", details = "#tab=requests&job=${refused.id}"),
+                     JobViews.line(refused))
+        assertNull(blocked.kv(ModelsRunner.NOT_BEFORE))
+        assertNull(blocked.kv(ModelsRunner.INSTALLED))
+    }
+
+    /** GitHub's hour spent on BTC's blob after beat_this's file came in whole: a wait with its time, beat_this's file
+     * kept beside the folder for the next try, which asks for BTC's alone. */
+    @Test fun theHourSpentAfterBeatThisCameInIsAWaitThatKeepsBeatThisForTheNextTry() {
+        served()
+        val reset = now.plusSeconds(1800)
+        github.route(blobPath, Reply(429, headers = mapOf("x-ratelimit-remaining" to "0",
+                                                          "x-ratelimit-reset" to "${reset.epochSecond}")))
+        val phone = phone()
+        val limited = run(phone)
+        val words = Limited(reset).message!!
+        assertEquals(Job.DONE, limited.state)
+        assertEquals(words, detail(limited))
+        assertEquals(Line("waiting", words, details = "#tab=requests&job=${limited.id}"), JobViews.line(limited))
+        assertEquals(Stamps.of(reset), phone.kv(ModelsRunner.NOT_BEFORE))
+        assertEquals(listOf(listPath, assetPath, "/assets/9", blobPath), asked())
+        val kept = File(phone.folder.parentFile, ".c1" + ModelFiles.KEPT)
+        assertEquals(listOf("beat_this-final0-fp16.onnx"), kept.list()!!.sorted())
+        assertEquals(FakeGitHub.sha256(beats), ModelFiles.sha256(File(kept, "beat_this-final0-fp16.onnx")))
+        // Past its time: beat_this's file taken from what was kept, BTC's asked for.
+        github.route(blobPath, Reply(200, weights))
+        github.asked.clear()
+        now = reset.plusSeconds(1)
+        assertEquals("Chord models ready · 0.8 MB", detail(run(phone)))
+        assertFalse("/assets/9" in asked())
+        assertTrue(blobPath in asked())
+        assertNull(phone.runner.ready())
     }
 
     // --- a build without the models -----------------------------------------------------------------------------------

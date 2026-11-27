@@ -4773,7 +4773,8 @@ picks one).
   chosen asset's address, redirected to `release-assets.githubusercontent.com`, a redirect to any other host refused.
   Two requests a download, at a tap, with caracole's own user agent; a 403 or 429 with no requests left is kept (kv
   `catalogues:not-before`) and nothing is asked before it (one more than two hours ahead of the clock passed over,
-  `CataloguesRunner.MOST_AHEAD`). No exception to robots.txt is made.
+  `Catalogues.MOST_AHEAD`, `holdBack`), the job failing in `Limited`'s words, where the chord models' job waits. No
+  exception to robots.txt is made.
 - The upload script keeps the release a prerelease (made one, or marked one, at each run: `/releases/latest` never
   answers a prerelease, and the phone reads the tag), and uploads again a file GitHub lists with no digest, which
   can't be checked, once it is deleted; one listed otherwise than the sidecar says is never replaced. `caracole index
@@ -4803,7 +4804,7 @@ picks one).
   rules (tests/fixtures/github/); github.com's, which closes `/*/releases/download/`, is never asked.
 - A download is a job of the phone's own (server/lookups' `ModelsRunner`), queued by a tap alone: never by itself, one
   at a time. A `Limited` keeps GitHub's time in kv `models:not-before`, and nothing is asked before it (one more than
-  two hours ahead of the clock passed over, `CataloguesRunner.MOST_AHEAD`): the job ends as a wait in `Limited`'s
+  two hours ahead of the clock passed over, `Catalogues.MOST_AHEAD`): the job ends as a wait in `Limited`'s
   words. On a metered network it asks nothing and waits for the go-ahead given in Settings, as the catalogues do
   (`--metered-ok`, a job of its own key). Once the folder is judged whole, kv `models:installed` (`{"contract",
   "files", "bytes", "when"}`, kv_set_json's text) notes it; both records are the phone's own, kept by a restore

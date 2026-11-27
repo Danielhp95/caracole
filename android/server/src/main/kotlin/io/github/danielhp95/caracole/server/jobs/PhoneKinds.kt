@@ -1,5 +1,7 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.catalogues.Limited
+
 /**
  * The phone's own job kinds, which Python never queues, their key, names, stage and words, one table that JobViews
  * reads (AGENTS.md records them as the phone's; the plan's §5.3): the render job (the phone's pages made again by a
@@ -52,9 +54,9 @@ object PhoneKinds {
                       otherwise = "{size} to download: waiting for your go-ahead in Settings (a metered network)",
                       pauses = listOf(LIMITED))
 
-    /** core.catalogues' Limited, its words as a template: GitHub's share of the hour spent, {time} the minute after
-     * which it may be asked again. */
-    const val LIMITED = "Try again after {time} — GitHub has answered this network's share of requests for the hour."
+    /** core.catalogues' Limited, its words as a template ([Limited.WORDS]): GitHub's share of the hour spent, {time} the
+     * minute after which it may be asked again. */
+    const val LIMITED = Limited.WORDS
 
     val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE, CATALOGUES, MODELS).associateBy { it.kind }
 

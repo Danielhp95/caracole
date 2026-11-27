@@ -12,7 +12,6 @@ import io.github.danielhp95.caracole.core.catalogues.download
 import io.github.danielhp95.caracole.core.catalogues.words
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.MergeProgress
@@ -43,8 +42,8 @@ import java.time.Instant
  * laptop publishes in GitHub's release (core.catalogues), this app's schema's newest file downloaded and merged, on
  * the queue's one worker, so never beside a lookup's write or any other job's. Its one stage, `catalogues`, says:
  *
- * 1. a time GitHub said to ask again after (kv [Catalogues.NOT_BEFORE]) still to come: [Limited]'s words, with no
- *    request (a record that isn't a time is none);
+ * 1. a time GitHub said to ask again after (kv [Catalogues.NOT_BEFORE]) still to come ([Catalogues.holdBack]): [Limited]'s
+ *    words, a failure, with no request (a record that isn't a time is none);
  * 2. the release listed ([CatalogueSource.list]) and its file chosen ([choose]): none of this schema, the reason in
  *    [words] (a newer schema, an older one, none at all); the one imported last (kv [Catalogues.IMPORTED]), "Up to
  *    date: the catalogues of DATE" ([UP_TO_DATE]), done, nothing downloaded;
@@ -130,11 +129,9 @@ class CataloguesRunner(
         fun doing(words: String, step: Any = words) = paced.say(words, step)
         context.stage(STAGE, "running")
         val (until, imported, agent) = parts.database.read { db ->
-            Triple(notBefore(db), db.kvGet(Catalogues.IMPORTED), PhoneConfig.read(db).userAgent)
+            Triple(Catalogues.notBefore(db, Catalogues.NOT_BEFORE), db.kvGet(Catalogues.IMPORTED), PhoneConfig.read(db).userAgent)
         }
-        val at = clock()
-        // GitHub's reset is within the hour: one further on than MOST_AHEAD is a clock that was wrong, passed over.
-        if (until != null && until.isAfter(at) && !until.isAfter(at.plus(MOST_AHEAD))) throw Limited(until)
+        Catalogues.holdBack(until, clock())
         empty(cache)  // what a killed job left
         val http = Http(userAgent = agent)
         val source = source(http)
@@ -206,13 +203,6 @@ class CataloguesRunner(
      * more, for the laptop's clock ahead of the phone's, as a sync's merge (SyncEngine). */
     private fun notAfter(): Long = Stamps.micros(clock().plus(Duration.ofDays(1)))
 
-    /** kv [Catalogues.NOT_BEFORE] as a time; none for no record, or one that isn't a time Stamps reads. */
-    private fun notBefore(db: Db): Instant? = try {
-        db.kvGet(Catalogues.NOT_BEFORE)?.let(Stamps::parse)?.let(Stamps::instant)
-    } catch (e: ArithmeticException) {
-        null  // a time out of range
-    }
-
     /** [block] run, a failure of it passed over, but a cancellation's. */
     private inline fun quietly(block: () -> Unit) {
         try {
@@ -243,9 +233,6 @@ class CataloguesRunner(
     companion object {
         const val COMMAND = "catalogues"
         const val METERED_OK = "--metered-ok"
-
-        /** The furthest ahead of the clock a kept [Catalogues.NOT_BEFORE] is kept to; past it, it is passed over. */
-        val MOST_AHEAD: Duration = Duration.ofHours(2)
 
         /** kv: the file a metered network left waiting for the owner's go-ahead, `{"name": …, "bytes": …}`. */
         const val ASKING = "catalogues:asking"

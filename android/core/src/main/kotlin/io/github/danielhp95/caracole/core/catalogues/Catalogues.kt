@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.core.catalogues
 
+import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -34,6 +37,24 @@ object Catalogues {
 
     /** The hosts a download from GitHub's API may be redirected to (an asset's bytes). */
     val API_REDIRECTS: Set<String> = setOf("release-assets.githubusercontent.com")
+
+    /** The furthest ahead of the clock a kept time to ask again after ([notBefore]) is kept to: GitHub's reset is
+     * within the hour, so one further on is a clock that was wrong, passed over. */
+    val MOST_AHEAD: Duration = Duration.ofHours(2)
+
+    /** kv [key] (the catalogues' [NOT_BEFORE], the chord models' `models:not-before`) as a time; none for no record,
+     * or one that isn't a time Stamps reads. */
+    fun notBefore(db: Db, key: String): Instant? = try {
+        db.kvGet(key)?.let(Stamps::parse)?.let(Stamps::instant)
+    } catch (e: ArithmeticException) {
+        null  // a time out of range
+    }
+
+    /** A [Limited] of [until] while it is still to come at [at] and no further ahead than [MOST_AHEAD]; nothing else:
+     * what a job checks before it asks GitHub anything. */
+    fun holdBack(until: Instant?, at: Instant) {
+        if (until != null && until.isAfter(at) && !until.isAfter(at.plus(MOST_AHEAD))) throw Limited(until)
+    }
 }
 
 /** Why the catalogues can't be listed or downloaded, in words the app says as they are. */
@@ -47,7 +68,12 @@ class NoRelease : CatalogueError("No catalogues are published yet.")
  * [until] is its `x-ratelimit-reset`, said as the minute on the phone's clock ([zone]) at or after it.
  */
 class Limited(val until: Instant, zone: ZoneId = ZoneId.systemDefault()) :
-    CatalogueError("Try again after ${clock(until, zone)} — GitHub has answered this network's share of requests for the hour.")
+    CatalogueError(WORDS.replace("{time}", clock(until, zone))) {
+    companion object {
+        /** Its words, {time} the minute after which GitHub may be asked again: the Journal's template of the wait. */
+        const val WORDS = "Try again after {time} — GitHub has answered this network's share of requests for the hour."
+    }
+}
 
 /** [at] as "14:05" in [zone], a time within a minute said as the minute after it. */
 private fun clock(at: Instant, zone: ZoneId): String {

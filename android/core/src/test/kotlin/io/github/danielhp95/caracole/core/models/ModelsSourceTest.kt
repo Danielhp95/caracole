@@ -77,10 +77,10 @@ class ModelsSourceTest {
 
     private val into: File get() = pins.folder(File(tmp.root, "state"))
 
-    /** Every name beside [into] and in it, the kept files' folder's too, with its bytes' SHA-256. */
     /** beat_this's file, downloaded and checked before BTC's failed: kept for the next try. */
     private val BEAT = listOf("beat_this-final0-fp16.onnx")
 
+    /** Every name beside [into] and in it, the kept files' folder's too, with its bytes' SHA-256. */
     private fun state(): Map<String, String> {
         val parent = into.parentFile
         if (!parent.isDirectory) return emptyMap()
