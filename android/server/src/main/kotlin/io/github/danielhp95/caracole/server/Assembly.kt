@@ -225,6 +225,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * and [ModelsRunner.ready]): the audio job's refusal, and the one answer E24's routes and `server.audio` give. */
     fun audioProblem(): String? = AudioRunner.problemOf(deps.chords, models.ready())
 
+    /** What keeps this phone from making chords whatever the models' files (its Android, its processor, its memory:
+     * ChordModels.phoneProblem), or null: Settings' row says it in place of a download (no chords at all: the
+     * release's LibraryPage.AUDIO_PROBLEM). */
+    fun chordsProblem(): String? = deps.chords.let { chords -> if (chords == null) LibraryPage.AUDIO_PROBLEM else chords.phoneProblem() }
+
     /** The kept audio files no song names deleted (audio_store.tidy, the computer's scan step's): at the phone's start
      * and after a sync's take, in a write of their own, never under the store's lock. */
     private fun tidyAudio() {

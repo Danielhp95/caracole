@@ -22,10 +22,15 @@ import java.io.IOException
  * - [forget]: what [hear] kept of [audio] to go on from (its checkpoints, the design's §3.3) let go, called once the
  *   sheet heard of it is kept, never before: a keep that fails leaves them, so that Try again hears nothing again.
  *   Never throws; none to let go by default.
+ * - [phoneProblem]: [ready]'s answer of the phone itself, the files aside.
  * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.32.0"); null where it says none.
  */
 interface ChordModels {
     fun ready(): String?
+
+    /** What keeps this phone from hearing chords whatever the models' files (its Android, its processor, its memory),
+     * or null: what Settings' row says in place of a download, where [ready] would say the files are missing. */
+    fun phoneProblem(): String? = null
     fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard
     fun forget(audio: File) {}
     val runtime: String? get() = null

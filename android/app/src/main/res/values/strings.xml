@@ -98,6 +98,28 @@
     <string name="print_refused">The phone\'s caracole didn\'t name that version (HTTP %1$d).</string>
     <string name="print_failed">The sheet couldn\'t be printed: %1$s</string>
 
+    <!-- Chords from audio (ChordModelsRow, ModelsRunner's job): Settings' row, its questions (the chords-on-the-phone
+         design's §6 and §8.3). -->
+    <string name="chords_label">Chords from audio</string>
+    <string name="chords_not_downloaded">Not downloaded · %1$s</string>
+    <string name="chords_downloading">Downloading · %1$s</string>
+    <string name="chords_ready">Ready · %1$s on the phone</string>
+    <string name="chords_cant">Not downloaded: %1$s</string>
+    <string name="chords_waiting">Waiting for your go-ahead (a metered network)</string>
+    <string name="chords_download">Download (%1$s)</string>
+    <string name="chords_remove">Remove</string>
+    <string name="chords_hint">Make a song\'s sheet from an audio file on the phone: the library\'s +, or share the file to caracole.</string>
+    <string name="chords_ask_title">Download the chord models?</string>
+    <string name="chords_ask_message">%1$s, once: beat_this\'s (MIT) from caracole\'s GitHub release and BTC\'s from its authors\' repository on GitHub. Chords are then worked out on the phone; nothing about your audio leaves it.</string>
+    <string name="chords_metered">You\'re on a metered network. Download %1$s anyway?</string>
+    <string name="chords_ask_yes">Download</string>
+    <string name="chords_ask_no">Not now</string>
+    <string name="chords_remove_title">Remove the chord models?</string>
+    <string name="chords_remove_message">Sheets you made stay. Making another needs the download again.</string>
+    <string name="chords_remove_yes">Remove</string>
+    <string name="chords_remove_no">Keep them</string>
+    <string name="chords_queue_full">The phone\'s queue is full: try again in a moment.</string>
+
     <!-- The site catalogues (SiteCatalogues, CataloguesRunner's job): Settings' row, the question a metered network
          leaves, and the first start's offer (MainActivity). -->
     <string name="catalogues_label">Site catalogues</string>

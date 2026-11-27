@@ -7,6 +7,8 @@ import android.os.Build
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
+import io.github.danielhp95.caracole.core.models.ModelFiles
+import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
@@ -77,6 +79,11 @@ object Caracole {
     /** A test's GitHub (CaracoleTestRunner's `-e catalogues URI`, or a device test's server on loopback): the site
      * catalogues' job lists the release there, read each time it runs; GitHub's API itself when null. */
     @Volatile var cataloguesForTests: URI? = null
+
+    /** A test's GitHub for the chord models (CaracoleTestRunner's, a device test's server on loopback at
+     * [CaracoleTestRunner.MODELS_PORT]), read once as the phone starts: the models' job asks it, with no redirect
+     * hop; GitHub's API itself when null. */
+    @Volatile var modelsForTests: URI? = null
 
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
@@ -156,9 +163,13 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
-                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
-                // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
+                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source this
+                // build's pins (ModelFiles.carried: the release carries none), asked of GitHub, or a test's.
                 chords = PhoneChords.of(context, state),
+                models = ModelFiles.carried()?.let { pins ->
+                    modelsForTests?.let { ModelsSource(base = it, redirects = emptySet(), pins = { pins }) }
+                        ?: ModelsSource(pins = { pins })
+                },
                 examiner = { file, format -> (examinerForTests ?: PhoneExaminer).examine(file, format) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in

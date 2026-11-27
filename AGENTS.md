@@ -3124,7 +3124,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   deletes `stateDir/models/` whole (every contract's folder, `.c*.kept`, `.part`, `.old`), no link followed, then kv
   `models:installed`, refused while a job of `USES` (the download; the chords job joins it) waits or runs; `sweep()`
   as the phone starts (ModelFiles.sweep, only beside a folder that is there: a lone `.old` is the next fetch's to put
-  back). ModelsRunnerTest over FakeGitHub, ModelsTest on the device.
+  back). `bytes()` every file's size, `toDownload()` what a download would ask for now (ModelsSource.toDownload: the
+  app's graph and a file found whole beside the folder in `.c*.kept` never counted), the metered stop's size and
+  Settings' questions'. ModelsRunnerTest over FakeGitHub, ModelsTest on the device.
+- The app's Settings › Chords from audio (`ChordModelsRow`, SettingsActivity's row): its line from `bytes()`,
+  `ready()`, `Phone.chordsProblem()` (ChordModels.phoneProblem, MlChordModels' device check: what keeps the phone
+  from chords whatever the models' files) and the newest models job ("Not downloaded · 56 MB", "Downloading · 21 of 56 MB", "Ready · 56 MB on the phone", "Not
+  downloaded: why", "Waiting for your go-ahead (a metered network)", the job's own metered line, there being no
+  `models:asking` record); Download asks §6's question with `toDownload()`, then a metered network's ("You're on a
+  metered network. Download 56 MB anyway?", `Caracole.metered` now), then queues `spec(meteredOk)`; Remove asks, then
+  `remove()`, its refusal said under the row; the debug Chords bench the section's last button. ChordModelsRowTest on
+  the JVM; SettingsChordsTest on the device, `phone.models` asking a GitHub on loopback (`Caracole.modelsForTests`,
+  CaracoleTestRunner's `MODELS_PORT` 8746), the real files device-test.sh pushed (`--models`).
 - The phone's own job kinds, which Python never queues (render, inbox, backup, restore, catalogues, models), are one table with their
   words, `server/jobs/PhoneKinds.kt`, the phone's alone.
 - `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:

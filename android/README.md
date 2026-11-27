@@ -936,6 +936,20 @@ It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's W
 the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
 the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
 
+**Settings › Chords from audio** (`ChordModelsRow`) says where the models stand: "Not downloaded · 56 MB",
+"Downloading · 21 of 56 MB", "Ready · 56 MB on the phone", "Not downloaded: why" (a phone that can't make chords, a
+download that failed), or "Waiting for your go-ahead (a metered network)". Download asks first (the size still to
+fetch: a file a failed download kept is none of it), then, on a metered network, again; then it queues the `models`
+job and follows its line. Remove asks, then deletes `files/state/models/` (refused while a sheet is being made from
+them). The debug build's Chords bench is the section's last button. `SettingsChordsTest` downloads the real files from
+a GitHub of its own on loopback (CaracoleTestRunner's `Caracole.modelsForTests`, port 8746), sees the library page's
+"+", then removes them:
+
+    android/scripts/device-test.sh --models SettingsChordsTest
+
+An audio file shared to caracole (a music app's or a file manager's Share) opens its page on the library screen, its
+guess in Artist and Title, Make sheet and Cancel; share one at a time (`ShareAudioTest`).
+
 ### Gate B2 on your phone
 
 The library page offers the "+" once the chord models are installed (the audio routes; `AudioRoutesOnDeviceTest`,

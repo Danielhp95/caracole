@@ -8,7 +8,6 @@ import io.github.danielhp95.caracole.core.index.Paced
 import io.github.danielhp95.caracole.core.index.Sizes
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.models.From
 import io.github.danielhp95.caracole.core.models.ModelFiles
 import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.models.Pins
@@ -95,6 +94,18 @@ class ModelsRunner(
     /** The names the models go by in an auto sheet's `raw["models"]` (models.json's), none in a build that carries
      * none: a sheet's maker (AudioRunner). */
     fun names(): Map<String, String> = pins?.models.orEmpty()
+
+    /** Every file's bytes in this build (what Settings' row says the models are: "Ready · 54 MB on the phone"), none
+     * in a build that carries none. */
+    fun bytes(): Long? = pins?.bytes
+
+    /** The bytes a download would ask for now (ModelsSource.toDownload: a file a failed fetch kept whole, and the
+     * app's own graph, never counted), what the metered wait and Settings' questions say; none in a build that
+     * carries none. It hashes the files it finds: never on the main thread. */
+    fun toDownload(): Long? {
+        val pins = pins ?: return null
+        return source?.toDownload(pins.folder(parts.stateDir))
+    }
 
     /** The folder the models are installed in, `stateDir/models/c<contract>/`; null in a build that carries none. */
     fun folder(): File? = pins?.folder(parts.stateDir)
@@ -193,7 +204,7 @@ class ModelsRunner(
         }
         Catalogues.holdBack(until, clock())
         if (metered() && !meteredOk) {
-            val asked = pins.files.filter { it.from !is From.App }.sumOf { it.bytes }
+            val asked = source.toDownload(folder)  // what is left: a file a failed fetch kept whole is no download
             context.stage(STAGE, "done", PhoneKinds.fill(kind.otherwise!!, "size" to Sizes.size(asked)))
             return
         }

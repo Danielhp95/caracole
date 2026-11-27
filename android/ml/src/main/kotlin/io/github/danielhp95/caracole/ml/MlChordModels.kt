@@ -87,6 +87,8 @@ class MlChordModels(
     @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
         private set
 
+    override fun phoneProblem(): String? = device()
+
     override fun ready(): String? {
         device()?.let { return it }
         val judge = installed ?: return pinned()
