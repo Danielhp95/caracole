@@ -106,6 +106,8 @@ EMPTY = "That file is empty."
 NO_NAME = "What is the file called? Its name is text."
 WHICH = "Which upload? Its id is 16 hex."
 GONE = "That upload is gone: it was left over an hour, or another file was chosen since. Choose it again."
+NOT_IN_BOOK = "{song} isn't in the book any more."  # the song's display name
+NOT_A_STORE = "{path} isn't a folder of caracole's own (a symbolic link, say): no audio file is kept there."
 
 # One change at a time to the staged uploads, of caracole serve's threads; re-entrant, so that a route may hold it
 # (``held``) across what it reads of the queue and what it changes here.
@@ -292,8 +294,7 @@ def _store(cfg: Config) -> Path:
     try:
         fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError as e:
-        raise AudioError(f"{path} isn't a folder of caracole's own (a symbolic link, say): no audio file is kept "
-                         "there.", 500) from e
+        raise AudioError(NOT_A_STORE.format(path=path), 500) from e
     try:
         os.fchmod(fd, 0o700)
     finally:
@@ -683,7 +684,7 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     try:
         current = get_song(conn, song.id)
     except KeyError:
-        raise AudioError(f"{song.display} isn't in the book any more.", 404) from None
+        raise AudioError(NOT_IN_BOOK.format(song=song.display), 404) from None
     source = Path(source)
     root = folder(cfg)
     staged_audio = _STAGED_AUDIO.fullmatch(source.name)
@@ -777,7 +778,7 @@ def adopt(cfg: Config, conn: sqlite3.Connection, song: Song, upload_id: str) -> 
     try:
         current = get_song(conn, song.id)
     except KeyError:
-        raise AudioError(f"{song.display} isn't in the book any more.", 404) from None
+        raise AudioError(NOT_IN_BOOK.format(song=song.display), 404) from None
     examine(found.path)  # still audio caracole reads
     return _named(conn, root, current, found.path, upload_id)
 

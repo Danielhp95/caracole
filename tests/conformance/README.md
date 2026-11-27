@@ -6,7 +6,9 @@ docs/superpowers/specs/2026-11-03-conformance-corpus.md.
 
 - `data/caracole/<area>/`: runtime data the phone ships (a resource root of `:core`): Unicode tables, keys, pinyin,
   the schema (`schema/migrations.json`, and `schema/phone.sql`, hand-written), the page's asset order, yt-dlp's
-  arguments and patterns (`youtube/youtube.json`; its budgets and pauses are `config/config.json`'s).
+  arguments and patterns (`youtube/youtube.json`; its budgets and pauses are `config/config.json`'s), the audio
+  store's rules and words (`library/audio_store.json`, with `vectors/library/audio_store.jsonl`, the area
+  `audio-store`: tests/test_conformance_audio_store.py).
 - `vectors/<area>/`: test vectors, `<name>.jsonl` (a header, then a record a line) or `<name>.json`, and fixtures,
   `vectors/<area>/fixtures/<name>.jsonl` (a database's rows, kv and files, replayed on both sides). Gradle hands the
   folder to every Kotlin test as the system property `caracole.conformance`.

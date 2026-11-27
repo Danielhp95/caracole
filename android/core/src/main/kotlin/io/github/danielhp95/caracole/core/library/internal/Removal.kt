@@ -4,6 +4,7 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.RemovedRow
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -21,7 +22,8 @@ import java.nio.file.Path
  * removal.py on the phone, which has no wanted.txt, no Music/ and no audio from YouTube: a song taken out for good,
  * its record deleted with its versions, kept files' rows and per-song kv, its tombstone left
  * ([Upsert.markRemoved]), then the files caracole wrote in its folder ([plan]'s `delete`: the phone's written pages
- * among them, by their records), and the folder, and its artist's, once empty. Files caracole didn't write stay.
+ * among them, by their records), and the folder, and its artist's, once empty, and the audio file the owner gave it
+ * from the audio store (AudioStore), unless another song's row names it. Files caracole didn't write stay.
  * vectors/library/remove.jsonl holds Python's answers.
  */
 internal object Removal {
@@ -41,16 +43,27 @@ internal object Removal {
     /** Why an entry of the song's folder stays, by what it is. */
     private val WHY = mapOf("file" to "caracole didn't write it", "link" to LibraryFiles.LINK, "folder" to "a folder")
 
-    /** What removing [song] would take and leave (removal.RemovalPlan, the phone's part of it). */
+    /** What removing [song] would take and leave (removal.RemovalPlan, the phone's part of it); [uploadedAudio] the
+     * audio file the owner gave it, in the audio store, which goes (removal.py's `uploaded_audio`). */
     data class Plan(val song: SongRow, val folder: List<String>, val delete: List<String>,
-                    val keep: List<Pair<String, String>>, val folderProblem: String?, val elsewhere: List<String>)
+                    val keep: List<Pair<String, String>>, val folderProblem: String?, val elsewhere: List<String>,
+                    val uploadedAudio: String? = null)
 
-    /** What a removal did: the files deleted, those left, whether the song's folder went. */
+    /** What a removal did: the files deleted, those left, whether the song's folder went, and the audio file the
+     * owner gave it when it went ([audioDeleted]). */
     data class Result(val tombstone: RemovedRow, val deleted: List<String>, val kept: List<Pair<String, String>>,
-                      val folderGone: Boolean, val errors: List<String>)
+                      val folderGone: Boolean, val errors: List<String>, val audioDeleted: String? = null)
 
-    /** removal.plan_removal: this reads, and changes nothing. */
-    fun plan(db: Db, libraryDir: File, song: SongRow): Plan {
+    /** removal.plan_removal's `uploaded_audio`: the file the owner gave [song] in the store [audioDir], unless another
+     * song's row names it too (it stays: their audio); null for none, or no store. */
+    fun uploadedAudio(db: Db, audioDir: File?, song: SongRow): File? {
+        val given = audioDir?.let { AudioStore.keptIn(it, song.audioPath) } ?: return null
+        return given.takeUnless { AudioStore.namedByAnother(db, it, song.id) }
+    }
+
+    /** removal.plan_removal: this reads, and changes nothing; [audioDir] the audio store's folder, whose file the
+     * owner gave the song goes with it. */
+    fun plan(db: Db, libraryDir: File, song: SongRow, audioDir: File? = null): Plan {
         val folder = SafeName.songFolder(song.artist, song.title).toList()
         val (keptHere, elsewhere) = keptFiles(db, song, folder)
         var ours = caracoles(db, song, keptHere)
@@ -76,7 +89,7 @@ internal object Removal {
         val order = Canonical.KEY_ORDER
         return Plan(song, folder, delete.sortedWith(order), keep.sortedWith { a, b ->
             order.compare(a.first, b.first).let { if (it != 0) it else order.compare(a.second, b.second) }
-        }, problem, elsewhere)
+        }, problem, elsewhere, uploadedAudio(db, audioDir, song)?.path)
     }
 
     /** removal.remove_song: the record out, its tombstone left, at [stamp] (a stored time), in one savepoint; then
@@ -97,7 +110,17 @@ internal object Removal {
         if (plan.folderProblem == null) {
             gone = deleteFiles(libraryDir.toPath(), plan, deleted, kept, errors)
         }
-        return Result(stone, deleted, kept, gone, errors)
+        var audio: String? = null
+        plan.uploadedAudio?.let { path ->
+            try {
+                Files.delete(Path.of(path))
+                audio = path
+            } catch (_: NoSuchFileException) {
+            } catch (e: IOException) { // the next tidy deletes it (AudioStore.tidy): no song names it now
+                errors += "can't delete $path: ${e.message}"
+            }
+        }
+        return Result(stone, deleted, kept, gone, errors, audio)
     }
 
     /** The files of [song] caracole wrote in its folder, which go with it when its folder changes (a take's move);

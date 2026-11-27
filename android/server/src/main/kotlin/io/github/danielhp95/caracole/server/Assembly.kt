@@ -9,6 +9,7 @@ import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Paced
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverrideChecks
@@ -130,7 +131,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  */
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
-    private val store = LibraryStore(deps.libraryDir)
+    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER))
     private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */

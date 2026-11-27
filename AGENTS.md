@@ -2847,8 +2847,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     checked; its `progress`, `MergeProgress`, index_transfer.merge's events one for one: `planning`, each site, each
     action, `tab` after each `UG_CHUNK` of UG's sitemap rows, by `tab_id` range in one statement's order, and the
     phone's own `optimize`; `Paced`, a stage's words at most once a second, a step's first and last at once);
-  - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
-    and the phone's sync engine and peer client;
+  - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables, audio_store.py
+    (`AudioStore`, below); `sync/`: peer_sync.py, and the phone's sync engine and peer client;
   - and milestones 4–6's, each in its section below: `http/`, `health/`, `config/`, `html/`, `lookup/`, `ug/`,
     `match/`, `lyrics/`, `lacuerda/`, `sites/`, `inbox/`, `share/`, `songbooks/`, `backup/`, and `catalogues/`
     (GitHub's release of the site catalogues, below).
@@ -4206,6 +4206,32 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (`_match`), file.jsonl (one file filed over file_fixture_library.jsonl: what it came to, the rows and files it
   wrote); none filed by a MusicXML header.
 - InboxTest and InboxRunnerTest on the JVM, ShareTest on the device.
+
+##### An audio file given to the phone
+
+- core.library's `AudioStore(stateDir, examiner)` is audio_store.py (`stateDir/audio/`, 0700, each file 0600), its
+  constants, name patterns (PyRegex), record and marker members and every refusal's words and status data,
+  data/caracole/library/audio_store.json (tests/test_conformance_audio_store.py): `sniff`, `displayName`, `stage`,
+  `staged`, `gone`, `drop`, `sweep`, `marked`, `keep`, `adopt`, `uploaded`, `givenName`, `tidy`, `keptIn`,
+  `givenFile`, `namedByAnother`, function for function, the marker written before the data's move and the record
+  let go once the row names the kept file; one in-process lock (`held`), `named` called under it.
+- Where it departs: `stage(input, name, named)` spools a stream into `.upload-<id>.part` (the phone's own name, which
+  `sweep` lets go an hour after its last write), refused at the first byte past `AUDIO_MAX`, its SHA-256 streamed,
+  the room checked once it is whole, under the lock after the others go (the disk's free bytes with the spooled ones
+  counted free, under twice them and `ROOM`: Python's check before its write); `keep(db, song, staged)` moves a staged
+  upload alone (a file of your own's copy is the computer's). `:core` reads no audio: the app's `Examiner` gives a
+  file's length and tags (an MP3's its frames' count, mpeg_frames.py's, wherever not 0; each tag's values in music.py's
+  key order; an M4A with no sound track thrown), the store judging the rest (the format the bytes said, a length over
+  0 and finite, `MAX_SECONDS`, music._first's stripped tag); whatever it throws a refusal, but an IOException of a
+  file kept on the disk.
+- A removal deletes the song's given file, none another song's row names (`LibraryStore(libraryDir, audioDir)`,
+  `Removal.uploadedAudio`, `Result.audioDeleted`), and its question says so in removal.py's words
+  (`AudioStore.REMOVAL_GOES`, `REMOVAL_BRIEF`); the re-keying merge keeps a file given (`Rekey.givenAudio`,
+  songs._given_audio: the later `audio_mtime`, kv `audio:name:` with it).
+- vectors/library/audio_store.jsonl (`AudioStoreReplay`, area `audio-store`): sniff and its two tests over every head
+  test_audio_store.py builds and edges, the shown name, the patterns' matches, kept names, the record's and marker's
+  texts and reads, `given_file` over trees, and `merge`; AudioStoreTest (each of a cut-off keep's states, a stage of
+  100 MiB under an allocation bound) and LibraryRoutesTest's removal.
 
 ##### Alerts and backups on the phone
 
