@@ -295,9 +295,13 @@ object AutochordsReplay : AreaReplay {
                     val named = step.jsonObject.getValue("relay")
                     database.writeBlocking { db ->
                         val only = if (named is JsonNull) null else named.jsonArray.map { it.jsonPrimitive.long }
-                        val relaid = Relay.onto(db, library, Overrides.read(db), only).map { it.id }
+                        val relayed = Relay.onto(db, library, Overrides.read(db), only)
+                        val relaid = relayed.songs.map { it.id }
                         val wantIds = want.getValue("relaid").jsonArray.map { it.jsonPrimitive.long }
                         misses.check(relaid == wantIds) { "step $n: re-laid $relaid, Python's $wantIds" }
+                        val failed = relayed.failed.keys.sorted()
+                        val wantFailed = want.getValue("failed").jsonArray.map { it.jsonPrimitive.long }
+                        misses.check(failed == wantFailed) { "step $n: failed ${relayed.failed}, Python's $wantFailed" }
                         val raws = db.query("SELECT id, raw FROM versions ORDER BY id") { it.long(0)!!.toString() to it.text(1)!! }.toMap()
                         for ((id, text) in want.getValue("raws").jsonObject) {
                             misses.check(raws[id] == str(text)) { "step $n: version $id's raw is\n${raws[id]}\nPython's\n${str(text)}" }
@@ -321,6 +325,11 @@ object AutochordsReplay : AreaReplay {
         }
         misses.assertNone()
     }
+
+    /** relay.jsonl's library, loaded into a fresh database and library folder for [block] (RelayTest's and
+     * PhoneRenderTest's own cases over it). */
+    fun relayLibrary(block: (Database, File) -> Unit) =
+        world(Corpus.records("autochords-sheet/relay.jsonl").single().args[0], block)
 
     /** The record's fixture in a fresh database and library folder of its own, gone after [block]. */
     private fun world(fixture: JsonElement, block: (Database, File) -> Unit) {

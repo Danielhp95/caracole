@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.viewer.autochords
 
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.lyrics.Lyrics
 import io.github.danielhp95.caracole.viewer.testing.replays.AutochordsReplay
@@ -36,6 +37,15 @@ class SheetHalfTest {
                          "\"beats\": [1e+21, 3.0], \"downbeats\": []}", corners.json())
         assertEquals(corners, Heard.read(corners.json()))
         assertNull(Heard.read("{\"contract\": 1, \"duration\": null, \"chords\": [], \"beats\": [], \"downbeats\": []}").duration)
+    }
+
+    @Test fun anIntsMinusZeroIsTheIntZeroAFloatsStaysMinusZero() {
+        // json.loads reads `-0` as the int 0 and float(0) is 0.0; `-0.0` is the float -0.0: on any reader's element
+        val doc = kotlinx.serialization.json.Json.parseToJsonElement(
+            "{\"contract\": 1, \"duration\": -0, \"chords\": [], \"beats\": [-0, -0.0], \"downbeats\": []}")
+        val heard = Heard.of(doc)
+        assertEquals("0.0", PyJson.floatText(heard.duration!!))
+        assertEquals(listOf("0.0", "-0.0"), heard.beats.map(PyJson::floatText))
     }
 
     @Test fun heardIsReadStrictly() {

@@ -3928,7 +3928,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `Relay` (`due`: relay_due's reasons word for word; `relay`, RELAY_KEEPS kept; `relaysHere`, `madeByAnother` by kv
     `sync:id`, `notedIn`, `notedOf` over transcript.py's kv as the computer reads it; `onto`: relay_onto_sheets, one
     query for its candidates, no file read for a sheet not due, the raw and the sheet in one savepoint, info.json
-    after, an unreadable `heard` left as it is);
+    after, an unreadable `heard` left as it is; `Relayed`: the songs re-laid and those that failed, with why, as
+    PhoneRender words a song's failure, a bug's "a bug in caracole: …"), every constant read from the data;
   - tests/test_conformance_autochords.py writes vectors/autochords-sheet/sheet.jsonl (make_sheet and raw_of over named
     hearings, float corners among them, × lyrics of each kind, Chinese, past the BMP, a YouTube credit, a transcript,
     nothing sung, three makers; read_heard's every refusal; relay_due's every reason and relay over raws make_sheet
@@ -3942,9 +3943,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`, and the
   song's timed lyrics, `_timed_lyrics`' read once a song, `lyricsFromJson` then `Lyrics.syncedLines`, none for lyrics
   it can't read, given every page of its sheets and versions), after
-  `PlainLyrics` (sheet_lyrics.py), then `Relay.onto` (render_all's order: whoever made the sheet, whether the mirror
-  serves the song or not, as phone_render.py's reference does; a re-lay moves the song's unit, its pages then the
-  phone's), and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
+  `PlainLyrics` (sheet_lyrics.py, a sheet that keeps no `heard` alone), then `Relay.onto` (render_all's order:
+  whoever made the sheet, whether the mirror serves the song or not, as phone_render.py's reference does; a re-lay
+  moves the song's unit, its pages then the phone's; a song whose re-lay failed is in `RenderStats.failed`, its pages
+  made from the sheet it has; both counted in `RenderStats.given`, render.RenderStats'), and `OwnVersions`
+  (own_versions_upgraded); a song the mirror serves gets its
   progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
     made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`

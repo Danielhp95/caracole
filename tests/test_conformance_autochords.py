@@ -94,6 +94,7 @@ from test_conformance_viewer_sheet import literals
 from caracole.autochords import ChordSegment, align, btc, merge, sheet, transcript
 from caracole.autochords.sheet_lyrics import relay_onto_sheets
 from caracole.autochords.transcript import Transcript, keep_transcript, note_heard_nothing
+from caracole.db import kv_set_json
 from caracole.overrides import load_overrides
 from caracole.songs import AUTO_SHEET, get_song, list_songs, update_song
 from caracole.lyrics import Lyrics
@@ -1069,6 +1070,7 @@ HEARD_TEXTS = (
     '{"contract": 1, "duration": 1e400, "chords": [], "beats": [-1e400], "downbeats": []}',
     '{"contract": 1, "duration": 9007199254740993, "chords": [[0, 1, "\U0001d401́\U00020000"]], '
     '"beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": -0, "chords": [[-0, -0.0, "C"]], "beats": [-0, -0.0, 0], "downbeats": [-0]}',
     '{"contract": 2, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
     '{"contract": true, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
     '{"contract": "1", "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
@@ -1177,6 +1179,9 @@ def _relay_records() -> list[dict]:
     credit = merge.youtube_credit(SHEET_VIDEO["title"], SHEET_VIDEO["channel"], SHEET_VIDEO["id"])
     out.append(_relay_case(song("synced", audio_path=None),
                            raw("none", video=SHEET_VIDEO, source=credit, maker=PHONE_MAKER)))
+    unnamed = raw("none", maker=PHONE_MAKER)
+    unnamed["youtube"] = None  # a kept "youtube": null is no video: no member written, no credit
+    out.append(_relay_case(song("synced"), unnamed))
     for name in ("corners", "seeded0", "seeded3"):
         out.append(_relay_case(song("words"), raw("none", h=heard[name], maker=COMPUTER_MAKER)))
     talk = raw("none", h=heard["talk"], maker=PHONE_MAKER)
@@ -1307,7 +1312,44 @@ def _library(w) -> list[dict]:
     vid = _sheet_of(w, made["columns"], four, maker=PHONE_MAKER)
     raw = get_version(w.conn, vid).raw
     set_raw(w.conn, vid, {k: v for k, v in raw.items() if k != "columns"})
+    # The owner's "it isn't sung", noted here of this side's own audio: chords only, in their words.
+    made["said"] = song("Not Sung You Said", **here)
+    _sheet_of(w, made["said"], four, source=PURCHASE)
+    note_heard_nothing(w.conn, made["said"], "2026-11-20T01:00:00Z", why="you said so", by="you")
+    # A transcript and nothing sung noted of OTHER audio than this side's now, and a transcript of no shape: none
+    # is the song's own audio's, so neither sheet is due.
+    other = {"audio": here["audio_path"], "audio_mtime": AUDIO_AT + 1.0}
+    made["other_transcript"] = song("Transcript Of Other Audio", **here)
+    _sheet_of(w, made["other_transcript"], four)
+    kv_set_json(w.conn, f"transcript:{made['other_transcript'].id}", {
+        "lrc": TRANSCRIPT_FOUR, **other, "model": "whisper-large-v3", "language": "en", "device": "cpu",
+        "words_dropped": 0, "made_at": "2026-11-20T01:00:00Z"})
+    made["other_silence"] = song("Silence Of Other Audio", **here)
+    _sheet_of(w, made["other_silence"], four)
+    kv_set_json(w.conn, f"transcribe:none:{made['other_silence'].id}",
+                {**other, "at": "2026-11-20T01:00:00Z", "why": "sung 6.2 s", "by": "you"})
+    made["bad_transcript"] = song("Transcript Of No Shape", **here)
+    _sheet_of(w, made["bad_transcript"], four)
+    kv_set_json(w.conn, f"transcript:{made['bad_transcript'].id}", {
+        "lrc": TRANSCRIPT_FOUR, "audio": here["audio_path"], "audio_mtime": AUDIO_AT, "model": "whisper-large-v3",
+        "language": "en", "device": "cpu", "words_dropped": "none", "made_at": "2026-11-20T01:00:00Z"})
+    # A sheet that keeps no heard (made before it was kept): the candidates' query passes it over.
+    made["no_heard"] = song("Heard Not Kept")
+    vid = _sheet_of(w, made["no_heard"], four, maker=PHONE_MAKER)
+    raw = get_version(w.conn, vid).raw
+    set_raw(w.conn, vid, {k: v for k, v in raw.items() if k != "heard"})
+    # A sheet over timed lyrics, and then a site's word that the song is instrumental.
+    made["instrumental"] = song("Instrumental Since")
+    words(made["instrumental"], "synced")
+    _sheet_of(w, made["instrumental"], four, maker=PHONE_MAKER)
+    # Lyrics the sheet half can't read (a stamp's minute past a float): a bug laying it out, the song's alone.
+    made["bug"] = song("Unlaid Bug")
+    _sheet_of(w, made["bug"], four, maker=PHONE_MAKER)
     # Then the words that came since each was made.
+    update_song(w.conn, made["instrumental"].id, lyrics_status="instrumental", lyrics_json=None)
+    update_song(w.conn, made["bug"].id, lyrics_status="found", lyrics_json=_lyrics(
+        "a minute past a float", "[" + "9" * 400 + ":01.00]a minute past a float\n", duration=10.0))
+    words(made["no_heard"], "plain")
     for name, kind in (("phone", "synced"), ("phone_video", "words"), ("here", "plain_other"),
                        ("new_audio", "plain"), ("elsewhere", "astral"), ("unread", "plain"), ("ignored", "plain"),
                        ("ignore", "plain"), ("human", "plain"), ("over_transcript", "plain")):
@@ -1317,13 +1359,16 @@ def _library(w) -> list[dict]:
             {"relay": None}]
 
 
-def _relay_out(w, done) -> dict:
+def _relay_out(w, done, errors: list[str]) -> dict:
+    """A step's songs re-laid, those whose re-lay failed (``errors``' songs, by id), the files, raws, units and
+    info.json."""
     from test_conformance_viewer_render import _out
 
     out = _out(w, phone_render.PhoneRendered(done, []))
     raws = {str(vid): text for vid, text in w.conn.execute("SELECT id, raw FROM versions ORDER BY id")}
-    return {"relaid": [s.id for s in done], "files": out["files"], "raws": raws, "units": out["units"],
-            "info": out["info"]}
+    failed = [s.id for s in list_songs(w.conn) if any(e.startswith(f"{s.display}: ") for e in errors)]
+    return {"relaid": [s.id for s in done], "failed": sorted(failed), "files": out["files"], "raws": raws,
+            "units": out["units"], "info": out["info"]}
 
 
 def relay_records(root) -> list[dict]:
@@ -1337,8 +1382,9 @@ def relay_records(root) -> list[dict]:
         outs = []
         for step in steps:
             overrides = load_overrides(w.cfg.overrides_file)
-            done = relay_onto_sheets(w.conn, w.cfg, overrides, only=step["relay"])
-            outs.append(_relay_out(w, done))
+            errors: list[str] = []
+            done = relay_onto_sheets(w.conn, w.cfg, overrides, only=step["relay"], errors=errors)
+            outs.append(_relay_out(w, done, errors))
         return [{"fn": "relay_onto_sheets", "case": "library", "args": [fixture, steps], "out": outs}]
     finally:
         w.close()

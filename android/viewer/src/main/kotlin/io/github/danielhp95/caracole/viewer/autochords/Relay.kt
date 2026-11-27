@@ -35,8 +35,10 @@ data class Noted(val transcript: Transcript? = null, val silent: Boolean = false
  */
 object Relay {
     private const val ID_KEY = "sync:id"
-    private const val TRANSCRIPT = "transcript:"
-    private const val HEARD_NOTHING = "transcribe:none:"
+
+    /** What [onto] did: the songs re-laid, and those whose re-lay failed with why (relay_onto_sheets' `errors`, which
+     * it logs: "<song>: <why>", a bug's "<song>: a bug in caracole: <exception>"), which PhoneRender's stats carry. */
+    data class Relayed(val songs: List<SongRow>, val failed: Map<Long, String>)
 
     /** sheet.noted_in: what the sheet was laid out with, as its raw keeps it. */
     fun notedIn(raw: JsonObject): Noted {
@@ -141,7 +143,7 @@ object Relay {
     fun notedOf(db: Db, song: SongRow, raw: JsonObject): Noted {
         if (song.audioPath.isNullOrEmpty() || madeElsewhere(db, raw) || !relaysHere(song)) return notedIn(raw)
         val transcript = transcriptOf(db, song)
-        val nothing = db.kvGet("$HEARD_NOTHING${song.id}")?.let(PyJson::loads) as? JsonObject
+        val nothing = db.kvGet("${SheetHalf.HEARD_NOTHING_KV}${song.id}")?.let(PyJson::loads) as? JsonObject
         val silent = transcript == null && nothing != null && ownAudio(song, nothing["audio"], nothing["audio_mtime"])
         return Noted(transcript, silent, silent && nothing?.let { SheetHalf.text(it, "by") } == "you")
     }
@@ -149,7 +151,7 @@ object Relay {
     /** transcript.transcript_of: the kept transcript (Transcript.from_json's shape), only while its audio is the
      * song's own. */
     private fun transcriptOf(db: Db, song: SongRow): Transcript? {
-        val kept = db.kvGet("$TRANSCRIPT${song.id}")?.let(PyJson::loads) as? JsonObject ?: return null
+        val kept = db.kvGet("${SheetHalf.TRANSCRIPT_KV}${song.id}")?.let(PyJson::loads) as? JsonObject ?: return null
         val texts = listOf("lrc", "audio", "model", "language", "device", "made_at").map { SheetHalf.text(kept, it) }
         if (texts.any { it == null }) return null
         val mtime = kept["audio_mtime"]
@@ -205,14 +207,18 @@ object Relay {
 
     /**
      * sheet_lyrics.relay_onto_sheets: each auto sheet that keeps what was heard laid out again over its song's words
-     * where they changed (the guards of [plan]), with no model and no audio; the songs re-laid, of [only] when given,
-     * not ignored, with no human sheet. The version's raw and the sheet are written in one savepoint, info.json after
-     * (its failure the song's alone: the sheet is re-laid); one that can't be laid out or written is left as it is,
-     * stopping no other. A second pass writes nothing: a sheet not due is passed over with no file read.
+     * where they changed (the guards of [plan]), with no model and no audio ([laidOut], [relay]: a test's failure is
+     * put there); the songs re-laid, of [only] when given, not ignored, with no human sheet, and those whose re-lay
+     * failed, with why ([Relayed]). The version's raw and the sheet are written in one savepoint, info.json after (its
+     * failure the song's, said, the sheet re-laid all the same); one that can't be laid out or written is left as it
+     * is, stopping no other, and tried again at the next pass. A second pass writes nothing: a sheet not due is passed
+     * over with no file read.
      */
-    fun onto(db: Db, libraryDir: File, overrides: Overrides, only: Collection<Long>? = null): List<SongRow> {
+    fun onto(db: Db, libraryDir: File, overrides: Overrides, only: Collection<Long>? = null,
+             laidOut: (SongRow, JsonObject, Noted) -> Made = ::relay): Relayed {
         val lib = LibraryStore(libraryDir)
         val done = ArrayList<SongRow>()
+        val failed = LinkedHashMap<Long, String>()
         for (id in candidates(db, only)) {
             val song = Songs.byId(db, id) ?: continue
             if (song.status == RenderNames.IGNORED || song.key in overrides.ignore) continue
@@ -221,29 +227,37 @@ object Relay {
             if (files.any { it.name == RenderNames.HUMAN_SHEET }) continue
             val version = Rows.get(db, auto.versionId) ?: continue
             val noted = plan(db, song, version.raw) ?: continue
-            try {
-                val made = relay(song, version.raw, noted)
+            val why = attempt(song) {
+                val made = laidOut(song, version.raw, noted)
                 val raw = SheetHalf.raw(song, lyricsFromJson(song.lyricsJson), made)
                 db.savepoint("relay") {
                     Rows.setRaw(db, version.id, raw)
                     Kept.keepFile(db, lib, song, version.id, RenderNames.AUTO_SHEET, made.text.toByteArray(Charsets.UTF_8),
                                   auto.keptRank, Stamps.now())
                 }
-            } catch (_: IOException) {
-                continue
-            } catch (_: SharedFolder) {
-                continue
-            } catch (_: Exception) { // a bug laying one out must cost the others nothing
-                continue
-            } catch (_: StackOverflowError) {
+            }
+            if (why != null) {
+                failed[id] = why
                 continue
             }
-            try {
-                InfoJson.write(db, libraryDir, Songs.byId(db, id) ?: song)
-            } catch (_: Exception) { // the sheet is re-laid all the same
-            }
+            attempt(song) { InfoJson.write(db, libraryDir, Songs.byId(db, id) ?: song) }?.let { failed[id] = "$it (info.json)" }
             done.add(Songs.byId(db, id) ?: song)
         }
-        return done
+        return Relayed(done, failed)
+    }
+
+    /** [block], and null; or why it failed, as PhoneRender words a song's failure: a file that can't be written
+     * ("<song>: <why>"), else a bug ("<song>: a bug in caracole: <exception>"). */
+    private inline fun attempt(song: SongRow, block: () -> Unit): String? = try {
+        block()
+        null
+    } catch (e: IOException) {
+        "${song.display}: ${e.message}"
+    } catch (e: SharedFolder) {
+        "${song.display}: ${e.message}"
+    } catch (e: Exception) {
+        "${song.display}: ${RenderNames.BUG}: $e"
+    } catch (e: StackOverflowError) {
+        "${song.display}: ${RenderNames.BUG}: $e"
     }
 }

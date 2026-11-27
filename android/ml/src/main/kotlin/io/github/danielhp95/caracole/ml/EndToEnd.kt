@@ -146,7 +146,8 @@ object EndToEnd {
         }
         return Scored(hearing.name, Scores.wcsr(hearing.harte, harte, "majmin"),
             Scores.wcsr(hearing.harte, harte, "tetrads"), f[0], f[1], frames, hearing.btcFrames, pcm.btcSamples,
-            hearing.btcSamples, Mel.frames(pcm.samples.toInt()), hearing.melFrames, heard.duration!!, hearing.duration,
+            hearing.btcSamples, Mel.frames(pcm.samples.toInt()), hearing.melFrames,
+            heard.duration ?: pcm.duration, hearing.duration, // the pipeline's heard is of its pcm's length
             differ(hearing.harte, harte, maxOf(frames, hearing.btcFrames)))
     }
 

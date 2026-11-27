@@ -71,7 +71,7 @@ object SheetHalf {
 
     val MODEL: String by lazy { sheet.getValue("MODEL").jsonPrimitive.content }
     val COLUMNS: String by lazy { sheet.getValue("COLUMNS").jsonPrimitive.content }
-    val CONTRACT: Int by lazy { sheet.getValue("CONTRACT").jsonPrimitive.int }
+    internal val CONTRACT: Int by lazy { sheet.getValue("CONTRACT").jsonPrimitive.int }
     private val SYNC_TOLERANCE_S by lazy { sheet.getValue("SYNC_TOLERANCE_S").jsonPrimitive.double }
     val MAKER_MEMBERS: List<String> by lazy { sheet.getValue("MAKER_MEMBERS").jsonArray.map { it.jsonPrimitive.content } }
     val RELAY_KEEPS: List<String> by lazy { sheet.getValue("RELAY_KEEPS").jsonArray.map { it.jsonPrimitive.content } }
@@ -79,6 +79,9 @@ object SheetHalf {
     private val NOTE by lazy { words.getValue("NOTE").jsonPrimitive.content }
     private val SILENT by lazy { words.getValue("SILENT").jsonPrimitive.content }
     private val NOT_SUNG by lazy { words.getValue("NOT_SUNG").jsonPrimitive.content }
+    /** transcript.TRANSCRIPT and HEARD_NOTHING: the kv prefixes of a song's transcript and nothing-sung verdict. */
+    internal val TRANSCRIPT_KV: String by lazy { words.getValue("TRANSCRIPT").jsonPrimitive.content }
+    internal val HEARD_NOTHING_KV: String by lazy { words.getValue("HEARD_NOTHING").jsonPrimitive.content }
 
     /** sheet.instrumental: a site says the song is instrumental ([lyrics], the song's stored ones). */
     fun instrumental(song: SongRow, lyrics: Lyrics?): Boolean =
@@ -180,7 +183,7 @@ object SheetHalf {
         if ((made.used == "synced" || made.used == "plain") && made.transcript == null) {
             songLyricsKey(lyrics)?.let { raw["lyrics_key"] = JsonPrimitive(it) }
         }
-        (video ?: kept["youtube"])?.let { raw["youtube"] = it }
+        (video ?: kept["youtube"]?.takeIf { it !is JsonNull })?.let { raw["youtube"] = it } // `is not None`
         made.heard?.let { raw["heard"] = it.record() }
         if (maker == null) {
             for (member in MAKER_MEMBERS) kept[member]?.let { raw[member] = it }

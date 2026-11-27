@@ -1,8 +1,11 @@
 package io.github.danielhp95.caracole.viewer.autochords
 
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.viewer.testing.replays.AutochordsReplay
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -29,5 +32,25 @@ class RelayTest {
         assertFalse(Relay.relaysHere(song("/a.m4a", 200.0, 100.0)))
         assertFalse(Relay.relaysHere(song("/a.m4a", Double.NaN, Double.NaN)))
         assertTrue(Relay.relaysHere(song("/a.m4a", 200.0, 100.0), elsewhere = true))
+    }
+
+    @Test fun aReLayThatFailsIsReportedInWordsAndCostsTheOtherSongsNothing() {
+        AutochordsReplay.relayLibrary { database, library ->
+            database.writeBlocking { db ->
+                val titles = Songs.list(db).associate { it.id to it.title }
+                val relayed = Relay.onto(db, library, Overrides.read(db)) { song, raw, noted ->
+                    if (song.title == "Made Here") throw IllegalStateException("injected") else Relay.relay(song, raw, noted)
+                }
+                val failed = relayed.failed.mapKeys { titles.getValue(it.key) }
+                assertEquals(setOf("Made Here", "Unlaid Bug"), failed.keys) // the injected one, and the library's own bug
+                assertEquals("Nobody - Made Here: a bug in caracole: java.lang.IllegalStateException: injected",
+                             failed.getValue("Made Here"))
+                assertTrue(failed.getValue("Unlaid Bug").startsWith("Nobody - Unlaid Bug: a bug in caracole: "))
+                // every other song due is re-laid all the same
+                assertEquals(setOf("Phone Made", "From A Video", "Made Elsewhere", "Transcribed Since", "Nothing Sung",
+                                   "Over A Transcript", "Columns", "Not Sung You Said", "Instrumental Since"),
+                             relayed.songs.map { it.title }.toSet())
+            }
+        }
     }
 }

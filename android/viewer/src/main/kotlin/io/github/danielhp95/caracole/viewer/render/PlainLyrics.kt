@@ -28,10 +28,12 @@ import io.github.danielhp95.caracole.core.library.Versions as Rows
  */
 object PlainLyrics {
     /** sheet_lyrics._wanting: each song, of [only] when given, whose auto sheet has no lyrics (its version's `raw`
-     * `lyrics` "none") and who has some, with those lyrics: never an ignored one, nor one with a human sheet. */
+     * `lyrics` "none") and keeps no `heard` (one that keeps it is re-laid, Relay.onto, timed lyrics and all), and who
+     * has some, with those lyrics: never an ignored one, nor one with a human sheet. */
     fun wanting(db: Db, overrides: Overrides, only: Collection<Long>? = null): List<Pair<SongRow, String>> {
         val ids = db.query("SELECT f.song_id FROM files f JOIN versions v ON v.id = f.version_id " +
-                               "WHERE f.name = ? AND json_valid(v.raw) AND json_extract(v.raw, '$.lyrics') = 'none'",
+                               "WHERE f.name = ? AND json_valid(v.raw) AND json_extract(v.raw, '$.lyrics') = 'none' " +
+                               "AND COALESCE(json_type(v.raw, '$.heard'), 'null') = 'null'",
                            RenderNames.AUTO_SHEET) { it.long(0)!! }
         val found = ArrayList<Pair<SongRow, String>>()
         for (id in ids) {

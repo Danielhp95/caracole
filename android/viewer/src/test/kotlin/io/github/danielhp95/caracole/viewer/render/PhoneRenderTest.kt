@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.inbox.HarmonicaFiles
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.py.PyUrl
@@ -15,6 +16,8 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.viewer.autochords.Relay
+import io.github.danielhp95.caracole.viewer.testing.replays.AutochordsReplay
 import io.github.danielhp95.caracole.viewer.testing.replays.RenderReplay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -50,6 +53,44 @@ class PhoneRenderTest {
         RenderReplay.facts(misses)
         misses.assertNone()
         assertTrue("${misses.checked} answers", misses.checked >= 20) // every info.json and unit of six of the cases
+    }
+
+    // --- the re-lay's failures and what it gave ---------------------------------------------------------------
+
+    @Test
+    fun aSongWhoseReLayFailsIsAFailureOfThePassAndStillGetsItsPagesFromTheSheetItHas() {
+        AutochordsReplay.relayLibrary { database, library ->
+            val render = object : PhoneRender(database, library, null, "corpus") {
+                override fun build(): String = RenderReplay.BUILD
+                override fun relayed(db: Db, overrides: Overrides, only: Collection<Long>?): Relay.Relayed =
+                    Relay.onto(db, library, overrides, only) { song, raw, noted ->
+                        if (song.title == "Made Here") throw IllegalStateException("injected") else Relay.relay(song, raw, noted)
+                    }
+            }
+            val stats = database.writeBlocking { db -> render.render(db, Songs.list(db).map { it.id }, null) }
+            val byTitle = database.read { db -> Songs.list(db).associateBy { it.title } }
+            val made = byTitle.getValue("Made Here")
+            assertEquals("Nobody - Made Here: a bug in caracole: java.lang.IllegalStateException: injected",
+                         stats.failed[made.id])
+            assertTrue(File(LibraryStore(library).folderOf(made), "sheet (auto).html").isFile)
+            assertTrue(byTitle.getValue("Phone Made").id !in stats.failed)
+            // the auto sheets that took lyrics or were laid out again: nine re-laid (Made Here failed), and the one
+            // that keeps no heard took plain lyrics
+            assertEquals(10, stats.given)
+        }
+    }
+
+    @Test
+    fun theRenderJobCountsTheReLaysFailuresToo() {
+        AutochordsReplay.relayLibrary { database, library ->
+            val render = object : PhoneRender(database, library, null, "corpus") {
+                override fun build(): String = RenderReplay.BUILD
+            }
+            val stats = render.renderStale({})
+            val bug = database.read { db -> Songs.list(db).first { it.title == "Unlaid Bug" } }
+            assertTrue(stats.failed.getValue(bug.id).startsWith("Nobody - Unlaid Bug: a bug in caracole: "))
+            assertEquals(11, stats.given) // ten re-laid, and the one that keeps no heard took plain lyrics
+        }
     }
 
     // --- the records --------------------------------------------------------------------------------------------

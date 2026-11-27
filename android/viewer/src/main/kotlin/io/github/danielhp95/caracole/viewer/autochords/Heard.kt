@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigDecimal
+import java.math.BigInteger
 
 /**
  * sheet.Heard: what the models heard in a song's audio, the chords-on-the-phone design's §4.4 `heard`, the one
@@ -43,8 +44,9 @@ data class Heard(
     fun json(): String = PyJson.dumps(record())
 
     companion object {
-        /** sheet.CONTRACT: the shape of `raw["heard"]` (models.json's `contract` too). */
-        const val CONTRACT = 1
+        /** sheet.CONTRACT, from the data (autochords.json's `sheet`): the shape of `raw["heard"]` (models.json's
+         * `contract` too). */
+        val CONTRACT: Int get() = SheetHalf.CONTRACT
 
         /** read_heard of json.loads([text]) (PyJson.loads: Python's reading of NaN, Infinity and its numbers). */
         fun read(text: String): Heard = of(PyJson.loads(text))
@@ -84,7 +86,9 @@ data class Heard(
                 throw IllegalArgumentException("what was heard holds $value where a number goes")
             }
             val text = value.content
-            val x = PyFloat.parse(text) ?: throw IllegalArgumentException("what was heard holds $text")
+            // An int's literal is json.loads' int, then float() of it: `-0` is the int 0, so 0.0 (float("-0") -0.0)
+            val x = PyFloat.parse(if (integral(text)) BigInteger(text).toString() else text)
+                ?: throw IllegalArgumentException("what was heard holds $text")
             if (integral(text) && x.isInfinite()) {
                 throw IllegalArgumentException("what was heard holds an int too large for a float")
             }

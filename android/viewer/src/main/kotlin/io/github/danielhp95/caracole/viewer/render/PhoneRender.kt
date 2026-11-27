@@ -68,11 +68,11 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
      * [renderStale] is the render job's, which holds none between two songs. */
     override fun render(db: Db, songIds: Collection<Long>, between: (() -> Unit)?): RenderStats {
         store.ensureCurrentKeys(db)
-        PlainLyrics.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
-        Relay.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
+        val given = PlainLyrics.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
+        val relayed = relayed(db, Overrides.read(db), songIds.toSet())
         var overrides = OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
         val pass = Pass()
-        val tally = Tally()
+        val tally = Tally(given.size + relayed.songs.size, relayed.failed)
         for ((n, listed) in songsOf(db, songIds).withIndex()) {
             var song = listed
             if (n > 0 && between != null) {
@@ -131,15 +131,15 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
      * `phone:render-build`, the build the phone's pages were last made by. A song whose pass fails costs the others
      * nothing (its why in the stats' `failed`). */
     open fun renderStale(between: () -> Unit, progress: (done: Int, total: Int) -> Unit = { _, _ -> }): RenderStats {
-        database.writeBlocking { db ->
+        val tally = database.writeBlocking { db ->
             store.ensureCurrentKeys(db)
-            PlainLyrics.onto(db, libraryDir, Overrides.read(db))
-            Relay.onto(db, libraryDir, Overrides.read(db))
+            val given = PlainLyrics.onto(db, libraryDir, Overrides.read(db))
+            val relayed = relayed(db, Overrides.read(db), null)
             OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
+            Tally(given.size + relayed.songs.size, relayed.failed)
         }
         val owed = database.read { db -> owed(db).map { it.id } }
         val pass = Pass()
-        val tally = Tally()
         progress(0, owed.size)
         for ((n, id) in owed.withIndex()) {
             if (n > 0) between()
@@ -260,10 +260,12 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
     /** What a song's pass came to: whether a page was written, and why it failed. */
     private class Done(val wrote: Boolean, val why: String?)
 
-    private class Tally {
+    /** A pass's counts: [given] auto sheets took lyrics or were re-laid first, and [relayFailed] those whose re-lay
+     * failed, each a failure of the pass as render_all logs it, though its pages are made from the sheet it has. */
+    private class Tally(val given: Int = 0, relayFailed: Map<Long, String> = emptyMap()) {
         var written = 0
         var unchanged = 0
-        val failed = LinkedHashMap<Long, String>()
+        val failed = LinkedHashMap(relayFailed)
 
         fun count(songId: Long, done: Done) {
             when {
@@ -273,8 +275,13 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
             }
         }
 
-        fun stats() = RenderStats(written, unchanged, failed)
+        fun stats() = RenderStats(written, unchanged, failed, given)
     }
+
+    /** The re-lay of [render] and [renderStale] (Relay.onto, render_all's relay_onto_sheets): open, so a test can put a
+     * failure in it. */
+    internal open fun relayed(db: Db, overrides: Overrides, only: Collection<Long>?): Relay.Relayed =
+        Relay.onto(db, libraryDir, overrides, only)
 
     /** The songs of [ids] the library still has, newest added first as list_songs gives them (render._songs_of). */
     private fun songsOf(db: Db, ids: Collection<Long>): List<SongRow> =
