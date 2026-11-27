@@ -368,7 +368,7 @@ class _Recorder:
         return out
 
     def parse_lrc(self, text):
-        self.records.append(_parse_record(text))
+        self.records.append(_parse_record(text, words=False))
         return merge.parse_lrc(text)
 
     def parse_lrc_words(self, text):
@@ -412,11 +412,14 @@ class _Recorder:
         return out
 
 
-def _parse_record(text: str) -> dict:
+def _parse_record(text: str, *, words: bool = True) -> dict:
+    """``parse_lrc_words`` of ``text``, or ``parse_lrc``'s (``[time, text]`` a line), a function of its own."""
+    fn = "parse_lrc_words" if words else "parse_lrc"
     try:
-        return {"fn": "parse_lrc_words", "args": [text], "out": _lrc_lines(merge.parse_lrc_words(text))}
+        out = _lrc_lines(merge.parse_lrc_words(text)) if words else [list(line) for line in merge.parse_lrc(text)]
     except (ValueError, OverflowError) as e:
-        return {"fn": "parse_lrc_words", "args": [text], "err": _err(e)}
+        return {"fn": fn, "args": [text], "err": _err(e)}
+    return {"fn": fn, "args": [text], "out": out}
 
 
 def _alignment(found) -> dict:
@@ -437,21 +440,12 @@ def _offset_record(lines, segments, beats, downbeats, *, audio_s, lyrics_s) -> d
 
 def _fits(lines, segments, beats, downbeats, *, audio_s, lyrics_s) -> dict | None:
     """Every candidate's ``_Fit`` (offset, score, onsets, coverage), as ``lyrics_offset`` scores them before it rounds
-    any: the SHA-256 (16 hex digits) of their doubles' big-endian bytes, and how many; None where it scores none. So
-    a sum off in its last bit (``statistics.fmean``'s math.fsum, the builtin sum of the measures) shows. The steps
-    are lyrics_offset's own, called one by one."""
-    sung = align._sung(lines)
-    if len(sung) < align.MIN_LINES:
+    any (``align.scored``, the steps ``lyrics_offset`` itself takes): the SHA-256 (16 hex digits) of their doubles'
+    big-endian bytes, and how many; None where it scores none. So a sum off in its last bit (``statistics.fmean``'s
+    math.fsum, the builtin sum of the measures) shows."""
+    early, fits, _ = align.scored(lines, segments, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s)
+    if early is not None:
         return None
-    audio = align._Audio(segments, beats, downbeats, until=max([audio_s] + [s.end for s in segments]))
-    if not audio.segs or audio.beat <= 0 or len(audio.bars) < 2:
-        return None
-    d = audio_s - lyrics_s
-    pairs = align._repeated(sung)
-    music = audio.music()
-    least = max(0.0, music[1] - music[0] - lyrics_s)
-    fits = [align._fit(o, sung, pairs, audio, d=d, music=music, lyrics_s=lyrics_s, least=least)
-            for o in align._candidates(d, audio.beat, audio.bar)]
     data = b"".join(struct.pack(">dddd", f.offset, f.score, f.onsets, f.coverage) for f in fits)
     return {"sha256": hashlib.sha256(data).hexdigest()[:16], "n": len(fits)}
 
@@ -701,6 +695,7 @@ def merge_records() -> list[dict]:
                            ("_word_start", "_on_words", "_chord_line", "_beat_grid"))
     texts = dict.fromkeys(literals(MERGE_LITERALS + ALIGN_LITERALS) + LRC_EDGES + STAMP_EDGES + LRC_RAISING)
     records += [_parse_record(t) for t in texts]
+    records += [_parse_record(t, words=False) for t in LRC_EDGES + LRC_RAISING]
     for title, channel, video in (("", "", "id"), ("　Wide　title ", "\tChan\nnel", "x"), ("T", "  ", "y")):
         records.append({"fn": "youtube_credit", "args": [title, channel, video],
                         "out": merge.youtube_credit(title, channel, video)})
@@ -765,6 +760,12 @@ def _seeded_alignments() -> list[dict]:
     beats = [k * 0.5 for k in range(241)]
     sung = [(round(2.0 * k + 0.1, 3), "the same words again" if k % 3 == 0 else f"line {k}") for k in range(0, 54, 2)]
     out.append(_offset_record(sung, mixed, beats, beats[::4], audio_s=120.0, lyrics_s=110.0))
+    # Lines past the BMP: mathematical letters and digits, CJK Extension B (``_sung``'s ``\w+`` and casefold, the
+    # repeats' keys counted in code points), the chorus repeated so that its lines pair.
+    chorus = [f"{ASTRAL_LINES[k]} \U0001d7d0{k}" for k in (0, 3, 5, 1)]
+    astral = [(chords, chorus if sung == test_autochords_align.CHORUS_WORDS else sung) for chords, sung in form()]
+    lines, lyrics_s, segs, beats, downbeats, audio_s = build(astral, before=7.25)
+    out.append(_offset_record(lines, segs, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s))
     return out
 
 

@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.ml.MlChordModels
 import io.github.danielhp95.caracole.ml.Pipeline
 import io.github.danielhp95.caracole.autochords.Checkpoints
 import java.io.File
+import java.util.concurrent.CancellationException
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -38,17 +39,27 @@ internal object BenchHearings {
     /** Empties [work] once no `:ml` process can write there: one a Stop cancelled stops only at its next chunk, and
      * may write a checkpoint after its client gave up, so [gone] (MlChordModels.awaitEnded, bounded) is waited for
      * first. After the last song nothing else waits for it. Whatever the wait ends in (a process still ending after
-     * it, or the running processes unreadable), the folder is deleted all the same and nothing is thrown, so no
+     * it, or the running processes unreadable), the folder is deleted all the same and nothing else is thrown, so no
      * failure here hides the song's own: a process that outlived the wait may still write a late checkpoint, which
-     * recreates the folder until the next bench run empties it before its first song. */
+     * recreates the folder until the next bench run empties it before its first song. A Stop that interrupts the wait
+     * (InterruptedException) and a coroutine's cancellation are never lost: once the folder is deleted, the thread's
+     * interrupt is set again and the cancellation rethrown. */
     internal fun leaveNothing(work: File, gone: () -> Unit) {
+        var interrupted = false
+        var cancelled: CancellationException? = null
         try {
             gone()
+        } catch (e: InterruptedException) {
+            interrupted = true // a Stop: thrown with the thread's flag cleared, set again once the folder is gone
+        } catch (e: CancellationException) {
+            cancelled = e // the job's: rethrown once the folder is gone
         } catch (e: Exception) {
             // Still ending after the wait, or no way to tell: what it wrote until now goes all the same.
         } finally {
             work.deleteRecursively()
         }
+        if (interrupted) Thread.currentThread().interrupt()
+        cancelled?.let { throw it }
     }
 
     fun isAudio(name: String) = name.substringAfterLast('.', "").lowercase() in AUDIO

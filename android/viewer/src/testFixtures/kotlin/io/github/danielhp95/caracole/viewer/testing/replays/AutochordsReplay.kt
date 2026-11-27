@@ -60,6 +60,9 @@ object AutochordsReplay : AreaReplay {
                         }
                     }
                 }
+                "parse_lrc" -> raises(record, misses) {
+                    JsonArray(Lrc.parse(str(a[0])).map { (t, s) -> JsonArray(listOf(num(t), JsonPrimitive(s))) })
+                }
                 "snap_to_beats" -> check(misses, record, record.out!!) {
                     segs(AutoSheet.snapToBeats(segments(a[0]), times(a[1])))
                 }
@@ -88,7 +91,7 @@ object AutochordsReplay : AreaReplay {
                 else -> fail("an unknown record: ${record.fn}")
             }
         }
-        val kinds = setOf("parse_lrc_words", "snap_to_beats", "_beat_grid", "_bar_starts", "youtube_credit", "_word_start", "_on_words",
+        val kinds = setOf("parse_lrc_words", "parse_lrc", "snap_to_beats", "_beat_grid", "_bar_starts", "youtube_credit", "_word_start", "_on_words",
                           "_chord_line", "with_plain_lyrics", "build_sheet")
         assertTrue("records of every kind: $counts", counts.keys == kinds && counts.getValue("build_sheet") > 100)
         misses.assertNone()
