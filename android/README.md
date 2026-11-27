@@ -410,7 +410,14 @@ app send no request to a site: every test's sites refuse, unless the test names 
 `android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the
 first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-5554, -5556 and -5558, holding its lock,
 `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
-port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
+port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD). As it
+ends, on any path, it stops the emulator it started, while it still holds its lock, and leaves one that was up already;
+`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. It stops the adb server it
+started once adb lists no device and no other caller holds an emulator, never one with a phone attached. That is the
+owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them for testing or development.
+same thing for gradle biuld and adb servers." `android/scripts/stop-all.sh` stops what is left at a task's end: every
+pool emulator no caller holds, the Gradle daemons, and the adb server when no device is listed. A Gradle daemon stops
+after two idle minutes (gradle.properties), and the Kotlin compile daemon with it.
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
