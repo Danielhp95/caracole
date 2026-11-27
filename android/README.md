@@ -7,6 +7,8 @@ pages change with it, and the app doesn't need an update. With the computer's in
 songs on the sites with the computer off ([below](#search-with-the-computer-off)), and caracole's own rules on the
 phone look them up there, make their pages, songbooks and versions, file what you share to it and back it all up,
 for the next sync to give the computer ([Lookups on the phone](#lookups-on-the-phone) and the sections after it).
+The debug build also makes a song's chord sheet from an audio file, heard on the phone
+([Chords from audio](#chords-from-audio-a-sheet-from-a-file-debug-build)).
 
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
@@ -970,11 +972,11 @@ are kept.
 
 The phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process (src/ml's
 `PhoneChords`, both builds of the `ml` shell; a build without `:ml` has none, and says auto-chords isn't on the phone).
-The models are those
-Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
-holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
-removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app
-sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 or x86_64 processor.
+The models are those Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery
+when not charging, holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never
+together), and removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try
+again, and the app sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 processor
+(the release; a debug build x86_64 too, for the emulator).
 
 `ChordsEndToEndTest` runs it whole on the emulator: the models `device-test.sh` pushes installed by the phone's own
 models' job (nothing asked of GitHub), the committed 20 s clip `tests/fixtures/autochords/hearing.mp3` staged and its
@@ -999,6 +1001,15 @@ a GitHub of its own on loopback (CaracoleTestRunner's `Caracole.modelsForTests`,
 
 An audio file shared to caracole (a music app's or a file manager's Share) opens its page on the library screen, its
 guess in Artist and Title, Make sheet and Cancel; share one at a time (`ShareAudioTest`).
+
+The phone hears no words. Its job's Words step is skipped ("not transcribed here: the phone hears no words" where every
+lyrics site missed), the Journal's Ready then says "Chords only, no lyrics.", and the song's card says "No lyrics site
+has its words. The computer hears them from its own audio of this song." Its card's lyrics panel (Look them up under
+another name) searches the three lyrics sites under the name you type and takes the row you pick, as on the computer
+(`caracole lyrics --song --as`, `--record`, `--clear` on the phone's queue, LyricsRoutes); a pick lays the auto sheet
+out again from what was heard, with no model. The audio never leaves the phone (in `files/state/audio/`, never synced);
+the sheet syncs, naming the file, and the computer keeps it, unless it hears the words itself where every lyrics site
+missed ([docs/autochords.md](../docs/autochords.md#on-the-phone)).
 
 ### Gate B2 on your phone
 
