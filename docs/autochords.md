@@ -120,10 +120,11 @@ the words. The phone hears no words: where every lyrics site missed, the sheet i
 the computer can hear them from its own audio of the song. A song's card can look its lyrics up under another name on
 the phone too; picking one lays the sheet out again without the models.
 
-It needs Android 13 or later and 6 GB of memory. It won't start below 15 % of battery unless the phone is charging,
-and it waits while the phone is too hot. Your audio never leaves the phone: no audio is sent anywhere to make the
-sheet, and the file stays in the app's own storage, never synced. The sheet you sync names the file, its full path
-included, and goes only to your own other caracole, which keeps it as the phone made it (above).
+It needs Android 13 or later, a 64-bit phone and 6 GB of memory. It won't start below 15 % of battery unless the phone
+is charging, and it waits while the phone is too hot. Your audio never leaves the phone: no audio is sent anywhere to
+make the sheet, and the file stays in the app's own storage, never synced. The sheet you sync names the file, its full
+path included, and goes only to your own other caracole, which keeps it, unless it hears the words itself where every
+lyrics site missed (above).
 
 ## The models for the phone
 

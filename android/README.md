@@ -946,12 +946,13 @@ are kept.
 
 ## Chords from audio: a sheet from a file (debug build)
 
-In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
-(src/debugMl's `PhoneChords`, a debug build of the `ml` shell; the release has none, and says auto-chords isn't on the phone). The models are those
-Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
-holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
-removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app
-sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 or x86_64 processor.
+In the debug build made in the `./android#ml` shell, the phone's audio job (`caracole audio --upload=ID --song=…`) hears
+with the real `:ml` process (src/debugMl's `PhoneChords`, a debug build of the `ml` shell; the release has none, and
+says auto-chords isn't on the phone). The models are those Settings' download installs in `files/state/models/c1/`. A
+hearing refuses under 15 % of battery when not charging, holds a partial wake lock while it runs, goes one at a time (a
+job's and the Chords bench's never together), and removes its checkpoints once the sheet's chords are heard; a hearing
+that failed keeps them for Try again, and the app sweeps those a day old as it starts. It asks for Android 13, 6 GB of
+memory and an arm64 or x86_64 processor.
 
 `ChordsEndToEndTest` runs it whole on the emulator: the models `device-test.sh` pushes installed by the phone's own
 models' job (nothing asked of GitHub), the committed 20 s clip `tests/fixtures/autochords/hearing.mp3` staged and its
@@ -983,8 +984,8 @@ has its words. The computer hears them from its own audio of this song." Its car
 another name) searches the three lyrics sites under the name you type and takes the row you pick, as on the computer
 (`caracole lyrics --song --as`, `--record`, `--clear` on the phone's queue, LyricsRoutes); a pick lays the auto sheet
 out again from what was heard, with no model. The audio never leaves the phone (in `files/state/audio/`, never synced);
-the sheet syncs, naming the file, and the computer keeps it as the phone made it
-([docs/autochords.md](../docs/autochords.md#on-the-phone)).
+the sheet syncs, naming the file, and the computer keeps it, unless it hears the words itself where every lyrics site
+missed ([docs/autochords.md](../docs/autochords.md#on-the-phone)).
 
 ### Gate B2 on your phone
 

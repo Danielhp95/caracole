@@ -3030,10 +3030,11 @@ meanwhile, the one queued is the answer and the second file is deleted.
   "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
 - Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
 
-The phone's debug build does the same once Settings › Chords from audio has downloaded the models (the release says
-"auto-chords isn't on the phone"), and takes an audio file shared to it from another app too: the job is `caracole
-audio --upload ID --song …` there, its chords and beats heard on the phone. It hears no words: Words is always
-skipped, and where every lyrics site missed the sheet is chords only ([On the phone](autochords.md#on-the-phone)).
+The phone's debug build does the same once Settings › Chords from audio has downloaded the models
+(the release says "auto-chords isn't on the phone"), and takes an audio file shared to it from
+another app too: the job is `caracole audio --upload ID --song …` there, its chords and beats
+heard on the phone. It hears no words: Words is always skipped, and where every lyrics site missed
+the sheet is chords only ([On the phone](autochords.md#on-the-phone)).
 
 #### Lyrics under another name, from a card
 
@@ -3066,9 +3067,9 @@ none, and neither has a song while a request of it waits or runs.
 - A refusal is said in the panel ("Search again: that record isn't among its last search's, …").
   The page opened as a file has no panel.
 
-The phone's card has the same panel, its search, pick and clear the same commands on the phone's queue. A pick there
-lays an auto sheet out again from what was heard, with no model; with no words found, the phone offers no
-transcription (it hears none).
+The phone's card has the same panel, its search, pick and clear the same commands on the phone's
+queue. A pick there lays an auto sheet out again from what was heard, with no model; with no words
+found, the phone offers no transcription (it hears none).
 
 #### Transcribing the lyrics from a card
 

@@ -76,8 +76,9 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
 - **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
 - Making and editing songbooks, and choosing a sheet's version.
 - Looking a song's lyrics up under another name, from its card, and picking the ones to keep.
-- In the debug build for now, [chords from audio](autochords.md#on-the-phone): an audio file you pick or share
-  becomes the song's sheet, worked out on the phone once Settings › Chords from audio has downloaded the models.
+- In the debug build for now, [chords from audio](autochords.md#on-the-phone): an audio file you
+  pick or share becomes the song's sheet, worked out on the phone once Settings › Chords from
+  audio has downloaded the models.
 - **Export PDF** opens Android's print dialog, to print or save as PDF.
 - Sharing to caracole from another app: a song from Spotify, Apple Music, TIDAL, YouTube, Deezer
   or Shazam to look it up, or a Guitar Pro file or score to file under its song.
@@ -87,8 +88,8 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
 ## What stays on the computer
 
 The nightly run, building the site indexes, YouTube, hearing the words of a song, PDF files and
-iReal Pro charts. A song you add on the phone without fetching it is picked up by the computer's next
-nightly run, after a sync.
+iReal Pro charts. A song you add on the phone without fetching it is picked up by the computer's
+next nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
