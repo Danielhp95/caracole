@@ -1,6 +1,18 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.search.ArtistHit
+import io.github.danielhp95.caracole.core.search.IndexFound
+import io.github.danielhp95.caracole.core.search.IndexHit
+import io.github.danielhp95.caracole.core.search.LibraryHit
+import io.github.danielhp95.caracole.core.search.SiteArtist
+import io.github.danielhp95.caracole.core.search.SiteHit
+import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.SearchGate
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.long
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -11,6 +23,7 @@ import io.github.danielhp95.caracole.core.youtube.Download
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.YtDlp
+import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import java.io.File
 import java.nio.file.Files
 import java.time.Duration
@@ -53,14 +66,18 @@ import kotlinx.serialization.json.jsonPrimitive
  *   pass_over or outdated; Python's otherwise, its message too), each run's argv (the phone's template of the
  *   record's kind, target and folder, the gate's proxyArg in it once), the events, the draws and the pauses, the runs
  *   made, the block's record (Health's state: its message, the cooldown from the job's start), and kv
- *   `http:last_request:youtube` written once a run was sent.
+ *   `http:last_request:youtube` written once a run was sent;
+ * - gate.jsonl: SearchGate.gate (with its suggestion, /api/search's `youtube`) and videoGate over each scene's kv and
+ *   events on a fresh database, YouTube on or off in the phone's settings; recordFailure's kv text byte for byte; and
+ *   sheetOnScreen of each record's hits;
+ * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte.
  */
 object YouTubeReplay : AreaReplay {
     override val area = "youtube"
 
     override fun replay(misses: Misses) {
         val counts = mapOf("argv" to argv(misses), "classify" to classify(misses), "parse" to parse(misses),
-            "choose" to choose(misses), "runs" to runs(misses))
+            "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses))
         for ((name, n) in counts) misses.check(n > 0) { "youtube/$name.jsonl holds no record" }
     }
 
@@ -232,7 +249,7 @@ object YouTubeReplay : AreaReplay {
                         )
                     }
                     val fake = FakeYtDlpProcess(planned)
-                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { opened }, db, pacing,
+                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, db, pacing,
                                    budget = budget, runId = "youtube-replay", timeouts = timeouts)
                     var made = 0
                     for (c in calls) {
@@ -324,4 +341,92 @@ object YouTubeReplay : AreaReplay {
     /** The phone's class for what the computer raised, by classify beside it: the computer's otherwise. */
     private val PHONE_CLASS = mapOf(("ProviderError" to "pass_over") to "PassedOver",
                                     ("ProviderError" to "outdated") to "ExtractorOutdated")
+
+    private fun gate(misses: Misses): Int {
+        var n = 0
+        for (r in records("gate")) {
+            n++
+            when (text(r, "fn")) {
+                "sheet_on_screen" -> {
+                    val got = SearchGate.sheetOnScreen(r.getValue("mine").jsonArray.map {
+                        LibraryHit(SONG, it.jsonArray[0].jsonPrimitive.double, it.jsonArray[1].jsonPrimitive.content)
+                    }, IndexFound(
+                        artists = r.getValue("artists").jsonArray.map {
+                            ArtistHit("a", "A", it.jsonArray[0].jsonPrimitive.double, 1, 1, part = it.jsonArray[1].jsonPrimitive.boolean)
+                        },
+                        songs = r.getValue("songs").jsonArray.map { IndexHit("a", "b", LinkedHashMap(), it.jsonPrimitive.double, "u") },
+                    ), r.getValue("lc_artists").jsonArray.map {
+                        SiteArtist("lacuerda", "A", "a", "u", it.jsonArray[0].jsonPrimitive.double, part = it.jsonArray[1].jsonPrimitive.boolean)
+                    }, r.getValue("lc_songs").jsonArray.map {
+                        SiteHit("lacuerda", "T", "u", it.jsonArray[0].jsonPrimitive.double, sheet = text0(it.jsonArray[1]))
+                    })
+                    val want = r.getValue("on_screen").jsonPrimitive.boolean
+                    misses.check(got == want) { "sheet_on_screen($r) = $got, Python's $want" }
+                }
+                "record_failure" -> PoliteDb.with { db ->
+                    for ((k, v) in r.getValue("kv").jsonObject) db.kvSet(k, v.jsonPrimitive.content)
+                    val now = Instant.parse(text(r, "now")!!)
+                    SearchGate.recordFailure(db, text(r, "key")!!, now, text(r, "error")!!)
+                    val failedKey = YouTubeData.read().json.getValue("search").jsonObject.getValue("failed_key").jsonPrimitive.content
+                    misses.check(db.kvGet(failedKey) == text(r, "after")) {
+                        "record_failure(${text(r, "key")}): ${db.kvGet(failedKey)}, Python's ${text(r, "after")}"
+                    }
+                }
+                else -> PoliteDb.with { db ->
+                    val scene = "${text(r, "fn")} ${text(r, "scene")}"
+                    db.execute("DELETE FROM events")
+                    db.execute("DELETE FROM kv WHERE key LIKE 'provider:%' OR key LIKE 'youtube-search:%'")
+                    for ((k, v) in r.getValue("kv").jsonObject) db.kvSet(k, v.jsonPrimitive.content)
+                    for (e in r.getValue("events").jsonArray) {
+                        val (run, at, provider) = e.jsonArray.map { it.jsonPrimitive.content }
+                        db.execute("INSERT INTO events (run, at, provider, url, status, decision, message) " +
+                                   "VALUES (?, ?, ?, NULL, NULL, 'ok', NULL)", run, at, provider)
+                    }
+                    val defaults = PhoneConfig.read(db)
+                    val cfg = if (r.getValue("route").jsonPrimitive.boolean) defaults else defaults.copy(
+                        providers = defaults.providers + ("youtube" to defaults.provider("youtube").copy(enabled = false)))
+                    val now = Instant.parse(text(r, "now")!!)
+                    val given = text(r, "given")!!
+                    val got = if (text(r, "fn") == "gate") {
+                        SearchGate.gate(cfg, db, given, r.getValue("on_screen").jsonPrimitive.boolean, now)
+                    } else {
+                        SearchGate.videoGate(cfg, db, given, now)
+                    }
+                    val want = r["gate"]?.takeIf { it !is JsonNull }?.jsonObject
+                    val shown = got?.let {
+                        JsonObject(mapOf("state" to JsonPrimitive(it.state), "key" to JsonPrimitive(it.key),
+                            "asked" to (it.asked ?: JsonNull), "why" to JsonPrimitive(it.why)))
+                    }
+                    misses.check(shown == want) { "$scene: the gate $shown, Python's $want" }
+                    if (text(r, "fn") == "gate") {
+                        val said = SearchGate.suggestion(got, given)
+                        val wanted = r["youtube"]?.takeIf { it !is JsonNull }
+                        misses.check(said == wanted) { "$scene: youtube $said, Python's $wanted" }
+                    }
+                }
+            }
+        }
+        return n
+    }
+
+    private fun record(misses: Misses): Int {
+        var n = 0
+        PoliteDb.with { db ->
+            for (r in records("record")) {
+                n++
+                val song = r.getValue("song").jsonPrimitive.long
+                val stored = text(r, "stored")
+                if (stored != null) db.kvSet(Records.key(song), stored)
+                Records.save(db, song, Records.load(db, song))
+                misses.check(db.kvGet(Records.key(song)) == text(r, "saved")) {
+                    "record $song ($stored): saved ${db.kvGet(Records.key(song))}, Python's ${text(r, "saved")}"
+                }
+            }
+        }
+        return n
+    }
+
+    /** A song of no consequence: sheet_on_screen reads a library hit's score and reading alone. */
+    private val SONG = SongRow(0, "", "", "", emptyList(), null, null, null, "{}", "", null, "wanted", false, null, null,
+        null, null, null, "[]", null, false, null, "pending", null, null, null, "")
 }

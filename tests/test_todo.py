@@ -1497,3 +1497,19 @@ def test_the_todo_page_lists_the_songs_whose_hearing_failed_at_night(conn, cfg, 
     assert "30 days or until their file changes" in section
     update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)  # a new file: tried again, so not listed
     assert WORDS_UNHEARD not in todo(conn, cfg)
+
+
+def test_the_songs_the_last_auto_chords_run_remeasured_are_named(conn, cfg):
+    from caracole.todo import REMEASURED_TITLE
+
+    kv_set_json(conn, "autochords:status", {"at": "2026-11-26T04:12:00Z", "generated": 2, "skipped": 0, "failed": [],
+                                            "remeasured": ["Ana - Luna", "A_B - Mar"]})
+    text = todo(conn, cfg)
+    section = text.split(f"## {REMEASURED_TITLE} (2)\n", 1)[1].split("\n## ", 1)[0]
+    assert "counts their frames now" in section and "Nothing to do." in section
+    assert "- **Ana - Luna**" in section and r"- **A\_B - Mar**" in section
+
+    for record in ({"at": "2026-11-27T04:12:00Z", "generated": 0, "skipped": 2, "failed": []},  # the next run's
+                   {"remeasured": "Ana - Luna"}, {"remeasured": [None, 3]}):
+        kv_set_json(conn, "autochords:status", record)
+        assert REMEASURED_TITLE not in todo(conn, cfg), record

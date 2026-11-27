@@ -783,3 +783,14 @@ def test_choose_gives_one_answer_whatever_the_hash_seed():
                               capture_output=True, text=True, check=True)
         answers[seed] = json.loads(done.stdout)
     assert set(map(json.dumps, answers.values())) == {json.dumps([youtube.EXACT, "AAAAAAAAAAA"])}, answers
+
+
+def test_a_downloads_duration_no_float_holds_is_an_answer_error_never_a_bug(fake, tmp_path, monkeypatch):
+    into = tmp_path / "into"
+    into.mkdir()
+    (into / "audio.m4a").write_text("AAC bytes")
+    line = json.dumps({"id": ID, "title": "Creep", "duration": 10 ** 400, "filepath": str(into / "audio.m4a")})
+    ytdlp = runner(fake, tmp_path)
+    monkeypatch.setattr(ytdlp, "_run", lambda *args: line + "\n")
+    with pytest.raises(ProviderError, match="yt-dlp's answer isn't JSON: int too large to convert to float"):
+        ytdlp.download(ID, into)

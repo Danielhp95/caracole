@@ -372,7 +372,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   m4a by its format alone, QuickJS, the gate as `--proxy`; no run of a target but a video's plain address, a value
   holding a NUL, an empty search or download folder) and `classify` (`CLASSIFY_STEPS`: `_OUTDATED`,
   `PHONE_PASS_OVER` on the ERROR line, out of date after a broken solver's warning, `_DEGRADED`), the corpus's
-  youtube/youtube.json (tests/test_conformance_youtube.py).
+  youtube/youtube.json (tests/test_conformance_youtube.py). `choose` reads a song's artist forms in `name_forms`'
+  order, the whole name first (`_Names.artist_slugs`, a tuple, never a set), so `choose` is the same under any hash
+  seed (a featuring artist's video was accepted or dropped by a set's order); a duration no float holds (an int
+  past one, in a search's, a video's or a download's answer) is an answer error in the words of an answer that isn't
+  JSON (`_duration`), never a bug.
 - youtube_urls.py: a video's address.
 - youtube_fetch.py: the step.
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
@@ -740,12 +744,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
 | notify.py | ntfy |
+| mpeg_frames.py | an MP3's length counted from its frames (`count`, `counted_length`), for one whose first frame names none (no Xing/Info frame count, no VBRI), where mutagen and libsndfile guess the size over the first frame's bitrate: ID3v2 at the start, ID3v1 and APE at the end left out, junk between frames (and within `FIRST_WITHIN`, 64 KiB, after the ID3v2 tags) passed over, each frame's samples over its own rate (a stream that changes its rate, version or layer counted through), about 0.4 µs a frame (4 ms for a four-minute CBR song); music.py `read_audio` and audio_store.py `_read` take it in place of mutagen's (`scan_music` once a file: kv `music:frames`, `FRAMES_KEY`, each headerless MP3's length by its path, size and mtime, the files gone leaving it), autochords/audio.py `load_mono` checks libsndfile's decode by it; the standard library alone |
 | site_index.py | a site's sitemaps into a table, resumed across runs; one that answers cut short, before its closing `</urlset>` or `</sitemapindex>`, an error that leaves the table as it was, never fewer rows |
 | stamps.py | how caracole stores a time and shows one (below) |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`); each song read again before its turn (`as_now`, `again`), and what a pass holds of overrides.toml after a hand-over (`Reread`) |
 | keys.py | a song's musical key and where it came from (below) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
-| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
+| audio_store.py | the audio files you give caracole for a song, in `state_dir/audio/` (0700, each file 0600): an upload staged by its 16-hex id (`stage`, `staged`, `drop`, `sweep`, one no job names at a time), a song's own `<song id>-<sha256 16 hex><ext>` (`keep`, `uploaded`), what no song names deleted (`tidy`, the scan step's); the format from the bytes (`sniff`, `FORMATS`), then mutagen's read, imported inside (a file of your own's too, `examine`), an MP3's length its frames' where its first frame names none (mpeg_frames.py), the 30 minutes judged by it, a song gone a refusal of `keep`'s; an upload always wins, the owner's decision of 2026-11-25: `keep` replaces a purchase (its file in Music/ stays) or YouTube's audio, and `music.scan_music(uploads=)` links no purchase over it |
 | sites.py | the library page's Sites tab's data (below) |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere, fitted in display columns of the stream's own width; `Ticker` (`ticker()`), what long work is doing as it goes: a live line on stderr on a terminal at the default verbosity alone, off for good once a write fails, a `caracole.progress` line a minute, the unit's status line (`systemd_status`, sd_notify `STATUS=`, where `$NOTIFY_SOCKET` is set); `Requests`, a client's requests against its budget (`make_client(ticker=)`, `make_youtube(ticker=)`, its runs with no time left); `Counted`, work of a known size (`directory_pass(progress=)`, `render.rendering`); a staged job by hand (`caracole transcribe`, `youtube --sheet`) its long stages' running details on one (commands/get.py `_Lines(ticker=)`, none with `--progress`, nor for `caracole get`); they only count, never pace |
 | staged.py | a job of stages over one song, each reported as a lookup's stages are, run in order under the lock as asked for now (`StagedRun`: `_run`, `stage`, `_fail`, `_after_a_lookup`, `_song_again`, `_refuse`; the stages both jobs end with, `_autochords_sheet`, `pdf`, `pages`; `StagedResult`; the command's last lines, `_common.staged_end`): youtube_sheet.py's (and audio_sheet.py's, a subclass of its), transcribe_job.py's and lyrics_pick.py's (`_audio_length`, the song's audio's length, theirs) |
@@ -2461,8 +2466,26 @@ It is rows.js's, shared by both pages:
     about 7 times a song's length each.
 - audio.py, `load_mono`: every model's audio, mono at a rate, through librosa (libsndfile: WAV, FLAC, Ogg, MP3), else
   torchaudio (FFmpeg, through torchcodec) for the AAC of an .m4a, as YouTube's audio always is (youtube.py) and an
-  iTunes purchase; btc.py `load_audio` and separate.py `frame_db` both read through it, and `load_librosa` gives numba
-  a cache folder first (a hardened unit has no writable home).
+  iTunes purchase, and for an MP3 whose first frame names no length where libsndfile's decode is more than
+  `DISAGREES_S` (0.5 s) off its frames' length (`mpeg_frames.counted_length`; libsndfile stops at its guess, the size
+  over the first frame's bitrate, with no error), a WARNING naming the file (the journal keeps it at the default
+  verbosity; such a file is rare and worth seeing), and should FFmpeg then fail, libsndfile's part kept with a
+  WARNING of how much of the file it is, as before the fix: every other file read as libsndfile reads it;
+  btc.py `load_audio` and separate.py `frame_db` both read through it (beat_this its own loader, FFmpeg's first,
+  beats.py: one loader for both is not built, as it would move every file's beat samples), and `load_librosa` gives
+  numba a cache folder first (a hardened unit has no writable home).
+- remeasure.py, `remeasure_once`, at `autochords_pending(remeasure=True)`'s start (the bulk `caracole autochords`
+  over every song, never a staged job about one song, nor `--song`), once ever (kv `autochords:remeasured`): every
+  song with no human sheet, not ignored, whose MP3 names no length and whose guess (`mpeg_frames.Count`'s `guessed`)
+  is `DISAGREES_S` off its frames' length: its auto sheet made due again (`autochords_mtime` cleared); read short, its
+  transcript (`transcript:`) and caracole's nothing-sung verdict (`transcribe:none:` by "caracole") dropped, heard
+  from a cut-short mix, so it is offered its words again, the owner's not-sung (`by` "you"), `transcribe:failed:`
+  (its setup's) and `transcribe:unreadable:` (Whisper's own, whole read) kept; where its wanted.txt line is exactly as
+  caracole writes one with the guess (`wanted.retime_wanted`), the line and its record corrected and, its lyrics
+  missing, LRCLIB and Megalobiz asked again (`lyrics_at` cleared, `megalobiz:checked:` dropped). Each such song a
+  WARNING, the run's `AutoStats.remeasured` (its summary's "remeasured N whose MP3 names no length, made again: …")
+  and kv `autochords:status`'s `remeasured`, which todo.py lists under "Made again: MP3s that name no length" for that
+  run alone.
 - align.py, pure Python too, is run.py's: how far to shift timed lyrics LRCLIB timed for audio of another length, from
   the chords and beats alone:
   - `lyrics_offset`: candidate shifts scored, the best taken only by a clear margin, else the plain lyrics as before;
@@ -2601,7 +2624,8 @@ It is rows.js's, shared by both pages:
   - a PDF's text where it is drawn (pdf_pages.py), a wait for caracole's lock seen, Chromium (Browser tests, below).
 - test_harness.py tests what makes the suite fast.
 - fixtures/ holds samples of what each site answers (real response shapes, trimmed) and synthetic lyrics, sheets and
-  files.
+  files; fixtures/audio/ the MP3s whose length a reader guesses wrong and three every reader agrees on, written once by
+  its make.sh with FFmpeg (no test runs it).
 
 #### `nix/`
 
@@ -3259,13 +3283,32 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), the pause
     after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
     gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
-    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block), then a timeout, the exit status and
-    `Classify.of`: `ProviderBlocked` (`Health.recordBlock` at the job's start, every later run refused with no
-    process), `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the
-    computer's for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their
-    place);
-  - vectors/youtube/argv, classify, parse, choose and runs.jsonl (`YouTubeReplay`, area `youtube`; runs.jsonl the
-    computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
+    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block; `gate.stopped`, the gate's acceptor
+    ended by a bug, an error in `gate.stopped_said`), then a timeout, the exit status and `Classify.of`:
+    `ProviderBlocked` (`Health.recordBlock` at the job's start, every later run refused with no process),
+    `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the computer's
+    for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their place);
+    - `YtDlpGate`, a gate a run (`gate: () -> YtDlpGate`), closed once the run's log is read, on every path;
+      `YtDlpGate.keptOpen` for one gate a job, which the job closes;
+    - a cooldown an earlier job recorded refuses each run before its gate (`ProviderBlocked` in youtube_sheet.py's
+      words, youtube.json's `runner.cooling`): no gate, no process, no event, no strike;
+    - the runner records a block itself (one strike); a caller never does, and sends the alert;
+    - a run cut off by an exception (anything but `NotStarted`) is counted and logged, an `error` event and kv
+      `http:last_request:youtube`, then rethrown with no secret: the computer's writes no event there, but Android
+      can kill the `:youtube` process mid-run, and the day's budget and the next pause must see it;
+    - `HostGate.close` never throws, keeping the caller's interrupt (set again once every thread was waited for);
+  - `SearchGate` (Y1.4), youtube_search.py's gates: `gate(cfg, db, query, onScreen, now, routeWhy)` and
+    `videoGate` (`found`, `none`, `auto`, `failed`, `spent`, `off`, their words, numbers and keys youtube.json's
+    `search`: a query once in 30 days, kv `youtube-search:<key>`; 10 runs named `youtube-search:` an hour in
+    `events`; none while `Health.isCooling`; its own failure or 3 within the hour, kv `youtube-search:failed`,
+    `recordFailure`; YouTube off in PhoneConfig, or `routeWhy`, the phone's own reason it makes no sheet from a
+    video), `suggestion` (/api/search's `youtube`) and `sheetOnScreen`;
+  - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
+    byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
+    song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
+    `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
+  - vectors/youtube/argv, classify, parse, choose, runs, gate and record.jsonl (`YouTubeReplay`, area `youtube`;
+    runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
 
 ##### The Requests tab on the phone
 
@@ -3984,7 +4027,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     bytes no file holds;
   - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
-    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
+    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`,
+    `youtube-outdated`, `phone:youtube-auto`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
     index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
     which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index
@@ -5086,3 +5130,9 @@ picks one).
 - `sources.sync_sources` syncs it alone, and a song's album, duration, ISRC and variant are what its line says now,
   kept in its record alone (`songs.upsert_song`;
   `test_songs.py::test_a_song_keeps_what_its_line_says_in_its_own_record_alone`).
+- wanted.py's writers: `append_wanted` (a line added), `remove_wanted` (a song's lines taken out) and
+  `retime_wanted`, autochords/remeasure.py's alone: a song's length rewritten on each of its lines that is byte for
+  byte what `format_line` writes with the length caracole once guessed for an MP3 that names none (`caracole audio`'s
+  line, or a hand-typed one the very same), the rest of the file as it was; it reports only the lines it wrote. So
+  the re-check, once, may correct a line's length, and the record follows it as from any line; the song's sync unit
+  then changes and goes to the other side at the next sync.

@@ -464,3 +464,15 @@ def test_transcript_kv_goes_with_a_removed_song(conn):
     delete_song_kv(conn, 7)
     left = {row[0] for row in conn.execute("SELECT key FROM kv WHERE key LIKE 'transcri%'")}
     assert left == {"transcript:77", "transcribe:none:77"}
+
+
+def test_a_removed_songs_youtube_records_go_with_it(conn):
+    # youtube-wanted:<id> is the phone's note of a song for its automatic pass: the computer never writes it, but a
+    # merge or a removal on either side takes it with the song's youtube:<id>.
+    from caracole.songs import delete_song_kv
+
+    for key in ("youtube:7", "youtube-wanted:7", "youtube:77", "youtube-wanted:77", "youtube-search:ab"):
+        db.kv_set(conn, key, "{}")
+    delete_song_kv(conn, 7)
+    left = {row[0] for row in conn.execute("SELECT key FROM kv WHERE key LIKE 'youtube%'")}
+    assert left == {"youtube:77", "youtube-wanted:77", "youtube-search:ab"}

@@ -77,6 +77,9 @@ from caracole.transcribe_job import HearsWords
 log = logging.getLogger(__name__)
 
 PROVIDER = "youtube"
+COOLING_SAID = "waiting out YouTube until {when}"  # the audio stage's skip while YouTube cools down after a block
+COOLING_WHEN = "%Y-%m-%d %H:%M UTC"  # the cooldown's end, as stamps.shown shows a time
+COOLING_LATER = "later"  # a cooldown with no end recorded
 STAGES = (
     ("song", "Find the song"),
     ("audio", "Audio from YouTube"),
@@ -272,8 +275,8 @@ class _Sheet(HearsWords, StagedRun):
             return "done", f"has the audio of {video.url} already"
         if is_cooling(self.conn, PROVIDER, self.now):
             until = get_state(self.conn, PROVIDER).cooldown_until
-            when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return "skipped", f"waiting out YouTube until {when}"
+            when = until.strftime(COOLING_WHEN) if until else COOLING_LATER
+            return "skipped", COOLING_SAID.format(when=when)
         downloading = "downloading the video's audio"
         self._doing("audio", downloading if pasted else "looking for a video on YouTube")
         heard: list[tuple[str, Record]] = []

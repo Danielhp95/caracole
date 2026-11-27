@@ -424,6 +424,36 @@ class BackupsTest {
         }
     }
 
+    @Test fun aRestoreKeepsYouTubesRecordsAsTheyAreNow() {
+        // What gates a YouTube run on the phone: its searches and their failures, the version yt-dlp read out of date,
+        // and whether the automatic pass is on. Each as it is now, never as the backup has it, or none.
+        val phone = phone()
+        phone.write { db ->
+            db.kvSet("youtube-search:creep-radiohead", "{\"at\": \"2026-11-01T08:00:00Z\", \"video\": null}")
+            db.kvSet("youtube-search:failed", "{}")
+            db.kvSet("youtube-outdated", "{\"version\": \"2026.11.23\", \"at\": \"2026-11-01T08:00:00Z\"}")
+            db.kvSet("phone:youtube-auto", "true")
+        }
+        val backup = make(phone, at(1))
+        phone.write { db ->
+            db.kvDelete("youtube-search:creep-radiohead")
+            db.kvSet("youtube-search:failed", "{\"x\": {\"at\": \"2026-11-05T08:00:00Z\", \"error\": \"boom\"}}")
+            db.kvDelete("youtube-outdated")
+            db.kvSet("phone:youtube-auto", "false")
+        }
+        Backups.restore(phone.database, phone.store, backup)
+        phone.read { db ->
+            assertNull(kv(db, "youtube-search:creep-radiohead"))
+            assertEquals("{\"x\": {\"at\": \"2026-11-05T08:00:00Z\", \"error\": \"boom\"}}", kv(db, "youtube-search:failed"))
+            assertNull(kv(db, "youtube-outdated"), "an out of date record gone since stays gone")
+            assertEquals("false", kv(db, "phone:youtube-auto"))
+        }
+        for (key in listOf("youtube-outdated", "phone:youtube-auto", "youtube-search:failed", "youtube-search:video:x")) {
+            assertTrue(OwnRecords.isOwn(key), key)
+        }
+        for (key in listOf("youtube:1", "youtube-wanted:1")) assertFalse(OwnRecords.isOwn(key), key)
+    }
+
     @Test fun aRestoreTwiceIsTheSameAndANonBackupIsRefusedChangingNothing() {
         val phone = phone()
         val backup = make(phone, at(1))

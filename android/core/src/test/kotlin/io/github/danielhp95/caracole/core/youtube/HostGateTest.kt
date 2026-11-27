@@ -880,4 +880,91 @@ class HostGateTest {
         for (name in data.texts("apart", gate)) assertTrue(rule.reportsApart(name), name)
         assertFalse(rule.reportsApart("www.youtube.com"))
     }
+
+    // Fix round 1 of Y1.3's review.
+
+    @Test
+    fun aConnectionThreadThatThrowsLeavesTheGateServingAndTheProcessAlone() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            val throwing = AtomicBoolean(true)
+            gate.beforeServing = { if (throwing.getAndSet(false)) throw NoSuchElementException("a bug in a connection") }
+            connect(opened).use { s ->
+                s.getOutputStream().write(connectLine("127.0.0.1:1", auth(opened)).toByteArray())
+                assertEquals(-1, s.getInputStream().read(), "the broken connection is closed")
+            }
+            assertEquals(407, status(ask(opened, connectLine("127.0.0.1:1", null))), "the gate still serves")
+            eventually("the broken connection's thread ended") {
+                Thread.getAllStackTraces().keys.none { it.isAlive && it.name == "caracole-gate-${opened.port}-1" }
+            }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
+
+    @Test
+    fun aTunnelWhosePumpsEndTogetherIsWaitedForWithoutABug() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            repeat(40) { round ->
+                val server = upstream(0, bytes(64, round))
+                val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+                connect(opened).use { s ->
+                    s.getOutputStream().write(connectLine("127.0.0.1:${server.port}", auth(opened)).toByteArray())
+                    assertEquals(200, status(head(s.getInputStream())))
+                    s.shutdownOutput()
+                    s.getInputStream().readAllBytes()
+                }
+            }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
+
+    // The runner's re-review.
+
+    @Test
+    fun aCloseUnderAnInterruptReturnsClosesEverythingAndKeepsTheInterrupt() {
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, headTimeoutMs = 60_000)
+        val (s, t) = trickle(opened, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nX-Slow: " + "a".repeat(100), everyMs = 200)
+        eventually("the slow client is served") { gateThreads(opened).any { it.name != "caracole-gate-${opened.port}-accept" } }
+        Thread.currentThread().interrupt()
+        try {
+            gate.close()
+            assertTrue(Thread.interrupted(), "the interrupt is kept (and cleared here)")
+        } finally {
+            Thread.interrupted()
+        }
+        s.use { assertEquals(-1, endOf(it), "its client's socket is closed") }
+        t.join(5_000)
+        assertEquals(emptyList(), gateThreads(opened).map { it.name }, "no thread of the gate is left")
+        assertFailsWith<java.net.ConnectException> { connect(opened).close() }
+    }
+
+    @Test
+    fun anAcceptorThatThrowsStopsTheGateSaysSoInItsLogAndLeavesTheProcessAlone() {
+        val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
+        val was = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
+        try {
+            val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            gate.afterAccepting = { throw NoSuchElementException("a bug in the acceptor") }
+            connect(opened).use { s -> assertEquals(-1, s.getInputStream().read(), "the client it took is closed") }
+            eventually("the acceptor ended") { gateThreads(opened).isEmpty() }
+            val stopped = YouTubeData.read().text("stopped", YouTubeData.read().gate)
+            assertEquals(listOf(stopped), gate.log().keys.toList(), "the log says the gate stopped, and nothing else")
+            assertTrue(stopped == HostGate.STOPPED && !gate.refusedAny())
+            assertFailsWith<java.net.ConnectException> { connect(opened).close() }
+            assertEquals(emptyList(), uncaught.toList())
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(was)
+        }
+    }
 }
