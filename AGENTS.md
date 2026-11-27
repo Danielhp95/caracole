@@ -4095,10 +4095,15 @@ nix flake check
     killed), while it still holds that emulator's lock, so no caller takes a dying one; one up already is someone
     else's and is left up; `--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
     It stops the adb server it started once adb lists no device at all and no other caller holds a pool emulator,
-    never one running before it nor while a phone is attached (tests/test_device_scripts.py).
+    never one running before it nor while a phone is attached (tests/test_device_scripts.py). No adb it runs inherits
+    the lock. An emulator left by a run that was SIGKILLed, or by a script older than this, reads as someone else's to
+    every later caller and stays up until stop-all.sh runs.
   - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
-    is left), `gradle --stop` when a Gradle daemon runs, and the adb server only when no device is listed, a line for
-    each thing stopped or left.
+    is left), and the adb server only when no device is listed, in any state, and no caller holds a pool lock, a line
+    for each thing stopped or left; this user's processes alone, matched by their own name and arguments. Gradle only
+    with `--gradle`: `gradle --stop` stops every daemon of that version for the user, other worktrees' running builds
+    among them, so it refuses while `gradle --status` calls any daemon busy (or can't say); without it, it says how
+    many run, each stopping by itself after two idle minutes.
   - android/gradle.properties' `org.gradle.daemon.idletimeout` is two minutes: a task's builds still reuse the daemon,
     and none lingers after; the Kotlin compile daemon ends with the Gradle daemon that used it.
 - **The owner's phone** gets a debug build only through `android/scripts/phone-install.sh` (`-s SERIAL`, `--launch`):

@@ -2,8 +2,8 @@
 # The phone's device tests on a pool of emulators, one caller an emulator at a time (AGENTS.md, "How work is done
 # here"):
 #
-#   android/scripts/device-test.sh [--keep-emulator] [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app]
-#                                  [CLASS[=DIR]]...
+#   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
+#                                  [--keep-emulator]
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
@@ -24,17 +24,18 @@
 # ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}, as before, and each other's the same name
 # with its port (caracole-emulator-5556.lock). It uses an emulator alone (a serial emulator-NNNN), never a phone adb also
 # lists, starts the one it took if it isn't up (each read-only, so several run on the one AVD; without a display it
-# stops and says so), never holding the lock (nothing the script starts inherits it). Between classes the app's data is
-# cleared, and the print spooler and any chooser closed. It prints each class's result and exits non-zero on any
-# failure.
+# stops and says so), never holding the lock (nothing the script starts inherits it). Between classes the app's data is cleared, and the print spooler and any
+# chooser closed. It prints each class's result and exits non-zero on any failure.
 #
 # It leaves nothing it started running, the owner's rule of 2026-11-27 ("Ensure that emulators are properly killed
 # when using them for testing or development. same thing for gradle biuld and adb servers."): as it ends, on every
-# path (a pass, a failure, an interrupt), the emulator it started is stopped (adb emu kill, then its process waited
-# for, CARACOLE_EMULATOR_STOP_WAIT seconds, 60 by default, then killed), while it still holds that emulator's lock, so
-# the next caller never takes a dying one; an emulator that was up already is someone else's and is left up. The adb
-# server it started is stopped once adb lists no device at all and no other caller holds an emulator of the pool;
-# one running before it is left. android/scripts/stop-all.sh stops whatever is left.
+# path (a pass, a failure, an interrupt, a second one during the stop), the emulator it started is stopped (adb emu
+# kill, then its process session waited for, CARACOLE_EMULATOR_STOP_WAIT seconds, 60 by default, then killed), while
+# it still holds that emulator's lock, so the next caller never takes a dying one; an emulator that was up already is
+# someone else's and is left up. An emulator left by a run that was SIGKILLed, or by a script older than this, reads
+# so to every later caller and stays up until android/scripts/stop-all.sh runs. The adb server it started is stopped
+# once adb lists no device at all, in any state, and no other caller holds an emulator of the pool; one running
+# before it is left. No adb it runs inherits the lock.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -100,7 +101,7 @@ done
 # adb: the host's, else the emulator shell's (one adb server for every caller: a phone it also lists is never used).
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(cd "$repo" && nix develop ./android#emulator -c sh -c 'command -v adb')"
-adb_cmd() { "$adb_bin" "$@"; }
+adb_cmd() { "$adb_bin" "$@" 9>&-; }  # an adb server it starts never holds the lock
 emulator_serial() { adb_cmd devices 2>/dev/null | awk -v s="emulator-$port" '$1 == s && $2 == "device" { print $1; exit }'; }
 
 # What this run started, stopped as it ends (the owner's rule of 2026-11-27), on every path and while it still holds
@@ -109,10 +110,14 @@ started_sid=""      # the session of the emulator it started (setsid's pid: the 
 adb_started=0
 running_in() { [ -n "$1" ] && pgrep -s "$1" >/dev/null 2>&1; }
 stop_ours() {
+    trap '' INT TERM HUP  # a second Ctrl-C never cuts the stop short, the lock let go with the emulator still up
     set +e
     local s="emulator-$port" wait="${CARACOLE_EMULATOR_STOP_WAIT:-60}" t
     if [ -n "$started_sid" ] && [ "$keep" = 1 ]; then
         echo "device-test.sh: $s kept up (--keep-emulator)" >&2
+    elif [ -n "$started_sid" ] && ! running_in "$started_sid"; then
+        # Whatever answers as $s now is not the one it started: nothing is sent to it.
+        echo "device-test.sh: $s, which it started, had stopped already: nothing to stop" >&2
     elif [ -n "$started_sid" ]; then
         [[ "$s" =~ ^emulator-[0-9]+$ ]] && adb_cmd -s "$s" emu kill >/dev/null 2>&1  # never a device but an emulator
         for ((t = 0; t < wait * 10; t++)); do running_in "$started_sid" || break; sleep 0.1; done
@@ -120,7 +125,13 @@ stop_ours() {
             kill -TERM -- "-$started_sid" 2>/dev/null
             for ((t = 0; t < 100; t++)); do running_in "$started_sid" || break; sleep 0.1; done
             running_in "$started_sid" && kill -KILL -- "-$started_sid" 2>/dev/null
-            echo "device-test.sh: $s didn't stop within $wait s of emu kill: killed it" >&2
+            for ((t = 0; t < 50; t++)); do running_in "$started_sid" || break; sleep 0.1; done
+            if running_in "$started_sid"; then
+                echo "device-test.sh: $s didn't stop within $wait s of emu kill, nor when killed: its session" \
+                    "$started_sid still runs (android/scripts/stop-all.sh)" >&2
+            else
+                echo "device-test.sh: $s didn't stop within $wait s of emu kill: killed it" >&2
+            fi
         else
             echo "device-test.sh: stopped $s, which it started" >&2
         fi

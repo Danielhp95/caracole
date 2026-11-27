@@ -1,5 +1,5 @@
 """android/scripts/device-test.sh and android/scripts/stop-all.sh, each run from a copy in a checkout of its own
-against stand-ins for ``adb``, ``emulator``, ``nix`` (and, for stop-all.sh, ``pgrep``): what each leaves running, the
+against stand-ins for ``adb``, ``emulator``, ``nix`` (and, for stop-all.sh, ``ps``): what each leaves running, the
 owner's rule of 2026-11-27 ("Ensure that emulators are properly killed when using them for testing or development.
 same thing for gradle biuld and adb servers."). No test reaches a device, an emulator or Gradle."""
 
@@ -35,9 +35,19 @@ from pathlib import Path
 here = Path(__file__).resolve().parent
 state = here / "emulators"
 state.mkdir(exist_ok=True)
+def held_locks():
+    out = []
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            target = os.readlink(f"/proc/self/fd/{fd}")
+        except OSError:
+            continue
+        if target.endswith(".lock"):
+            out.append(target)
+    return out
 def log(tool, argv):
     with open(here / "calls.jsonl", "a") as f:
-        f.write(json.dumps({"tool": tool, "argv": argv}) + "\n")
+        f.write(json.dumps({"tool": tool, "argv": argv, "locks": held_locks()}) + "\n")
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -90,6 +100,11 @@ if rest[:3] == ["shell", "getprop", "sys.boot_completed"]:
 if rest[:3] == ["shell", "am", "instrument"]:
     how = os.environ.get("FAKE_INSTRUMENT", "ok")
     (here / "instrumenting").write_text("")
+    if how == "crash":  # the emulator dies mid-run
+        port = serial.removeprefix("emulator-")
+        (state / (port + ".kill")).write_text("")
+        while port in emulators():
+            time.sleep(0.05)
     if how == "hang":
         time.sleep(60)
     print("FAILURES!!!\r" if how == "fail" else "OK (1 test)\r")
@@ -112,32 +127,43 @@ while os.environ.get("FAKE_EMULATOR_DEAF") or not (state / (port + ".kill")).exi
 (state / port).unlink(missing_ok=True)
 '''
 
-# nix: `develop … -c gradle …` logged (the build, or --stop); any other `-c` command run as it is.
+# nix: `develop … -c gradle …` logged (the build, --status: FAKE_GRADLE_STATUS, or --stop); any other `-c` command run
+# as it is.
 NIX = COMMON + r'''
 argv = sys.argv[1:]
 log("nix", argv)
 rest = argv[argv.index("-c") + 1:]
 if rest[:1] == ["gradle"]:
+    if "--status" in rest:
+        print(os.environ.get("FAKE_GRADLE_STATUS", ""))
+        sys.exit(int(os.environ.get("FAKE_GRADLE_STATUS_RC", "0")))
     sys.exit(0)
 os.execvp(rest[0], rest)
 '''
 
-# pgrep, for stop-all.sh: `-f GradleDaemon` the pids in FAKE_GRADLE_DAEMONS, `-f …-port N…` that emulator's pid.
-PGREP = COMMON + r'''
+# ps, for stop-all.sh (`ps -u UID -o pid=,comm=,args=`): each emulator alive as its qemu, FAKE_GRADLE_DAEMONS' pids as
+# Gradle daemons, and FAKE_PS_EXTRA's lines as they are.
+PS = COMMON + r'''
 argv = sys.argv[1:]
-log("pgrep", argv)
-pattern = argv[-1]
-if "GradleDaemon" in pattern:
-    pids = os.environ.get("FAKE_GRADLE_DAEMONS", "").split()
-else:
-    pids = [str(pid) for port, pid in emulators().items() if port in pattern]
-print("\n".join(pids))
-sys.exit(0 if pids else 1)
+log("ps", argv)
+for port, pid in sorted(emulators().items()):
+    print(f"{pid} qemu-system-x86 /nix/store/x-emulator/qemu-system-x86_64 -avd caracole -port {port} -read-only")
+for pid in os.environ.get("FAKE_GRADLE_DAEMONS", "").split():
+    print(f"{pid} java /nix/store/x-jdk/bin/java -Xmx3g -cp gradle.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon"
+          " 8.14.4")
+for line in os.environ.get("FAKE_PS_EXTRA", "").splitlines():
+    print(line)
 '''
+
+STATUS = """   PID STATUS   INFO
+{lines}
+
+Only Daemons for the current Gradle version are displayed. See https://docs.gradle.org/8.14.4/userguide/gradle_daemon.html#sec:status
+"""
 
 
 class Rig:
-    def __init__(self, tmp_path: Path, *, pgrep: bool = False):
+    def __init__(self, tmp_path: Path, *, ps: bool = False):
         self.tmp = tmp_path
         self.android = tmp_path / "checkout" / "android"
         (self.android / "scripts").mkdir(parents=True)
@@ -146,7 +172,7 @@ class Rig:
                 shutil.copy2(SCRIPTS / name, self.android / "scripts" / name)
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
-        tools = [("adb", ADB), ("emulator", EMULATOR), ("nix", NIX)] + ([("pgrep", PGREP)] if pgrep else [])
+        tools = [("adb", ADB), ("emulator", EMULATOR), ("nix", NIX)] + ([("ps", PS)] if ps else [])
         for name, body in tools:
             tool = self.bin / name
             tool.write_text(f"#!{sys.executable}\n{body}", encoding="utf-8")
@@ -194,10 +220,15 @@ class Rig:
                 out[f.name] = int(f.read_text())
         return out
 
-    def calls(self, tool: str | None = None) -> list[list[str]]:
+    def records(self) -> list[dict]:
         log = self.bin / "calls.jsonl"
-        lines = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
-        return [c["argv"] for c in lines if tool is None or c["tool"] == tool]
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+    def calls(self, tool: str | None = None) -> list[list[str]]:
+        return [c["argv"] for c in self.records() if tool is None or c["tool"] == tool]
+
+    def adb_held_no_lock(self) -> bool:
+        return all(c["locks"] == [] for c in self.records() if c["tool"] == "adb")
 
     def close(self) -> None:
         for proc in self.extra:
@@ -234,7 +265,7 @@ def rig(tmp_path):
 
 @pytest.fixture
 def stop_rig(tmp_path):
-    made = Rig(tmp_path, pgrep=True)
+    made = Rig(tmp_path, ps=True)
     yield made
     made.close()
 
@@ -363,6 +394,69 @@ def test_an_adb_server_it_started_is_left_while_another_caller_holds_an_emulator
     assert "left the adb server it started: another caller holds emulator-5556" in done.stderr
 
 
+def test_no_adb_it_runs_holds_the_emulators_lock(rig):
+    """An adb server it starts (adb forks it) would otherwise hold that emulator's flock until it dies."""
+    done = rig.run("device-test.sh", "--area", "keys")
+    assert done.returncode == 0, done.stderr
+    assert ["kill-server"] in rig.calls("adb"), "it started the server"
+    assert rig.adb_held_no_lock()
+
+
+def test_an_emulator_that_died_mid_run_is_sent_nothing_and_killed_by_no_one(rig):
+    rig.server_up()
+    done = rig.run("device-test.sh", "--area", "keys", FAKE_INSTRUMENT="crash")
+    assert ["-s", "emulator-5554", "emu", "kill"] not in rig.calls("adb"), "whatever answers there now isn't ours"
+    assert "device-test.sh: emulator-5554, which it started, had stopped already: nothing to stop" in done.stderr
+    assert "killed" not in done.stderr
+
+
+def test_a_second_interrupt_during_the_stop_never_cuts_it_short(rig):
+    rig.server_up()
+    proc = subprocess.Popen(rig.command("device-test.sh", "--area", "keys"),
+                            env=rig.env(FAKE_INSTRUMENT="hang", FAKE_EMULATOR_DEAF="1"),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        until(lambda: (rig.bin / "instrumenting").exists(), timeout=60)
+        os.killpg(proc.pid, signal.SIGINT)
+        until(lambda: (rig.bin / "emulators" / "5554.kill").exists(), timeout=30)  # the stop has begun
+        os.killpg(proc.pid, signal.SIGINT)
+        os.killpg(proc.pid, signal.SIGTERM)
+        _, err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    assert rig.emulators() == {}, "stopped all the same"
+    assert "emulator-5554 didn't stop within 3 s of emu kill: killed it" in err
+
+
+def test_sigterm_still_stops_the_emulator(rig):
+    rig.server_up()
+    proc = subprocess.Popen(rig.command("device-test.sh", "--area", "keys"), env=rig.env(FAKE_INSTRUMENT="hang"),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        until(lambda: (rig.bin / "instrumenting").exists(), timeout=60)
+        os.killpg(proc.pid, signal.SIGTERM)
+        _, err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    assert proc.returncode == 143
+    assert rig.emulators() == {}
+    assert "stopped emulator-5554" in err
+
+
+@pytest.mark.parametrize("state", ["offline", "unauthorized"])
+@pytest.mark.parametrize("serial", [PHONE, "emulator-5560"])
+def test_an_adb_server_it_started_is_left_while_a_device_in_any_state_is_listed(rig, state, serial):
+    done = rig.run("device-test.sh", "--area", "keys", FAKE_ADB_DEVICES=f"{serial} {state}")
+    assert done.returncode == 0, done.stderr
+    assert ["kill-server"] not in rig.calls("adb")
+    assert rig.server
+    assert "left the adb server it started: a device is still listed" in done.stderr
+
+
 # stop-all.sh
 
 
@@ -374,24 +468,70 @@ def test_stop_all_with_nothing_running_says_so_and_exits_0(stop_rig):
     assert "stop-all.sh: no adb server was running" in done.stdout
     assert not stop_rig.server, "the server its own look started is stopped again"
     assert stop_rig.calls("nix") == []
+    assert all(c[:1] == ["-u"] and c[1] == str(os.getuid()) for c in stop_rig.calls("ps")), "this user's alone"
 
 
-def test_stop_all_stops_every_free_pool_emulator_gradle_and_the_adb_server(stop_rig):
+def test_stop_all_stops_every_free_pool_emulator_and_the_adb_server(stop_rig):
     stop_rig.server_up()
     stop_rig.emulator_up(5554)
     stop_rig.emulator_up(5556)
-    done = stop_rig.run("stop-all.sh", CARACOLE_EMULATORS="3", FAKE_GRADLE_DAEMONS="4242")
+    done = stop_rig.run("stop-all.sh", CARACOLE_EMULATORS="3")
     assert done.returncode == 0, done.stderr
     assert stop_rig.emulators() == {}
     assert "stop-all.sh: stopped emulator-5554" in done.stdout
     assert "stop-all.sh: stopped emulator-5556" in done.stdout
-    assert ["develop", str(stop_rig.android), "-c", "gradle", "-p", str(stop_rig.android), "--stop"] in \
-        stop_rig.calls("nix")
-    assert "stop-all.sh: stopped the Gradle daemons (gradle --stop)" in done.stdout
     assert ["kill-server"] in stop_rig.calls("adb")
     assert "stop-all.sh: stopped the adb server (no device listed)" in done.stdout
+    assert stop_rig.adb_held_no_lock(), "no adb it runs holds a pool lock"
     again = stop_rig.run("stop-all.sh", CARACOLE_EMULATORS="3")
     assert again.returncode == 0 and "no emulator of the pool is running" in again.stdout, "idempotent"
+
+
+def test_stop_all_without_gradle_leaves_the_daemons_and_says_they_idle_out(stop_rig):
+    stop_rig.server_up()
+    done = stop_rig.run("stop-all.sh", FAKE_GRADLE_DAEMONS="4242 4343")
+    assert done.returncode == 0, done.stderr
+    assert stop_rig.calls("nix") == [], "no gradle --status, no gradle --stop"
+    assert "stop-all.sh: left 2 Gradle daemon(s): each stops by itself after two idle minutes (--gradle stops them " \
+        "now)" in done.stdout
+
+
+def test_stop_all_with_gradle_stops_them_when_every_one_is_idle(stop_rig):
+    stop_rig.server_up()
+    status = STATUS.format(lines="  4242 IDLE     8.14.4\n  4343 IDLE     8.14.4")
+    done = stop_rig.run("stop-all.sh", "--gradle", FAKE_GRADLE_DAEMONS="4242 4343", FAKE_GRADLE_STATUS=status)
+    assert done.returncode == 0, done.stderr
+    assert stop_rig.calls("nix") == [
+        ["develop", str(stop_rig.android), "-c", "gradle", "-p", str(stop_rig.android), "--status"],
+        ["develop", str(stop_rig.android), "-c", "gradle", "-p", str(stop_rig.android), "--stop"]]
+    assert "stop-all.sh: stopped 2 idle Gradle daemon(s) (gradle --stop)" in done.stdout
+
+
+@pytest.mark.parametrize("lines, rc", [
+    ("  4242 IDLE     8.14.4\n  4343 BUSY     8.14.4", "0"),   # a build running in another checkout
+    ("  4242 IDLE     8.14.4", "0"),                           # one it can't read the state of
+    ("", "1"),                                                 # gradle --status failing
+])
+def test_stop_all_with_gradle_refuses_while_a_daemon_is_busy_or_unknown(stop_rig, lines, rc):
+    stop_rig.server_up()
+    done = stop_rig.run("stop-all.sh", "--gradle", FAKE_GRADLE_DAEMONS="4242 4343",
+                        FAKE_GRADLE_STATUS=STATUS.format(lines=lines) if lines else "", FAKE_GRADLE_STATUS_RC=rc)
+    assert done.returncode == 0, done.stderr
+    assert not any("--stop" in c for c in stop_rig.calls("nix"))
+    assert "stop-all.sh: left 2 Gradle daemon(s):" in done.stdout and "busy" in done.stdout
+
+
+def test_stop_all_matches_the_processes_themselves_never_a_command_line_quoting_them(stop_rig):
+    stop_rig.server_up()
+    decoys = "\n".join([
+        "777 bash bash -c pgrep -f qemu-system.*-port 5554 qemu-system-x86_64 -port 5554",
+        "778 vim vim org.gradle.launcher.daemon.bootstrap.GradleDaemon",
+    ])
+    done = stop_rig.run("stop-all.sh", FAKE_PS_EXTRA=decoys)
+    assert done.returncode == 0, done.stderr
+    assert "no emulator of the pool is running" in done.stdout
+    assert "no Gradle daemon is running" in done.stdout
+    assert ["-s", "emulator-5554", "emu", "kill"] not in stop_rig.calls("adb")
 
 
 def test_stop_all_leaves_an_emulator_whose_lock_another_caller_holds(stop_rig):
@@ -408,9 +548,23 @@ def test_stop_all_leaves_an_emulator_whose_lock_another_caller_holds(stop_rig):
     assert ["kill-server"] not in stop_rig.calls("adb"), "a device is listed"
 
 
-def test_stop_all_never_stops_the_adb_server_while_a_phone_is_listed(stop_rig):
+def test_stop_all_leaves_the_adb_server_while_a_caller_holds_a_pool_lock_with_nothing_listed_yet(stop_rig):
+    """An emulator early in its boot isn't listed yet: its caller holds the lock."""
     stop_rig.server_up()
-    done = stop_rig.run("stop-all.sh", FAKE_ADB_DEVICES=f"{PHONE} device")
+    stop_rig.lock.parent.mkdir(parents=True, exist_ok=True)
+    with open(stop_rig.lock.parent / "caracole-emulator-5556.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        done = stop_rig.run("stop-all.sh", CARACOLE_EMULATORS="3")
+    assert done.returncode == 0, done.stderr
+    assert ["kill-server"] not in stop_rig.calls("adb")
+    assert stop_rig.server
+    assert "stop-all.sh: left the adb server: another caller holds emulator-5556" in done.stdout
+
+
+@pytest.mark.parametrize("state", ["device", "offline", "unauthorized"])
+def test_stop_all_never_stops_the_adb_server_while_a_phone_in_any_state_is_listed(stop_rig, state):
+    stop_rig.server_up()
+    done = stop_rig.run("stop-all.sh", FAKE_ADB_DEVICES=f"{PHONE} {state}")
     assert done.returncode == 0, done.stderr
     assert ["kill-server"] not in stop_rig.calls("adb")
     assert stop_rig.server
