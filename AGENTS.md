@@ -59,7 +59,7 @@ Below the table, a section for each step whose modules have more to say.
 | fetch | ug/fetch.py, ug/page.py, ug/artist.py, ug/artist_tabs.py, rank.py, coverage.py, versions.py, sheet_versions.py |
 | lacuerda | lacuerda.py, lacuerda_fetch.py, lacuerda_index.py, lacuerda_search.py |
 | ireal | ireal.py, ireal_fetch.py, ireal_index.py |
-| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py, audio_store.py (`tidy`) |
+| scan | music.py (Music/; a song linked again, `follow_audio`: what was heard of the same bytes follows them), inbox.py (`_inbox/`), musicxml.py, audio_store.py (`tidy`) |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | harptabs | harptabs.py, harptabs_fetch.py, harptabs_index.py |
 | gametabs | gametabs.py, gametabs_fetch.py, gametabs_index.py |
@@ -2557,8 +2557,11 @@ It is rows.js's, shared by both pages:
     one rule, `of_audio`, the owner's "yes" of 2026-11-27 (a file moved, renamed or touched keeps what was heard of
     it): its path and mtime the song's, else the same bytes by its content key (`audio_key`: `audio_size`, and
     `audio_sha256`, a given file's 16 hex digits from its kept name, audio_store.py `given_sha16`, no read; any other
-    file's SHA-256, read only once the sizes agree, once a process while its stat stays, `_HASHED`); one with no key
-    (kept before keys were) other audio once path or mtime differ. A read answers so and writes nothing (a page build,
+    file's SHA-256, read only once the sizes agree, once a process while its stat stays, `_HASHED`; written only while
+    the file's mtime is the one the record names, so a file changed during a hearing, or replaced since the song's
+    row was read, keys nothing); one with no key (kept before keys were) other audio once path or mtime differ; a read
+    that fails no verdict, nothing kept; a page build after a bulk move or touch between scans reads each such file
+    once a process. A read answers so and writes nothing (a page build,
     `search`, the to-do page); `follow_audio`, where a write is allowed, re-points such a record (its path and mtime
     the song's) and keys an unkeyed one of the song's path and mtime: music.py `scan_music` right after it links a
     song's file again, and the nightly pass (`autochords_pending`) before each song. auto-chords' own

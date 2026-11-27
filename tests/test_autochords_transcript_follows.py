@@ -75,10 +75,10 @@ def noted(conn, song):
     record, all of its audio as it is now (each writer drops another, so they are written as they are kept)."""
     tr.keep_transcript(conn, song, made(song))
     nothing = {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": AT, "why": "you said so", "by": "you"}
-    kv_set_json(conn, f"{tr.HEARD_NOTHING}{song.id}", {**nothing, **tr.audio_key(song.audio_path)})
+    kv_set_json(conn, f"{tr.HEARD_NOTHING}{song.id}", {**nothing, **tr.audio_key(song.audio_path, song.audio_mtime)})
     kv_set_json(conn, f"{tr.WHISPER_CANT_READ}{song.id}", {
         "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": AT, "error": "no decoder",
-        **tr.audio_key(song.audio_path)})
+        **tr.audio_key(song.audio_path, song.audio_mtime)})
     tr.note_hearing_failed(conn, song, AT, "the GPU")
 
 
@@ -176,7 +176,7 @@ def test_an_old_record_with_no_key_holds_while_its_path_and_mtime_do_and_is_keye
     assert kv_get_json(conn, f"{tr.TRANSCRIPT}{song.id}") == old  # a read writes nothing
     assert hashed == []
     assert tr.follow_audio(conn, song) == 1  # a pass that may write keys it, lazily
-    assert kv_get_json(conn, f"{tr.TRANSCRIPT}{song.id}") == {**old, **tr.audio_key(song.audio_path)}
+    assert kv_get_json(conn, f"{tr.TRANSCRIPT}{song.id}") == {**old, **tr.audio_key(song.audio_path, song.audio_mtime)}
     assert tr.follow_audio(conn, song) == 0
     # Unkeyed, once its path and mtime differ, nothing proves the bytes: other audio, as before.
     kv_set_json(conn, f"{tr.TRANSCRIPT}{song.id}", old)
@@ -221,3 +221,34 @@ def test_the_cards_offers_are_the_same_after_a_move(conn, cfg, tmp_path):
     kv = conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall()
     assert tr.offers(conn, cfg, Overrides()) == offers
     assert conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall() == kv  # a page build writes nothing
+
+
+# The review of 2026-11-27: a record is keyed only with the bytes it names (its path and mtime as the file stands).
+
+
+def test_an_old_record_is_never_keyed_with_bytes_that_replaced_its_own(conn, tmp_path):
+    song = bought(conn, tmp_path)  # the row: its path, mtime and first bytes
+    old = made(song).as_json()  # an old unkeyed transcript of those bytes
+    kv_set_json(conn, f"{tr.TRANSCRIPT}{song.id}", old)
+    path = Path(song.audio_path)
+    path.write_bytes(b"other bytes entirely" * 5)  # replaced in place before any scan
+    os.utime(path, (song.audio_mtime + 50, song.audio_mtime + 50))
+    assert tr.follow_audio(conn, song) == 0  # a pass with the row as it was: its mtime isn't the file's, no key
+    assert kv_get_json(conn, f"{tr.TRANSCRIPT}{song.id}") == old
+    after = relinked(conn, song, path)  # the next scan links the new mtime
+    assert tr.transcript_of(conn, after) is None
+
+
+def test_a_record_kept_after_its_file_changed_is_keyed_with_nothing(conn, tmp_path):
+    song = bought(conn, tmp_path)
+    heard = made(song)  # heard of the first bytes, at the row's mtime
+    path = Path(song.audio_path)
+    path.write_bytes(b"other bytes entirely" * 5)  # changed while Whisper ran
+    os.utime(path, (song.audio_mtime + 50, song.audio_mtime + 50))
+    tr.keep_transcript(conn, song, heard)
+    tr.note_hearing_failed(conn, song, AT, "the GPU")
+    for prefix in (tr.TRANSCRIPT, tr.HEARING_FAILED):
+        assert tr.AUDIO_SHA256 not in kv_get_json(conn, f"{prefix}{song.id}"), prefix
+    after = relinked(conn, song, path)
+    assert tr.transcript_of(conn, after) is None
+    assert tr.hearing_failed(conn, after, NOW) is None

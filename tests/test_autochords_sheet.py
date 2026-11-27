@@ -147,7 +147,7 @@ def _unkeyed(key: str, value: str, song) -> str:
     if not key.startswith(RECORDS):
         return value
     record = json.loads(value)
-    assert {AUDIO_SIZE: record.pop(AUDIO_SIZE), AUDIO_SHA256: record.pop(AUDIO_SHA256)} == audio_key(song.audio_path)
+    assert {AUDIO_SIZE: record.pop(AUDIO_SIZE), AUDIO_SHA256: record.pop(AUDIO_SHA256)} == audio_key(song.audio_path, song.audio_mtime)
     return json.dumps(record, ensure_ascii=False)
 
 

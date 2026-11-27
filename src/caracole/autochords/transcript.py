@@ -154,7 +154,7 @@ def _sha256(path: str, st: os.stat_result) -> str | None:
     if seen not in _HASHED:
         try:
             sha = _read_sha256(path)
-        except OSError:
+        except OSError:  # no verdict: the reader answers "other audio" this once, and nothing of it is kept
             return None
         if len(_HASHED) >= _HASHED_MOST:
             _HASHED.clear()
@@ -162,18 +162,21 @@ def _sha256(path: str, st: os.stat_result) -> str | None:
     return _HASHED[seen]
 
 
-def audio_key(audio_path: str | None) -> dict[str, Any]:
-    """The content key of the file at ``audio_path``, a record's members (``AUDIO_SIZE``, ``AUDIO_SHA256``): a file you
-    gave a song by its kept name's digits (no read), any other by its bytes, read whole; {} for no regular file."""
+def audio_key(audio_path: str | None, audio_mtime: float | None) -> dict[str, Any]:
+    """The content key of the file at ``audio_path``, a record's members (``AUDIO_SIZE``, ``AUDIO_SHA256``), only while
+    the file is the one the record names: its mtime ``audio_mtime`` (the review of 2026-11-27: a file changed during a
+    hearing, or replaced in place since the song's row was read, would key the record with bytes it wasn't heard
+    from). A file you gave a song by its kept name's digits (no read), any other by its bytes, read whole; {} for no
+    regular file, another mtime, or one that can't be read: the record stays unkeyed, other audio once it moves."""
     from caracole.audio_store import given_sha16
 
-    if not audio_path:
+    if not audio_path or audio_mtime is None:
         return {}
     try:
         st = os.stat(audio_path)
     except OSError:
         return {}
-    if not stat.S_ISREG(st.st_mode):
+    if not stat.S_ISREG(st.st_mode) or st.st_mtime != audio_mtime:
         return {}
     sha = given_sha16(audio_path) or _sha256(audio_path, st)
     return {AUDIO_SIZE: st.st_size, AUDIO_SHA256: sha} if sha is not None else {}
@@ -213,7 +216,10 @@ def of_audio(song: Song, record: object) -> bool:
     key) is of the song's audio as it is now: its path and mtime the song's; else the same bytes by its key
     (``_same_bytes``), a record with none (kept before keys were) other audio, as nothing proves its bytes. The one
     rule every reader here keeps, writing nothing: a file is read only where path or mtime moved, the record has a key
-    and the sizes agree, once a process while the file stays (``_HASHED``)."""
+    and the sizes agree, once a process while the file stays (``_HASHED``). Its worst case is a page build after
+    files were moved or touched in bulk between two scans (which re-point them, ``follow_audio``): one whole read of
+    each such song's file with a keyed record, once a caracole serve process, its later builds answered from
+    ``_HASHED``."""
     if not isinstance(record, Mapping):
         return False
     if _own_audio(song, record.get("audio"), record.get("audio_mtime")):
@@ -235,13 +241,13 @@ def follow_audio(conn: sqlite3.Connection, song: Song) -> int:
         if _own_audio(song, record.get("audio"), record.get("audio_mtime")):
             if isinstance(record.get(AUDIO_SHA256), str):
                 continue
-            key = audio_key(song.audio_path)
+            key = audio_key(song.audio_path, song.audio_mtime)
             if not key:
                 continue
             followed = {**record, **key}
         elif _same_bytes(song, record):
             followed = {**record, "audio": song.audio_path, "audio_mtime": song.audio_mtime,
-                        **audio_key(song.audio_path)}
+                        **audio_key(song.audio_path, song.audio_mtime)}
         else:
             continue
         kv_set_json(conn, f"{prefix}{song.id}", followed)
@@ -251,13 +257,14 @@ def follow_audio(conn: sqlite3.Connection, song: Song) -> int:
 
 def _noted(song: Song) -> dict[str, Any]:
     """A record's members naming the song's audio as it is now: its path, mtime and content key."""
-    return {"audio": song.audio_path, "audio_mtime": song.audio_mtime, **audio_key(song.audio_path)}
+    key = audio_key(song.audio_path, song.audio_mtime)
+    return {"audio": song.audio_path, "audio_mtime": song.audio_mtime, **key}
 
 
 def keep_transcript(conn: sqlite3.Connection, song: Song, transcript: Transcript) -> None:
     """The song's transcript kept, with its audio's content key: its audio heard, so neither nothing sung nor
     Whisper's refusal of it stands."""
-    kv_set_json(conn, f"{TRANSCRIPT}{song.id}", {**transcript.as_json(), **audio_key(transcript.audio)})
+    kv_set_json(conn, f"{TRANSCRIPT}{song.id}", {**transcript.as_json(), **audio_key(transcript.audio, transcript.audio_mtime)})
     kv_delete(conn, f"{HEARD_NOTHING}{song.id}")
     kv_delete(conn, f"{WHISPER_CANT_READ}{song.id}")
     kv_delete(conn, f"{HEARING_FAILED}{song.id}")
