@@ -6,7 +6,8 @@ promise is that losing it costs only requests: a file you gave can't be fetched 
 
 - **A kept file** is ``<song id>-<first 16 hex of its SHA-256><ext>`` (``keep``), and the song's ``audio_path`` names
   it, as it names a purchase. A song's audio is an upload when that path is a regular file of this folder by such a
-  name (``uploaded``): no kv record, nothing the phone or a sync sees.
+  name (``uploaded``): no kv record of it, nothing the phone or a sync sees. The name the file was given under is
+  kept beside it (kv ``audio:name:<song id>``, ``NAME_KEY``, ``given_name``), for its auto sheet's raw alone.
 - **An upload always wins**, the owner's decision of 2026-11-25: a file you give a song is its audio whatever it had
   (a purchase linked from Music/, whose file stays where it is; YouTube's audio, which youtube_fetch.py's ``tidy``
   then lets go of; an earlier upload, deleted), and nothing takes its place later: ``music.scan_music`` leaves such a
@@ -54,11 +55,16 @@ from shutil import disk_usage
 from typing import IO, Any
 
 from caracole.config import Config
+from caracole.db import kv_delete, kv_get, kv_set
 from caracole.songs import Song, get_song, update_song
 
 log = logging.getLogger(__name__)
 
 FOLDER = "audio"  # in the state directory
+# kv: the name the file a song's audio is was given under (an upload's, as sent; a file of your own's), a name to
+# show alone, for its auto sheet's raw (``audio_name``): written as ``keep`` makes it the song's audio, gone with the
+# song (songs._PER_SONG_KV), and with the file at a merge (songs._given_audio); no sync carries it, the raw does.
+NAME_KEY = "audio:name:"
 AUDIO_MAX = 128 * 1024 * 1024  # an upload's bytes, at most; a file of your own is any size
 MAX_SECONDS = 30 * 60  # an audio file's length, at most
 ROOM = 1024 ** 3  # bytes the disk keeps free beside twice the file, at least
@@ -720,15 +726,37 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
                 _unlink(part)
                 raise
     _sync(root)
-    return _named(conn, root, current, kept, staged_audio.group("id") if move else None)
+    return _named(conn, root, current, kept, staged_audio.group("id") if move else None, source.name)
 
 
-def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None) -> Path:
-    """The song's row naming the kept file, then the staged record let go (a moved upload's keep over), then the file
-    the song had there before, unless another song's row names it."""
+def given_name(conn: sqlite3.Connection, song: Song) -> str | None:
+    """The name the song's given file had (``NAME_KEY``): None for a song kept none for, or one kept before the
+    record was (never a name made up)."""
+    return kv_get(conn, f"{NAME_KEY}{song.id}") or None
+
+
+def _sent_name(root: Path, upload_id: str) -> str:
+    """The name a staged upload was sent under, from its record (``_display_name``'s); "" when it can't be read."""
+    try:
+        record = json.loads((root / f"{_STAGED}{upload_id}.json").read_bytes())
+    except (OSError, ValueError):
+        return ""
+    return _display_name(record.get("name")) if isinstance(record, dict) else ""
+
+
+def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None,
+           name: str = "") -> Path:
+    """The song's row naming the kept file, and the name it was given under (``NAME_KEY``: a staged upload's, else
+    ``name``), then the staged record let go (a moved upload's keep over), then the file the song had there before,
+    unless another song's row names it."""
     mtime = os.lstat(kept).st_mtime
+    shown = _sent_name(root, upload_id) if upload_id is not None else _display_name(name)
     if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
         update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
+    if shown:
+        kv_set(conn, f"{NAME_KEY}{current.id}", shown)
+    else:
+        kv_delete(conn, f"{NAME_KEY}{current.id}")
     if upload_id is not None:
         _unlink(root / f"{_STAGED}{upload_id}.json")  # the row names the kept file now
     earlier = kept_in(root, current.audio_path)

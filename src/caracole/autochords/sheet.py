@@ -61,7 +61,10 @@ def heard_record(heard: Heard) -> dict[str, object]:
     """What was heard as an auto sheet's raw keeps it (``raw["heard"]``): ``{"contract": CONTRACT, "duration",
     "chords": [[start, end, label], …], "beats": […], "downbeats": […]}``, every time a float in seconds as the models
     gave it (BTC's segments rounded to the millisecond by btc.py, beat_this's beats a frame over 50), in their order,
-    so that ``heard_of`` gives back the very ``Heard`` and ``make_sheet`` the very bytes."""
+    so that ``heard_of`` gives back the very ``Heard`` and ``make_sheet`` the very bytes. Each label is the chord's
+    common name, the one ``make_sheet`` takes, as ``BTCRecognizer.recognize`` returns it (``common_name`` of
+    ``spell_for_key``'s Harte label, runs of one name joined: "Am7", "Bb", "N" for none), never the Harte label: the
+    phone stores the same."""
     return {
         "contract": CONTRACT,
         "duration": None if heard.duration is None else float(heard.duration),
@@ -71,19 +74,53 @@ def heard_record(heard: Heard) -> dict[str, object]:
     }
 
 
+def _number(value: object) -> float:
+    """A number of a heard record, as a float: an int or a float, never a bool or a text."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"what was heard holds {value!r} where a number goes")
+    return float(value)
+
+
+def _numbers(record: Mapping[str, object], member: str) -> list[float]:
+    value = record.get(member)
+    if not isinstance(value, list):
+        raise ValueError(f"what was heard has no list of numbers for its {member}")
+    return [_number(v) for v in value]
+
+
+def read_heard(record: object) -> Heard:
+    """The ``Heard`` of a heard record (``heard_record``'s), read strictly, as the phone reads it: ``contract`` 1;
+    ``duration`` a number or null; ``chords`` a list of ``[number, number, text]``; ``beats`` and ``downbeats`` lists
+    of numbers (a number an int or a float, never a bool or a text), each read as a float. ValueError, in words, for
+    anything else."""
+    if not isinstance(record, dict):
+        raise ValueError("what was heard isn't a record")
+    if record.get("contract") != CONTRACT or isinstance(record.get("contract"), bool):
+        raise ValueError(f"what was heard is of contract {record.get('contract')!r}, not {CONTRACT}")
+    if "duration" not in record:
+        raise ValueError("what was heard has no duration")
+    duration = record["duration"]
+    chords = record.get("chords")
+    if not isinstance(chords, list):
+        raise ValueError("what was heard has no list of chords")
+    segments = []
+    for chord in chords:
+        if not (isinstance(chord, list) and len(chord) == 3 and isinstance(chord[2], str)):
+            raise ValueError(f"what was heard holds {chord!r} where a chord [start, end, name] goes")
+        segments.append(ChordSegment(_number(chord[0]), _number(chord[1]), chord[2]))
+    return Heard(segments, _numbers(record, "beats"), _numbers(record, "downbeats"),
+                 None if duration is None else _number(duration))
+
+
 def heard_of(raw: Mapping[str, object]) -> Heard | None:
-    """The ``Heard`` an auto sheet's raw keeps (``heard_record``'s); None for a raw that keeps none (a sheet made
-    before it was kept), of another contract, or one that can't be read."""
+    """The ``Heard`` an auto sheet's raw keeps (``read_heard`` of its ``heard``); None for a raw that keeps none (a
+    sheet made before it was kept), or keeps one of another contract or shape."""
     record = raw.get("heard")
-    if not isinstance(record, dict) or record.get("contract") != CONTRACT:
+    if record is None:
         return None
     try:
-        duration = record["duration"]
-        segments = [ChordSegment(float(a), float(b), str(label)) for a, b, label in record["chords"]]
-        beats = [float(b) for b in record["beats"]]
-        downbeats = [float(d) for d in record["downbeats"]]
-        return Heard(segments, beats, downbeats, None if duration is None else float(duration))
-    except (KeyError, TypeError, ValueError):
+        return read_heard(record)
+    except ValueError:
         return None
 
 
@@ -93,7 +130,7 @@ class Maker:
     caracole's id (``by``: kv ``sync:id``, as the sync's state names it), the models' names (``models``: "chords",
     "beats", each ``name@<16 hex of its file's SHA-256>``) and what ran them (``runtime``: "torch 2.13.0"), the audio
     file's name alone (``audio_name``: a purchase's; none for YouTube's) and the first 16 hex digits of the SHA-256 of
-    its bytes (``audio_sha16``). Never a path of this machine."""
+    its bytes (``audio_sha16``). None of these is a path of this machine (the raw's older ``audio`` member still is)."""
 
     on: str
     by: str | None

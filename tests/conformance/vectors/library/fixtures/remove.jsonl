@@ -8,6 +8,10 @@
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":2,"kept_rank":1,"name":"tab.txt","path":"Radiohead/Creep/tab.txt","sha256":"77fdc6b7985eb31c45f3e39c2c060fbb194ae9ba695ee9bcde04b71ac4f15c62","song_id":1,"version_id":1},"table":"files"}
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":3,"kept_rank":1,"name":"sheet.txt","path":"Radiohead/Karma Police/sheet.txt","sha256":"2dafa4711a130165a2407cb1a3dc8b69299c1b153f837eac08ba584e1443df7e","song_id":2,"version_id":2},"table":"files"}
 {"row":{"artist":"Radiohead","key":"radiohead/creep","removed_at":"2026-10-01T00:00:00Z","source_ids":"{\"wanted\": [\"radiohead/creep-old\"]}","title":"Creep"},"table":"removed"}
+{"kv":"audio:name:1","value":"{}"}
+{"kv":"audio:name:1:more","value":"{}"}
+{"kv":"audio:name:2","value":"{}"}
+{"kv":"audio:name:2:more","value":"{}"}
 {"kv":"autochords:failed:1","value":"{}"}
 {"kv":"autochords:failed:1:more","value":"{}"}
 {"kv":"autochords:failed:2","value":"{}"}

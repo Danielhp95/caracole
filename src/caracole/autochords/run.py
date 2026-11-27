@@ -813,17 +813,17 @@ class _Beats:
 def _maker(conn: sqlite3.Connection, song: Song, recognizer: Recognizer, beats_fn: BeatsFn,
            video: Video | None) -> Maker:
     """Who made the song's auto sheet here, from what: this side, this caracole's id (peer_sync.py ``own_id``), the
-    models' names and runtime where they say them, the audio file's name (none for YouTube's, and none for a file you
-    gave it, whose kept name is caracole's own: audio_store.py, which keeps no name it was sent under) and its bytes'
-    hash, read once."""
-    from caracole.audio_store import given_file
+    models' names and runtime where they say them, the audio file's name (a purchase's own; for a file you gave, the
+    name it was given under, audio_store.py ``given_name``, none for one kept before that was recorded; none for
+    YouTube's) and its bytes' hash, read once."""
+    from caracole.audio_store import given_file, given_name
     from caracole.peer_sync import own_id
 
     audio = Path(song.audio_path or "")
     models = {part: name for part, name in (("chords", getattr(recognizer, "name", None)),
                                             ("beats", getattr(beats_fn, "name", None))) if isinstance(name, str)}
     runtime = getattr(recognizer, "runtime", None)
-    name = None if video is not None or given_file(song.audio_path) else audio.name
+    name = None if video is not None else given_name(conn, song) if given_file(song.audio_path) else audio.name
     return Maker(MADE_ON, own_id(conn), models, runtime if isinstance(runtime, str) else None, name, sha16(audio))
 
 

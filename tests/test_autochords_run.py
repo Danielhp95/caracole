@@ -254,19 +254,29 @@ def test_a_sheet_keeps_what_was_heard_and_who_made_it(conn, cfg, tmp_path):
     assert str(tmp_path) not in json.dumps({m: raw[m] for m in NEW_MEMBERS})
 
 
-def test_a_file_you_gave_and_youtubes_audio_keep_no_audio_name(conn, cfg, tmp_path):
-    # An upload is kept under caracole's own name (<song id>-<sha16><ext>), not the one it was sent under; YouTube's
-    # audio is the video's, which the raw's youtube names.
-    from caracole.audio_store import FOLDER
+def test_a_file_you_gave_is_named_as_it_was_given_and_a_remake_names_it_alike(conn, cfg, tmp_path):
+    # An upload is kept under caracole's own name (<song id>-<sha16><ext>); its raw names the file as it was given
+    # (audio_store.py's kv audio:name:), and so does its sheet made again. One kept before that record has none: no
+    # audio_name, never a made-up one.
+    from caracole.audio_store import FOLDER, NAME_KEY
+    from caracole.db import kv_delete, kv_set
 
     given = add_song(conn, "Nobody", "Given")
     folder = tmp_path / "state" / FOLDER
     folder.mkdir(parents=True)
     path = make_wav(folder / f"{given.id}-0123456789abcdef.wav", 10.0)
     update_song(conn, given.id, audio_path=str(path), audio_mtime=os.stat(path).st_mtime)
+    kv_set(conn, f"{NAME_KEY}{given.id}", "Given (demo).wav")
     assert run(conn, cfg).generated == 1
     raw = auto_raw(conn, given)
-    assert "audio_name" not in raw and len(raw["audio_sha16"]) == 16
+    assert raw["audio_name"] == "Given (demo).wav" and len(raw["audio_sha16"]) == 16
+    update_song(conn, given.id, autochords_mtime=None)  # made again
+    assert run(conn, cfg).generated == 1
+    assert auto_raw(conn, given)["audio_name"] == "Given (demo).wav"
+    kv_delete(conn, f"{NAME_KEY}{given.id}")
+    update_song(conn, given.id, autochords_mtime=None)
+    assert run(conn, cfg).generated == 1
+    assert "audio_name" not in auto_raw(conn, given)
 
 
 def test_a_song_keeps_its_one_auto_version_whoever_made_it(conn, cfg, tmp_path):

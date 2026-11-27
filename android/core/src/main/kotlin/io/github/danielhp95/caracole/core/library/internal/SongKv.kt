@@ -19,7 +19,7 @@ internal object SongKv {
         "transcript:", "transcribe:none:",
         "transcribe:unreadable:", "transcribe:failed:",
         "sheet_versions:same:",
-        "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:",
+        "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:", "audio:name:",
     )
 
     /** songs.KEY_VERSION_KV: the normalize.KEY_VERSION the stored keys were made with. */

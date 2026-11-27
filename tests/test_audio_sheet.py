@@ -161,6 +161,13 @@ def test_an_upload_is_moved_into_place(setup, conn, sites, tmp_path):
     assert set(kept_files(setup)) == {kept.name, f".upload-{up.id}.kept"}  # moved: its marker alone stays
     with pytest.raises(audio_store.AudioError):
         audio_store.staged(setup, up.id)
+    # Its auto sheet names the file as it was sent, never by caracole's kept name
+    from caracole.songs import AUTO_SHEET
+    from caracole.versions import get_version
+
+    vid = conn.execute("SELECT version_id FROM files WHERE song_id = ? AND name = ?",
+                       (the_song(conn).id, AUTO_SHEET)).fetchone()[0]
+    assert get_version(conn, vid).raw["audio_name"] == "Vikingos.mp3"
 
 
 def test_youtube_audio_is_replaced_and_its_file_let_go(setup, conn, sites, tmp_path):

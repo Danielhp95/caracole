@@ -250,26 +250,63 @@ def test_a_sheet_laid_out_again_from_what_its_raw_kept_is_the_same_bytes(conn, c
 def test_a_raw_that_kept_no_heard_or_another_contract_gives_none():
     assert heard_of({"model": "btc_large_voca"}) is None
     assert heard_of({"heard": {"contract": 2, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}}) is None
-    assert heard_of({"heard": {"contract": 1, "chords": "C"}}) is None
+
+
+GOOD = {"contract": 1, "duration": 10.0, "chords": [[0.0, 5.0, "C"], [5, 10.0, "G"]], "beats": [0.5, 1], "downbeats": []}
+
+
+@pytest.mark.parametrize("member, value", [
+    ("beats", "12"),  # a string is no list of numbers, though it iterates
+    ("beats", [0.5, True]),  # a bool is no number
+    ("beats", [0.5, "1.0"]),
+    ("downbeats", None),
+    ("duration", True),
+    ("duration", "10.0"),
+    ("chords", [[0.0, 5.0]]),
+    ("chords", [[0.0, 5.0, "C", "x"]]),
+    ("chords", [["0.0", 5.0, "C"]]),
+    ("chords", [[0.0, False, "C"]]),
+    ("chords", [[0.0, 5.0, 7]]),
+    ("chords", "C"),
+    ("contract", None),
+])
+def test_a_heard_record_of_any_other_shape_is_unreadable(member, value):
+    from caracole.autochords.sheet import read_heard
+
+    record = {**GOOD, member: value}
+    with pytest.raises(ValueError, match="what was heard"):
+        read_heard(record)
+    assert heard_of({"heard": record}) is None
+    record = {k: v for k, v in GOOD.items() if k != member}
+    with pytest.raises(ValueError):
+        read_heard(record)
+
+
+def test_a_heard_record_reads_its_numbers_as_floats():
+    from caracole.autochords.sheet import read_heard
+
+    heard = read_heard(GOOD)
+    assert heard == Heard([ChordSegment(0.0, 5.0, "C"), ChordSegment(5.0, 10.0, "G")], [0.5, 1.0], [], 10.0)
+    assert all(type(x) is float for x in [*heard.beats, *(s.start for s in heard.segments)])
+    assert read_heard({**GOOD, "duration": None}).duration is None
 
 
 def _ten_minutes() -> Heard:
-    """A realistic hearing of a ten-minute song: BTC's segments at its frames (10/108 s, rounded to the ms), about
-    three hundred of them under long chord names; beat_this's beats at 50 frames a second, 1,200 of them at 120 BPM
-    with a frame's jitter and some twin peaks merged by their mean, every fourth a downbeat."""
+    """A dense hearing of a ten-minute song, as real recordings run up to: 40 segments and 75 beats a minute. BTC's
+    400 segments at its frames (10/108 s, three decimals) under long chord names; beat_this's 750 beats at 50 frames a
+    second with a frame's jitter and some twin peaks merged by their mean, every fourth a downbeat."""
     import random
 
     rng = random.Random(12)
     names = ["C#m7b5", "Abmaj7", "F#mMaj7", "Bbsus4", "Ebdim7", "G7", "N"]
-    frames, segments, at = 6480, [], 0
-    while at < frames:
-        n = rng.randint(8, 36)
-        segments.append(ChordSegment(round(at * 10 / 108, 3), round(min(at + n, frames) * 10 / 108, 3),
-                                     rng.choice(names)))
-        at += n
+    frames = 6480  # ten minutes of BTC's frames
+    cuts = sorted(rng.sample(range(1, frames), 399))
+    edges = [0, *cuts, frames]
+    segments = [ChordSegment(round(a * 10 / 108, 3), round(b * 10 / 108, 3), rng.choice(names))
+                for a, b in zip(edges, edges[1:])]
     beats = []
-    for k in range(1200):
-        frame = 25 * k + rng.choice((-1, 0, 0, 1))
+    for k in range(750):  # 75 a minute, as a dense recording's
+        frame = 40 * k + rng.choice((-1, 0, 0, 1))
         beats.append((frame + 0.5) / 50 if rng.random() < 0.1 else frame / 50)
     return Heard(segments, beats, beats[::4], 600.0195918367347)
 
@@ -280,7 +317,7 @@ def test_a_ten_minute_songs_raw_stays_under_32_kb(conn, tmp_path):
     song = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=1.0, lyrics_status="found",
                       lyrics_json=lyrics_json(synced=SYNCED, duration=600.0))
     heard = _ten_minutes()
-    assert len(heard.segments) > 250
+    assert (len(heard.segments), len(heard.beats)) == (400, 750)
     made = make_sheet(song, heard)
     maker = Maker("computer", "0123456789abcdef0123456789abcdef", {
         "chords": "btc_large_voca@1673d23f8f9a55ae", "beats": "beat_this final0@8c328b45f59d8dd3"}, "torch 2.13.0",
