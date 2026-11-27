@@ -217,6 +217,23 @@ class LibraryStoreTest {
         }
     }
 
+    @Test fun aRemovalTakesTheSongsYouTubeRecordsWithIt() {
+        // youtube:<id>, the video picked and its audio, and youtube-wanted:<id>, the phone's note of the song for its
+        // automatic pass: songs._PER_SONG_KV's, so the next song given that id starts with neither.
+        phone("library/fixtures/remove.jsonl") { db, store ->
+            val song = Songs.byKey(db, "radiohead/karma-police")!!
+            val other = "${song.id}0"
+            for (key in listOf("youtube:${song.id}", "youtube-wanted:${song.id}", "youtube:$other",
+                               "youtube-wanted:$other", "youtube-search:karma-police-radiohead")) db.kvSet(key, "{}")
+            store.remove(db, song.key, NOW)!!
+            assertNull(db.kvGet("youtube:${song.id}"))
+            assertNull(db.kvGet("youtube-wanted:${song.id}"))
+            for (key in listOf("youtube:$other", "youtube-wanted:$other", "youtube-search:karma-police-radiohead")) {
+                assertNotNull(db.kvGet(key), "$key: another song's, or no song's, stays")
+            }
+        }
+    }
+
     @Test fun aRemovedSongStaysRemovedUntilItIsAskedForAgainThenComesBackNew() {
         phone("library/fixtures/remove.jsonl") { db, store ->
             val before = Songs.byKey(db, "radiohead/karma-police")!!

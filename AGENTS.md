@@ -372,7 +372,15 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 
 #### youtube
 
-- youtube.py: running yt-dlp.
+- youtube.py: running yt-dlp; and the phone's half, which the computer never runs: `phone_argv` (`PHONE_DOWNLOAD_ARGS`,
+  m4a by its format alone, QuickJS, the gate as `--proxy`; no run of a target but a video's plain address, a value
+  holding a NUL, an empty search or download folder) and `classify` (`CLASSIFY_STEPS`: `_OUTDATED`,
+  `PHONE_PASS_OVER` on the ERROR line, out of date after a broken solver's warning, `_DEGRADED`), the corpus's
+  youtube/youtube.json (tests/test_conformance_youtube.py). `choose` reads a song's artist forms in `name_forms`'
+  order, the whole name first (`_Names.artist_slugs`, a tuple, never a set), so `choose` is the same under any hash
+  seed (a featuring artist's video was accepted or dropped by a set's order); a duration no float holds (an int
+  past one, in a search's, a video's or a download's answer) is an answer error in the words of an answer that isn't
+  JSON (`_duration`), never a bug.
 - youtube_urls.py: a video's address.
 - youtube_fetch.py: the step.
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
@@ -3426,6 +3434,49 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     read of that artist page.
   - vectors/index/ (`IndexReplay`, area `index`), vectors/search/index.jsonl (`SearchReplay`) and
     vectors/web/api_search.jsonl (`WebReplay`).
+- YouTube's rules (core.youtube; the phone-YouTube plan's Y1.2), youtube.py's phone half over
+  data/caracole/youtube/youtube.json, no flag, pattern, prefix or word of yt-dlp's typed (NoLiteralsTest, HostGate.kt
+  read too):
+  - `YouTubeData`: `read()`, `argv` (phone_argv: a kind's template, each element filled in one pass, a value never
+    read again; its refusals, `Refused`), `searchTarget`, `watchUrl`, `pattern`;
+  - `Videos`: `parseSearch`, `parseVideo` and `searchQuery` (PyJson.loads, Python's `str()`, truth and `float()`, an
+    `AnswerError` in a ProviderError's words, an int duration too big for a float one too, on both sides; past
+    PyJson's depth, its own words, a well-formed answer too, which Python reads: parse.jsonl's `phone` record);
+  - `Choose`: `choose` and `ranked` (`_ranked`'s key: tier, title, closeness, official, rank), in code points, names by
+    core.keys.Normalize, patterns through PyRegex;
+  - `Classify`: `of` (classify), `ofRun` (the exit status first), `OK_EXIT`, `OK`, `GATE` (the runner's, before both);
+  - `HostGate.HostRule.YOUTUBE`: youtube.py's `PHONE_GATE` (youtube.json's `gate`: names, suffixes, port, the hosts
+    reported apart, those refused by name, the refusal's words); the computer has no gate;
+  - `YtDlp` (Y1.3), youtube.py's `YtDlp` over a `YtDlpProcess` (`Ran`; `NotStarted`, nothing sent): `budget` runs
+    (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), the pause
+    after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
+    gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
+    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block; `gate.stopped`, the gate's acceptor
+    ended by a bug, an error in `gate.stopped_said`), then a timeout, the exit status and `Classify.of`:
+    `ProviderBlocked` (`Health.recordBlock` at the job's start, every later run refused with no process),
+    `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the computer's
+    for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their place);
+    - `YtDlpGate`, a gate a run (`gate: () -> YtDlpGate`), closed once the run's log is read, on every path;
+      `YtDlpGate.keptOpen` for one gate a job, which the job closes;
+    - a cooldown an earlier job recorded refuses each run before its gate (`ProviderBlocked` in youtube_sheet.py's
+      words, youtube.json's `runner.cooling`): no gate, no process, no event, no strike;
+    - the runner records a block itself (one strike); a caller never does, and sends the alert;
+    - a run cut off by an exception (anything but `NotStarted`) is counted and logged, an `error` event and kv
+      `http:last_request:youtube`, then rethrown with no secret: the computer's writes no event there, but Android
+      can kill the `:youtube` process mid-run, and the day's budget and the next pause must see it;
+    - `HostGate.close` never throws, keeping the caller's interrupt (set again once every thread was waited for);
+  - `SearchGate` (Y1.4), youtube_search.py's gates: `gate(cfg, db, query, onScreen, now, routeWhy)` and
+    `videoGate` (`found`, `none`, `auto`, `failed`, `spent`, `off`, their words, numbers and keys youtube.json's
+    `search`: a query once in 30 days, kv `youtube-search:<key>`; 10 runs named `youtube-search:` an hour in
+    `events`; none while `Health.isCooling`; its own failure or 3 within the hour, kv `youtube-search:failed`,
+    `recordFailure`; YouTube off in PhoneConfig, or `routeWhy`, the phone's own reason it makes no sheet from a
+    video), `suggestion` (/api/search's `youtube`) and `sheetOnScreen`;
+  - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
+    byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
+    song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
+    `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
+  - vectors/youtube/argv, classify, parse, choose, runs, gate and record.jsonl (`YouTubeReplay`, area `youtube`;
+    runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
 
 ##### The Requests tab on the phone
 
@@ -4144,7 +4195,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     bytes no file holds;
   - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
-    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
+    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`,
+    `youtube-outdated`, `phone:youtube-auto`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
     index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
     which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index

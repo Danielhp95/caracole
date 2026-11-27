@@ -157,7 +157,9 @@ object SearchLimits {
     val TYPE_ORDER: List<String> = listOf("chords", "tabs", "ukulele")
     const val MAX_PATTERNS = 2
     const val SHOWN_CANDIDATES = 3
-    val READINGS: List<String> = listOf("title", "both", "artist")
+    /** A hit read by its artist's name alone (search.py's LibraryHit.via, ScoredRow.via). */
+    const val VIA_ARTIST = "artist"
+    val READINGS: List<String> = listOf("title", "both", VIA_ARTIST)
     const val TOP_SONGS = 3
     const val ARTIST_ROWS = 3
     const val SONG_ROWS = 8

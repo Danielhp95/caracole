@@ -71,6 +71,11 @@ THUMB_URL = "https://i.ytimg.com/vi/{id}/hqdefault.jpg"  # 480 × 360
 THUMBS = "youtube-thumbs"  # in cache_dir: never cache_dir/youtube/, whose files tidy() lets go of
 MAX_BYTES = 256 * 1024
 MAX_SIDE = 2048
+COOLING_WHY = "YouTube turned us back"  # a Gate's why while YouTube cools down after a block
+SPENT_WHY = "no more YouTube asks this hour ({n} spent)"  # SEARCHES_PER_HOUR spent
+OWN_FAILED_WHY = "it failed within the hour ({error})"  # the query's own search failed within FAILED_FOR
+FAILURES_WHY = "{n} searches failed this hour"  # FAILURES_PAUSE or more did
+THUMB_ROUTE = "/youtube/thumb/{id}.jpg"  # where caracole serve sends a kept thumbnail
 
 
 def query_key(query: str) -> str:
@@ -115,9 +120,9 @@ def failed(conn: sqlite3.Connection, key: str, now: datetime) -> str | None:
     """Why no search of ``key`` goes now, its own or ``FAILURES_PAUSE`` failing within the hour; None when neither."""
     failures = _failures(conn, now)
     if key in failures:
-        return f"it failed within the hour ({failures[key]['error']})"
+        return OWN_FAILED_WHY.format(error=failures[key]['error'])
     if len(failures) >= FAILURES_PAUSE:
-        return f"{len(failures)} searches failed this hour"
+        return FAILURES_WHY.format(n=len(failures))
     return None
 
 
@@ -183,9 +188,9 @@ def _gate(conn: sqlite3.Connection, key: str, now: datetime) -> Gate:
     if was is not None:
         return Gate("found" if isinstance(was.get("video"), dict) else "none", key, was)
     if is_cooling(conn, PROVIDER, now):
-        return Gate("spent", key, why="YouTube turned us back")
+        return Gate("spent", key, why=COOLING_WHY)
     if searches_used(conn, now) >= SEARCHES_PER_HOUR:
-        return Gate("spent", key, why=f"no more YouTube asks this hour ({SEARCHES_PER_HOUR} spent)")
+        return Gate("spent", key, why=SPENT_WHY.format(n=SEARCHES_PER_HOUR))
     why = failed(conn, key, now)
     if why is not None:
         return Gate("failed", key, why=why)
@@ -339,7 +344,7 @@ def suggestion(gate_said: Gate | None, query: str) -> dict[str, Any] | None:
         v = gate_said.asked["video"]
         said["video"] = {"id": v.get("id"), "title": v.get("title") or "", "channel": v.get("channel") or "",
                          "duration": v.get("duration"), "url": v.get("url"),
-                         "thumb": f"/youtube/thumb/{v.get('id')}.jpg" if gate_said.asked.get("thumb") else None}
+                         "thumb": THUMB_ROUTE.format(id=v.get("id")) if gate_said.asked.get("thumb") else None}
     if gate_said.why:
         said["why"] = gate_said.why
     return said

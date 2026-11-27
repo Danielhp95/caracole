@@ -106,6 +106,10 @@
 {"kv":"wanted:first_seen:oasis/wonderwall","value":"2026-10-31T00:00:00Z"}
 {"kv":"wanted:first_seen:radiohead/creep","value":"2026-10-31T00:00:00Z"}
 {"kv":"wanted:first_seen:radiohead/karma-police","value":"2026-10-31T00:00:00Z"}
+{"kv":"youtube-wanted:1","value":"{}"}
+{"kv":"youtube-wanted:1:more","value":"{}"}
+{"kv":"youtube-wanted:2","value":"{}"}
+{"kv":"youtube-wanted:2:more","value":"{}"}
 {"kv":"youtube:1","value":"{}"}
 {"kv":"youtube:1:more","value":"{}"}
 {"kv":"youtube:2","value":"{}"}
