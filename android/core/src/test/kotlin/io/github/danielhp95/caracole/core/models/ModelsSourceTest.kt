@@ -77,21 +77,30 @@ class ModelsSourceTest {
 
     private val into: File get() = pins.folder(File(tmp.root, "state"))
 
-    /** Every name beside [into] and in it, with its bytes' SHA-256: a refusal leaves both as they were. */
+    /** Every name beside [into] and in it, the kept files' folder's too, with its bytes' SHA-256. */
+    /** beat_this's file, downloaded and checked before BTC's failed: kept for the next try. */
+    private val BEAT = listOf("beat_this-final0-fp16.onnx")
+
     private fun state(): Map<String, String> {
         val parent = into.parentFile
         if (!parent.isDirectory) return emptyMap()
-        val kept = File(parent, ".c1" + ModelFiles.KEPT)
-        return parent.walkTopDown().onEnter { it != kept }.filter { it.isFile }
+        return parent.walkTopDown().filter { it.isFile }
             .associate { it.relativeTo(parent).path to ModelFiles.sha256(it) } +
-            parent.walkTopDown().onEnter { it != kept }.filter { it.isDirectory && it != parent && it != kept }
+            parent.walkTopDown().filter { it.isDirectory && it != parent }
                 .associate { it.relativeTo(parent).path + "/" to "" }
     }
 
-    private fun refused(call: () -> Any?): CatalogueError {
+    /** [call] refused, leaving everything beside [into] and in it as it was, but the files of [kept] (downloaded and
+     * checked before the refusal) now in the kept files' folder, with their pinned bytes. */
+    private fun refused(kept: List<String> = emptyList(), call: () -> Any?): CatalogueError {
         val before = state()
         val e = assertFailsWith<CatalogueError> { call() }
-        assertEquals("nothing installed or left: ${e.message}", before, state())
+        val bytes = mapOf(graph to "btc-graph.onnx", weights to "btc_model_large_voca.pt",
+                          beats to "beat_this-final0-fp16.onnx").entries.associate { (b, name) -> name to b }
+        val folder = ".c1" + ModelFiles.KEPT
+        val expected = before + kept.associate { "$folder/$it" to FakeGitHub.sha256(bytes.getValue(it)) } +
+            (if (kept.isEmpty()) emptyMap() else mapOf("$folder/" to ""))
+        assertEquals("nothing installed or left but what was kept: ${e.message}", expected, state())
         return e
     }
 
@@ -212,7 +221,7 @@ class ModelsSourceTest {
         served()
         github.route(blobPath, Reply(429, headers = limited.headers))
         assertEquals(Instant.ofEpochSecond(1_795_000_000),
-                     (refused { source().fetch(http, into) { _, _ -> } } as Limited).until)
+                     (refused(BEAT) { source().fetch(http, into) { _, _ -> } } as Limited).until)
     }
 
     @Test fun btcsAuthorsRepositoryGoneOrRenamedSaysWhatTheOwnerCanDo() {
@@ -223,7 +232,7 @@ class ModelsSourceTest {
             github.asked.clear()
             assertEquals("BTC's weights aren't in their authors' repository on GitHub any more (jayg996/BTC-ISMIR19 " +
                              "answered HTTP $status); nothing was downloaded. Update the app; if it still says so, " +
-                             "tell caracole's author.", refused { source().fetch(http, into) { _, _ -> } }.message)
+                             "tell caracole's author.", refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
             assertEquals(blobLine, github.asked.last())  // a redirect never followed
         }
     }
@@ -233,7 +242,7 @@ class ModelsSourceTest {
         val again = "GitHub answered HTTP 403. Try again later."
         served()
         github.route(blobPath, Reply(403))
-        assertEquals(again, refused { source().fetch(http, into) { _, _ -> } }.message)
+        assertEquals(again, refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
         File(tmp.root, "state").deleteRecursively()  // beat_this's file, which the failed fetch kept, gone too
         served()
         github.route(listPath, Reply(403))
@@ -276,7 +285,7 @@ class ModelsSourceTest {
     @Test fun aFileDownloadedAndCheckedIsKeptForTheNextTryWhenAnotherFails() {
         served()
         github.route(blobPath, Reply(404))
-        refused { source().fetch(http, into) { _, _ -> } }
+        refused(BEAT) { source().fetch(http, into) { _, _ -> } }
         github.asked.clear()
         served()
         assertEquals(listOf("btc_model_large_voca.pt"), source().fetch(http, into) { _, _ -> }.fetched)
@@ -288,7 +297,7 @@ class ModelsSourceTest {
     @Test fun aFileKeptForTheNextTryIsHashedAgainNeverTrusted() {
         served()
         github.route(blobPath, Reply(404))
-        refused { source().fetch(http, into) { _, _ -> } }
+        refused(BEAT) { source().fetch(http, into) { _, _ -> } }
         val kept = File(into.parentFile, ".c1" + ModelFiles.KEPT)
         File(kept, "beat_this-final0-fp16.onnx").writeBytes(Random(8).nextBytes(beats.size))
         served()
@@ -298,10 +307,10 @@ class ModelsSourceTest {
         assertNull(ModelFiles.verify(into, pins))
     }
 
-    @Test fun theStorageFailingMidWriteIsSaidAndLeavesNothingBut() {
+    @Test fun theStorageFailingMidWriteIsSaidAndLeavesNothingButTheFileCheckedBeforeIt() {
         served()
         // Once beat_this's file is in, the place BTC's is written to is taken by a folder: its write fails.
-        val e = refused {
+        val e = refused(BEAT) {
             source().fetch(http, into) { got, _ ->
                 if (got == beats.size.toLong()) {
                     into.parentFile.listFiles()!!.single { it.name.endsWith(".part") }
@@ -317,7 +326,7 @@ class ModelsSourceTest {
         served(asset = Random(4).nextBytes(beats.size))
         assertEquals(mismatch, refused { source().fetch(http, into) { _, _ -> } }.message)
         served(btc = Random(5).nextBytes(weights.size))
-        assertEquals(mismatch, refused { source().fetch(http, into) { _, _ -> } }.message)
+        assertEquals(mismatch, refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
         // An install there before, one file of it missing: left exactly as it was.
         served()
         source().fetch(http, into) { _, _ -> }
@@ -329,18 +338,18 @@ class ModelsSourceTest {
     @Test fun aContentLengthOtherThanThePinsIsRefusedBeforeTheBodyIsRead() {
         val other = "GitHub is sending a file of another size than the one listed; nothing was downloaded. Try again."
         served(btc = weights + byteArrayOf(0))
-        assertEquals(other, refused { source().fetch(http, into) { _, _ -> } }.message)
+        assertEquals(other, refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
         served(btc = weights.copyOf(weights.size - 1))
-        assertEquals(other, refused { source().fetch(http, into) { _, _ -> } }.message)
+        assertEquals(other, refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
     }
 
     @Test fun aBodyOfNoLengthLongerOrShorterThanItsPinIsRefusedAsItComes() {
         served()
         github.route(blobPath, Reply(200, weights + byteArrayOf(0), chunked = true))
         assertEquals("The download isn't the file GitHub listed. Try again.",
-                     refused { source().fetch(http, into) { _, _ -> } }.message)
+                     refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
         github.route(blobPath, Reply(200, weights.copyOf(weights.size - 1), chunked = true))
-        assertEquals("The download was cut short. Try again.", refused { source().fetch(http, into) { _, _ -> } }.message)
+        assertEquals("The download was cut short. Try again.", refused(BEAT) { source().fetch(http, into) { _, _ -> } }.message)
     }
 
     @Test fun tooLittleRoomAsksNothing() {
