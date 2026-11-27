@@ -119,6 +119,7 @@ from helpers.fake_ytdlp import FakeYtDlp, entry
 from caracole import db, health, youtube, youtube_fetch, youtube_search
 from caracole.config import ProviderPolicy
 from caracole.http import BudgetExhausted, ProviderError
+from caracole.search import STRONG
 from caracole.youtube_urls import VIDEO_ID, watch_url
 
 MADE_BY = "tests/test_conformance_youtube.py"
@@ -143,6 +144,21 @@ CHOOSE_KEY = ("of the videos that fit, the least of (tier, -title, closeness, -o
               "unwanted or not the song's own variant, else 0; title exact or alone; closeness 0 to 3 (3 with no "
               "length); official 3 the artist's Topic channel, 2 official audio, 1 the artist's own channel or an "
               "official video, else 0; rank the search's order")
+GATE_ORDER = ("a search's gate: no word in the query (query_key empty), a sheet on the screen or the route off: "
+              "none; then found or none (a record of the key within asked_for_days: its video an object, found), "
+              "spent while cooling (cooling_why), spent with searches_per_hour runs named run… of the last hour in "
+              "events (spent_why), failed (own_failed_why, else failures_why once failures_pause did within "
+              "failed_for_seconds), else auto; a video's gate the same of video_key + its id, off (off_why) where "
+              "YouTube is turned off")
+ON_SCREEN = ("a sheet on the screen: a song of your library scored strong or more not by its artist alone, a song "
+             "of UG's index strong or more, an artist either index names whole (not part) strong or more, or a "
+             "LaCuerda song strong or more with a sheet")
+RECORD_FIELDS = ["video", "source", "audio", "downloaded_at", "query", "skip", "error", "error_at", "unusable",
+                 "unusable_reason", "failures"]
+RECORD_RULE = ("kv prefix + song id, json.dumps' text of fields in this order, then missing_at when it is set; read "
+               "back: a text field a non-empty str or none, skip its str items, failures its int (bool too) values, "
+               "video as Video.from_json reads it (an id video_id matches whole, str(title or ''), str(channel or "
+               "''), a number's float duration)")
 GATE_STEP = {"class": "gate", "over": "gate_log",
              "note": "the phone's runner's, before stderr is read: a refusal of the app's gate, or its 407, is "
                      "decided from the gate's log; classify never sees it"}
@@ -226,7 +242,16 @@ def youtube_json() -> str:
         "search": {"searches_per_hour": youtube_search.SEARCHES_PER_HOUR,
                    "asked_for_days": youtube_search.ASKED_FOR.days,
                    "failed_for_seconds": int(youtube_search.FAILED_FOR.total_seconds()),
-                   "failures_pause": youtube_search.FAILURES_PAUSE},
+                   "failures_pause": youtube_search.FAILURES_PAUSE,
+                   "states": list(youtube_search.STATES), "run": youtube_search.RUN,
+                   "kv_prefix": youtube_search.KV_PREFIX, "video_key": youtube_search.VIDEO_KEY,
+                   "failed_key": youtube_search.FAILED_KEY, "error_chars": youtube_search.ERROR_CHARS,
+                   "cooling_why": youtube_search.COOLING_WHY, "spent_why": youtube_search.SPENT_WHY,
+                   "own_failed_why": youtube_search.OWN_FAILED_WHY,
+                   "failures_why": youtube_search.FAILURES_WHY, "off_why": youtube_fetch.OFF_REASON,
+                   "thumb_route": youtube_search.THUMB_ROUTE, "strong": STRONG, "order": GATE_ORDER,
+                   "on_screen": ON_SCREEN},
+        "record": {"prefix": youtube_fetch.RECORD_PREFIX, "fields": RECORD_FIELDS, "rule": RECORD_RULE},
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
                  "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal},
@@ -1024,3 +1049,237 @@ def test_the_runs_corpus(tmp_path, monkeypatch):
                         "slept": clock.slept, "requests_made": yt.requests_made, "block": block})
     assert {c["classify"] for r in records for c in r["calls"]} >= {*youtube.RUN_CLASSES}
     check(VECTORS / "youtube" / "runs.jsonl", jsonl(records, corpus="youtube/runs", made_by=MADE_BY))
+
+
+# --- the search's and the video's gate, and the YouTube record ---------------------------------------------------
+
+NOW = datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
+Q = "Radiohead Creep"
+QK = youtube_search.query_key(Q)
+VK = youtube_search.video_key(ID)
+FOUND = {"id": ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 239.0, "url": watch_url(ID)}
+
+
+def _at(**ago) -> str:
+    from datetime import timedelta
+
+    from caracole import stamps
+    return stamps.stamp(NOW - timedelta(**ago))
+
+
+def _searched(key: str, video, thumb=False, **ago) -> dict:
+    return {youtube_search.KV_PREFIX + key: json.dumps({"at": _at(**ago), "query": Q, "video": video,
+                                                        "thumb": thumb}, ensure_ascii=False)}
+
+
+def _failed(**entries) -> dict:
+    return {youtube_search.FAILED_KEY: json.dumps(entries, ensure_ascii=False)}
+
+
+def _runs(n: int, *, minutes: int = 5, run=youtube_search.RUN, provider="youtube", each=1) -> list:
+    return [[f"{run}{i}", _at(minutes=minutes), provider] for i in range(n) for _ in range(each)]
+
+
+def _cooling(**ago) -> dict:
+    return {"block": _at(**ago)}
+
+
+# (name, what, the query or the video's id, on_screen, route on, kv, events, extra)
+GATE_SCENES = [
+    ("fresh", "gate", Q, False, True, {}, [], {}),
+    ("no word", "gate", "!!! ...", False, True, {}, [], {}),
+    ("empty", "gate", "", False, True, {}, [], {}),
+    ("on screen", "gate", Q, True, True, {}, [], {}),
+    ("route off", "gate", Q, False, False, {}, [], {}),
+    ("found", "gate", Q, False, True, _searched(QK, FOUND, days=10), [], {}),
+    ("found with its thumbnail", "gate", Q, False, True, _searched(QK, FOUND, True, days=10), [], {}),
+    ("none", "gate", Q, False, True, _searched(QK, None, days=1), [], {}),
+    ("30 days ago to the second", "gate", Q, False, True, _searched(QK, FOUND, days=30), [], {}),
+    ("30 days and a second ago", "gate", Q, False, True, _searched(QK, FOUND, days=30, seconds=1), [], {}),
+    ("an unreadable time", "gate", Q, False, True,
+     {youtube_search.KV_PREFIX + QK: json.dumps({"at": "garbage", "video": FOUND})}, [], {}),
+    ("a record that isn't an object", "gate", Q, False, True, {youtube_search.KV_PREFIX + QK: "[1, 2]"}, [], {}),
+    ("a video that isn't an object", "gate", Q, False, True,
+     {youtube_search.KV_PREFIX + QK: json.dumps({"at": _at(days=1), "video": "x"})}, [], {}),
+    ("the words in another order", "gate", "creep  RADIOHEAD", False, True, _searched(QK, FOUND, days=2), [], {}),
+    ("cooling", "gate", Q, False, True, {}, [], _cooling(hours=1)),
+    ("found while cooling", "gate", Q, False, True, _searched(QK, FOUND, days=2), [], _cooling(hours=1)),
+    ("a cooldown over", "gate", Q, False, True, {}, [], _cooling(days=3)),
+    ("the hour's 10", "gate", Q, False, True, {}, _runs(10), {}),
+    ("9 runs", "gate", Q, False, True, {}, _runs(9), {}),
+    ("one run of 12 events", "gate", Q, False, True, {}, _runs(1, each=12), {}),
+    ("10 an hour ago to the second", "gate", Q, False, True, {}, _runs(10, minutes=60), {}),
+    ("10 an hour and a minute ago", "gate", Q, False, True, {}, _runs(10, minutes=61), {}),
+    ("10 of other runs", "gate", Q, False, True, {}, _runs(10, run="lookup:x"), {}),
+    ("10 of another provider", "gate", Q, False, True, {}, _runs(10, provider="ytimg"), {}),
+    ("spent while failed", "gate", Q, False, True, _failed(**{QK: {"at": _at(minutes=5), "error": "boom"}}),
+     _runs(10), {}),
+    ("its own failure", "gate", Q, False, True, _failed(**{QK: {"at": _at(minutes=10), "error": "boom"}}), [], {}),
+    ("its failure an hour ago to the second", "gate", Q, False, True,
+     _failed(**{QK: {"at": _at(hours=1), "error": "boom"}}), [], {}),
+    ("its failure past the hour", "gate", Q, False, True,
+     _failed(**{QK: {"at": _at(minutes=61), "error": "boom"}}), [], {}),
+    ("a failure's odd error", "gate", Q, False, True,
+     _failed(**{QK: {"at": _at(minutes=1), "error": 5}}), [], {}),
+    ("a failure's empty error", "gate", Q, False, True,
+     _failed(**{QK: {"at": _at(minutes=1), "error": 0}}), [], {}),
+    ("three others failed", "gate", Q, False, True,
+     _failed(a={"at": _at(minutes=1), "error": "x"}, b={"at": _at(minutes=2), "error": "y"},
+             c={"at": _at(minutes=3), "error": "z"}), [], {}),
+    ("two others failed", "gate", Q, False, True,
+     _failed(a={"at": _at(minutes=1), "error": "x"}, b={"at": _at(minutes=2), "error": "y"}), [], {}),
+    ("three, one past the hour", "gate", Q, False, True,
+     _failed(a={"at": _at(minutes=1), "error": "x"}, b={"at": _at(minutes=2), "error": "y"},
+             c={"at": _at(hours=2), "error": "z"}), [], {}),
+    ("failures that aren't an object", "gate", Q, False, True, {youtube_search.FAILED_KEY: '"x"'}, [], {}),
+    ("a failure that isn't an object", "gate", Q, False, True,
+     _failed(**{QK: "x", "b": {"at": _at(minutes=1), "error": "y"}}), [], {}),
+    ("CJK", "gate", "宋冬野 安和桥", False, True, {}, [], {}),
+    ("video fresh", "video", ID, False, True, {}, [], {}),
+    ("video off", "video", ID, False, False, _searched(VK, FOUND, days=1), [], {}),
+    ("video found", "video", ID, False, True, _searched(VK, FOUND, True, days=1), [], {}),
+    ("video unavailable", "video", ID, False, True,
+     {youtube_search.KV_PREFIX + VK: json.dumps({"at": _at(days=1), "video": None, "unavailable": "Private video"})},
+     [], {}),
+    ("video cooling", "video", ID, False, True, {}, [], _cooling(minutes=30)),
+    ("video, the hour's 10", "video", ID, False, True, {}, _runs(10), {}),
+    ("video failed", "video", ID, False, True, _failed(**{VK: {"at": _at(minutes=3), "error": "boom"}}), [], {}),
+    ("video, three failed", "video", ID, False, True,
+     _failed(a={"at": _at(minutes=1), "error": "x"}, b={"at": _at(minutes=2), "error": "y"},
+             c={"at": _at(minutes=3), "error": "z"}), [], {}),
+]
+
+# (the key, the error, the failures before)
+FAILURES = [
+    (QK, "  a  long\n error\t" + "x" * 300, {}),
+    (QK, "again", {QK: {"at": _at(minutes=5), "error": "first"}, "old": {"at": _at(hours=2), "error": "gone"},
+                   "other": {"at": _at(minutes=20), "error": 7}}),
+    (VK, "ERROR: [youtube] it went wrong ünïcödé", {"a": {"at": _at(minutes=59), "error": "x"}}),
+]
+
+
+def _scene_db(tmp_path, n: int, kv: dict, events: list, extra: dict):
+    conn = db.connect(tmp_path / f"gate-{n}.sqlite")
+    for key, value in kv.items():
+        db.kv_set(conn, key, value)
+    for run, at, provider in events:
+        conn.execute("INSERT INTO events (run, at, provider, url, status, decision, message) "
+                     "VALUES (?, ?, ?, NULL, NULL, 'ok', NULL)", (run, at, provider))
+    if "block" in extra:
+        from caracole import stamps
+        health.record_block(conn, youtube.PROVIDER, stamps.parse(extra["block"]), "blocked: a test")
+    return conn
+
+
+def _kv_of(conn) -> dict:
+    return {k: v for k, v in conn.execute("SELECT key, value FROM kv ORDER BY key")
+            if k.startswith((youtube_search.KV_PREFIX, "provider:"))}
+
+
+def _gate_out(g) -> dict | None:
+    return None if g is None else {"state": g.state, "key": g.key, "asked": g.asked, "why": g.why}
+
+
+def test_the_gate_corpus(tmp_path, monkeypatch):
+    records = []
+    route = {"on": True}
+    monkeypatch.setattr(youtube_fetch, "route_problem",
+                        lambda cfg: None if route["on"] else "turned off ([providers.youtube] enabled = false)")
+    for n, (name, what, given, on_screen, on, kv, events, extra) in enumerate(GATE_SCENES):
+        conn = _scene_db(tmp_path, n, kv, events, extra)
+        route["on"] = on
+        if what == "gate":
+            got = youtube_search.gate(None, conn, given, on_screen=on_screen, now=NOW)
+            said = youtube_search.suggestion(got, given)
+        else:
+            got = youtube_search.video_gate(None, conn, given, NOW)
+            said = None
+        records.append({"fn": what, "scene": name, "now": youtube_search.stamps.stamp(NOW), "given": given,
+                        "on_screen": on_screen, "route": on, "kv": _kv_of(conn), "events": events,
+                        "gate": _gate_out(got), "youtube": said})
+        conn.close()
+    for n, (key, error, before) in enumerate(FAILURES):
+        conn = _scene_db(tmp_path, 100 + n, _failed(**before) if before else {}, [], {})
+        kv = _kv_of(conn)
+        youtube_search.record_failure(conn, key, NOW, error)
+        records.append({"fn": "record_failure", "now": youtube_search.stamps.stamp(NOW), "kv": kv, "key": key,
+                        "error": error, "after": db.kv_get(conn, youtube_search.FAILED_KEY)})
+        conn.close()
+    for case in ON_SCREEN_CASES:
+        records.append({"fn": "sheet_on_screen", **case, "on_screen": _on_screen(case)})
+    states = {r["gate"]["state"] for r in records if r.get("gate")}
+    assert states == set(youtube_search.STATES), states
+    check(VECTORS / "youtube" / "gate.jsonl", jsonl(records, corpus="youtube/gate", made_by=MADE_BY))
+
+
+# sheet_on_screen's inputs: mine [score, via], songs [score], artists [score, part], lc_artists [score, part],
+# lc_songs [score, sheet or null]
+ON_SCREEN_CASES = [
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [[90.0, "title"]], "songs": [], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [[89.9, "both"]], "songs": [], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [[100.0, "artist"]], "songs": [], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [], "songs": [90.0], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [], "songs": [89.99], "artists": [], "lc_artists": [], "lc_songs": []},
+    {"mine": [], "songs": [], "artists": [[95.0, False]], "lc_artists": [], "lc_songs": []},
+    {"mine": [], "songs": [], "artists": [[95.0, True]], "lc_artists": [], "lc_songs": []},
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [[90.0, False]], "lc_songs": []},
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [[99.0, True]], "lc_songs": []},
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [], "lc_songs": [[92.0, "https://acordes.lacuerda.net/x"]]},
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [], "lc_songs": [[92.0, None]]},
+    {"mine": [], "songs": [], "artists": [], "lc_artists": [], "lc_songs": [[92.0, ""]]},
+    {"mine": [[50.0, "both"]], "songs": [80.0], "artists": [[89.0, False]], "lc_artists": [[70.0, False]],
+     "lc_songs": [[60.0, "s"]]},
+]
+
+
+def _on_screen(case: dict) -> bool:
+    from caracole.search import ArtistHit, IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit
+    from caracole.songs import Song
+
+    song = Song.__new__(Song)
+    mine = [LibraryHit(song, s, via) for s, via in case["mine"]]
+    index = IndexFound(artists=tuple(ArtistHit("a", "A", s, 1, 1, part=p) for s, p in case["artists"]),
+                       songs=tuple(IndexHit("a", "b", {}, s, "u") for s in case["songs"]))
+    lc_artists = [SiteArtist("lacuerda", "A", "a", "u", s, part=p) for s, p in case["lc_artists"]]
+    lc_songs = [SiteHit("lacuerda", "T", "u", s, sheet=sheet) for s, sheet in case["lc_songs"]]
+    return youtube_search.sheet_on_screen(mine, index, lc_artists, lc_songs)
+
+
+# Each a stored kv text (None: no record), as load_record reads it and _save writes it back.
+RECORD_TEXTS = [
+    None,
+    "{}",
+    "[1]",
+    '"a record"',
+    json.dumps(youtube_fetch.Record().as_json()),
+    json.dumps({"video": FOUND, "source": "search", "audio": "/c/youtube/7-dQw4w9WgXcQ.m4a",
+                "downloaded_at": "2026-11-20T03:00:00Z", "query": "Radiohead Creep", "skip": ["AAAAAAAAAAA"],
+                "error": None, "error_at": None, "unusable": None, "unusable_reason": None,
+                "failures": {"AAAAAAAAAAA": 2}}),
+    json.dumps({"missing_at": "2026-11-01T00:00:00Z", "query": "宋冬野 安和桥", "skip": [], "failures": {}},
+               ensure_ascii=False),
+    json.dumps({"video": {"id": ID, "title": 5, "channel": None, "duration": 239}, "source": "",
+                "audio": 3, "skip": ["x", 1, None, "y"], "failures": {"a": True, "b": 1.5, "c": "2", "d": -3,
+                                                                     "e": 10 ** 20},
+                "error": "boom", "error_at": "2026-11-25T10:00:00Z", "unusable": ID,
+                "unusable_reason": "Private video", "extra": "kept out", "missing_at": ""}),
+    json.dumps({"video": {"id": "not an id", "title": "x"}, "skip": "nope", "failures": [1]}),
+    json.dumps({"video": {"id": ID, "title": ["a", 1], "channel": {"k": False}, "duration": "239"}}),
+    json.dumps({"video": {"id": ID, "duration": True}, "source": "pasted"}),
+    json.dumps({"video": {"id": ID, "duration": 1e300}, "query": "a \"quoted\" \\ name\n"}),
+]
+
+
+def test_the_record_corpus(tmp_path):
+    records = []
+    conn = db.connect(tmp_path / "record.sqlite")
+    for n, text in enumerate(RECORD_TEXTS):
+        key = f"{youtube_fetch.RECORD_PREFIX}{n}"
+        if text is not None:
+            db.kv_set(conn, key, text)
+        record = youtube_fetch.load_record(conn, n)
+        youtube_fetch._save(conn, n, record)
+        records.append({"song": n, "stored": text, "saved": db.kv_get(conn, key)})
+    conn.close()
+    check(VECTORS / "youtube" / "record.jsonl", jsonl(records, corpus="youtube/record", made_by=MADE_BY))

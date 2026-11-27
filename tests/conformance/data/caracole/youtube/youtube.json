@@ -495,7 +495,46 @@
   "searches_per_hour": 10,
   "asked_for_days": 30,
   "failed_for_seconds": 3600,
-  "failures_pause": 3
+  "failures_pause": 3,
+  "states": [
+   "found",
+   "none",
+   "auto",
+   "failed",
+   "spent",
+   "off"
+  ],
+  "run": "youtube-search:",
+  "kv_prefix": "youtube-search:",
+  "video_key": "video:",
+  "failed_key": "youtube-search:failed",
+  "error_chars": 200,
+  "cooling_why": "YouTube turned us back",
+  "spent_why": "no more YouTube asks this hour ({n} spent)",
+  "own_failed_why": "it failed within the hour ({error})",
+  "failures_why": "{n} searches failed this hour",
+  "off_why": "YouTube is off",
+  "thumb_route": "/youtube/thumb/{id}.jpg",
+  "strong": 90,
+  "order": "a search's gate: no word in the query (query_key empty), a sheet on the screen or the route off: none; then found or none (a record of the key within asked_for_days: its video an object, found), spent while cooling (cooling_why), spent with searches_per_hour runs named run… of the last hour in events (spent_why), failed (own_failed_why, else failures_why once failures_pause did within failed_for_seconds), else auto; a video's gate the same of video_key + its id, off (off_why) where YouTube is turned off",
+  "on_screen": "a sheet on the screen: a song of your library scored strong or more not by its artist alone, a song of UG's index strong or more, an artist either index names whole (not part) strong or more, or a LaCuerda song strong or more with a sheet"
+ },
+ "record": {
+  "prefix": "youtube:",
+  "fields": [
+   "video",
+   "source",
+   "audio",
+   "downloaded_at",
+   "query",
+   "skip",
+   "error",
+   "error_at",
+   "unusable",
+   "unusable_reason",
+   "failures"
+  ],
+  "rule": "kv prefix + song id, json.dumps' text of fields in this order, then missing_at when it is set; read back: a text field a non-empty str or none, skip its str items, failures its int (bool too) values, video as Video.from_json reads it (an id video_id matches whole, str(title or ''), str(channel or ''), a number's float duration)"
  },
  "gate": {
   "names": [

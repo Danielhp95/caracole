@@ -3095,8 +3095,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     process), `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the
     computer's for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their
     place);
-  - vectors/youtube/argv, classify, parse, choose and runs.jsonl (`YouTubeReplay`, area `youtube`; runs.jsonl the
-    computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
+  - `SearchGate` (Y1.4), youtube_search.py's gates: `gate(cfg, db, query, onScreen, now, routeWhy)` and
+    `videoGate` (`found`, `none`, `auto`, `failed`, `spent`, `off`, their words, numbers and keys youtube.json's
+    `search`: a query once in 30 days, kv `youtube-search:<key>`; 10 runs named `youtube-search:` an hour in
+    `events`; none while `Health.isCooling`; its own failure or 3 within the hour, kv `youtube-search:failed`,
+    `recordFailure`; YouTube off in PhoneConfig, or `routeWhy`, the phone's own reason it makes no sheet from a
+    video), `suggestion` (/api/search's `youtube`) and `sheetOnScreen`;
+  - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
+    byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
+    song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
+    `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
+  - vectors/youtube/argv, classify, parse, choose, runs, gate and record.jsonl (`YouTubeReplay`, area `youtube`;
+    runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
 
 ##### The Requests tab on the phone
 
@@ -3815,7 +3825,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     bytes no file holds;
   - `OwnRecords`: what a restore keeps as it is now (Politeness's "Two caracoles, each its own politeness"): `provider:`,
     `http:last_request:`, the global records that gate a request (`lacuerda:search:`, `lacuerda:search-failed`,
-    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`), `sync:` (so a
+    `gtptabs:unusable:`, `ug:artist_url:`, `ug:pasted_tab:`, `ug:unreadable:`, `youtube-search:`,
+    `youtube-outdated`, `phone:youtube-auto`), `sync:` (so a
     restored library is the phone's change at the next sync: §11 Q11's default), `phone:settings`, `phone:schema`, the
     index push's notes and every index's progress records, what the whole exports it merged read (`index:merged`,
     which a sync asks the computer by), the site catalogues' (`catalogues:`: the file the index

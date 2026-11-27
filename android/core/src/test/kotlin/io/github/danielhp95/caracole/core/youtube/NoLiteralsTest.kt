@@ -23,8 +23,9 @@ import kotlin.test.assertTrue
  * - any of the data's own texts of four characters or more ([dataTexts]): the arguments and each template element's
  *   fixed text (`quickjs:`, the `--print` expression), the targets' and the lines' prefixes, every pattern's source
  *   and each of its alternatives that is a phrase (a word alone is any code's), the phone's format and output name,
- *   the gate's hosts and words, the runner's and the answers' words; a literal that is exactly one of the data's keys
- *   (how the code reads the data) excepted;
+ *   the gate's hosts and words, the runner's and the answers' words, the search gate's states, keys and words and
+ *   the record's; a literal that is exactly one of the data's keys, or of the record's fields (how the code reads the
+ *   data and a record), excepted;
  *
  * and no literal is compiled as a pattern (`Regex(`, `PyRegex.compile(`, `Pattern.compile(` or `.toRegex()` of one).
  */
@@ -34,7 +35,7 @@ class NoLiteralsTest {
     @Test fun noFlagPatternOrPrefixIsTypedInThePackage() {
         val files = root.listFiles { f -> f.name.endsWith(".kt") }.orEmpty().sortedBy { it.name }
         assertTrue(files.map { it.name }.containsAll(listOf("Choose.kt", "Classify.kt", "HostGate.kt", "Videos.kt",
-            "YouTubeData.kt", "YtDlp.kt", "YtDlpProcess.kt")), "the package's files: ${files.map { it.name }}")
+            "YouTubeData.kt", "YtDlp.kt", "YtDlpProcess.kt", "SearchGate.kt", "Records.kt")), "the package's files: ${files.map { it.name }}")
         val found = files.flatMap { f -> scan(f.readText()).map { "${f.name}: $it" } }
         assertEquals(emptyList(), found)
     }
@@ -48,6 +49,9 @@ class NoLiteralsTest {
         assertEquals(1, scan("val w = \"a Too Many Requests here\"").size)
         assertEquals(1, scan("val q = \"quickjs:\$path\"").size)
         assertEquals(1, scan("val h = \"jnn-pa.googleapis.com\"").size)
+        assertEquals(1, scan("val y = \"YouTube turned us back\"").size, "the search gate's words")
+        assertEquals(1, scan("val k = \"youtube-search:failed\"").size, "the search gate's keys")
+        assertEquals(emptyList(), scan("val f = \"unusable_reason\""), "a record's field is how it's read")
         assertEquals(emptyList(), scan("val k = \"live_statuses\"; val n = \"x\""), "a key of the data is how it's read")
     }
 
@@ -72,6 +76,8 @@ class NoLiteralsTest {
             }
         }
         walk(YouTubeData.read().json)
+        // The record's fields are its JSON's keys, as a member's name is the data's: how the code reads one.
+        YouTubeData.read().json.getValue("record").jsonObject.getValue("fields").jsonArray.forEach { keys += it.jsonPrimitive.content }
         keys
     }
 
@@ -107,6 +113,8 @@ class NoLiteralsTest {
         }
         strings(json.getValue("gate")).forEach(::fixed)
         strings(json.getValue("runner")).forEach(::fixed)
+        strings(json.getValue("search")).forEach(::fixed)
+        json.getValue("record").jsonObject.let { r -> strings(JsonObject(r - "fields")).forEach(::fixed) }
         strings(json.getValue("answers").jsonObject.let { JsonObject(it - "provider" - "live_statuses") }).forEach(::fixed)
         out.filter { it.length >= 4 }.toSet()
     }
