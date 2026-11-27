@@ -3942,7 +3942,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
   serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
 - **The device step**, the one place an emulator runs, through device-test.sh's pool of emulators, each one caller at a
-  time (android/README.md, "Try it on an emulator"):
+  time, each stopped again by the run that started it (android/README.md, "Try it on an emulator"; "Leave nothing
+  running", below):
   `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
@@ -4085,8 +4086,27 @@ nix flake check
   free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's choice of 2026-11-10: emulator-5554, -5556,
   -5558, each one caller at a time) and holds its lock (emulator-5554's
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
-  port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
-  it up.
+  port) while it installs and runs, and starts that emulator if it isn't up (each read-only, so several run on the one
+  AVD).
+- **Leave nothing running**, the owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them
+  for testing or development. same thing for gradle biuld and adb servers."
+  - device-test.sh stops, as it ends on any path (a pass, a failure, an interrupt: an EXIT trap), the emulator it
+    started (`adb emu kill`, its process session waited for `CARACOLE_EMULATOR_STOP_WAIT` s, 60 by default, then
+    killed), while it still holds that emulator's lock, so no caller takes a dying one; one up already is someone
+    else's and is left up; `--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
+    It stops the adb server it started once adb lists no device at all and no other caller holds a pool emulator,
+    never one running before it nor while a phone is attached (tests/test_device_scripts.py). No adb it runs inherits
+    the lock, and each adb call of a stop is bounded (`CARACOLE_ADB_TIMEOUT`, 10 s; no answer, then the kill). An
+    emulator left by a run that was SIGKILLed, or by a script older than this, reads as someone else's to every later
+    caller and stays up until stop-all.sh runs.
+  - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
+    is left), and the adb server only when no device is listed, in any state, and no caller holds a pool lock, a line
+    for each thing stopped or left; this user's processes alone, matched by their own name and arguments. Gradle only
+    with `--gradle`: `gradle --stop` stops every daemon of that version for the user, other worktrees' running builds
+    among them, so it refuses while `gradle --status` calls any daemon busy (or fails, or can't say; the check and
+    the stop aren't atomic); without it, it says how many run, each stopping by itself after two idle minutes.
+  - android/gradle.properties' `org.gradle.daemon.idletimeout` is two minutes: a task's builds still reuse the daemon,
+    and none lingers after; the Kotlin compile daemon ends with the Gradle daemon that used it.
 - **The owner's phone** gets a debug build only through `android/scripts/phone-install.sh` (`-s SERIAL`, `--launch`):
   `adb install -r --user 0` of `io.github.danielhp95.caracole.debug` alone, so the phone's other user and F-Droid's
   `io.github.danielhp95.caracole` are never touched; no test runs on it.

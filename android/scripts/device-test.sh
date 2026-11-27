@@ -3,6 +3,7 @@
 # here"):
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
+#                                  [--keep-emulator]
 #
 #   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
@@ -14,6 +15,7 @@
 #   --computer DIR  one computer for every class that names none
 #   --sites S       the fake sites server of scenario S (tests/helpers/fake_sites.py serve S PORT, on the host, a
 #                   free port never 8737) for every class run, named to each as -e sites http://10.0.2.2:PORT
+#   --keep-emulator the emulator it starts is left up as it ends, to look at it (CARACOLE_KEEP_EMULATOR=1 too)
 #
 # It builds assembleDebug and assembleDebugAndroidTest first (the debug build, io.github.danielhp95.caracole.debug, and
 # its tests, io.github.danielhp95.caracole.debug.test), outside the lock, then takes the first free emulator of
@@ -22,8 +24,18 @@
 # ${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}, as before, and each other's the same name
 # with its port (caracole-emulator-5556.lock). It uses an emulator alone (a serial emulator-NNNN), never a phone adb also
 # lists, starts the one it took if it isn't up (each read-only, so several run on the one AVD; without a display it
-# stops and says so) and leaves it up, never holding the lock (nothing the script starts inherits it). Between classes the app's data is cleared, and the print spooler and any
+# stops and says so), never holding the lock (nothing the script starts inherits it). Between classes the app's data is cleared, and the print spooler and any
 # chooser closed. It prints each class's result and exits non-zero on any failure.
+#
+# It leaves nothing it started running, the owner's rule of 2026-11-27 ("Ensure that emulators are properly killed
+# when using them for testing or development. same thing for gradle biuld and adb servers."): as it ends, on every
+# path (a pass, a failure, an interrupt, a second one during the stop), the emulator it started is stopped (adb emu
+# kill, then its process session waited for, CARACOLE_EMULATOR_STOP_WAIT seconds, 60 by default, then killed), while
+# it still holds that emulator's lock, so the next caller never takes a dying one; an emulator that was up already is
+# someone else's and is left up. An emulator left by a run that was SIGKILLed, or by a script older than this, reads
+# so to every later caller and stays up until android/scripts/stop-all.sh runs. The adb server it started is stopped
+# once adb lists no device at all, in any state, and no other caller holds an emulator of the pool; one running
+# before it is left. No adb it runs inherits the lock.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,6 +53,7 @@ want_app=0
 computer=""
 sites=""
 classes=()
+keep="${CARACOLE_KEEP_EMULATOR:-0}"
 
 usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "$0"; exit 2; }  # the header, whole
 
@@ -49,6 +62,7 @@ while [ $# -gt 0 ]; do
         --area) want_areas=1; areas="${2-}"; [ $# -ge 2 ] || usage; shift 2 ;;
         --area=*) want_areas=1; areas="${1#--area=}"; shift ;;
         --app) want_app=1; shift ;;
+        --keep-emulator) keep=1; shift ;;
         --computer) computer="${2-}"; [ -n "$computer" ] || usage; shift 2 ;;
         --sites) sites="${2-}"; [ -n "$sites" ] || usage; shift 2 ;;
         -h|--help) usage ;;
@@ -87,9 +101,77 @@ done
 # adb: the host's, else the emulator shell's (one adb server for every caller: a phone it also lists is never used).
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(cd "$repo" && nix develop ./android#emulator -c sh -c 'command -v adb')"
-adb_cmd() { "$adb_bin" "$@"; }
+adb_cmd() { "$adb_bin" "$@" 9>&-; }  # an adb server it starts never holds the lock
 emulator_serial() { adb_cmd devices 2>/dev/null | awk -v s="emulator-$port" '$1 == s && $2 == "device" { print $1; exit }'; }
 
+# What this run started, stopped as it ends (the owner's rule of 2026-11-27), on every path and while it still holds
+# the emulator's lock (fd 9, closed only as the script exits, after this): the emulator, then the adb server.
+started_sid=""      # the session of the emulator it started (setsid's pid: the emulator and its children)
+adb_started=0
+running_in() { [ -n "$1" ] && pgrep -s "$1" >/dev/null 2>&1; }
+# adb in the stop, bounded (a hung console or a wedged server answers nothing): KILL, as the stop ignores TERM and so
+# does what it runs.
+adb_bounded() { timeout -s KILL "${CARACOLE_ADB_TIMEOUT:-10}" "$adb_bin" "$@" 9>&-; }
+stop_ours() {
+    trap '' INT TERM HUP  # a second Ctrl-C never cuts the stop short, the lock let go with the emulator still up
+    set +e
+    local s="emulator-$port" wait="${CARACOLE_EMULATOR_STOP_WAIT:-60}" t asked="emu kill"
+    if [ -n "$started_sid" ] && [ "$keep" = 1 ]; then
+        echo "device-test.sh: $s kept up (--keep-emulator)" >&2
+    elif [ -n "$started_sid" ] && ! running_in "$started_sid"; then
+        # Whatever answers as $s now is not the one it started: nothing is sent to it.
+        echo "device-test.sh: $s, which it started, had stopped already: nothing to stop" >&2
+    elif [ -n "$started_sid" ]; then
+        if [[ "$s" =~ ^emulator-[0-9]+$ ]] && ! adb_bounded -s "$s" emu kill >/dev/null 2>&1; then  # an emulator alone
+            asked="emu kill, which got no answer"
+        fi
+        for ((t = 0; t < wait * 10; t++)); do running_in "$started_sid" || break; sleep 0.1; done
+        if running_in "$started_sid"; then
+            kill -TERM -- "-$started_sid" 2>/dev/null
+            for ((t = 0; t < 100; t++)); do running_in "$started_sid" || break; sleep 0.1; done
+            running_in "$started_sid" && kill -KILL -- "-$started_sid" 2>/dev/null
+            for ((t = 0; t < 50; t++)); do running_in "$started_sid" || break; sleep 0.1; done
+            if running_in "$started_sid"; then
+                echo "device-test.sh: $s didn't stop within $wait s of $asked, nor when killed: its session" \
+                    "$started_sid still runs (android/scripts/stop-all.sh)" >&2
+            else
+                echo "device-test.sh: $s didn't stop within $wait s of $asked: killed it" >&2
+            fi
+        else
+            echo "device-test.sh: stopped $s, which it started" >&2
+        fi
+    elif [ -n "$port" ] && [ -n "${serial:-}" ]; then
+        echo "device-test.sh: $s was up already: left up" >&2
+    fi
+    if [ "$adb_started" = 1 ]; then
+        local listed held="" i p
+        local answered=1
+        listed="$(adb_bounded devices 2>/dev/null)" || answered=0
+        listed="$(awk '/^List of devices attached/ { on = 1; next } on && NF >= 2' <<<"$listed")"
+        for ((i = 0; i < pool; i++)); do
+            p=$((5554 + 2 * i))
+            [ "$p" = "$port" ] && continue
+            if ! flock -n "$(lock_of "$p")" true 2>/dev/null; then held="emulator-$p"; break; fi
+        done
+        if [ "$answered" = 0 ]; then
+            echo "device-test.sh: left the adb server it started: adb devices got no answer" >&2
+        elif [ -n "$listed" ]; then
+            echo "device-test.sh: left the adb server it started: a device is still listed" >&2
+        elif [ -n "$held" ]; then
+            echo "device-test.sh: left the adb server it started: another caller holds $held" >&2
+        else
+            adb_bounded kill-server >/dev/null 2>&1
+            echo "device-test.sh: stopped the adb server it started (no device left)" >&2
+        fi
+    fi
+}
+trap stop_ours EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+# The first word with adb's server says whether this run started it ("* daemon started successfully").
+grep -q 'daemon started' <<<"$(adb_cmd devices 2>&1 || true)" && adb_started=1
 serial="$(emulator_serial || true)"
 if [ -z "$serial" ]; then
     if [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
@@ -97,11 +179,11 @@ if [ -z "$serial" ]; then
         exit 3
     fi
     echo "device-test.sh: starting emulator-$port (its log: $logs/emulator-$port.log)" >&2
-    (cd "$repo" && setsid nohup nix develop ./android#emulator -c env \
+    started_sid="$(cd "$repo" && { setsid nohup nix develop ./android#emulator -c env \
         ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-/home/dani/.config/.android/avd}" QT_QPA_PLATFORM=xcb \
         LD_LIBRARY_PATH=/run/opengl-driver/lib \
         emulator -avd caracole -port "$port" -read-only -gpu host -no-snapshot-save >"$logs/emulator-$port.log" \
-        2>&1 </dev/null &) 9>&-
+        2>&1 </dev/null & echo $!; } 9>&-)"
     for _ in $(seq 1 180); do
         serial="$(emulator_serial || true)"
         [ -n "$serial" ] && break
@@ -123,7 +205,7 @@ adb install -r -t "$test_apk" >/dev/null
 # The computers this run started, stopped as it ends.
 servers=()
 cleanup() { for pid in "${servers[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done; }
-trap cleanup EXIT
+trap 'cleanup; stop_ours' EXIT
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'; }
 
