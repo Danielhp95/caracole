@@ -29,9 +29,10 @@ object Mp4 {
     /** The sound track: its `mdhd` timescale and duration (or the `mvhd`'s, with no sound track), the movie's
      * timescale, its edits, its sample table's total length (`stbl/stts`: each entry's count times its delta, in the
      * media's timescale; null where none is read, or past a Long), and whether the file is [fragmented] (an `mvex` in
-     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty). */
+     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty); [sound] false for the `mvhd`'s of a
+     * file with no sound track (a video alone, which audio_store refuses). */
     data class Track(val timescale: Long, val duration: Long, val movieTimescale: Long, val edits: List<Edit>,
-                     val samples: Long? = null, val fragmented: Boolean = false) {
+                     val samples: Long? = null, val fragmented: Boolean = false, val sound: Boolean = true) {
         /** mutagen's length: `float(duration) / timescale`, 0 for a timescale of 0. */
         val seconds: Double get() = if (timescale == 0L) 0.0 else duration.toDouble() / timescale
 
@@ -83,7 +84,7 @@ object Mp4 {
             val stts = child(mdia, "minf")?.let { child(it, "stbl") }?.let { child(it, "stts") }?.let(::total)
             return Track(mdhd.first, mdhd.second, movie.first, edits, stts, child(moov, "mvex") != null)
         }
-        Track(movie.first, movie.second, movie.first, emptyList())
+        Track(movie.first, movie.second, movie.first, emptyList(), sound = false)
     }
 
     /** A `mvhd` or `mdhd` payload's timescale and duration, or null for a version mutagen doesn't read. */

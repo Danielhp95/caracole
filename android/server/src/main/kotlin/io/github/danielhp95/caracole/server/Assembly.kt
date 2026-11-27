@@ -61,6 +61,7 @@ import io.github.danielhp95.caracole.server.page.PageRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.page.ServerControls
 import io.github.danielhp95.caracole.server.page.SongbookSection
+import io.github.danielhp95.caracole.server.routes.AudioRoutes
 import io.github.danielhp95.caracole.server.routes.ExportRoutes
 import io.github.danielhp95.caracole.server.routes.GuitarRoutes
 import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
@@ -136,8 +137,9 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
  * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
- * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
- * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
+ * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, AudioRoutes (a sheet from an audio file: the "+" and a
+ * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then the phone's own
+ * ShareRoutes (a song shared to the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
@@ -286,6 +288,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
+        AudioRoutes(parts, audio, ::audioProblem),
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
                     links = ShareReader(parts)),
     )
@@ -414,6 +417,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
+            audio = audioProblem(),
             inApp = true,
         )
     }

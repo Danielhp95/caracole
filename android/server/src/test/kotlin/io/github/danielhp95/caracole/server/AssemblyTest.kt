@@ -79,7 +79,7 @@ class AssemblyTest {
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
                             "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "SongbookRoutes", "VersionsRoutes",
                             "HarmonicaRoutes",
-                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
+                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "AudioRoutes", "ShareRoutes"),
                      phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
@@ -103,6 +103,7 @@ class AssemblyTest {
             "ReviewRoutes" to listOf("GET /review", "POST /review"),
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
+            "AudioRoutes" to listOf("POST /audio/upload", "POST /audio", "POST /audio/drop"),
             "SyncRoutes" to listOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
                                    "GET /api/sync/indexes", "POST /sync/apply"),
             "SyncFileRoutes" to listOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",

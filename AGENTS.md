@@ -2176,9 +2176,9 @@ It is rows.js's, shared by both pages:
     `::test_an_upload_holds_the_store_only_to_read_the_jobs_uploads_and_let_go_of_the_others`).
   - The page's side (library.js `audioDialog`, `audioSheet`; filter.css): where library_page.py's `server.audio`
     (`audio_member`: `ok`, `why`, `limit`, `too_big` the route's words for a file past it; the phone's LibraryPage.kt
-    `AUDIO_PROBLEM`, `ok` false) says so, the bar's
-    "+" (`#add-audio`, before Filter, and its hidden `#audio-file`, made by the script alone: none on the file or the
-    phone) and a file dropped on the Library while it shows open `dialog#audio-sheet` (a sheet from the bottom under
+    the same from `Phone.audioProblem()`) says so, the bar's
+    "+" (`#add-audio`, before Filter, and its hidden `#audio-file`, made by the script alone: none on the file, nor on
+    a phone that makes none) and a file dropped on the Library while it shows open `dialog#audio-sheet` (a sheet from the bottom under
     720 px, sliding up there alone): XHR's upload, sent as `application/octet-stream` (a File's own type is refused
     415), its count `aria-hidden` beside the live region, which says only its start and its outcome; a file past
     `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
@@ -4362,8 +4362,31 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Harte labels at B1's WCSR and beats F against models.jsonl's hearing, LRCLIB's requests alone, the maker's members,
   the checkpoints gone; `:ml` killed mid-job (long.wav) fails the chords in `DIED`'s words, the library page
   answering; and `hear`'s contract on the real process (what `waiting` throws, as itself; `BUSY`).
-- `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file: the app's
-  reader is E24's); `tidy` runs as the phone starts and after a sync's take, a write of its own, never under `held`.
+- `Phone.audio` (`AudioStore(stateDir, PhoneDeps.examiner)`, by default `NO_EXAMINER`, which reads no file); `tidy`
+  runs as the phone starts and after a sync's take, a write of its own, never under `held`.
+- The app's examiner, `PhoneExaminer`, the debug build's alone (src/debug, as `:autochords` is a debugImplementation;
+  src/release's refuses every file, its routes refusing first anyway): its length `:autochords`' `AudioLengths` by
+  the format the store gives (a spool has no extension): an MP3's `MpegFrames` count (mpeg_frames.py's port) where
+  its first frame names none, else `MpegHeader`'s; an M4A's sound track's `mdhd` (`Mp4.Track.sound`: none with no
+  sound track, refused); FLAC's STREAMINFO; `Ogg`; `Pcm`. Its tags Android's (MediaMetadataRetriever: artist, then
+  album artist, title, album; none where it can't read them, a WAV's and an AIFF's ID3 chunk among them). AudioLengthsTest holds each length to the computer's
+  store's over vectors/web/audio_routes.jsonl's `examine` records, to the bit; AudioRoutesOnDeviceTest the real one.
+- server/routes' `AudioRoutes(parts, store, problem)`, web/audio_routes.py's three routes: `POST /audio/upload`
+  (`Route(spool = true)`: App hands its answer the body as a stream, a test's bytes wrapped, refused 413 by its
+  Content-Length past the limit; LocalServer streams it from the socket, never whole in the heap, 413 in server.py's
+  words before reading a body past it, and an answer that left it unread says `Connection: close`, CIO dropping the
+  rest, never reading it as a request), `POST /audio`, `POST /audio/drop`, in their words and statuses (the store's
+  refusals; `NOT_HERE` with `Phone.audioProblem()`'s reason; a song with a sheet or ignored; `WAITS`); the store's
+  `held` from what Make sheet and a drop read of the queue to what they change, an upload's `named`
+  (`JobCommands.uploadsNamed`, jobs.uploads_named) read under it; `sweep` at each upload; the route closes the
+  stream on every end. A song by name is the job's to add (the phone writes no wanted.txt, so its note is none).
+  `namesOf` is audio_sheet.names_of (`bareName`: pathlib's stem, music.py's track number). `server.audio`
+  (`ServerControls.audio`, `Phone.audioProblem()`): `audio_member`'s shape, `ok` true with `AUDIO_MAX` and
+  `too_big` where it is null. vectors/web/audio_routes.jsonl (tests/test_conformance_audio_routes.py, area `web`):
+  each route over scenes of one library (a sheet, ignored, a purchase, YouTube's audio, a file given), the computer's
+  reader's reads recorded for the phone's fake examiner, the routes' limits, `audio_member` where it makes sheets,
+  and `examine` over the fixtures; `WebReplay.audioRoutes` (AudioRoutesReplay), AudioRoutesTest, LibraryPageTest,
+  LocalServerTest's spooled bodies.
 - vectors/lookup/audio_sheet.jsonl (`AudioSheetReplay`, area `audio-sheet`): Python's job with fake models over the
   fake lyrics sites, replayed through AudioRunner with a fake ChordModels answering the record's `heard`; compared
   apart: the lyrics stage's words, a failing hearing's chords words, the events' runs, the pauses, the maker's side,

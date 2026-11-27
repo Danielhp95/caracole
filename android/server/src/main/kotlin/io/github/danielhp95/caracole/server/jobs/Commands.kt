@@ -328,6 +328,12 @@ object JobCommands {
     /** Whether a command makes a song's sheet from an audio file you gave (`caracole audio`). */
     fun sheetsFromAudio(args: List<String>): Boolean = first(args) == "audio"
 
+    /** jobs.uploads_named: the staged uploads (AudioStore's ids) the waiting and running jobs of [jobs] name
+     * (`--upload=`), which an upload never lets go of. */
+    fun uploadsNamed(jobs: List<Job>): Set<String> = jobs.filter { it.active }.flatMap { it.steps }
+        .filter { sheetsFromAudio(it.args) }.flatMap { it.args }.filter { it.startsWith("--upload=") }
+        .mapTo(HashSet()) { it.removePrefix("--upload=") }
+
     /** jobs._picks_lyrics: whether a command makes a record of a song's kept lyrics search its lyrics (`caracole
      * lyrics --pick` or `--record`). */
     fun picksLyrics(args: List<String>): Boolean =

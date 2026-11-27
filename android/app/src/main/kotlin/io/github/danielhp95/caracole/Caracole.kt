@@ -81,8 +81,8 @@ object Caracole {
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
 
-    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none (every
-     * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
+    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none: the
+     * app's own (PhoneExaminer: the debug build's `:autochords` and Android's tags, the release's none). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
 
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
@@ -159,7 +159,7 @@ object Caracole {
                 // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
                 // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
                 chords = PhoneChords.of(context, state),
-                examiner = { file, format -> (examinerForTests ?: PhoneDeps.NO_EXAMINER).examine(file, format) },
+                examiner = { file, format -> (examinerForTests ?: PhoneExaminer).examine(file, format) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the

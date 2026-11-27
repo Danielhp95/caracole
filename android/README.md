@@ -938,7 +938,8 @@ the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and te
 
 ### Gate B2 on your phone
 
-Once the library page offers the "+" (the audio routes, a later task): install a debug build
+The library page offers the "+" once the chord models are installed (the audio routes; `AudioRoutesOnDeviceTest`,
+through `device-test.sh --models`, uploads a clip over the app's own server and queues its sheet). Install a debug build
 (`android/scripts/phone-install.sh`), download the chord models in Settings › Chords from audio, charge the phone
 above 15 %, then on the library page tap "+", pick a song of yours whose lyrics LRCLIB has timed, and Make sheet.
 The gate: from the tap to Ready, with "chords over the lyrics", within 90 s. The Journal's entry gives the job's

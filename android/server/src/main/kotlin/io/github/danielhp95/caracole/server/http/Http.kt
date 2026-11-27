@@ -7,8 +7,11 @@ import java.io.InputStream
 
 // web/app.py's shapes on the phone (lane server-shell).
 
-/** A request as it came: the raw target as sent, headers by lowercase name, the body read up to the route's limit. */
-data class Request(val method: String, val target: String, val headers: Map<String, String>, val body: ByteArray)
+/** A request as it came: the raw target as sent, headers by lowercase name, the body read up to the route's limit;
+ * for a route that spools its body ([Route.spool]), [stream], the body as it comes, unread (LocalServer's), its
+ * [body] then empty; a request made whole (a test's) has none, its body given as bytes. */
+data class Request(val method: String, val target: String, val headers: Map<String, String>, val body: ByteArray,
+                   val stream: InputStream? = null)
 
 /** An answer's body: none, bytes, or a file streamed. */
 sealed interface Body {
@@ -47,7 +50,8 @@ fun interface PostAnswer {
 }
 
 /** A `json` or a `bytes` route's answer (web/app.py's `Route.body`): [document], its body read as JSON (PyJson.loads,
- * a JsonElement), or its bytes (a ByteArray). */
+ * a JsonElement), or its bytes (a ByteArray), or for a route that spools its body ([Route.spool]) an InputStream of
+ * them, unread, which the route reads as it needs and closes. */
 fun interface DocumentAnswer {
     fun answer(request: Request, document: Any): Response
 }
@@ -55,11 +59,13 @@ fun interface DocumentAnswer {
 /** One route: a method and a path ([under]: every path below it), what it is ([doc]), whether only the page's script
  * reads it ([scriptOnly]: the token header), the page its refusals name, its body's limit in bytes, and its answer: a
  * POST's [body] a form ([post]), or, a page's script's alone, a JSON document or bytes ([document]), each with the
- * form token in its header (web/app.py's `BODIES`). */
+ * form token in its header (web/app.py's `BODIES`). [spool], a `bytes` route's alone: its body is never held whole in
+ * the heap (128 MiB passes most apps' heap limit), but handed to its answer as a stream as it comes (the design's
+ * §8.2, POST /audio/upload's), the server refusing it unread past [limit] by its Content-Length. */
 data class Route(
     val method: String, val path: String, val doc: String, val under: Boolean = false, val scriptOnly: Boolean = false,
     val page: String = "the library", val limit: Int = 16_384, val get: GetAnswer? = null, val post: PostAnswer? = null,
-    val body: String = FORM, val document: DocumentAnswer? = null,
+    val body: String = FORM, val document: DocumentAnswer? = null, val spool: Boolean = false,
 ) {
     companion object {
         /** A POST's kinds of body (web/app.py's BODIES), each read as its content type says (BODY_TYPES). */

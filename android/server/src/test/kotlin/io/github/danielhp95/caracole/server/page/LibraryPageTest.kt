@@ -80,6 +80,40 @@ class LibraryPageTest {
     }
 
     @Test
+    fun `where the phone makes sheets from audio files its server's audio is caracole serve's that does`() {
+        val python = io.github.danielhp95.caracole.core.testing.Corpus.records("web/audio_routes.jsonl")
+            .single { it.fn == "caracole.library_page.audio_member" }.out
+        val member = page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = null))
+            .getValue("server").jsonObject.getValue("audio")
+        assertEquals(python, member)
+        assertEquals(listOf("ok", "why", "limit", "too_big"), member.jsonObject.keys.toList())
+    }
+
+    @Test
+    fun `where it doesn't its server's audio says why, each of the design's reasons`() {
+        for (why in listOf("the chord models aren't downloaded (Settings › Chords from audio)",
+                           "chords from audio need Android 13 or later", "no chord models for this phone's processor",
+                           "chords from audio need 6 GB of memory or more", LibraryPage.AUDIO_PROBLEM)) {
+            val member = page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = why))
+                .getValue("server").jsonObject.getValue("audio")
+            assertEquals(obj("ok" to false, "why" to why, "limit" to 0, "too_big" to ""), member, why)
+        }
+    }
+
+    @Test
+    fun `the served page gives its script the audio member the "+" is drawn from`() {
+        val made = page.served(page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = null)),
+                               ServerControls("tok", audio = null), "Tabs")
+        val data = Regex("""<script type="application/json" id="songs">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
+            .find(made)!!.groupValues[1]
+        val audio = kotlinx.serialization.json.Json.parseToJsonElement(data).jsonObject.getValue("server").jsonObject
+            .getValue("audio").jsonObject
+        assertEquals(JsonPrimitive(true), audio.getValue("ok"))
+        // library.js draws the bar's "+" (#add-audio) where server.audio.ok is true: its script is the page's own
+        assertTrue("server.audio.ok === true" in made && "plus.id = \"add-audio\"" in made)
+    }
+
+    @Test
     fun `the server's part goes where caracole serve puts it, before the songbooks`() {
         val data = mirroredData(listOf(mirroredCard(3, "a/x", "A", "X"), mirroredCard(-1, "b/y", "B", "Y")))
         val controls = ServerControls("tok", busy = setOf(9L, 3L), active = 2, held = setOf(3L), removing = setOf(5L),
