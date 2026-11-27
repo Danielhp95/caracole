@@ -3947,7 +3947,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   whoever made the sheet, whether the mirror serves the song or not, as phone_render.py's reference does; a re-lay
   moves the song's unit, its pages then the phone's; a song whose re-lay failed is in `RenderStats.failed`, its pages
   made from the sheet it has; both counted in `RenderStats.given`, render.RenderStats'), and `OwnVersions`
-  (own_versions_upgraded); a song the mirror serves gets its
+  (own_versions_upgraded); render.jsonl's `relaid` case holds each auto version's raw text by digest, so a phone that
+  puts plain lyrics on a heard sheet fails it. Two differences, on purpose: the phone has no log, so a re-lay that
+  failed by IO or a `SharedFolder` is in `RenderStats.failed` too (Python's `errors` holds bugs alone, the rest
+  logged), and the lookup's pdf stage then says "failed" in the re-lay's words, its pages made (get.py says "made":
+  its `render_all` passes no `errors=`); a song the mirror serves gets its
   progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
     made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`

@@ -22,7 +22,9 @@ the same library.
   render step: ``{"failed": [display names], "files": [[path, sha256, size], …] (every file of the songs' folders,
   by path), "kv": {key: text} (every record of render.py's and the phone's: render:files:*, render:progressions:*,
   render:*:phone, keys:own_versions), "units": {unit: digest} (each song's, which a changed file, version or override
-  moves), "info": {path: text} (each info.json)}``.
+  moves), "info": {path: text} (each info.json)}``; and for the cases of ``RAW_CASES`` ``"raws": {"<song id>/<tab
+  id>": 16 hex}``, each auto version's raw text as SQLite holds it, by its SHA-256 (the units' canonical digests are
+  blind to a raw's member order, which tells whether plain lyrics went on a heard sheet before its re-lay or after).
 
 The cases (``CASES``) between them reach: a UG sheet and its key, and its timed lyrics, too few lines to light its page;
 the versions kept beside the sheet (their pages, one dropped once it leaves), the song's UG versions listed with the one
@@ -479,7 +481,18 @@ def _fixture(w: World) -> list[dict]:
 RECORDED = re.compile(r"render:(files:\d+|progressions:\d+|\d+:phone)|keys:own_versions")
 
 
-def _out(w: World, made: phone.PhoneRendered) -> dict[str, Any]:
+# The cases whose outs also hold each auto version's raw as SQLite holds it (its text's SHA-256, 16 hex): the units'
+# digests are of canonical JSON, blind to the order of a raw's members, which tells whether the plain lyrics were put
+# on a heard sheet before or after it was laid out again.
+RAW_CASES = ("relaid",)
+
+
+def _raws(w: World) -> dict[str, str]:
+    rows = w.conn.execute("SELECT song_id, tab_id, raw FROM versions WHERE provider = 'auto' ORDER BY song_id, tab_id")
+    return {f"{song_id}/{tab_id}": hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16] for song_id, tab_id, raw in rows}
+
+
+def _out(w: World, made: phone.PhoneRendered, case: str = "") -> dict[str, Any]:
     lib = w.cfg.library_dir
     files = []
     for path in sorted(p for p in lib.rglob("*") if p.is_file() and not p.is_symlink() and p.parent != lib):
@@ -488,7 +501,10 @@ def _out(w: World, made: phone.PhoneRendered) -> dict[str, Any]:
     kv = {k: v for k, v in w.conn.execute("SELECT key, value FROM kv ORDER BY key") if RECORDED.fullmatch(k)}
     units = {phone.unit_id(s): phone.unit_digest(w.conn, w.cfg, s) for s in list_songs(w.conn)}
     info = {path: (lib / path).read_text(encoding="utf-8") for path, _, _ in files if path.endswith("/info.json")}
-    return {"failed": made.failed, "files": files, "kv": kv, "units": units, "info": info}
+    out = {"failed": made.failed, "files": files, "kv": kv, "units": units, "info": info}
+    if case in RAW_CASES:
+        out["raws"] = _raws(w)
+    return out
 
 
 def _assert_phone_writes(out: dict[str, Any], fixture: list[dict]) -> None:
@@ -510,7 +526,7 @@ def run_case(root: Path, name: str) -> dict[str, Any]:
         outs = []
         for step in steps:
             if "render" in step:
-                out = _out(w, phone.phone_render(w.conn, w.cfg, song_ids=step["render"]))
+                out = _out(w, phone.phone_render(w.conn, w.cfg, song_ids=step["render"]), name)
                 _assert_phone_writes(out, fixture)
                 outs.append(out)
             elif "drop" in step:
