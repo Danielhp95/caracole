@@ -1379,7 +1379,7 @@ def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn
     try:
         assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore", "harptabs",
                                      "gametabs", "ireal", "youtube"}
-        assert made.clients["youtube"].policy.budget == 6
+        assert made.clients["youtube"].policy.budget == 50
         assert lock in _common._held
     finally:
         made.close()

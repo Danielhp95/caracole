@@ -17,7 +17,7 @@ library of:
 For a song nobody has charted, `caracole autochords` writes a sheet from audio with local models (torch, optional):
 
 - a purchase;
-- or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), a few songs a night, only
+- or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), up to 25 songs a night, only
   where auto-chords is;
 - or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py);
 - or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
@@ -4481,7 +4481,8 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   render re-lays it, maker kept; the phone takes it, its own render re-lays nothing, and a third comparison is empty:
   no conflict, one `auto` version, one digest.
 - **The device step**, the one place an emulator runs, through device-test.sh's pool of emulators, each one caller at a
-  time (android/README.md, "Try it on an emulator"):
+  time, each stopped again by the run that started it (android/README.md, "Try it on an emulator"; "Leave nothing
+  running", below):
   `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
   `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
   (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
@@ -4632,8 +4633,27 @@ nix flake check
   which builds first, then takes the first free emulator of a pool (`CARACOLE_EMULATORS`, 3 by default, the owner's
   choice of 2026-11-10: emulator-5554, -5556, -5558, each one caller at a time) and holds its lock (emulator-5554's
   `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`, the others' the same name with their
-  port) while it installs and runs, starts that emulator if it isn't up (each read-only, so several run on the one AVD) and leaves
-  it up.
+  port) while it installs and runs, and starts that emulator if it isn't up (each read-only, so several run on the one
+  AVD).
+- **Leave nothing running**, the owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them
+  for testing or development. same thing for gradle biuld and adb servers."
+  - device-test.sh stops, as it ends on any path (a pass, a failure, an interrupt: an EXIT trap), the emulator it
+    started (`adb emu kill`, its process session waited for `CARACOLE_EMULATOR_STOP_WAIT` s, 60 by default, then
+    killed), while it still holds that emulator's lock, so no caller takes a dying one; one up already is someone
+    else's and is left up; `--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
+    It stops the adb server it started once adb lists no device at all and no other caller holds a pool emulator,
+    never one running before it nor while a phone is attached (tests/test_device_scripts.py). No adb it runs inherits
+    the lock, and each adb call of a stop is bounded (`CARACOLE_ADB_TIMEOUT`, 10 s; no answer, then the kill). An
+    emulator left by a run that was SIGKILLed, or by a script older than this, reads as someone else's to every later
+    caller and stays up until stop-all.sh runs.
+  - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
+    is left), and the adb server only when no device is listed, in any state, and no caller holds a pool lock, a line
+    for each thing stopped or left; this user's processes alone, matched by their own name and arguments. Gradle only
+    with `--gradle`: `gradle --stop` stops every daemon of that version for the user, other worktrees' running builds
+    among them, so it refuses while `gradle --status` calls any daemon busy (or fails, or can't say; the check and
+    the stop aren't atomic); without it, it says how many run, each stopping by itself after two idle minutes.
+  - android/gradle.properties' `org.gradle.daemon.idletimeout` is two minutes: a task's builds still reuse the daemon,
+    and none lingers after; the Kotlin compile daemon ends with the Gradle daemon that used it.
 - **The owner's phone** gets a debug build only through `android/scripts/phone-install.sh` (`-s SERIAL`, `--launch`):
   `adb install -r --user 0` of `io.github.danielhp95.caracole.debug` alone, so the phone's other user and F-Droid's
   `io.github.danielhp95.caracole` are never touched; no test runs on it.
@@ -4702,7 +4722,8 @@ picks one).
   - `ireal` 20 requests (its sitemap index and six children and the curated playlist, once in 30 days, then a song's
     candidates, `ireal_fetch.CANDIDATES` (3) thread pages at most, then, once the library has a song, the jazz forum's
     page and its playlists with what is left, `ireal_index.playlist_pass`);
-  - `youtube` 6 yt-dlp runs;
+  - `youtube` 50 yt-dlp runs (6 until 2026-11-27: the owner's choice that day, "increase youtube's song request maximum to 50
+    (not 6)");
   - `ytimg` 20 requests (YouTube's image host: the thumbnail of a video suggested for a search, one image a video,
     youtube_search.py).
 - `caracole index build`: at least 100 (`BUILD_BUDGET`, commands/index.py); and `caracole harptabs --index` and
@@ -4974,7 +4995,8 @@ picks one).
 
 #### The one exception is YouTube
 
-- The one exception is YouTube, the owner's explicit choice for a handful of their own songs a night: its robots.txt
+- The one exception is YouTube, the owner's explicit choice for their own songs (a handful a night at first; up to 25 since 2026-11-27, the
+  budget's 50 runs): its robots.txt
   closes `/results` and `/youtubei/` to crawlers, and yt-dlp uses both, against its terms too.
 - Provider `youtube` (youtube.py) is the one place caracole runs yt-dlp, and only on these terms, for:
   - a song with no human sheet (`todo.songs_to_buy`);
