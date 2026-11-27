@@ -293,7 +293,17 @@ class BenchRun(
      * its stdout, and the session's stop if it stops it. */
     private fun one(song: String, kind: String, cache: String?, target: String, into: File?, runId: String,
                     lastEnd: Double?, sessionStart: Instant, observe: Boolean,
-                    chosenBy: String? = null): Pair<Pair<BenchRunRecord, String>?, String?> {
+                    chosenBy: String? = null): Pair<Pair<BenchRunRecord, String>?, String?> = try {
+        oneRun(song, kind, cache, target, into, runId, lastEnd, sessionStart, observe, chosenBy)
+    } finally {
+        // Measured or not: the audio goes whatever escapes the run (a gate's log or close, its record), nothing of the
+        // session but its report stays.
+        into?.deleteRecursively()
+    }
+
+    private fun oneRun(song: String, kind: String, cache: String?, target: String, into: File?, runId: String,
+                       lastEnd: Double?, sessionStart: Instant, observe: Boolean,
+                       chosenBy: String?): Pair<Pair<BenchRunRecord, String>?, String?> {
         val state = ledger.state()
         val reservation = ledger.reserve(first = lastEnd == null)
         val stamp = reservation.stamp ?: return null to (reservation.refused ?: OFF)
@@ -383,8 +393,6 @@ class BenchRun(
                 decoded = probe.decode(path)
             }
         }
-        // Measured: the audio goes, nothing of the session but its report stays.
-        into?.deleteRecursively()
         val record = BenchRunRecord(
             song, kind, cache, startedAt, ran?.ran?.processStartMs ?: -1, ran?.ran?.pythonReadyMs ?: -1, seconds,
             maxOf(pause, 0.0), ran?.lines.orEmpty(), outcome, reason, log,

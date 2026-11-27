@@ -167,6 +167,37 @@ class HostGateTest {
         assertFalse(gate.refusedAny())
     }
 
+    /** The kill check's gate, LOOPBACK with its hosts narrowed to [HostGate.KILL_CHECK_HOSTS]: 127.0.0.1 tunnelled,
+     * 10.0.2.2 (the emulator's host, a routable private address on some real networks) refused and never dialled;
+     * the tests' LOOPBACK gate keeps both, and a host outside LOOPBACK_NAMES can't be named. */
+    @Test
+    fun theKillChecksGateReaches127001Alone() {
+        assertEquals(listOf("127.0.0.1"), HostGate.KILL_CHECK_HOSTS)
+        val server = upstream(0, "ok".toByteArray())
+        val gate = HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never,
+                            loopbackHosts = HostGate.KILL_CHECK_HOSTS).also { gates += it }
+        val opened = gate.start()
+        assertEquals(403, status(ask(opened, connectLine("10.0.2.2:${server.port}", auth(opened)))))
+        assertEquals(403, status(ask(opened, "GET http://10.0.2.2:${server.port}/clip.m4a HTTP/1.1\r\n" +
+            "Host: 10.0.2.2:${server.port}\r\nProxy-Authorization: ${auth(opened)}\r\n\r\n")))
+        assertEquals(HostGate.HostUse(refused = 2, why = "not 127.0.0.1"), gate.log()["10.0.2.2"])
+        connect(opened).use { s ->
+            s.getOutputStream().write(connectLine("127.0.0.1:${server.port}", auth(opened)).toByteArray())
+            assertEquals(200, status(head(s.getInputStream())))
+            assertEquals("ok", s.getInputStream().readAllBytes().toString(Charsets.US_ASCII))
+        }
+        server.done.join(5_000)
+        assertEquals(1, gate.log()["127.0.0.1"]?.connects)
+        // The tests' LOOPBACK gate keeps both hosts (not dialled here: 10.0.2.2 is no host of this machine's).
+        assertEquals(listOf("127.0.0.1", "10.0.2.2"), HostGate.LOOPBACK_NAMES)
+        assertFailsWith<IllegalArgumentException> {
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never, loopbackHosts = listOf("192.168.1.1"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never, loopbackHosts = emptyList())
+        }
+    }
+
     @Test
     fun bytesTheClientSendsRightAfterItsConnectAreTunnelledToo() {
         val up = bytes(300, 3)

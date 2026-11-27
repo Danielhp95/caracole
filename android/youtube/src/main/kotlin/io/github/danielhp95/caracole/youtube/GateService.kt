@@ -38,7 +38,8 @@ import java.util.concurrent.atomic.AtomicLong
  * the asker's own claim, which the app's ActivityManager must list under that name (a Messenger carries no calling
  * pid), so it guards against a mistake inside the app's own uid, never against another process of the app; the bench
  * asks it from its button alone; [OPEN_LOOPBACK] a gate of LOOPBACK's mode whatever this process's, which can reach
- * 127.0.0.1 and 10.0.2.2 alone (the bench's kill check, on the owner's phone too: always safe to open); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
+ * 127.0.0.1 alone ([HostGate.KILL_CHECK_HOSTS]: never 10.0.2.2, a routable private address on some real networks; the
+ * bench's kill check, on the owner's phone too: always safe to open); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
  * [CLOSE_ALL] a client's every gate (its close), each gate is closed too when the process that asked for it dies, and
  * every gate when the service ends. Nothing it is asked throws on its thread (where an uncaught
  * exception would end the main process, its server and queue with it): a gate that won't start is said in the answer,
@@ -114,7 +115,7 @@ class GateService : Service() {
                 val open = try {
                     when (msg.what) {
                         OPEN_OBSERVING -> makeObserving(mode())
-                        OPEN_LOOPBACK -> makeGate(HostGate.Mode.LOOPBACK)
+                        OPEN_LOOPBACK -> makeLoopbackGate()
                         else -> makeGate(mode())
                     }.also { gate = it }.start()
                 } catch (e: Exception) {
@@ -175,7 +176,7 @@ class GateService : Service() {
         }
     }
 
-    private fun mode(): HostGate.Mode = HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))
+    private fun mode(): HostGate.Mode = modeOf?.invoke() ?: HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))
 
     /** Why an OBSERVE gate isn't opened for the asker of [pid], or null: the bench's own process asks, under the
      * network's mode. */
@@ -253,7 +254,7 @@ class GateService : Service() {
         /** A fresh OBSERVE gate: every host logged; the bench's alone, its button's (refused otherwise, in words). */
         fun openObserving(): Gate = gate(ask(OPEN_OBSERVING, -1) { putInt(PID, android.os.Process.myPid()) })
 
-        /** A fresh gate of LOOPBACK's mode, whatever the main process's: it reaches 127.0.0.1 and 10.0.2.2 alone. */
+        /** A fresh gate of LOOPBACK's mode, whatever the main process's: it reaches 127.0.0.1 alone. */
         fun openLoopback(): Gate = gate(ask(OPEN_LOOPBACK, -1))
 
         /** The gates' mode, the main process's. */
@@ -349,6 +350,15 @@ class GateService : Service() {
 
         /** How a gate is made: a test's seam (a gate that won't start). */
         @Volatile internal var makeGate: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.YOUTUBE) }
+
+        /** How the kill check's gate is made: LOOPBACK, 127.0.0.1 alone, whatever this process's mode. */
+        @Volatile internal var makeLoopbackGate: () -> HostGate = {
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, loopbackHosts = HostGate.KILL_CHECK_HOSTS)
+        }
+
+        /** A test's seam: the gates' mode in place of `caracole.network`'s (null, in production: the property's). A
+         * test never clears that property, the guard that keeps every client of its process on loopback. */
+        @Volatile internal var modeOf: (() -> HostGate.Mode)? = null
 
         /** How an OBSERVE gate is made (only once [observeRefusal] passed: the network's mode). */
         private val makeObserving: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.OBSERVE) }

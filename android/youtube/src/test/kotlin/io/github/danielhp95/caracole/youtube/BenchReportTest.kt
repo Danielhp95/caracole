@@ -354,6 +354,19 @@ class BenchReportTest {
         assertEquals(emptyList(), File(dir, "bench").listFiles().orEmpty().filter { it.name.startsWith("into-") || it.name == "kill" })
     }
 
+    /** A run whose gate's log, close or record throws out of it still leaves no download folder behind. */
+    @Test
+    fun `a download's folder goes even when an exception escapes its run`() {
+        val into = { File(dir, "bench").listFiles().orEmpty().filter { it.name.startsWith("into-") } }
+        for (fail in listOf<() -> Unit>({ logThrows = true }, { closeThrows = true }, { recordThrows = true })) {
+            logThrows = false; closeThrows = false; recordThrows = false
+            db.writeBlocking { it.execute("DELETE FROM events"); it.execute("DELETE FROM kv WHERE key = ?", DbLedger.RUNS) }
+            fail()
+            assertFailsWith<java.io.IOException> { bench().session(listOf("aaaaaaaaaaa"), false) }
+            assertEquals(emptyList(), into())
+        }
+    }
+
     @Test
     fun `a run refused mid-session when another job spent the day's runs meanwhile`() {
         sentBefore(4)

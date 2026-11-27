@@ -181,10 +181,14 @@ class YouTubeBenchActivity : Activity() {
             shown.runOnUiThread { if (!shown.isDestroyed) shown.show() }
         }
 
+        /** The session on [app]: every client made inside the `try` whose `finally` clears [running], so a session
+         * whose clients won't build never leaves Start refused for the process's life. */
         fun session(app: Context, asked: List<String>, observing: Boolean) {
-            val gates = GateService.Client(app)
-            val ledger = YouTubeBenchLedger.Client(app)
+            var gates: GateService.Client? = null
+            var ledger: YouTubeBenchLedger.Client? = null
             try {
+                gates = GateService.Client(app)
+                ledger = YouTubeBenchLedger.Client(app)
                 val mode = gates.mode()
                 val client = YtDlpClient(app, mode)
                 val loopback = YtDlpClient(app, HostGate.Mode.LOOPBACK)
@@ -211,9 +215,12 @@ class YouTubeBenchActivity : Activity() {
             } catch (e: Exception) {
                 say("the bench failed: ${BenchReport.scrub(e.message ?: e.javaClass.simpleName)}")
             } finally {
-                ledger.close()
-                gates.close()
-                running.set(false)
+                try {
+                    ledger?.close()
+                } finally {
+                    gates?.close()
+                    running.set(false)
+                }
                 redraw()
             }
         }

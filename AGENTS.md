@@ -2875,7 +2875,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     never a process-group kill, the uid's processes sharing zygote's), and waits until it is gone before the next;
     `YtDlpStopped` for a process gone unasked, `YtDlpNotStarted` for none started, `Refused` in the glue's words.
     `GateService`, in the main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)`
-    there, rule YOUTUBE), its `proxyArg` and its log over a Messenger (`GateService.Client`, each ask matched to its
+    there, or a test's `modeOf` seam: a test never clears that property; rule YOUTUBE), its `proxyArg` and its log over
+    a Messenger (`GateService.Client`, each ask matched to its
     answer); nothing it is asked throws on its thread; a client's gates close with its close or its process's death,
     each gate's death recipient unlinked as it closes.
     No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest`, `GateServiceTest` and
@@ -2890,8 +2891,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `ytbench:runs` and `events`, its stamp kept; given back only for a run that never started), its `events` row
     written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
     the gate's `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService
-    `OPEN_LOOPBACK`) on every phone, none of the six spent; its report `BenchReport.of`/`summary` (BenchReportTest,
-    YouTubeBenchTest); an observing gate only for an ask naming `:ytbench` and never under loopback (GateService
+    `OPEN_LOOPBACK`: LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the
+    six spent; its report `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest); an observing gate only for an
+    ask naming `:ytbench` and never under loopback (GateService
     `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
     request's `verbose` leave.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its

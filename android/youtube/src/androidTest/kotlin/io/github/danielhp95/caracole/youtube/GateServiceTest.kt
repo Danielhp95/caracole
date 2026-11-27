@@ -34,10 +34,13 @@ import java.util.concurrent.TimeUnit
 @RunWith(AndroidJUnit4::class)
 class GateServiceTest {
     private val made = GateService.makeGate
+    private val loopbackMade = GateService.makeLoopbackGate
 
     @After
     fun put() {
         GateService.makeGate = made
+        GateService.makeLoopbackGate = loopbackMade
+        GateService.modeOf = null
         GateService.answerDelayMs = 0
     }
 
@@ -147,25 +150,60 @@ class GateServiceTest {
         }
     }
 
-    /** The kill check's gate is LOOPBACK's whatever this process's mode: with `caracole.network` taken off here (the
-     * network's mode), an ordinary open makes a NETWORK gate and openLoopback a LOOPBACK one (the gates made seen
-     * through the seam; neither reaches a host). */
+    /** The kill check's gate is LOOPBACK's whatever this process's mode: with the mode seam saying the network's
+     * (never `caracole.network` cleared: it keeps every client of this process on loopback), an ordinary open makes a
+     * NETWORK gate and openLoopback the kill check's (the gates made seen through the seams; neither reaches a host). */
     @Test
     fun aLoopbackGateIsLoopbacksWhateverTheProcesssMode() {
-        val modes = java.util.Collections.synchronizedList(mutableListOf<HostGate.Mode>())
-        GateService.makeGate = { mode -> modes += mode; HostGate(mode, HostGate.HostRule.YOUTUBE) }
-        val was = System.getProperty(YtDlpClient.NETWORK)
-        try {
-            System.clearProperty(YtDlpClient.NETWORK)
-            GateService.Client(context).use { client ->
-                assertEquals(HostGate.Mode.NETWORK, client.mode())
-                client.open().close()
-                client.openLoopback().close()
-            }
-        } finally {
-            if (was == null) System.clearProperty(YtDlpClient.NETWORK) else System.setProperty(YtDlpClient.NETWORK, was)
+        val modes = java.util.Collections.synchronizedList(mutableListOf<String>())
+        GateService.makeGate = { mode -> modes += mode.name; HostGate(mode, HostGate.HostRule.YOUTUBE) }
+        GateService.makeLoopbackGate = { modes += "kill check"; loopbackMade() }
+        GateService.modeOf = { HostGate.Mode.NETWORK }
+        GateService.Client(context).use { client ->
+            assertEquals(HostGate.Mode.NETWORK, client.mode())
+            client.open().close()
+            client.openLoopback().close()
         }
-        assertEquals(listOf(HostGate.Mode.NETWORK, HostGate.Mode.LOOPBACK), modes.toList())
+        assertEquals("loopback", System.getProperty(YtDlpClient.NETWORK))
+        assertEquals(listOf("NETWORK", "kill check"), modes.toList())
+    }
+
+    /** The kill check's gate reaches 127.0.0.1 alone: 10.0.2.2 (the emulator's host, a routable private address on
+     * some real networks) refused by it with a 403, logged, never dialled; 127.0.0.1 tunnelled. */
+    @Test
+    fun theKillChecksGateRefuses10002() {
+        java.net.ServerSocket(0, 4, java.net.InetAddress.getByName("127.0.0.1")).use { server ->
+            val served = Thread { runCatching { server.accept().use { it.getOutputStream().write("ok".toByteArray()) } } }
+                .apply { isDaemon = true; start() }
+            GateService.Client(context).use { client ->
+                client.openLoopback().use { gate ->
+                    assertEquals(403, connect(gate, "10.0.2.2:${server.localPort}"))
+                    assertEquals(200, connect(gate, "127.0.0.1:${server.localPort}"))
+                    val log = gate.log()
+                    assertEquals(1, log["10.0.2.2"]?.refused)
+                    assertEquals("not 127.0.0.1", log["10.0.2.2"]?.why)
+                    assertEquals(0, log["10.0.2.2"]?.connects)
+                    assertEquals(1, log["127.0.0.1"]?.connects)
+                }
+            }
+            served.join(5_000)
+        }
+    }
+
+    /** A CONNECT to [target] through [gate] with its credentials: the answer's status. */
+    private fun connect(gate: GateService.Gate, target: String): Int {
+        val m = checkNotNull(Regex("""^http://([0-9a-f]+):([0-9a-f]+)@127\.0\.0\.1:(\d+)$""").find(gate.proxyArg))
+        val auth = android.util.Base64.encodeToString("${m.groupValues[1]}:${m.groupValues[2]}".toByteArray(),
+                                                      android.util.Base64.NO_WRAP)
+        java.net.Socket("127.0.0.1", gate.port).use { s ->
+            s.soTimeout = 10_000
+            s.getOutputStream().write(("CONNECT $target HTTP/1.1\r\nHost: $target\r\n" +
+                "Proxy-Authorization: Basic $auth\r\n\r\n").toByteArray(Charsets.ISO_8859_1))
+            val head = StringBuilder()
+            val input = s.getInputStream()
+            while (!head.endsWith("\r\n\r\n")) head.append((input.read().takeIf { it >= 0 } ?: break).toChar())
+            return head.substring(head.indexOf(' ') + 1).substringBefore(' ').toInt()
+        }
     }
 
     private fun assertThrowsIo(block: () -> Unit): IOException = try {

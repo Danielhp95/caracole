@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
  * the mode allows one) to the hosts its [mode] and [rule] allow and to no other, and logs each host asked for: its
  * connects, the bytes each way, the refusals. It is a check and a measurement: only the argv routes yt-dlp through it.
  *
- * - [Mode.LOOPBACK] (tests and instrumentation): `127.0.0.1` and `10.0.2.2` alone, any port, CONNECT and GET; nothing
- *   is looked up, the rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed;
+ * - [Mode.LOOPBACK] (tests and instrumentation): [loopbackHosts] alone (`127.0.0.1` and `10.0.2.2`, [LOOPBACK_NAMES];
+ *   the kill check's gate [KILL_CHECK_HOSTS], 127.0.0.1 alone), any port, CONNECT and GET; nothing is looked up, the
+ *   rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed;
  *   under YOUTUBE a name that resolves to an address that isn't public ([isPublic]) is refused, and the socket is
  *   connected ([connector]) to the very address checked.
  * - `jnn-pa.googleapis.com` (and any name under it) is refused in every mode and by every rule.
@@ -51,7 +52,19 @@ class HostGate(
     private val idleTimeoutMs: Int = IDLE_TIMEOUT_MS,
     private val headTimeoutMs: Int = HEAD_TIMEOUT_MS,
     private val connector: Connector = Connector.DIRECT,
+    private val loopbackHosts: List<String> = LOOPBACK_NAMES,
 ) : Closeable {
+    init {
+        require(loopbackHosts.isNotEmpty() && loopbackHosts.all { it in LOOPBACK_NAMES }) {
+            "a gate's loopback hosts are some of ${LOOPBACK_NAMES.joinToString(", ")}"
+        }
+    }
+
+    /** The bytes of the hosts a [Mode.LOOPBACK] gate allows, and why another is refused. */
+    private val loopbackAddresses = loopbackHosts.map { LOOPBACK_HOSTS[LOOPBACK_NAMES.indexOf(it)] }
+    private val whyNotLoopback =
+        if (loopbackHosts == LOOPBACK_NAMES) WHY_NOT_LOOPBACK else "not " + loopbackHosts.joinToString(" or ")
+
     enum class Mode {
         LOOPBACK, NETWORK;
 
@@ -445,7 +458,7 @@ class HostGate(
         val why = when {
             HostRule.refusedByName(at.key) -> WHY_BY_NAME
             mode == Mode.LOOPBACK ->
-                if (at.address != null && LOOPBACK_HOSTS.any { it.contentEquals(at.address) }) null else WHY_NOT_LOOPBACK
+                if (at.address != null && loopbackAddresses.any { it.contentEquals(at.address) }) null else whyNotLoopback
             at.address != null ->
                 if (rule !== HostRule.OBSERVE) WHY_LITERAL
                 else if (isPublic(InetAddress.getByAddress(at.address))) null else WHY_NOT_PUBLIC
@@ -648,6 +661,10 @@ class HostGate(
 
         /** The hosts a [Mode.LOOPBACK] gate allows, as a target names them (LOOPBACK_HOSTS's bytes). */
         val LOOPBACK_NAMES: List<String> = listOf("127.0.0.1", "10.0.2.2")
+
+        /** The kill check's gate's hosts (on the owner's phone too): 127.0.0.1 alone, never 10.0.2.2, the emulator's
+         * host, which is a routable private address on some real networks. */
+        val KILL_CHECK_HOSTS: List<String> = listOf("127.0.0.1")
 
         /** [Opened.proxyArg]'s shape, a Python regex matched whole (`re.fullmatch`): the gate's scheme, a user and a
          * secret of [TOKEN_BYTES] random bytes in lowercase hex each, its host and a port. What `:youtube`'s glue holds
