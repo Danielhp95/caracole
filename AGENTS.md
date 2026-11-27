@@ -2956,8 +2956,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     never by the codec: where the format names `encoder-delay` and `encoder-padding` the framework's codecs may trim
     them themselves (this emulator's do), so caracole takes both keys out of the codec's format and trims (`Trim`, its
     counts made the output's rate's at its first format, `Trim.at`: rescaled exactly, else the stated delay): an MP4 to
-    its one media edit exactly, a fragmented one with no edit list to its fragments' length, its priming kept (no box
-    names it), as the computer's remux of it decodes (one whose fragments can't be read, a download cut short, refused:
+    its one media edit exactly, a fragmented one with no edit it takes (none, or a segment of 0) to its fragments'
+    length, its priming kept (no box names it), as the computer's remux of it decodes (one whose fragments can't be
+    read, a download cut short, refused:
     `fragmentsKeep`), an Ogg to its last page's granule less Opus's pre-skip (`Ogg`), an MP3 by the decoder's own 529
     samples (`DROPS_MP3_DELAY`, the decoders measured, any other refused: a LAME tag's delay after them, a headerless
     file's whole by a `silentFrame` first), else the delay and padding stated. Its loop is `CodecLoop` (plain code

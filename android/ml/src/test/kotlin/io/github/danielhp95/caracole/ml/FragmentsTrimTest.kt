@@ -22,6 +22,14 @@ class FragmentsTrimTest {
         assertTrue(e.message!!.contains("its fragments can't be read"), e.message)
     }
 
+    /** An edit list [Mp4.Track.edit] rejects (a segment of 0, two media edits) decides nothing: the fragments do,
+     * never the stated trim. */
+    @Test fun aFragmentedTrackWhoseEditListIsRejectedIsEndedAtItsFragmentsLength() {
+        assertEquals(265_624L, fragmentsKeep(track(true, 265_624, listOf(Mp4.Edit(0, 1024)))))
+        assertEquals(265_624L, fragmentsKeep(track(true, 265_624, listOf(Mp4.Edit(10, 0), Mp4.Edit(10, 5)))))
+        assertFailsWith<UndecodableAudio> { fragmentsKeep(track(true, null, listOf(Mp4.Edit(0, 1024)))) }
+    }
+
     @Test fun anyOtherTrackIsNotEndedByItsFragments() {
         assertNull(fragmentsKeep(null))
         assertNull(fragmentsKeep(track(false, null)))

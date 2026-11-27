@@ -112,11 +112,12 @@ data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0, va
 /**
  * Where [Decoder] ends a fragmented MP4 with no edit list (yt-dlp's m4a on the phone): its fragments' length in its
  * `mdhd` timescale, as the computer's remux of it (yt-dlp's FixupM4a) decodes it; null for any other [track] (not
- * fragmented, or with an edit list, which decides); a fragmented one whose fragments can't be read, or of a timescale
- * past an Int, is [UndecodableAudio]: never decoded to an unknown length stated as 0, nor cut to nothing.
+ * fragmented, or with an edit [Mp4.Track.edit] takes, which decides: one it rejects, a segment of 0, decides nothing);
+ * a fragmented one whose fragments can't be read, or of a timescale past an Int, is [UndecodableAudio]: never
+ * decoded to an unknown length stated as 0, nor cut to nothing.
  */
 fun fragmentsKeep(track: Mp4.Track?): Long? {
-    if (track == null || !track.fragmented || track.edits.isNotEmpty()) return null
+    if (track == null || !track.fragmented || track.edit() != null) return null
     if (track.timescale !in 1..Int.MAX_VALUE) throw UndecodableAudio("its fragments' timescale can't be read")
     return track.fragments ?: throw UndecodableAudio("its fragments can't be read (a download cut short?)")
 }
