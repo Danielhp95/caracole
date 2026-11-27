@@ -12,8 +12,10 @@
 #   someone else's.
 # - the Gradle daemons, only with --gradle: gradle --stop stops every daemon of that Gradle version for this user,
 #   every checkout's and worktree's, a build running in one among them, so it refuses while any daemon of this user is
-#   busy (gradle --status; one whose state it can't read counts as busy). Without --gradle it says how many run: each
-#   stops by itself after two idle minutes (android/gradle.properties).
+#   busy (gradle --status; one whose state it can't read counts as busy, and a --status that fails refuses all). The
+#   check and the stop are not atomic: a build that starts in another worktree between --status and --stop can still
+#   be killed. Without --gradle it says how many run: each stops by itself after two idle minutes
+#   (android/gradle.properties).
 # - the adb server, only when adb lists no device at all, in any state (never while a phone is attached), and no
 #   caller holds an emulator of the pool (one may be booting, not listed yet); never one it would start itself just to
 #   look.
@@ -53,11 +55,17 @@ gradle_daemons() {
 
 adb_bin="${ADB:-$(command -v adb || true)}"
 [ -n "$adb_bin" ] || adb_bin="$(nix develop "$android#emulator" -c sh -c 'command -v adb')"
-adb_cmd() { "$adb_bin" "$@" 8>&-; }  # an adb server it starts never holds a lock
+# Every adb call bounded (a hung console or a wedged server answers nothing: a call that fails is no answer), and no
+# adb server it starts holds a lock.
+adb_cmd() { timeout -s KILL "${CARACOLE_ADB_TIMEOUT:-10}" "$adb_bin" "$@" 8>&-; }
 look="$(adb_cmd devices 2>&1)"
 adb_started=0
 grep -q 'daemon started' <<<"$look" && adb_started=1
-listed() { adb_cmd devices 2>/dev/null | awk '/^List of devices attached/ { on = 1; next } on && NF >= 2 { print $1 }'; }
+listed() {
+    local out
+    out="$(adb_cmd devices 2>/dev/null)" || return 1
+    awk '/^List of devices attached/ { on = 1; next } on && NF >= 2 { print $1 }' <<<"$out"
+}
 
 # 1. The pool's emulators, each stopped while holding its lock, so no caller takes it as it dies.
 mkdir -p "$(dirname "$lock")"
@@ -73,22 +81,24 @@ for ((i = 0; i < pool; i++)); do
         exec 8>&-
         continue
     fi
-    adb_cmd -s "$serial" emu kill >/dev/null 2>&1
+    asked="emu kill"
+    adb_cmd -s "$serial" emu kill >/dev/null 2>&1 || asked="emu kill, which got no answer"
     gone() { ! listed | grep -qx "$serial" && [ -z "$(qemu_of "$port")" ]; }
-    for ((t = 0; t < wait * 10; t++)); do gone && break; sleep 0.1; done
+    until_gone() { local end=$((SECONDS + $1)); until gone || [ "$SECONDS" -ge "$end" ]; do sleep 0.1; done; }
+    until_gone "$wait"  # by the clock: each look may take adb's bound
     if gone; then
         say "stopped $serial"
     else
         # shellcheck disable=SC2046  # one pid a word
         kill $(qemu_of "$port") 2>/dev/null
-        for ((t = 0; t < 100; t++)); do gone && break; sleep 0.1; done
+        until_gone 10
         # shellcheck disable=SC2046
         gone || kill -KILL $(qemu_of "$port") 2>/dev/null
-        for ((t = 0; t < 50; t++)); do gone && break; sleep 0.1; done
+        until_gone 5
         if gone; then
-            say "$serial didn't stop within $wait s of emu kill: killed it"
+            say "$serial didn't stop within $wait s of $asked: killed it"
         else
-            say "$serial didn't stop within $wait s of emu kill, nor when killed: it still runs"
+            say "$serial didn't stop within $wait s of $asked, nor when killed: it still runs"
         fi
     fi
     exec 8>&-
@@ -103,13 +113,19 @@ if [ "$count" = 0 ]; then
 elif [ "$gradle" = 0 ]; then
     say "left $count Gradle daemon(s): each stops by itself after two idle minutes (--gradle stops them now)"
 else
-    status="$(nix develop "$android" -c gradle -p "$android" --status 2>/dev/null)"
+    if ! status="$(nix develop "$android" -c gradle -p "$android" --status 2>/dev/null)"; then
+        unread=1    # a --status that fails reads no daemon's state: every one counts as busy
+    else
+        unread=0
+    fi
     idle="$(awk '$1 ~ /^[0-9]+$/ && $2 == "IDLE" { print $1 }' <<<"$status")"
     busy=0
     while read -r pid; do
-        [ -n "$pid" ] && ! grep -qx "$pid" <<<"$idle" && busy=$((busy + 1))
+        [ -n "$pid" ] && { [ "$unread" = 1 ] || ! grep -qx "$pid" <<<"$idle"; } && busy=$((busy + 1))
     done <<<"$daemons"
-    if [ "$busy" != 0 ]; then
+    if [ "$unread" = 1 ]; then
+        say "left $count Gradle daemon(s): gradle --status failed, so none is known idle"
+    elif [ "$busy" != 0 ]; then
         say "left $count Gradle daemon(s): $busy busy or of a state gradle --status doesn't say (a build may be running" \
             "in another checkout), and gradle --stop would stop every one"
     elif nix develop "$android" -c gradle -p "$android" --stop >/dev/null 2>&1; then
@@ -120,13 +136,16 @@ else
 fi
 
 # 3. The adb server: only with no device listed and no pool emulator held.
-devices="$(listed)"
+answered=1
+devices="$(listed)" || answered=0
 held=""
 for ((i = 0; i < pool; i++)); do
     port=$((5554 + 2 * i))
     if ! flock -n "$(lock_of "$port")" true 2>/dev/null; then held="emulator-$port"; break; fi
 done
-if [ -n "$devices" ]; then
+if [ "$answered" = 0 ]; then
+    say "left the adb server: adb devices got no answer"
+elif [ -n "$devices" ]; then
     say "left the adb server: $(paste -sd' ' <<<"$devices") is listed"
 elif [ -n "$held" ]; then
     say "left the adb server: another caller holds $held"

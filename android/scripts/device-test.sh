@@ -109,17 +109,22 @@ emulator_serial() { adb_cmd devices 2>/dev/null | awk -v s="emulator-$port" '$1 
 started_sid=""      # the session of the emulator it started (setsid's pid: the emulator and its children)
 adb_started=0
 running_in() { [ -n "$1" ] && pgrep -s "$1" >/dev/null 2>&1; }
+# adb in the stop, bounded (a hung console or a wedged server answers nothing): KILL, as the stop ignores TERM and so
+# does what it runs.
+adb_bounded() { timeout -s KILL "${CARACOLE_ADB_TIMEOUT:-10}" "$adb_bin" "$@" 9>&-; }
 stop_ours() {
     trap '' INT TERM HUP  # a second Ctrl-C never cuts the stop short, the lock let go with the emulator still up
     set +e
-    local s="emulator-$port" wait="${CARACOLE_EMULATOR_STOP_WAIT:-60}" t
+    local s="emulator-$port" wait="${CARACOLE_EMULATOR_STOP_WAIT:-60}" t asked="emu kill"
     if [ -n "$started_sid" ] && [ "$keep" = 1 ]; then
         echo "device-test.sh: $s kept up (--keep-emulator)" >&2
     elif [ -n "$started_sid" ] && ! running_in "$started_sid"; then
         # Whatever answers as $s now is not the one it started: nothing is sent to it.
         echo "device-test.sh: $s, which it started, had stopped already: nothing to stop" >&2
     elif [ -n "$started_sid" ]; then
-        [[ "$s" =~ ^emulator-[0-9]+$ ]] && adb_cmd -s "$s" emu kill >/dev/null 2>&1  # never a device but an emulator
+        if [[ "$s" =~ ^emulator-[0-9]+$ ]] && ! adb_bounded -s "$s" emu kill >/dev/null 2>&1; then  # an emulator alone
+            asked="emu kill, which got no answer"
+        fi
         for ((t = 0; t < wait * 10; t++)); do running_in "$started_sid" || break; sleep 0.1; done
         if running_in "$started_sid"; then
             kill -TERM -- "-$started_sid" 2>/dev/null
@@ -127,10 +132,10 @@ stop_ours() {
             running_in "$started_sid" && kill -KILL -- "-$started_sid" 2>/dev/null
             for ((t = 0; t < 50; t++)); do running_in "$started_sid" || break; sleep 0.1; done
             if running_in "$started_sid"; then
-                echo "device-test.sh: $s didn't stop within $wait s of emu kill, nor when killed: its session" \
+                echo "device-test.sh: $s didn't stop within $wait s of $asked, nor when killed: its session" \
                     "$started_sid still runs (android/scripts/stop-all.sh)" >&2
             else
-                echo "device-test.sh: $s didn't stop within $wait s of emu kill: killed it" >&2
+                echo "device-test.sh: $s didn't stop within $wait s of $asked: killed it" >&2
             fi
         else
             echo "device-test.sh: stopped $s, which it started" >&2
@@ -140,18 +145,22 @@ stop_ours() {
     fi
     if [ "$adb_started" = 1 ]; then
         local listed held="" i p
-        listed="$(adb_cmd devices 2>/dev/null | awk '/^List of devices attached/ { on = 1; next } on && NF >= 2')"
+        local answered=1
+        listed="$(adb_bounded devices 2>/dev/null)" || answered=0
+        listed="$(awk '/^List of devices attached/ { on = 1; next } on && NF >= 2' <<<"$listed")"
         for ((i = 0; i < pool; i++)); do
             p=$((5554 + 2 * i))
             [ "$p" = "$port" ] && continue
             if ! flock -n "$(lock_of "$p")" true 2>/dev/null; then held="emulator-$p"; break; fi
         done
-        if [ -n "$listed" ]; then
+        if [ "$answered" = 0 ]; then
+            echo "device-test.sh: left the adb server it started: adb devices got no answer" >&2
+        elif [ -n "$listed" ]; then
             echo "device-test.sh: left the adb server it started: a device is still listed" >&2
         elif [ -n "$held" ]; then
             echo "device-test.sh: left the adb server it started: another caller holds $held" >&2
         else
-            adb_cmd kill-server >/dev/null 2>&1
+            adb_bounded kill-server >/dev/null 2>&1
             echo "device-test.sh: stopped the adb server it started (no device left)" >&2
         fi
     fi

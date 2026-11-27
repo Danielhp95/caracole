@@ -70,6 +70,10 @@ def emulators():
 ADB = COMMON + r'''
 argv = sys.argv[1:]
 log("adb", argv)
+hang = os.environ.get("FAKE_ADB_HANG", "").split(",")
+if argv == ["devices"] and "devices" in hang and (not os.environ.get("FAKE_ADB_HANG_AFTER_RUN")
+                                                  or (here / "instrumenting").exists()):
+    time.sleep(600)
 if argv == ["devices"]:
     if not (here / "server").exists():
         (here / "server").write_text("up")
@@ -87,6 +91,8 @@ if argv == ["kill-server"]:
     (here / "server").unlink(missing_ok=True)
     sys.exit(0)
 serial, rest = (argv[1], argv[2:]) if argv[:1] == ["-s"] else ("", argv)
+if rest == ["emu", "kill"] and "emu" in hang:
+    time.sleep(600)
 if rest == ["emu", "kill"]:
     (state / (serial.removeprefix("emulator-") + ".kill")).write_text("")
     print("OK: killing emulator, bye bye")
@@ -457,6 +463,22 @@ def test_an_adb_server_it_started_is_left_while_a_device_in_any_state_is_listed(
     assert "left the adb server it started: a device is still listed" in done.stderr
 
 
+def test_an_adb_that_hangs_in_the_stop_is_cut_off_and_the_emulator_killed_all_the_same(rig):
+    """A hung console (emu kill) and a wedged server (devices) never hold the stop, which ignores TERM, forever."""
+    started = time.monotonic()
+    done = rig.run("device-test.sh", "--area", "keys", FAKE_ADB_HANG="emu,devices", FAKE_ADB_HANG_AFTER_RUN="1",
+                   CARACOLE_ADB_TIMEOUT="2")
+    assert done.returncode == 0, done.stderr
+    assert time.monotonic() - started < 60
+    assert rig.emulators() == {}, "its session killed"
+    assert "device-test.sh: emulator-5554 didn't stop within 3 s of emu kill, which got no answer: killed it" \
+        in done.stderr
+    assert "device-test.sh: left the adb server it started: adb devices got no answer" in done.stderr
+    assert ["kill-server"] not in rig.calls("adb")
+    with open(rig.lock, "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released
+
+
 # stop-all.sh
 
 
@@ -510,7 +532,6 @@ def test_stop_all_with_gradle_stops_them_when_every_one_is_idle(stop_rig):
 @pytest.mark.parametrize("lines, rc", [
     ("  4242 IDLE     8.14.4\n  4343 BUSY     8.14.4", "0"),   # a build running in another checkout
     ("  4242 IDLE     8.14.4", "0"),                           # one it can't read the state of
-    ("", "1"),                                                 # gradle --status failing
 ])
 def test_stop_all_with_gradle_refuses_while_a_daemon_is_busy_or_unknown(stop_rig, lines, rc):
     stop_rig.server_up()
@@ -519,6 +540,30 @@ def test_stop_all_with_gradle_refuses_while_a_daemon_is_busy_or_unknown(stop_rig
     assert done.returncode == 0, done.stderr
     assert not any("--stop" in c for c in stop_rig.calls("nix"))
     assert "stop-all.sh: left 2 Gradle daemon(s):" in done.stdout and "busy" in done.stdout
+
+
+@pytest.mark.parametrize("lines", ["", "  4242 IDLE     8.14.4\n  4343 IDLE     8.14.4"])
+def test_stop_all_with_gradle_refuses_when_gradle_status_fails(stop_rig, lines):
+    stop_rig.server_up()
+    done = stop_rig.run("stop-all.sh", "--gradle", FAKE_GRADLE_DAEMONS="4242 4343",
+                        FAKE_GRADLE_STATUS=STATUS.format(lines=lines), FAKE_GRADLE_STATUS_RC="1")
+    assert done.returncode == 0, done.stderr
+    assert not any("--stop" in c for c in stop_rig.calls("nix"))
+    assert "stop-all.sh: left 2 Gradle daemon(s): gradle --status failed, so none is known idle" in done.stdout
+
+
+def test_stop_all_cuts_off_an_adb_that_hangs_and_kills_the_emulator_all_the_same(stop_rig):
+    stop_rig.server_up()
+    stop_rig.emulator_up(5554)
+    started = time.monotonic()
+    done = stop_rig.run("stop-all.sh", FAKE_ADB_HANG="emu,devices", CARACOLE_ADB_TIMEOUT="2")
+    assert done.returncode == 0, done.stderr
+    assert time.monotonic() - started < 60
+    assert stop_rig.emulators() == {}
+    assert "stop-all.sh: emulator-5554 didn't stop within 3 s of emu kill, which got no answer: killed it" \
+        in done.stdout
+    assert "stop-all.sh: left the adb server: adb devices got no answer" in done.stdout
+    assert ["kill-server"] not in stop_rig.calls("adb")
 
 
 def test_stop_all_matches_the_processes_themselves_never_a_command_line_quoting_them(stop_rig):

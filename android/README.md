@@ -420,7 +420,8 @@ this, reads as someone else's to every later caller and stays up until `android/
 what is left at a task's end: every pool emulator no caller holds, and the adb server when no device is listed and no
 caller holds an emulator. A Gradle daemon stops after two idle minutes (gradle.properties), and the Kotlin compile
 daemon with it; `stop-all.sh --gradle` stops them at once, but `gradle --stop` stops every daemon of that version for
-you, another worktree's running build among them, so it refuses while one is busy.
+you, another worktree's running build among them, so it refuses while one is busy or `gradle --status` fails; the
+check and the stop are not atomic, so a build that starts elsewhere between them can still be killed.
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
