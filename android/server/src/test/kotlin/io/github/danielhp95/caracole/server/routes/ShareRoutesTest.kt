@@ -447,6 +447,50 @@ class ShareRoutesTest {
         assertEquals(1, html.split("Eagles - Hotel California already has a sheet.").size - 1, shown(html))
     }
 
+    /** The one hint of a ready phone where the song named isn't one a sheet from a video is for, in the route's words. */
+    @Test fun `an ignored song, one with audio of its own, YouTube cooling down and no names each say why in one hint`() {
+        val phone = phone(sites = eagles, youtube = true)
+        fun hint(target: String): String {
+            val html = unescape(page(phone.get(target)))
+            assertFalse(make in html, shown(html))
+            assertEquals(emptyList(), forms(html, "/request"))
+            return Regex("""<p class="message">([^<]*)</p>""").findAll(html).map { it.groupValues[1] }
+                .single { "Fetch looks up" !in it && "UG index" !in it }
+        }
+        val video = share("text" to eaglesVideo)
+        phone.parts.database.writeBlocking { db ->
+            phone.parts.store.add(db, "Eagles", "Hotel California", now = "2026-11-27T12:00:00Z")
+            io.github.danielhp95.caracole.core.library.OverrideWriters.addIgnore(db, "Eagles - Hotel California")
+        }
+        assertEquals("Eagles - Hotel California is ignored in overrides.toml.", hint(video))
+        phone.parts.database.writeBlocking { db ->
+            db.execute("DELETE FROM phone_overrides")
+            val song = Songs.byKey(db, "eagles/hotel-california")!!
+            Versions.updateSong(db, song.id, mapOf("audio_path" to "/music/Eagles/Hotel California.m4a"))
+        }
+        assertEquals("Eagles - Hotel California has its own audio (bought or given); auto-chords uses that.", hint(video))
+        // the names typed with no artist: Edit's to fill in
+        assertEquals(YouTubeRoutes.NO_NAMES, hint(share("artist" to "", "title" to "Hotel California", "youtube" to eaglesVideo)))
+        // YouTube cooling down after a block: the route not ready now, whatever the song
+        phone.parts.database.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.health.Health.recordBlock(db, "youtube", java.time.Instant.now(), "blocked")
+        }
+        assertTrue(hint(video).startsWith("No sheets from YouTube here: YouTube refused caracole; asked again after "),
+                   hint(video))
+    }
+
+    /** A page another site sent, of a YouTube link the cache doesn't answer: Read the link, no button and no hint, and
+     * nothing asked (oEmbed waits for the owner's press, as any service's). */
+    @Test fun `a page another site sent of a video not read yet offers Read the link and no button`() {
+        val phone = phone(sites = queen, youtube = true)
+        val html = unescape(page(phone.getFrom("cross-site", share("text" to "https://youtu.be/fJ9rUzIMcZQ"))))
+        assertTrue(">Read the link</button>" in html, shown(html))
+        assertFalse(make in html)
+        assertFalse("No sheets from YouTube here" in html || YouTubeRoutes.NO_NAMES in html, shown(html))
+        assertEquals(emptyList(), forms(html, "/request"))
+        assertEquals(0, asked.get())
+    }
+
     @Test fun `Edit keeps the video, so the names typed are the ones its sheet is made under, with no request`() {
         val phone = phone(sites = queen, youtube = true)
         val html = unescape(page(phone.get(share("text" to "https://youtu.be/fJ9rUzIMcZQ"))))

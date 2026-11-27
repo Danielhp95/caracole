@@ -122,9 +122,7 @@ class YouTubeRoutes(
 
     /** video_field: a form's `youtube`, the video's plain address; 400 for anything that is no video's. */
     private fun videoField(form: Map<String, String>): String {
-        val value = Py.strip(form["youtube"].orEmpty())
-        val video = if (Py.len(value) <= VIDEO_LIMIT) OverrideUrls.videoIdFromUrl(value) else null
-        return YouTubeData.read().watchUrl(video ?: throw notAVideo())
+        return YouTubeData.read().watchUrl(videoIdOf(form["youtube"].orEmpty()) ?: throw notAVideo())
     }
 
     /**
@@ -172,7 +170,7 @@ class YouTubeRoutes(
         val video = if (id.isNotEmpty()) {
             id.takeIf { PyRe.fullmatch(YouTubeData.read().videoId, it) != null }
         } else {
-            if (Py.len(link) <= VIDEO_LIMIT) OverrideUrls.videoIdFromUrl(Py.strip(link)) else null
+            videoIdOf(link)
         }
         return video ?: throw notAVideo()
     }
@@ -309,6 +307,13 @@ class YouTubeRoutes(
 
         /** youtube_routes.VIDEO_LIMIT: characters of a pasted address. */
         const val VIDEO_LIMIT = 600
+
+        /** The video [link] names (stripped, at most [VIDEO_LIMIT] characters: youtube_urls.video_id_from_url's
+         * shapes), null for none: a form's `youtube`, a pasted link, a link shared to the app. */
+        fun videoIdOf(link: String): String? {
+            val value = Py.strip(link)
+            return if (Py.len(value) <= VIDEO_LIMIT) OverrideUrls.videoIdFromUrl(value) else null
+        }
         /** youtube_routes.NOT_HERE: how a refusal begins where no sheet from YouTube can be made. */
         const val NOT_HERE = "No sheets from YouTube here"
         /** The share page's hint for a video whose song's names caracole couldn't read: Edit's names make its sheet. */

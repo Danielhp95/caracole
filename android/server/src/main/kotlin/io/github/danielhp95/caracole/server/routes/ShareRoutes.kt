@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.py.Py
@@ -98,7 +97,7 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         val link: String?
         val video: String?
         if (typed) {
-            video = field(asked, "youtube").takeIf { Py.len(it) <= YouTubeRoutes.VIDEO_LIMIT }?.let(OverrideUrls::videoIdFromUrl)
+            video = YouTubeRoutes.videoIdOf(field(asked, "youtube"))
             app = field(asked, "app").ifEmpty { null }
             sent = emptyList()
             said = listOf(artist, title).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { null }
@@ -112,7 +111,7 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
             sent = listOf("Text" to text, "Subject" to subject, "Title" to extra).filter { it.second.isNotEmpty() }
             said = shared.said
             link = shared.link
-            video = link?.takeIf { Py.len(it) <= YouTubeRoutes.VIDEO_LIMIT }?.let(OverrideUrls::videoIdFromUrl)
+            video = link?.let(YouTubeRoutes::videoIdOf)
         }
         // A link alone of a service caracole may ask: its answer's names, as a text that said them would give them.
         val linked = if (typed || said != null) null else link?.let { ShareLinks.of(it) }
