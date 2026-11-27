@@ -31,16 +31,19 @@ class GlueRefusalTest {
     private val secret = "fedcba9876543210fedcba9876543210"
     private val gate = "http://$user:$secret@127.0.0.1:40123"
     private val qjs = "/data/app/x/lib/x86_64/libqjs.so"
-    private val cache = File(root, "cache/yt-dlp").path
-    private val into = File(root, "cache/into").path
+    private val cache = File(root, "cache/yt-dlp").apply { mkdirs() }.path
+    private val into = File(root, "cache/into").apply { mkdirs() }.path
     private val video = data.watchUrl("aaaaaaaaaaa")
     private val clip = "http://127.0.0.1:8080/clip.m4a"
-    private val script = File(root, "cache/loop.js").path
+    private val script = File(into, "loop.js").path
 
     @AfterTest
     fun clean() {
         root.deleteRecursively()
     }
+
+    private val NOT_YOUTUBE = "its target isn't a YouTube search or video address"
+    private val FOLDER = "it would write outside the run's folders"
 
     /** What `script` prints, run with the glue and the wheels on its path and [args] as sys.argv[2:]. */
     private fun python(script: String, args: List<String>): String {
@@ -54,7 +57,8 @@ class GlueRefusalTest {
         return said
     }
 
-    private fun rules(mode: HostGate.Mode) = GlueRules.of(mode, qjs, listOf(root.path))
+    private fun rules(mode: HostGate.Mode, folders: RunFolders = RunFolders(File(cache), File(into))) =
+        GlueRules.of(mode, qjs, folders)
 
     /** refusal's answer for [argv] (null for none), checking it printed nothing else. */
     private fun refusal(argv: List<String>, mode: HostGate.Mode, rules: String = rules(mode)): String? {
@@ -180,6 +184,37 @@ class GlueRefusalTest {
         }
         refusedInBoth(data.argv("download", video, "/sdcard/yt-dlp", qjs, gate, into))
         refusedInBoth(data.argv("download", video, cache, "/system/bin/sh", gate, into))
+    }
+
+    @Test
+    fun `a search asks for the phone's own count of results, never another`() {
+        runs(search(data.searchTarget("anything", data.searchResults)), HostGate.Mode.NETWORK)
+        for (n in listOf(1, data.searchResults + 1, 99999)) {
+            val why = refused(search(data.searchTarget("anything", n)), HostGate.Mode.NETWORK)
+            assertEquals(NOT_YOUTUBE, why)
+        }
+        refused(search("ytsearch:anything"), HostGate.Mode.NETWORK)
+        refused(search("ytsearch08:anything"), HostGate.Mode.NETWORK)
+    }
+
+    @Test
+    fun `a run names its own two folders alone, never another of the app's storage`() {
+        val other = File(root, "cache/other").apply { mkdirs() }.path
+        val otherCache = File(root, "cache/other/yt-dlp").apply { mkdirs() }.path
+        refusedInBoth(data.argv("download", video, cache, qjs, gate, other))
+        refusedInBoth(data.argv("download", video, otherCache, qjs, gate, into))
+        refusedInBoth(data.argv("download", video, cache, qjs, gate, "$into/deeper"))
+        // A folder given its run's folders by a link to it: the same folder, so it runs; a link out of it is refused.
+        val link = File(root, "cache/link")
+        Files.createSymbolicLink(link.toPath(), File(into).toPath())
+        runs(data.argv("download", video, cache, qjs, gate, link.path), HostGate.Mode.NETWORK)
+        // No folders given at all (a run whose request named none): every template refused.
+        val none = rules(HostGate.Mode.NETWORK, RunFolders())
+        assertEquals(FOLDER, refusal(download(), HostGate.Mode.NETWORK, none))
+        assertEquals(FOLDER, refusal(search(), HostGate.Mode.NETWORK, none))
+        // KillTest's script outside the run's into folder.
+        val outside = File(root, "cache/loop.js").path
+        refused(with(download(clip), "--exec", "before_dl:$qjs $outside"))
     }
 
     @Test

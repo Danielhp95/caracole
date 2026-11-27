@@ -72,7 +72,8 @@ class KillTest {
                 stop()
             }
         }.apply { start() }
-        val ran = client.run(Runs.download(gate.proxyArg, s.url(), Runs.into(name)), timeoutS, { _, _ -> }, {})
+        val argv = Runs.download(gate.proxyArg, s.url(), Runs.into(name))
+        val ran = client.run(argv, timeoutS, { _, _ -> }, {}, Runs.folders(argv))
         stopper.join()
         ran
     }
@@ -100,7 +101,8 @@ class KillTest {
     fun aTrickledDownloadPastItsTimeoutLeavesNoProcess() {
         // The download's own pause (2.5–5 s) and 2 s or so of its body: past 9 s, the run is killed mid-body.
         trickled().use { s ->
-            val ran = client.run(Runs.download(gate.proxyArg, s.url(), Runs.into("timeout")), 9.0, { _, _ -> }, {})
+            val argv = Runs.download(gate.proxyArg, s.url(), Runs.into("timeout"))
+            val ran = client.run(argv, 9.0, { _, _ -> }, {}, Runs.folders(argv))
             assertTrue(ran.killed && ran.timedOut)
             assertEquals(-1, ran.exit)
             assertTrue("the body never began", s.bodyBegun.count == 0L)
@@ -126,8 +128,9 @@ class KillTest {
                 }
                 client.cancel()
             }.apply { start() }
-            val argv = Runs.download(gate.proxyArg, server.url(), Runs.into("child"), Runs.child())
-            val ran = client.run(argv, 120.0, { _, _ -> }, {})
+            val into = Runs.into("child")
+            val argv = Runs.download(gate.proxyArg, server.url(), into, Runs.child(into))
+            val ran = client.run(argv, 120.0, { _, _ -> }, {}, Runs.folders(argv))
             stopper.join()
             Runs.said("a child of yt-dlp: qjs $child; this process ${Process.myPid()} (group " +
                 "${Runs.group(Process.myPid())}); the others as it ran: $groups")
@@ -174,7 +177,8 @@ class KillTest {
                     took = SystemClock.elapsedRealtime() - t0
                 }
                 val first = Thread {
-                    client.run(Runs.download(gate.proxyArg, s.url(), Runs.into("first")), 120.0, { _, _ -> }, {})
+                    val argv = Runs.download(gate.proxyArg, s.url(), Runs.into("first"))
+                    client.run(argv, 120.0, { _, _ -> }, {}, Runs.folders(argv))
                 }.apply { start() }
                 assertTrue(s.bodyBegun.await(120, TimeUnit.SECONDS))
                 waiter.start()
@@ -207,8 +211,8 @@ class KillTest {
                 }
             }.apply { start() }
             try {
-                val ran = client.run(Runs.download(gate.proxyArg, server.url(), Runs.into("killed")), 60.0,
-                                     { _, _ -> }, {})
+                val argv = Runs.download(gate.proxyArg, server.url(), Runs.into("killed"))
+                val ran = client.run(argv, 60.0, { _, _ -> }, {}, Runs.folders(argv))
                 fail("not stopped: killed ${ran.killed}, exit ${ran.exit}")
             } catch (e: YtDlpStopped) {
                 assertEquals(YtDlpClient.STOPPED, e.words)

@@ -36,6 +36,13 @@ object Runs {
         return argv.subList(0, dash) + extra + listOf("--", target)
     }
 
+    /** The run's own folders, as its argv names them (its `--cache-dir`, and its `-o`'s folder): what the client sends
+     * with the request, which the service checks and the glue holds the argv to. */
+    fun folders(argv: List<String>): RunFolders {
+        fun after(name: String) = argv.indexOf(name).takeIf { it >= 0 }?.let { argv.getOrNull(it + 1) }
+        return RunFolders(after("--cache-dir")?.let(::File)?.apply { mkdirs() }, after("-o")?.let { File(it).parentFile })
+    }
+
     /** youtube.json's search argv, filled. */
     fun search(proxy: String): List<String> {
         val data = YouTubeData.read()
@@ -46,9 +53,10 @@ object Runs {
     /** `--version` through [proxy]: the tests' own form, which the service runs under LOOPBACK alone. */
     fun version(proxy: String) = listOf("--ignore-config", "--no-plugin-dirs", "--proxy", proxy, "--version")
 
-    /** KillTest's child, the glue's one `--exec` form: the app's qjs on a script of an endless loop in the cache. */
-    fun child(): List<String> {
-        val script = File(into("child-script"), "loop.js").apply { writeText("while (true);\n") }
+    /** KillTest's child, the glue's one `--exec` form: the app's qjs on a script of an endless loop in the run's own
+     * folder [into]. */
+    fun child(into: File): List<String> {
+        val script = File(into, "loop.js").apply { writeText("while (true);\n") }
         return listOf("--exec", "before_dl:${Qjs.path(context).path} ${script.path}")
     }
 

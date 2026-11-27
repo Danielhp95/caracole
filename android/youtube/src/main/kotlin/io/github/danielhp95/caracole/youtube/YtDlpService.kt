@@ -23,12 +23,16 @@ import java.util.concurrent.atomic.AtomicBoolean
  * One yt-dlp run in the app's `:youtube` process (the phone-youtube design's §3.2), then the process killed: the
  * computer runs a fresh `yt-dlp` each time, and yt-dlp keeps module state. Bound by [YtDlpClient] over a [Messenger]:
  *
- * - it takes one [Wire.RUN] (`run` its id, echoed in every answer; `argv`; `network`), answers [Wire.STARTED] (its pid
+ * - it takes one [Wire.RUN] (`run` its id, echoed in every answer; `argv`; `network`; the run's own folders, `cache`
+ *   and `into`, each optional), answers [Wire.STARTED] (its pid
  *   and its process's start), then starts Python (Chaquopy's, in this process), makes the environment [Env]'s alone
  *   (the glue's `environ`), and asks the glue's `refusal` (an allowlist: the phone's own argv templates, through
  *   [GlueRules]; the glue's docstring says it): refused, [Wire.REFUSED] in words, never run; else [Wire.READY] and
  *   yt-dlp's run, its streams into [Env.out] and [Env.err], then [Wire.DONE] with its exit status; a failure
  *   [Wire.FAILED], `sent` false when nothing of yt-dlp ran (Python didn't start);
+ * - the run's folders are the only ones its argv may name ([GlueRules]): each given must be an absolute folder inside
+ *   the app's own storage (`filesDir` or `cacheDir`), its path its canonical one (no link on the way), else the run is
+ *   refused ([BAD_FOLDER]) before Python starts;
  * - `network` is the main process's mode, exactly `LOOPBACK` or `NETWORK` ([HostGate.Mode]'s names), which the client
  *   sends in each request: this process has no test runner to set it and reads no property; anything else, none
  *   included, is refused;
@@ -96,6 +100,12 @@ class YtDlpService : Service() {
                 answer(reply, run, Wire.REFUSED) { putString(Wire.WORDS, if (argv == null) NO_ARGV else BAD_MODE) }
                 return
             }
+            val folders = try {
+                RunFolders(folder(data.getString(Wire.CACHE)), folder(data.getString(Wire.INTO)))
+            } catch (_: IllegalArgumentException) {
+                answer(reply, run, Wire.REFUSED) { putString(Wire.WORDS, BAD_FOLDER) }
+                return
+            }
             if (!bound) return
             val glue = try {
                 if (!Python.isStarted()) Python.start(AndroidPlatform(this))
@@ -112,8 +122,7 @@ class YtDlpService : Service() {
             val env = Env.prepare(this)
             val had = glue.callAttr("environ", env.keys.toTypedArray(), env.values.toTypedArray()).asList()
             Log.i(TAG, "the environment made Env's alone; the process had ${had.joinToString(" ")}")
-            val roots = listOf(filesDir, cacheDir).map { it.canonicalPath }
-            val rules = GlueRules.of(mode, Qjs.path(this).path, roots)
+            val rules = GlueRules.of(mode, Qjs.path(this).path, folders)
             val why = glue.callAttr("refusal", argv, rules)?.toString()
             answer(reply, run, Wire.READY) { putLong(Wire.AT, SystemClock.elapsedRealtime()) }
             if (why != null) {
@@ -147,6 +156,17 @@ class YtDlpService : Service() {
             if (bound) unbound.await(UNBIND_WAIT_MS, TimeUnit.MILLISECONDS)
             die()
         }
+    }
+
+    /** A folder a request names, checked: none for none; else an absolute folder inside the app's `filesDir` or
+     * `cacheDir`, its path its canonical one (no link, no `..`); anything else an IllegalArgumentException. */
+    private fun folder(path: String?): java.io.File? {
+        if (path == null) return null
+        val file = java.io.File(path)
+        require(file.isAbsolute && file.isDirectory && file.canonicalPath == path.trimEnd('/'))
+        val roots = listOf(filesDir, cacheDir).map { it.canonicalPath }
+        require(roots.any { file.canonicalPath.startsWith("$it/") })
+        return file
     }
 
     private fun die() {
@@ -184,6 +204,8 @@ class YtDlpService : Service() {
         const val WORDS = "words"
         const val EXIT = "exit"
         const val SENT = "sent"
+        const val CACHE = "cache"
+        const val INTO = "into"
     }
 
     companion object {
@@ -198,5 +220,6 @@ class YtDlpService : Service() {
         const val ONE_RUN = "this :youtube process has taken a request already"
         const val NO_ARGV = "a request names its argv"
         const val BAD_MODE = "a request names its network mode, LOOPBACK or NETWORK"
+        const val BAD_FOLDER = "a run's folders are folders of the app's own storage, named by their canonical paths"
     }
 }

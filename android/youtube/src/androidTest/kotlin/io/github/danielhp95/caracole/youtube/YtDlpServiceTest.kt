@@ -9,6 +9,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -45,7 +46,7 @@ class YtDlpServiceTest {
 
     private fun run(argv: List<String>, timeoutS: Double = 120.0): Ran {
         val t0 = SystemClock.elapsedRealtime()
-        val ran = client.run(argv, timeoutS, { _, line -> lines.add(line) }, {})
+        val ran = client.run(argv, timeoutS, { _, line -> lines.add(line) }, {}, Runs.folders(argv))
         Runs.said("ran in ${SystemClock.elapsedRealtime() - t0} ms: exit ${ran.exit}, the process started at " +
             "${ran.processStartMs} ms, Python ready at ${ran.pythonReadyMs} ms")
         return ran
@@ -196,6 +197,53 @@ class YtDlpServiceTest {
             assertNotNull(lines.joinToString("\n"), map)
             assertTrue(map, YtDlpClient.PROXY_SAID in map!!)
             assertNoSecret(ran)
+        }
+    }
+
+    /** yt-dlp's parser takes a unique prefix of an option: `--prox` is `--proxy`. The client finds the gate's address by
+     * its shape in what it is given and in what yt-dlp writes, whatever spelled it. */
+    @Test
+    fun aProxySpelledByAPrefixIsRedactedToo() {
+        LoopbackServer(Runs.clip).use { server ->
+            val argv = Runs.download(gate.proxyArg, server.url(), Runs.into("prefix"), listOf("-v"))
+                .map { if (it == "--proxy") "--prox" else it }
+            assertTrue("--prox" in argv)
+            val ran = run(argv)
+            assertEquals(ran.stderrTail, 0, ran.exit)
+            val map = lines.firstOrNull { it.startsWith("[debug] Proxy map:") }
+            assertNotNull(lines.joinToString("\n"), map)
+            assertTrue(map, YtDlpClient.PROXY_SAID in map!!)
+            assertNoSecret(ran)
+        }
+    }
+
+    /** The run's folders, sent with the request, are folders of the app's own storage named by their canonical
+     * paths, and the argv names those alone. */
+    @Test
+    fun aRunsFoldersAreItsOwnInTheAppsStorage() {
+        LoopbackServer(Runs.clip).use { server ->
+            val into = Runs.into("own")
+            val argv = Runs.download(gate.proxyArg, server.url(), into)
+            val cache = Runs.folders(argv).cache!!
+            for (folders in listOf(RunFolders(File("/data/local/tmp"), into), RunFolders(cache, File("/sdcard")))) {
+                val e = assertThrows(Refused::class.java) { client.run(argv, 60.0, { _, _ -> }, {}, folders) }
+                assertEquals(YtDlpService.BAD_FOLDER, e.words)
+            }
+            val link = File(context.cacheDir, "youtube-test-link").apply { delete() }
+            android.system.Os.symlink(into.path, link.path)
+            try {
+                val e = assertThrows(Refused::class.java) {
+                    client.run(argv, 60.0, { _, _ -> }, {}, RunFolders(cache, link))
+                }
+                assertEquals(YtDlpService.BAD_FOLDER, e.words)
+            } finally {
+                link.delete()
+            }
+            // Folders of the app's own, but not those the argv names: the glue's refusal.
+            val other = Runs.into("other")
+            val e = assertThrows(Refused::class.java) { client.run(argv, 60.0, { _, _ -> }, {}, RunFolders(cache, other)) }
+            assertTrue(e.words, "folders" in e.words)
+            assertTrue("a refused run wrote nothing", other.listFiles().isNullOrEmpty())
         }
     }
 

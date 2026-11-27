@@ -958,13 +958,15 @@ holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy
 nothing under `assets/chaquopy/`, with the debug build as the control. No route runs it yet.
 
 Each yt-dlp run is a process of its own, `:youtube` (`YtDlpService`), as the computer runs a fresh `yt-dlp`:
-`YtDlpClient` in the main process binds it, sends the argv and its own mode (`caracole.network`, as `LOOPBACK` or
-`NETWORK`: that process has no test runner to set it, and refuses any other value), follows yt-dlp's stderr line by
-line, and once it is answered the service kills its process; one request a process, and none run once its client let
-go. The environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy
+`YtDlpClient` binds it, sends the argv, the main process's mode (`caracole.network`, as `LOOPBACK` or `NETWORK`; a
+client of another process is given its gate's: that process has no test runner to set it, and refuses any other
+value) and the run's own two folders (its cache and a download's, which the service checks are in the app's storage
+with no link), follows yt-dlp's stderr line by line, and once it is answered the service kills its process; one
+request a process, none run once its client let go, and one run at a time across the app's processes (a file lock, a
+client that can't take it starting and killing nothing: "another run is going"). The environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy
 variable). The service runs an argv only as one of the phone's own templates (youtube.json's `phone_argv`) reads to
 yt-dlp's own option parser: each option a template sets with its value, or a value its placeholder's check passes
-(the gate's `--proxy` shape, the app's qjs, folders inside the app's own, a YouTube search or video on the network and
+(the gate's `--proxy` shape, the app's qjs, the run's own folders, a search of the phone's 8 results or a video on the network and
 a 127.0.0.1 or 10.0.2.2 address under `LOOPBACK`), every other at its default; under `LOOPBACK` the tests' own forms
 too (`--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). So a test can't reach a real host through
 it, and no argv runs a command, loads a plugin, reads cookies or writes outside the app. A timeout, a cancel or a close
@@ -974,10 +976,11 @@ phone may have run out of memory)". `GateService`, in the main process, gives an
 
 Two cautions for what builds on it. Never kill a process group: every process of the app's uid, the main one
 included, shares one (zygote's). And yt-dlp's `-v` prints its proxy map, the gate's secret in it: `YtDlpClient` redacts
-the `--proxy` from every line and the output it gives back, but a bench or a debug run that adds `-v` must keep those
-`[debug]` lines out of every log, report and screen but through it.
+any gate-shaped address (however the argv spelled its `--proxy`: yt-dlp takes `--prox` too) from every line and the
+output it gives back, but a bench or a debug run that adds `-v` must keep those `[debug]` lines out of every log,
+report and screen but through it.
 
-`YtDlpServiceTest`, `KillTest` and `GateServiceTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
+`YtDlpServiceTest`, `KillTest`, `GateServiceTest` and `AcrossProcessesTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
 `tests/helpers/synth_music.py`, CC0) from a server of the test's on 127.0.0.1, by plain HTTP and by HTTPS, through the
 gate: on the x86_64 emulator the process starts about 0.1 s after the bind, Python is ready with yt-dlp imported at
 0.6–0.8 s, a `--version` run takes 0.7–0.8 s whole, and the clip's download 4.6–5.7 s (yt-dlp's own pause before a

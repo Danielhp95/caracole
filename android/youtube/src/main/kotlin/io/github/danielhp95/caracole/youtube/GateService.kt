@@ -44,6 +44,8 @@ class GateService : Service() {
     /** Each gate's asker: the binder of the Messenger it asked with, whose client's close, or process's death, closes
      * it. */
     private val owners = ConcurrentHashMap<Int, IBinder>()
+    /** Each gate's death recipient on its asker's binder, unlinked as the gate closes. */
+    private val deaths = ConcurrentHashMap<Int, IBinder.DeathRecipient>()
     private val serial = AtomicInteger()
     private val messenger by lazy { Messenger(Handler(thread.looper) { msg -> receive(msg); true }) }
 
@@ -69,7 +71,15 @@ class GateService : Service() {
     }
 
     private fun closeGate(id: Int) {
-        owners.remove(id)
+        val owner = owners.remove(id)
+        val death = deaths.remove(id)
+        if (owner != null && death != null) {
+            try {
+                owner.unlinkToDeath(death, 0)
+            } catch (_: NoSuchElementException) {
+                // Never linked (its link failed) or gone with its binder: nothing to unlink.
+            }
+        }
         gates.remove(id)?.close()
     }
 
@@ -103,7 +113,9 @@ class GateService : Service() {
                     owners[opened] = owner
                     try {
                         // An asker of another process that dies has its gates closed with it.
-                        owner.linkToDeath({ closeOf(owner) }, 0)
+                        val death = IBinder.DeathRecipient { closeOf(owner) }
+                        deaths[opened] = death
+                        owner.linkToDeath(death, 0)
                     } catch (_: RemoteException) {
                         closeGate(opened)
                     }
@@ -146,6 +158,9 @@ class GateService : Service() {
 
     /** How many gates are open now. */
     internal fun openGates(): Int = gates.size
+
+    /** How many death recipients are linked now (one an open gate). */
+    internal fun linkedDeaths(): Int = deaths.size
 
     /** The id of the gate opened last. */
     internal fun newest(): Int = serial.get()

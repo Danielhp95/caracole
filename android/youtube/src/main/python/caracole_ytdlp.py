@@ -14,18 +14,19 @@ Before a run, YtDlpService (its own process, one run each) asks two more:
   variable of the Android process's), and `tempfile` made to read its `TMPDIR` again, where yt-dlp writes each
   challenge script for qjs. The process's own environment, so qjs and any child yt-dlp starts inherit it too.
 - `refusal(argv, rules)`: why the service won't run `argv`, else None; `rules` the JSON GlueRules.kt makes (the
-  phone's argv templates, their placeholders and targets' rules from youtube.json, the gate's `--proxy` shape and the
-  loopback hosts from HostGate, the mode, the app's qjs, the folders a run may write in). An allowlist: the argv is
-  read by yt-dlp's own option parser (as `parseOpts` with arguments given: no config file read; an alias read as
-  what it expands to; `--help` and `--version` noted, not printed), and runs only when it is one of the templates
-  as the parser reads them: each option a template sets holding the template's own value, or, where the template
-  holds a placeholder, a value that placeholder's check passes (the proxy the gate's shape, the qjs the app's, the
-  cache and the output folders inside the run's folders, the target the mode's: a YouTube search or watch address
-  on the network, an http or https address of a loopback host under LOOPBACK), and every other option at the
-  parser's default (so `--no-plugin-dirs`, the cookies' `--no-…` and the rest as the templates give them). Under
-  LOOPBACK alone, the tests' own forms, all in `_TEST_FORMS`: `--version` with the gate, and beside a template
-  `--no-check-certificates`, `-v` and KillTest's one `--exec`. Its words never hold a value of the argv: the
-  proxy's holds the gate's secret.
+  phone's argv templates, their placeholders and targets' rules and the count a search asks for, from youtube.json;
+  the gate's `--proxy` shape and the loopback hosts from HostGate; the mode, the app's qjs, and the run's own two
+  folders, its cache's and its download's, which YtDlpService checked are in the app's storage with no link). An
+  allowlist: the argv is read by yt-dlp's own option parser (as `parseOpts` with arguments given: no config file
+  read; an alias read as what it expands to; `--help` and `--version` noted, not printed), and runs only when it is
+  one of the templates as the parser reads them: each option a template sets holding the template's own value, or,
+  where the template holds a placeholder, a value that placeholder's check passes (the proxy the gate's shape, the
+  qjs the app's, the cache and the output folder the run's own, exactly, the target the mode's: a YouTube search of
+  the phone's own count or a watch address on the network, an http or https address of a loopback host under
+  LOOPBACK), and every other option at the parser's default (so `--no-plugin-dirs`, the cookies' `--no-…` and the
+  rest as the templates give them). Under LOOPBACK alone, the tests' own forms, all in `_TEST_FORMS`: `--version`
+  with the gate, and beside a template `--no-check-certificates`, `-v` and KillTest's one `--exec`. Its words never
+  hold a value of the argv: the proxy's holds the gate's secret.
 
 What it is not:
 
@@ -148,12 +149,22 @@ def _match(template, given, marks, found):
     return template == given
 
 
-def _inside(path, roots):
-    """Whether `path` is an absolute folder of no `..`, `%` or link out, inside one of `roots` (canonical)."""
-    if not path or not os.path.isabs(path) or "%" in path or os.path.normpath(path) != path.rstrip("/"):
+def _clean(path):
+    """Whether `path` is an absolute folder of no `..`, `%` or trailing oddity, as written."""
+    return bool(path) and os.path.isabs(path) and "%" not in path and os.path.normpath(path) == path.rstrip("/")
+
+
+def _same(path, folder):
+    """Whether `path` is the run's `folder` itself (YtDlpService checked that one: in the app's storage, no link)."""
+    return folder is not None and _clean(path) and os.path.realpath(path) == os.path.realpath(folder)
+
+
+def _inside(path, folder):
+    """Whether `path` is a folder inside the run's `folder`, or that folder itself, no link out."""
+    if folder is None or not _clean(path):
         return False
-    real = os.path.realpath(path)
-    return any(real.startswith(root.rstrip("/") + "/") for root in roots)
+    real, root = os.path.realpath(path), os.path.realpath(folder).rstrip("/")
+    return real == root or real.startswith(root + "/")
 
 
 def _loopback(target, hosts):
@@ -177,7 +188,9 @@ def _target_ok(kind, target, rules, loopback):
         return _loopback(target, rules["loopback_hosts"])
     targets = rules["targets"]
     if kind == "search":
-        return re.fullmatch(_filled(targets["search_prefix"], "{n}", "[0-9]+") + ".+", target, re.S) is not None
+        # The count the phone asks for alone (youtube.json's search_results), never another.
+        count = re.escape(str(rules["search_results"]))
+        return re.fullmatch(_filled(targets["search_prefix"], "{n}", count) + ".+", target, re.S) is not None
     vid = targets["video_id"]
     pattern = _filled(targets["watch_url"], "{id}", "(?:" + vid["pattern"] + ")")
     return re.fullmatch(pattern, target, re.I if vid["ignorecase"] else 0) is not None
@@ -190,9 +203,9 @@ def _checked(name, value, kind, rules, loopback):
     if name == "qjs":
         return None if value == rules["qjs"] else NOT_QJS
     if name == "cache_dir":
-        return None if _inside(value, rules["roots"]) and os.path.basename(value) == rules["cache_folder"] else FOLDER
+        return None if _same(value, rules["cache_dir"]) and os.path.basename(value) == rules["cache_folder"] else FOLDER
     if name == "into":
-        return None if _inside(value, rules["roots"]) else FOLDER
+        return None if _same(value, rules["into"]) else FOLDER
     if name == "target":
         if _target_ok(kind, value, rules, loopback):
             return None
@@ -201,14 +214,14 @@ def _checked(name, value, kind, rules, loopback):
 
 
 def _killtest_child(value, rules):
-    """KillTest's child, the one `--exec` form: before the download, the app's qjs on a script in the run's folders,
+    """KillTest's child, the one `--exec` form: before the download, the app's qjs on a script in the run's own folder,
     two words of path characters alone (no shell metacharacter, no `{}` for yt-dlp to fill)."""
     if not (isinstance(value, dict) and list(value) == ["before_dl"] and len(value["before_dl"]) == 1):
         return False
     words = value["before_dl"][0].split(" ")
     # The qjs word is the app's own path, exactly (Android's `~~…==` folder names in it, no shell expands them there).
     return (len(words) == 2 and words[0] == rules["qjs"] and _PATH_CHARS.fullmatch(words[1]) is not None
-            and words[1].endswith(".js") and _inside(os.path.dirname(words[1]), rules["roots"]))
+            and words[1].endswith(".js") and _inside(os.path.dirname(words[1]), rules["into"]))
 
 
 # What the device tests alone may add beside a template, under LOOPBACK alone, each option with its check; and the one

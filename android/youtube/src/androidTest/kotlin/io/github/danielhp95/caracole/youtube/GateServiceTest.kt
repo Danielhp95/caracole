@@ -90,6 +90,23 @@ class GateServiceTest {
         assertEquals(0, running.openGates())
     }
 
+    /** A gate closed lets go of the death recipient its open linked on its asker's binder: one linked an open gate. */
+    @Test
+    fun aGateClosedUnlinksItsDeathRecipient() {
+        GateService.Client(context).use { client ->
+            val gates = List(3) { client.open() }
+            val running = checkNotNull(GateService.running)
+            assertEquals(running.openGates(), running.linkedDeaths())
+            gates[0].close()
+            gates[1].close()
+            assertEquals(running.openGates(), running.linkedDeaths())
+        }
+        val running = checkNotNull(GateService.running)
+        val until = SystemClock.elapsedRealtime() + 5_000
+        while (running.linkedDeaths() != 0 && SystemClock.elapsedRealtime() < until) SystemClock.sleep(50)
+        assertEquals(0, running.linkedDeaths())
+    }
+
     @Test
     fun aGateThatWontStartIsSaidNotThrown() {
         // A gate started already: its start() throws, as one that can't listen would.

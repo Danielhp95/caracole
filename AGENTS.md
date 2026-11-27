@@ -2859,21 +2859,27 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `LANG`, `PATH`; no proxy variable), and runs the argv only through the glue's `refusal`, an allowlist: read by
     yt-dlp's own option parser (an alias as what it expands to), it must be one of youtube.json's `phone_argv`
     templates as that parser reads them (`GlueRules`: the templates, their placeholders and targets through
-    `YouTubeData`, the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from `HostGate`): each option a template sets with
-    its value or a value its placeholder's check passes, every other at the parser's default; under LOOPBACK the
+    `YouTubeData`, the search's one count `search_results`, the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from
+    `HostGate`, and the run's own two folders, `RunFolders`, which the request names and the service checks: in the
+    app's storage, canonical, no link): each option a template sets with its value or a value its placeholder's check
+    passes, every other at the parser's default; under LOOPBACK the
     tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). It kills
-    its process once unbound. `YtDlpClient(context).run(argv, timeoutS, onLine, waiting): Ran` (`killed`,
-    `timedOut`) binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one run at a time in the process, each run its own stop
+    its process once unbound. `YtDlpClient(context, mode).run(argv, timeoutS, onLine, waiting, folders): Ran`
+    (`killed`, `timedOut`) binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one run at a time in the process and across
+    the app's processes (a `FileChannel` lock on `filesDir/youtube-run.lock` held for the whole run; one it can't take,
+    `YtDlpNotStarted` "another run is going", nothing killed or started), each run its own stop
     (`cancel()`, `close()`, a run still waiting its turn included), follows its stderr from `cacheDir/youtube-run/`,
-    redacts the `--proxy` from every line, the tail and the stdout (`Redact`), kills its pid on a stop (waiting for
+    redacts every gate-shaped address (`PROXY_PATTERN`, whatever option spelled it) from every line, the tail and the
+    stdout (`Redact`), kills its pid on a stop (waiting for
     STARTED, else finding `:youtube` by its name; Android then kills the process's cgroup, qjs with it: KillTest;
     never a process-group kill, the uid's processes sharing zygote's), and waits until it is gone before the next;
     `YtDlpStopped` for a process gone unasked, `YtDlpNotStarted` for none started, `Refused` in the glue's words.
     `GateService`, in the main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)`
     there, rule YOUTUBE), its `proxyArg` and its log over a Messenger (`GateService.Client`, each ask matched to its
-    answer); nothing it is asked throws on its thread; a client's gates close with its close or its process's death.
-    No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest` and `GateServiceTest`
-    (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
+    answer); nothing it is asked throws on its thread; a client's gates close with its close or its process's death,
+    each gate's death recipient unlinked as it closes.
+    No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest`, `GateServiceTest` and
+    `AcrossProcessesTest` (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
     in no logcat line, a stop of every kind that leaves no process of the uid but the main one.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
