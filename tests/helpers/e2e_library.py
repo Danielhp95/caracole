@@ -473,6 +473,65 @@ class Computer:
         finally:
             conn.close()
 
+    def without_models(self, *args: str, timeout: float = 300) -> str:
+        """``caracole -vv ARGS`` (its log at DEBUG) on this library, which must succeed, with packages named torch,
+        librosa and beat_this that raise as they are imported (``DIR/no-models/``): ``caracole autochords`` finds
+        them there (it asks no more than ``find_spec``), so it runs as on a computer with auto-chords, and anything
+        that would hear a song fails it. What it printed and logged."""
+        stubs = self.dir / "no-models"
+        for name in ("torch", "librosa", "beat_this"):
+            (stubs / name).mkdir(parents=True, exist_ok=True)
+            (stubs / name / "__init__.py").write_text(
+                f"raise ImportError('{name}: the end to end\'s computer runs no model')\n", encoding="utf-8")
+        env = self.env()
+        env["PYTHONPATH"] = os.pathsep.join((env["PYTHONPATH"], str(stubs)))
+        done = subprocess.run(self.command("-vv", *args), env=env, cwd=self.root, capture_output=True, text=True,
+                              check=False, timeout=timeout)
+        said = done.stdout + done.stderr
+        if done.returncode != 0:
+            raise RuntimeError(f"caracole {' '.join(args)} exited {done.returncode}:\n{said}")
+        return said
+
+    def buy(self, artist: str, title: str, audio: Path) -> Path:
+        """``audio`` as a purchase of the song, in the library's Music folder under "Artist - Title" (music.py reads
+        a file with no tags by its name)."""
+        bought = self.cfg().music_dir / f"{artist} - {title}{audio.suffix}"
+        bought.parent.mkdir(parents=True, exist_ok=True)
+        bought.write_bytes(audio.read_bytes())
+        return bought
+
+    def lyrics_found(self, key: str, record: dict) -> None:
+        """LRCLIB's ``record`` found for the song of identity key ``key``, kept as the lyrics step's ``_record`` keeps
+        it: its lyric files, then the song's ``lyrics_status``, ``lyrics_json`` and ``lyrics_at``."""
+        from caracole import db
+        from caracole.library import song_dir
+        from caracole.lyrics import Lyrics, write_lyrics
+        from caracole.songs import find_song, update_song
+
+        cfg = self.cfg()
+        conn = db.connect(cfg.db_path)
+        try:
+            song = find_song(conn, key)
+            words = Lyrics.from_record(record)
+            write_lyrics(song_dir(cfg.library_dir, song), words)
+            update_song(conn, song.id, lyrics_status="found", lyrics_json=words.to_json(), lyrics_at=FETCHED)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def auto_versions(self, key: str) -> list[tuple[str, dict]]:
+        """The song's ``auto`` versions: each one's tab id and raw record."""
+        from caracole import db
+        from caracole.songs import find_song
+
+        conn = db.connect(self.cfg().db_path)
+        try:
+            song = find_song(conn, key)
+            return [(tab, json.loads(raw)) for tab, raw in conn.execute(
+                "SELECT tab_id, raw FROM versions WHERE song_id = ? AND provider = 'auto' ORDER BY id", (song.id,))]
+        finally:
+            conn.close()
+
     def after_the_phone_left(self) -> None:
         """What the owner does on the computer while the phone is away (§9's step 5): ``caracole add`` adds ``ADDS``,
         and C1's and C2's ``[transpose]`` change (overrides.toml's writer, ``put_song_entries``, keeping their other

@@ -4,7 +4,10 @@ import io.github.danielhp95.caracole.core.backup.Backups
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.index.Reads
+import io.github.danielhp95.caracole.core.library.AudioStore
+import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.sync.PeerClient
@@ -27,6 +30,7 @@ import io.github.danielhp95.caracole.server.lookups.Review
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -132,6 +136,10 @@ import kotlin.test.fail
  *    phone's units written for the Python side, which holds them to the computer's and the pages to Python's.
  * 11. The computer off: the first song's key set in the songbook and its own version made again, then the library
  *    exported in a file as Settings' Export makes it, for the Python side to import on the computer (Import a file).
+ * 12. The computer back and the fake sites up: a chords-only sheet made on the phone from an audio file (the audio
+ *    job, its models [RecordedChordModels]), given at a sync with no conflict.
+ * 13. The computer having left it in its nightly pass and laid it out again over the song's lyrics: a sync takes it
+ *    back, the phone's own render lays out nothing more, and a third comparison finds nothing.
  */
 class PhoneScenarioTest {
     @Test fun phase1_theComputersLibraryIndexAndPagesComeToANewPhone() = phase(1) { phone, scenario ->
@@ -997,6 +1005,143 @@ class PhoneScenarioTest {
         }
     }
 
+    /**
+     * A sheet made on the phone from an audio file, the computer back and the fake sites up: the chord models
+     * installed by the phone's own job ([RecordedChordModels.installed]: nothing asked), the committed clip staged and
+     * its `audio` job run on the real queue (AudioRunner), the models answering what the computer heard in it
+     * ([RecordedChordModels]); every lyrics site misses the song, so the sheet is chords alone: one `auto` version,
+     * its raw holding `heard`, made on the phone by this phone (`made_by` its kv `sync:id`). Then a sync gives the
+     * song and nothing else (no conflict, nothing left), the computer's unit of it the phone's, and a comparison
+     * after finds nothing.
+     */
+    @Test fun phase12_aSheetMadeOnThePhoneFromAnAudioFileGoesToTheComputer() {
+        val chords by lazy { RecordedChordModels() }
+        val examiner = AudioStore.Examiner { _, format ->
+            AudioStore.Audio(format, chords.duration,
+                             mapOf("artist" to listOf(HEARD.artist), "title" to listOf(HEARD.title)))
+        }
+        val made: (PhoneDeps) -> PhoneDeps = {
+            it.copy(models = RecordedChordModels.installed(), chords = chords, examiner = examiner)
+        }
+        phase(12, deps = made) { phone, _ ->
+            val fake = FakeSites(sites ?: fail("phase 12's lyrics sites are the fake sites (-Pcaracole.e2e.sites)"))
+            assertTrue(phone.phone.models.ready() != null, "no chord models on the phone before their job")
+            done(phone.await(phone.phone.queue.submit(phone.phone.models.spec(meteredOk = true)).first.id))
+            assertEquals(null, phone.phone.models.ready(), "the chord models installed by the phone's own job")
+            assertEquals(null, phone.phone.audioProblem())
+
+            val staged = phone.phone.audio.stage(chords.clip.inputStream(), "hearing.mp3", emptySet())
+            val display = "${HEARD.artist} - ${HEARD.title}"
+            val commands = JobCommands.audioSheetSteps(display, staged.id)
+            val before = fake.count()
+            val job = done(phone.await(phone.phone.queue.submit(JobSpec(
+                "Sheet from an audio file: $display", JobCommands.AUDIO_SHEET + HEARD.key, "song",
+                JobCommands.stages(commands.map { it.args }), display = display, commands = commands)).first.id))
+            val ends = job.stages.associate { it.name to (it.state to it.detail) }
+            assertEquals(DONE to "chords only, no lyrics", ends["chords"], job.asJson().toString())
+            assertEquals(1, chords.heard, "heard once")
+            assertEquals("missing", lyricsStatus(phone, HEARD.key), "every lyrics site missed it")
+            val asked = fake.log(before)
+            assertTrue(asked.isNotEmpty(), "the lyrics sites were asked")
+            val other = asked.filter { it.text("provider") !in LYRICS_SITES || it.text("known") != "true" }
+            assertEquals(emptyList(), other, "the job asked the lyrics sites alone, each URL one the scenario answers")
+
+            val raw = autoRaw(phone, HEARD.key)
+            assertEquals(JsonPrimitive("phone"), raw["made_on"])
+            assertEquals(JsonPrimitive(phone.ownId()), raw["made_by"])
+            assertEquals(JsonPrimitive("none"), raw["lyrics"])
+            assertEquals(chords.heardOfClip.record(), raw["heard"])
+            assertEquals(JsonPrimitive(RecordedChordModels.RUNTIME), raw["runtime"])
+
+            val compared = compare(phone)
+            assertEquals(mapOf(HEARD.unit to "mine"), compared.proposals, "the song made on the phone, no conflict")
+            val synced = apply(phone, compared, "")
+            assertStages(phone, synced, SyncEngine.COMPARE to DONE, SyncEngine.TAKE to SKIPPED, SyncEngine.GIVE to DONE,
+                         SyncEngine.MIRROR to DONE, SyncEngine.AGREE to DONE)
+            val outcome = outcome(phone, synced)
+            assertEquals(setOf(HEARD.unit), units(outcome, "given"), "$outcome")
+            assertEquals(emptySet(), units(outcome, "taken"), "$outcome")
+            assertEquals(JsonArray(emptyList()), outcome["left"], "nothing left: $outcome")
+            val digest = phone.units().getValue(HEARD.unit).digest
+            assertEquals(digest, phone.peer().state(phone.ownId()).units[HEARD.unit]?.digest,
+                         "the computer's unit the phone's")
+            assertEquals(emptyMap(), compare(phone).proposals, "a comparison after finds nothing")
+            write(File(phone.home, "phone-state.json"), buildJsonObject {
+                put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
+            })
+            buildJsonObject {
+                put("key", HEARD.key)
+                put("display", display)
+                put("digest", digest)
+                put("made_by", phone.ownId())
+                put("heard", raw.getValue("heard"))
+                put("sheet", keptFile(phone, HEARD.key, AUTO_SHEET))
+                put("asked", JsonObject(FakeSites.byProvider(asked).mapValues { JsonPrimitive(it.value) }))
+            }
+        }
+    }
+
+    /**
+     * The computer, having left the phone's sheet in its nightly pass and laid it out again over the song's lyrics as
+     * it rendered: a sync takes it (the computer's change alone, no conflict, nothing left), the phone's sheet the
+     * computer's byte for byte, its maker still this phone, its `heard` as made, one `auto` version, and the page the
+     * phone serves of it the re-laid one. The phone's own render then (its re-lay first, Relay.onto) has nothing to lay
+     * out again (`Relay.due` null) and moves nothing: the unit's digest as taken; and a third comparison finds nothing.
+     */
+    @Test fun phase13_theSheetLaidOutAgainOnTheComputerComesBackAndIsNeverFoughtOver() = phase(13) { phone, _ ->
+        val twelve = read(File(phone.home, "phase-12.json"))
+        val compared = compare(phone)
+        assertEquals(mapOf(HEARD.unit to "theirs"), compared.proposals, "the re-lay, the computer's change alone")
+        val synced = apply(phone, compared, "")
+        assertStages(phone, synced, SyncEngine.COMPARE to DONE, SyncEngine.TAKE to DONE, SyncEngine.GIVE to SKIPPED,
+                     SyncEngine.MIRROR to DONE, SyncEngine.AGREE to DONE)
+        val outcome = outcome(phone, synced)
+        assertEquals(setOf(HEARD.unit), units(outcome, "taken"), "$outcome")
+        assertEquals(emptySet(), units(outcome, "given"), "$outcome")
+        assertEquals(JsonArray(emptyList()), outcome["left"], "nothing left: $outcome")
+
+        val computer = File(phone.home.parentFile, "computer/library")
+        val path = keptPath(phone, HEARD.key, AUTO_SHEET)
+        val sheet = File(phone.libraryDir, path).readBytes()
+        assertTrue(sheet.contentEquals(File(computer, path).readBytes()), "the computer's re-laid sheet, byte for byte")
+        assertTrue(sheet.decodeToString() != twelve.text("sheet"), "laid out again over the lyrics")
+        val raw = autoRaw(phone, HEARD.key)
+        assertEquals(twelve["made_by"], raw["made_by"], "its maker still the phone")
+        assertEquals(JsonPrimitive("phone"), raw["made_on"])
+        assertEquals(twelve["heard"], raw["heard"], "what was heard, as heard")
+        assertEquals(JsonPrimitive("synced"), raw["lyrics"])
+        assertEquals("found", lyricsStatus(phone, HEARD.key))
+        val auto = phone.database.read { db ->
+            db.one("SELECT COUNT(*) FROM versions v JOIN songs s ON s.id = v.song_id " +
+                       "WHERE s.key = ? AND v.provider = 'auto'", HEARD.key) { it.long(0) }
+        }
+        assertEquals(1L, auto, "one auto version")
+        // The page the phone serves of it: the computer's, of the re-laid sheet (the mirror's at the unit's digest).
+        val page = phone.mirror.manifest()!!.entries
+            .single { it.unit == HEARD.unit && it.path.endsWith("/sheet (auto).html") }
+        val served = phone.get("/" + quotePath(page.path))
+        assertEquals(200, served.status, served.text.take(1000))
+        assertTrue(served.bytes.contentEquals(File(computer, page.path).readBytes()), "the re-laid sheet's page served")
+
+        // The phone's own render: its re-lay has nothing to do, and nothing moves.
+        val taken = phone.units().getValue(HEARD.unit).digest
+        val id = idOf(phone, HEARD.key)
+        phone.database.read { db ->
+            val song = Songs.byId(db, id)!!
+            assertEquals(null, Relay.due(song, raw, Relay.notedOf(db, song, raw)), "the sheet up to date on the phone")
+        }
+        val stats = phone.database.writeBlocking { db -> phone.phone.render.render(db, listOf(id), null) }
+        assertEquals(emptyMap(), stats.failed, "$stats")
+        assertEquals(0, stats.given, "nothing laid out again: $stats")
+        assertEquals(taken, phone.units().getValue(HEARD.unit).digest, "the unit as taken")
+        assertTrue(File(phone.libraryDir, path).readBytes().contentEquals(sheet), "the sheet as taken")
+        assertEquals(emptyMap(), compare(phone).proposals, "a third comparison finds nothing")
+        write(File(phone.home, "phone-state.json"), buildJsonObject {
+            put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
+        })
+        buildJsonObject { put("digest", taken); put("taken", outcome["taken"] ?: JsonNull) }
+    }
+
     // --- the phases' plumbing ---------------------------------------------------------------------------------------
 
     private val phase: Int? = System.getProperty("caracole.e2e.phase")?.toIntOrNull()
@@ -1006,7 +1151,8 @@ class PhoneScenarioTest {
 
     /** Phase [n]'s [body], given the phone over DIR/phone/ and the scenario, if it is the phase asked for; what it
      * returns, and the requests the phone sent, written to DIR/phone/phase-N.json. */
-    private fun phase(n: Int, render: ((PhoneDeps) -> PhoneRender)? = null, body: (ScenarioPhone, Scenario) -> JsonObject) {
+    private fun phase(n: Int, render: ((PhoneDeps) -> PhoneRender)? = null, deps: (PhoneDeps) -> PhoneDeps = { it },
+                      body: (ScenarioPhone, Scenario) -> JsonObject) {
         Assume.assumeTrue("phase $n alone, against a computer (-Pcaracole.e2e.phase, .server, .dir)",
                           phase == n && server != null && dir != null)
         val home = File(dir, "phone")
@@ -1014,7 +1160,7 @@ class PhoneScenarioTest {
         Requests.install()
         Requests.reset()
         val scenario = Scenario.read(dir!!)
-        val result = ScenarioPhone(home, server!!, sites, render).use { phone -> body(phone, scenario) }
+        val result = ScenarioPhone(home, server!!, sites, render, deps).use { phone -> body(phone, scenario) }
         write(File(home, "phase-$n.json"), JsonObject(result + mapOf(
             "phase" to JsonPrimitive(n), "requests" to JsonPrimitive(Requests.count),
         )))
@@ -1146,6 +1292,19 @@ class PhoneScenarioTest {
                        "WHERE songs.key = ? AND files.name = ?", key, name) { it.text(0) }
         } ?: fail("no $name kept for $key: ${keptFiles(phone, key)}")
         return File(phone.libraryDir, path).readText()
+    }
+
+    /** Where the file [name] the phone keeps of the song of [key] is in its library. */
+    private fun keptPath(phone: ScenarioPhone, key: String, name: String): String = phone.database.read { db ->
+        db.one("SELECT files.path FROM files JOIN songs ON songs.id = files.song_id " +
+                   "WHERE songs.key = ? AND files.name = ?", key, name) { it.text(0) }
+    } ?: fail("no $name kept for $key: ${keptFiles(phone, key)}")
+
+    /** The raw record of the version the song of [key] keeps its auto sheet of. */
+    private fun autoRaw(phone: ScenarioPhone, key: String): JsonObject = phone.database.read { db ->
+        val song = Songs.byKey(db, key) ?: fail("no song $key")
+        val file = Kept.keptFiles(db, song.id).firstOrNull { it.name == AUTO_SHEET } ?: fail("no auto sheet of $key")
+        Versions.get(db, file.versionId)!!.raw
     }
 
     private fun keptVersions(phone: ScenarioPhone, key: String): List<String> =
@@ -1305,5 +1464,14 @@ class PhoneScenarioTest {
 
         /** status.py's line for a lookup that found its song nowhere: a miss, which an error never is. */
         const val NOT_FOUND = "Not found"
+
+        /** The song phases 12 and 13 make a sheet of from an audio file: the scenario `chords`' (fake_sites.py's
+         * CHORDS), which the lookups scenario the phone's sites answer has nothing of. */
+        val HEARD = Song("Calla Lake", "River Road", "calla-lake/river-road")
+
+        const val AUTO_SHEET = "sheet (auto).txt"
+
+        /** The sites the audio job's lyrics stage asks. */
+        val LYRICS_SITES = setOf("lrclib", "megalobiz", "azlyrics")
     }
 }

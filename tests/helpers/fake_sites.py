@@ -434,6 +434,10 @@ class Sites:
         record.pop("lyricsfile", None)
         return record
 
+    def lrclib_record(self, role: str) -> dict:
+        """The LRCLIB record ``/api/get`` answers for the scenario's song of part ``role``."""
+        return next(record for song, record in self._lyrics() if song.role == role)
+
     def _lyrics(self) -> list[tuple[SiteSong, dict]]:
         return [(s, self._record(s, n)) for n, s in enumerate(self.songs) if s.lyrics]
 

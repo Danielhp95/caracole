@@ -4473,7 +4473,13 @@ CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py  
   the long-lists stage is judged by.
 - tests/test_android_e2e.py, marked `android_e2e` and `slow`, is skipped unless `CARACOLE_ANDROID_E2E=1`: the goal's
   scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
-  serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
+  serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase. Its last phases
+  (12, 13) are one song's sheet from audio between the two: the phone's audio job makes it chords-only
+  (`RecordedChordModels`: the corpus's hearing of hearing.mp3 for that clip, the models installed by the phone's own
+  job from test pins, nothing asked), a sync gives it, the computer's `caracole autochords` (stub model packages that
+  raise, `Computer.without_models`) leaves it `MADE_ELSEWHERE` beside a purchase, the song's lyrics come and its
+  render re-lays it, maker kept; the phone takes it, its own render re-lays nothing, and a third comparison is empty:
+  no conflict, one `auto` version, one digest.
 - **The device step**, the one place an emulator runs, through device-test.sh's pool of emulators, each one caller at a
   time (android/README.md, "Try it on an emulator"):
   `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
