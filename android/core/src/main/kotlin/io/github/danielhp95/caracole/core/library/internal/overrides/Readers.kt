@@ -148,7 +148,7 @@ internal object Readers {
                           table["record"]?.let { lyricsRecord(it, where, value) })
     }
 
-    private fun lyricsRefused(value: JsonElement, where: String) =
+    internal fun lyricsRefused(value: JsonElement, where: String) =
         OverridesError("$where: expected $LYRICS_SHAPE, got ${PyValues.repr(value)}")
 
     /** str.partition: the text before the first [sep], and the rest after it; null without one. */
@@ -157,7 +157,9 @@ internal object Readers {
         return if (at < 0) null else text.substring(0, at) to text.substring(at + sep.length)
     }
 
-    private fun lyricsAsked(part: JsonElement, where: String, value: JsonElement): Pair<String, String> {
+    /** overrides._lyrics_asked: `as`, "Artist - Title" split at its first " - " and stripped; else refused, [value]
+     * quoted. */
+    fun lyricsAsked(part: JsonElement, where: String, value: JsonElement): Pair<String, String> {
         val (artist, title) = PyValues.text(part)?.let { partition(it, " - ") } ?: throw lyricsRefused(value, where)
         val a = Py.strip(artist)
         val t = Py.strip(title)
@@ -165,7 +167,9 @@ internal object Readers {
         return a to t
     }
 
-    private fun lyricsRecord(part: JsonElement, where: String, value: JsonElement): LyricsRecord {
+    /** overrides._lyrics_record: `record`, `site:id` of [LYRICS_RECORD_IDS]' shapes, as it is; else refused, [value]
+     * quoted. */
+    fun lyricsRecord(part: JsonElement, where: String, value: JsonElement): LyricsRecord {
         val (site, id) = PyValues.text(part)?.let { partition(it, ":") } ?: throw lyricsRefused(value, where)
         val shape = LYRICS_RECORD_IDS[site] ?: throw lyricsRefused(value, where)
         if (PyRe.fullmatch(shape, id) == null) throw lyricsRefused(value, where)
