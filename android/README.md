@@ -130,7 +130,9 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
    over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
    arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
-   models for this phone's processor". `android/scripts/release-check.sh` checks all of it.
+   models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
+   ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, BTC's and beat_this's) are its assets
+   `chords/licenses/`, as alphaTab's are `alphatab/licenses/`. `android/scripts/release-check.sh` checks all of it.
 3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
    that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
    same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
@@ -847,22 +849,22 @@ Wi-Fi off and the rules in: `adb -s emulator-NNNN shell svc wifi enable`, and `s
 (and `ip6tables`) in `adb shell`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner: it has no HTTP
 code, so `caracole.network=loopback` isn't set for it.
 
-BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so the debug
-build's alone; `:core`, whose resources are the rest of that folder, leaves them out. That nothing of this reaches the
-release is a check to run again:
+BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so a build with
+`:ml`'s alone; `:core`, whose resources are the rest of that folder, leaves them out. What the release carries, and
+what it doesn't, is a check to run again:
 
     android/scripts/release-check.sh
 
 It builds the release (unsigned without the release key: the same packaged output) and the debug build in the `ml`
-shell (the debug build with `:ml`), reads each
-APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath names no
-`onnxruntime` and no `:ml`, and that its APK holds no `libonnxruntime*`, no class under `ai/onnxruntime/` or of `:ml`
-(dexdump), no `ChordsBench` or `BenchService` in its dex, nothing under `caracole/autochords/` or
-`assets/autochords/`, no `.onnx` or `.pt` file, and nothing of the runtime's telemetry or the bench in its manifest
-(aapt2). Every probe has a control that shows it can see what it looks for: the debug build's classpath and APK
-(which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
-makes, the runtime's own AAR, whose manifest declares no provider, and `gradle :app:apkScan`, whose own control finds
-each string it looks for where it would be.
+shell, reads each APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath
+names `onnxruntime` and `:ml`, and that its APK holds ONNX Runtime's and libsoxr's libraries for arm64-v8a alone,
+classes under `ai/onnxruntime/` and of `:ml` (dexdump), `caracole/autochords/` with one model file (BTC's graph, no
+weights), MlService in its `:ml` process, the licences under `assets/chords/licenses/` (each its source's bytes), and
+nothing of the Chords bench (its classes, Settings' row, `assets/autochords/`, its manifest's entries) or of the
+runtime's telemetry (aapt2), within 100 MiB. Every probe has a control that shows it can see what it looks for: the
+debug build's APK (which holds the bench and x86_64's libraries, and none of the weights' files), the names of the
+files `.#chord-models` makes, the runtime's own AAR, whose manifest declares no provider, the licences' probe telling
+two licences apart, and `gradle :app:apkScan`, whose own control finds each string it looks for where it would be.
 
 ## Chords from audio: the decoder
 

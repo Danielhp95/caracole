@@ -15,6 +15,8 @@
 #   Chords bench (no "ChordsBench", "BenchService" or Settings' row's words, "Chords bench", in its dex; no
 #   assets/autochords/, the bench's clips; no ChordsBenchActivity, BenchService or BenchWorkerService, ":bench" or
 #   ":benchrun" process or FOREGROUND_SERVICE_SPECIAL_USE in its manifest, aapt2's dump), no TelemetryInitializer;
+# - the licences of what the chord models ship, under assets/chords/licenses/, each its source's bytes: ONNX Runtime's
+#   LICENSE and ThirdPartyNotices.txt (from its AAR), libsoxr's LICENCE and COPYING.LGPL, BTC's and beat_this's;
 # - its size: 100 MiB at most;
 #
 # and the controls, so that no probe passes for nothing:
@@ -166,6 +168,32 @@ providers_declared=1
 [ -n "$aar" ] && providers_declared="$(unzip -p "$aar" AndroidManifest.xml | grep -c '<provider' || true)"
 echo "ONNX Runtime's AAR: ${aar:-none in $ort_maven}"
 check "the runtime's AAR (from source) declares no provider" "$(yes_if '[ -n "$aar" ] && [ "$providers_declared" = 0 ]')"
+# The licences of what the chord models ship (ml/build.gradle.kts's copyLicences), in the release APK byte for byte
+# as their sources hold them: ONNX Runtime's from its AAR, libsoxr's beside its source, BTC's and beat_this's.
+licence_dir="$probe/licences"
+mkdir -p "$licence_dir"
+[ -n "$aar" ] && unzip -q -o "$aar" LICENSE ThirdPartyNotices.txt -d "$licence_dir/ort" 2>/dev/null
+licence_pairs=(
+    "onnxruntime-LICENSE=$licence_dir/ort/LICENSE"
+    "onnxruntime-ThirdPartyNotices.txt=$licence_dir/ort/ThirdPartyNotices.txt"
+    "libsoxr-LICENCE=android/autochords/native/soxr/LICENCE"
+    "libsoxr-COPYING.LGPL=android/autochords/native/soxr/COPYING.LGPL"
+    "BTC-LICENSE=src/caracole/autochords/LICENSE-BTC"
+    "beat_this-LICENSE.txt=android/ml/licenses/beat_this-LICENSE.txt"
+)
+same_licence() {  # same_licence APK NAME SOURCE: the APK's assets/chords/licenses/NAME is SOURCE's bytes
+    [ -s "$3" ] && unzip -p "$1" "assets/chords/licenses/$2" 2>/dev/null | cmp -s - "$3"
+}
+for pair in "${licence_pairs[@]}"; do
+    name="${pair%%=*}"
+    check "release APK holds $name (assets/chords/licenses/), its source's bytes" \
+        "$(yes_if 'same_licence "$release" "$name" "${pair#*=}"')"
+done
+check "the control: the licences' probe tells two licences apart (onnxruntime-LICENSE is not libsoxr's LICENCE)" \
+    "$(yes_if '! same_licence "$release" onnxruntime-LICENSE android/autochords/native/soxr/LICENCE')"
+check "the control: the licences' probe finds no licence the APK lacks" \
+    "$(yes_if '! same_licence "$release" no-such-LICENSE src/caracole/autochords/LICENSE-BTC')"
+
 echo "ApkScanTest (gradle :app:apkScan):"
 if nix develop ./android#ml -c gradle -p android :app:apkScan --console=plain -q; then scanned=1; else scanned=0; fi
 check "ApkScanTest: no telemetry host, provider or client in the APKs or the runtime's AAR" "$scanned"

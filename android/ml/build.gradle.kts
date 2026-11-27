@@ -83,6 +83,31 @@ val copyModelData by tasks.registering(Sync::class) {
 tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource") || it.name.startsWith("lint") }
     .configureEach { dependsOn(copyModelData) }
 
+// The licences of what the chord models ship in the APK, as its assets `chords/licenses/` (as alphaTab's are
+// `alphatab/licenses/`, app/alphatab.gradle.kts): ONNX Runtime's (MIT) LICENSE and ThirdPartyNotices.txt from its
+// AAR's root, which packaging never takes; libsoxr's (LGPL-2.1+) LICENCE and COPYING.LGPL beside its source; BTC's
+// (MIT: its graph is in the APK, its weights downloaded) as src/caracole/autochords vendors it; beat_this's (MIT: its
+// converted graph downloaded), beat-this 1.1.0's LICENSE, kept in licenses/. release-check.sh checks each is in the
+// release APK, byte for byte.
+val onnxRuntimeAar = configurations.detachedConfiguration(
+    dependencies.create("io.github.danielhp95.caracole:onnxruntime-android:$onnxRuntime@aar"))
+val copyLicences by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/licenceAssets"))
+    into("chords/licenses") {
+        from({ zipTree(onnxRuntimeAar.singleFile) }) {
+            include("LICENSE", "ThirdPartyNotices.txt")
+            rename { "onnxruntime-$it" }
+        }
+        from("../autochords/native/soxr") {
+            include("LICENCE", "COPYING.LGPL")
+            rename { "libsoxr-$it" }
+        }
+        from("../../src/caracole/autochords/LICENSE-BTC") { rename { "BTC-LICENSE" } }
+        from("licenses/beat_this-LICENSE.txt")
+    }
+}
+android.sourceSets.getByName("main").assets.srcDir(copyLicences)
+
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
