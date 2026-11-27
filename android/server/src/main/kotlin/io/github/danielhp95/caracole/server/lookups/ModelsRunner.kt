@@ -46,8 +46,8 @@ import kotlin.concurrent.read
  * answered by that one) and the queue's one worker are the guarantee [ModelsSource.fetch] asks of its caller, and
  * nothing else calls it. Its one stage, `models`, says:
  *
- * 1. a build that carries no models ([source] null: ModelFiles.carried() found no models.json, the release's until
- *    stage S): "Not downloaded: This build carries no chord models.", no request, nothing written;
+ * 1. a build that carries no models ([source] null: ModelFiles.carried() found no models.json, a build without
+ *    `:ml`): "Not downloaded: This build carries no chord models.", no request, nothing written;
  * 2. the folder already installed whole ([ModelFiles.installed], the judge: the files, never the record): "Chord models
  *    ready · 55 MB", no request (kv [INSTALLED] written where it was lost);
  * 3. a time GitHub said to ask again after (kv [NOT_BEFORE]) still to come, up to [Catalogues.MOST_AHEAD]

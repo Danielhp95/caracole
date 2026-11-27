@@ -188,8 +188,8 @@ class AssemblyTest {
         }
     }
 
-    /** `caracole audio` is the phone's command, AudioRunner's; with no chord models wired in (the release, the
-     * assembly's default) its job refuses before anything is kept, in the command's words; the models' remove is
+    /** `caracole audio` is the phone's command, AudioRunner's; with no chord models wired in (a build without
+     * `:ml`, the assembly's default) its job refuses before anything is kept, in the command's words; the models' remove is
      * refused while one waits or runs (ModelsRunner.USES). */
     @Test fun theAudioCommandIsWiredAndWithNoChordsItRefusesBeforeAnythingIsKept() = phone { phone ->
         val commands = io.github.danielhp95.caracole.server.jobs.JobCommands.audioSheetSteps("Calla Lake - River Road",
