@@ -539,6 +539,32 @@ def test_synced_lyrics_no_shift_fits_clearly_give_way_to_the_plain_ones(conn, cf
     assert raw["lyrics"] == "plain" and "lyrics_shift" not in raw
 
 
+def test_a_length_that_cant_be_read_after_the_models_is_caracoles_error_never_the_files(
+    conn, cfg, tmp_path, monkeypatch
+):
+    # The models read the file; reading its length after them fails (the file went between the two, say): that is
+    # caracole's error, as it was before the sheet half moved (E11), never the file's: nothing is filed against its
+    # audio, so the same file, back with the same mtime, is tried again; the song stays due and the run fails.
+    import caracole.autochords.run as ac_run
+    from caracole.autochords.run import _skip_reason
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+
+    def vanished(path):
+        raise FileNotFoundError(f"[Errno 2] No such file or directory: {str(path)!r}")
+
+    monkeypatch.setattr(ac_run, "read_audio", vanished)
+    recognizer, beats = FakeRecognizer(), FakeBeats()
+    stats = run(conn, cfg, recognizer, beats)
+    assert recognizer.calls == beats.calls == [Path(s.audio_path)]
+    assert kv_get(conn, failed_key(s)) is None
+    assert (stats.generated, stats.failed, stats.failures) == (0, 1, [])
+    [error] = stats.errors
+    assert error.startswith("Nobody - River Road: FileNotFoundError: ")
+    assert kept_files(conn, s.id) == []
+    assert _skip_reason(conn, get_song(conn, s.id), Overrides()) is None
+
+
 def test_a_shift_that_fails_to_be_found_leaves_the_plain_lyrics_and_blames_no_purchase(
         conn, cfg, tmp_path, monkeypatch, caplog):
     import caracole.autochords.sheet as ac_sheet

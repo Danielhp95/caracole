@@ -541,6 +541,9 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
     video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
     try:
         heard = _hear(song, *models, told)
+    except _LengthUnread as e:  # the models read the file: its length read after them is caracole's, never the file's
+        _error(stats, song, e.read)
+        return
     except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
         stats.failed += 1
         stats.failures.append(_unreadable(conn, song, e, stamp))
@@ -799,16 +802,30 @@ def _from_youtube(video: Video | None) -> str | None:
     return youtube_credit(video.title, video.channel, video.id)
 
 
+class _LengthUnread(Exception):
+    """``read_audio`` failing on a file the models just read (gone between the two, say): caracole's error, the song
+    still due, never a failure filed against its audio (``read``, what it raised)."""
+
+    def __init__(self, read: Exception):
+        super().__init__(str(read))
+        self.read = read
+
+
 def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> Heard:
     """The models over the song's audio file, and its length as ``music.read_audio`` reads it, the one the sheet is
-    laid out against (sheet.py, which reads no audio): what fails here is the file's (one that won't decode, say),
-    which ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
+    laid out against (sheet.py, which reads no audio): what the models fail on is the file's (one that won't decode,
+    say), which ``_unreadable`` records; the length's read failing after them is caracole's (``_LengthUnread``), as is
+    what fails after it, laying out the sheet."""
     audio = Path(song.audio_path or "")
     told(STEPS[1])
     segments = recognizer.recognize(audio)
     told(STEPS[2])
     beats, downbeats = beats_fn(audio)
-    return Heard(list(segments), beats, downbeats, read_audio(audio).duration_s)
+    try:
+        duration = read_audio(audio).duration_s
+    except Exception as e:  # noqa: BLE001 - whatever it raises: the song stays due
+        raise _LengthUnread(e) from e
+    return Heard(list(segments), beats, downbeats, duration)
 
 
 def _keep(

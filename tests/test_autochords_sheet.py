@@ -154,6 +154,27 @@ def test_the_sheet_half_makes_the_bytes_it_made_before_it_moved(conn, cfg, tmp_p
     assert hashlib.sha256(made.encode("utf-8")).hexdigest()[:16] == PINNED.get(case), made
 
 
+# A file that names no length (``read_audio``'s ``duration_s`` None): its timed lyrics can't be fitted to it, so the
+# plain ones, and the raw's lyrics members as the code wrote them before the halves were parted (74f6c3c8).
+NO_LENGTH = "716401d00ab757d7"
+
+
+@pytest.mark.parametrize("how", [_bulk, _staged], ids=["bulk", "staged"])
+def test_audio_that_names_no_length_gets_its_plain_lyrics_as_before(conn, cfg, tmp_path, how, monkeypatch):
+    import caracole.autochords.run as ac_run
+
+    monkeypatch.setattr(ac_run, "read_audio", lambda path: SimpleNamespace(duration_s=None))
+    song = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0, lyrics_status="found",
+                      lyrics_json=lyrics_json(synced=SYNCED, duration=10.0))
+    how(conn, cfg, song, Recognizer(FOUR), BEATS)
+    [kept] = kept_files(conn, song.id)
+    raw = get_version(conn, kept.version_id).raw
+    assert (raw["lyrics"], "lyrics_shift" in raw, "synced_lyrics" in raw, "lyrics_key" in raw) == (
+        "plain", False, True, True)
+    made = _made(conn, cfg, tmp_path, song)
+    assert hashlib.sha256(made.encode("utf-8")).hexdigest()[:16] == NO_LENGTH, made
+
+
 def test_the_sheet_half_reads_no_audio_file():
     # sheet.py lays a sheet out from what was heard alone: no audio reader (music.py, mutagen) and no model.
     code = ("import sys\nimport caracole.autochords.sheet\nimport caracole.autochords.sheet_lyrics\n"

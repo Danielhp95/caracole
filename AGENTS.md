@@ -2433,9 +2433,11 @@ It is rows.js's, shared by both pages:
   one length the sheet is laid out against); `make_sheet(song, heard, *, source, transcript, silent, said) -> Made`,
   `synced_for(song, lyrics, heard) -> Timed | None` (`Timed.note`), `raw_of(song, made, *, video)`, the version's
   raw; `synced_key`, `song_lyrics_key`, `lyrics_key` and `wider_lines`, what that raw keeps of the song's lyrics.
-  run.py keeps the hearing half: the models, `on_step`, the words' hearing, `_skip_reason`, `_keep`, the remeasure.
+  run.py keeps the hearing half: the models, `on_step`, the words' hearing, `_skip_reason`, `_keep`, and calls
+  remeasure.py's `remeasure_once`; the models failing on the audio is the file's (`_unreadable`), the length's read
+  after them failing caracole's (`_LengthUnread`, `_error`: the song still due, nothing filed against its audio).
   test_autochords_sheet.py pins what each kind of sheet made before the two halves were parted, by the bulk pass and
-  a staged job's chords stage.
+  a staged job's chords stage, a file that names no length among them.
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
