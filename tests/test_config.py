@@ -504,7 +504,7 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
     }
     assert {name: p.budget for name, p in cfg.providers.items()} == {
         "ug": 60, "lrclib": 200, "megalobiz": 60, "azlyrics": NO_BUDGET, "lacuerda": 30, "gtptabs": 20,
-        "musescore": 10, "harptabs": 20, "gametabs": 20, "ireal": 20, "youtube": 6, "ytimg": 20,
+        "musescore": 10, "harptabs": 20, "gametabs": 20, "ireal": 20, "youtube": 50, "ytimg": 20,
         "itunes": 0, "spotify": 0, "tidal": 0, "youtube-oembed": 0,
     }
     assert {(p.lookup_requests, p.lookup_per_hour) for name, p in cfg.providers.items()

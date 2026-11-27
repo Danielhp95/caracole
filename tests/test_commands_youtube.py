@@ -119,7 +119,7 @@ def test_youtube_downloads_the_due_songs_and_says_what_comes_next(tmp_path, ntfy
     assert result.exit_code == 0, result.output
     assert (f"Radiohead - Creep: downloaded Creep (Radiohead - Topic), https://www.youtube.com/watch?v={TOPIC}"
             in result.output)
-    assert "YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 6)." in result.output
+    assert "YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 50)." in result.output
     assert "caracole autochords" in result.output
     assert get_song(conn, song.id).audio_path.endswith(f"{song.id}-{TOPIC}.m4a")
     assert get_state(conn, "youtube").last_ok is not None
