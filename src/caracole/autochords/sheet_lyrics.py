@@ -5,21 +5,22 @@ a sheet over plain lyrics adds them to (``merge.with_plain_lyrics``), so the wor
 ``render_all`` does this first, whichever way the lyrics came (LRCLIB, Megalobiz or AZLyrics; the nightly run, ``caracole
 lyrics`` or a lookup), so that the song's page has them as soon as it is made again. The sheet's version then says
 "plain", so timed lyrics stay what run.py's ``_skip_reason`` makes it due for: with those, the words go on here at
-once and auto-chords puts each chord over its word at its next run. It also keeps the words' key (``lyrics_key``),
-as run.py keeps it for a sheet it made over the song's lyrics, so that other words later make it due as that one is.
+once and auto-chords puts each chord over its word at its next run. It also keeps the words' key (sheet.py's
+``lyrics_key``), as sheet.py's ``raw_of`` keeps it for a sheet made over the song's lyrics, so that other words later
+make it due as that one is.
 
-Imports no model, as ``merge`` does: render.py runs in a caracole without auto-chords too.
+Imports no model, as ``merge`` and ``sheet`` do: render.py runs in a caracole without auto-chords too.
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import sqlite3
 from collections.abc import Collection
 from pathlib import Path
 
 from caracole.autochords.merge import with_plain_lyrics
+from caracole.autochords.sheet import lyrics_key  # sheet.py's, kept here for render.py and older callers
 from caracole.config import Config
 from caracole.library import SharedFolder, keep_file, kept_files, read_regular, write_info
 from caracole.overrides import Overrides
@@ -27,22 +28,6 @@ from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song
 from caracole.versions import get_version, set_raw
 
 log = logging.getLogger(__name__)
-
-
-def lyrics_key(plain: str) -> str:
-    """The key of the words an auto sheet was made over, kept as its version's ``raw["lyrics_key"]``: 16 hex digits of
-    the SHA-256 of the plain lyrics with each line stripped of the spaces around it, every run of blank lines one
-    blank line and none at either end. So the same words stored again (timed otherwise, a stanza break of two lines, a
-    trailing space, CRLF) keep their key, and any other letter, case or punctuation, which the sheet shows, is other
-    words."""
-    lines: list[str] = []
-    for line in plain.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        line = line.strip()
-        if line or (lines and lines[-1]):
-            lines.append(line)
-    while lines and not lines[-1]:
-        lines.pop()
-    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:16]
 
 
 def _wanting(conn: sqlite3.Connection, overrides: Overrides,

@@ -391,8 +391,8 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     ("Whisper can't read the audio": auto-chords' own reader, the one the vocals read the mix with, gives its verdict as
     the chords are made), noted as Whisper's alone (`transcribe:unreadable:`), offered no transcription until it
     changes; nothing sung is the words' done "nothing sung was heard (why)".
-  - `autochords_pending(only=)`, once, after the words: run.py `_make_sheet` takes the transcript; before it, the
-    audio still the one the vocals separated (`_same_audio`) where they ran.
+  - `autochords_pending(only=)`, once, after the words: run.py `_generate` hands sheet.py's `make_sheet` the
+    transcript; before it, the audio still the one the vocals separated (`_same_audio`) where they ran.
   - caracole serve's sheet from a YouTube video runs it (web/youtube_routes.py).
 - audio_sheet.py is no step either but `caracole audio FILE` (commands/audio.py): one song's auto sheet from an audio
   file the owner gives it now, the YouTube sheet's `_Sheet` with its download swapped for keeping the file
@@ -2426,7 +2426,16 @@ It is rows.js's, shared by both pages:
 - merge.py is pure Python and the only module `__init__.py` imports.
 - sheet_lyrics.py, no model either (render.py imports it, in any package), puts lyrics that came after a sheet of none
   on it, `render_all` first thing, so every path to a page gives it them (`merge.with_plain_lyrics`, a version's
-  `raw["lyrics"]` then "plain", and `raw["lyrics_key"]` their words' `lyrics_key`).
+  `raw["lyrics"]` then "plain", and `raw["lyrics_key"]` their words' `lyrics_key`, sheet.py's, which it re-exports).
+- sheet.py, no model and no audio reader either (no music.py, mutagen, torch or numpy; the lyrics module only inside
+  a function: `test_the_sheet_half_reads_no_audio_file`), is the sheet half: `Heard(segments, beats, downbeats,
+  duration)`, what run.py's `_hear` gives (the models' chords and beats, and `music.read_audio(audio).duration_s`, the
+  one length the sheet is laid out against); `make_sheet(song, heard, *, source, transcript, silent, said) -> Made`,
+  `synced_for(song, lyrics, heard) -> Timed | None` (`Timed.note`), `raw_of(song, made, *, video)`, the version's
+  raw; `synced_key`, `song_lyrics_key`, `lyrics_key` and `wider_lines`, what that raw keeps of the song's lyrics.
+  run.py keeps the hearing half: the models, `on_step`, the words' hearing, `_skip_reason`, `_keep`, the remeasure.
+  test_autochords_sheet.py pins what each kind of sheet made before the two halves were parted, by the bulk pass and
+  a staged job's chords stage.
 - btc.py (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and beat_this; run.py runs
   them over the library (`autochords_pending`), logging each song it works on and its place among those due
   ("Working out the chords of A - T (3 of 12)…", `_count_due`), and telling `on_step` each step (`STEPS`: the models
@@ -2540,16 +2549,16 @@ It is rows.js's, shared by both pages:
     sheet, which come first) until the audio changes, or by hand (`anyway`, `caracole transcribe --force`, after an
     ffmpeg or Whisper upgrade), a refusal adding what to do (`refused_for`, `WHISPER_UNREADABLE_DO`);
     anything else Whisper raises is a bug, raised as it is, filing nothing; and nothing sung is noted.
-- Which words go under the chords (run.py `_make_sheet`): a site's lyrics whenever the song has any (a site's
+- Which words go under the chords (sheet.py `make_sheet`): a site's lyrics whenever the song has any (a site's
   verdict that it is instrumental wins too: a chart alone, the transcript kept unused), else the
   transcript of its current audio (transcript.py `transcript_of`: its own audio and mtime only), else none.
-  - A transcript is used as timed lyrics whose duration is the audio's: no `_synced_for`, no shift searched. The sheet
+  - A transcript is used as timed lyrics whose duration is the audio's: no `synced_for`, no shift searched. The sheet
     says `transcript.NOTE` after the credit and the shift's line.
   - The version's `raw` gets `lyrics_source` "transcript", `transcript` (the LRC) and `transcript_made_at`, and none of
     the three otherwise; `raw["lyrics"]` stays "synced".
   - A sheet over the song's own lyrics (synced or plain, no transcript) keeps `raw["lyrics_key"]`, 16 hex digits of
-    the SHA-256 of their plain text, its lines stripped and its blank runs folded (sheet_lyrics.py `lyrics_key`, run.py
-    `_lyrics_key`): `_skip_reason` makes it due again once the song's are other words; one with no key (made before
+    the SHA-256 of their plain text, its lines stripped and its blank runs folded (sheet.py `lyrics_key`,
+    `song_lyrics_key`): `_skip_reason` makes it due again once the song's are other words; one with no key (made before
     it) never for that.
   - `_skip_reason` makes the song due again when such a sheet finds a site's lyrics or an instrumental verdict, or finds the kept transcript's
     `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript (not for an instrumental song).

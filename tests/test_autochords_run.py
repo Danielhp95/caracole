@@ -448,13 +448,13 @@ def test_lyrics_that_time_each_word_put_each_chord_over_its_word(conn, cfg, tmp_
 
 def test_synced_lyrics_within_the_tolerance_are_laid_out_as_ever_with_no_shift_looked_for(
         conn, cfg, tmp_path, monkeypatch):
-    import caracole.autochords.run as ac_run
+    import caracole.autochords.sheet as ac_sheet
     from caracole.autochords import build_sheet
 
     def no_alignment(*args, **kwargs):
         raise AssertionError("no shift is looked for when the lengths agree")
 
-    monkeypatch.setattr(ac_run, "lyrics_offset", no_alignment)
+    monkeypatch.setattr(ac_sheet, "lyrics_offset", no_alignment)
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0, lyrics_status="found",
                    lyrics_json=lyrics_json(synced=SYNCED, duration=11.5))
     run(conn, cfg)
@@ -541,12 +541,12 @@ def test_synced_lyrics_no_shift_fits_clearly_give_way_to_the_plain_ones(conn, cf
 
 def test_a_shift_that_fails_to_be_found_leaves_the_plain_lyrics_and_blames_no_purchase(
         conn, cfg, tmp_path, monkeypatch, caplog):
-    import caracole.autochords.run as ac_run
+    import caracole.autochords.sheet as ac_sheet
 
     def broken(*args, **kwargs):
         raise ZeroDivisionError("a bug")
 
-    monkeypatch.setattr(ac_run, "lyrics_offset", broken)
+    monkeypatch.setattr(ac_sheet, "lyrics_offset", broken)
     s = talk_first(conn, tmp_path)
     stats = run(conn, cfg, Heard((0.0, TALK, "N"), *BAND), lambda path: (TALKED_BEATS, TALKED_BEATS[::4]))
     assert (stats.generated, stats.failures) == (1, [])
@@ -965,7 +965,7 @@ def test_missing_lyrics_are_not_waited_for(conn, cfg, tmp_path):
 
 
 def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeypatch):
-    import caracole.autochords.run as ac_run
+    import caracole.autochords.sheet as ac_sheet
 
     seen = {}
 
@@ -973,7 +973,7 @@ def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeyp
         seen.update(kwargs, segments=list(segments))
         return "auto-generated, unverified\nA - T\n"
 
-    monkeypatch.setattr(ac_run, "build_sheet", spy)
+    monkeypatch.setattr(ac_sheet, "build_sheet", spy)
     with_audio(
         conn,
         tmp_path,
@@ -1171,14 +1171,14 @@ def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):
 def test_a_bug_laying_out_the_sheet_blames_no_audio_and_the_song_stays_due(conn, cfg, tmp_path, monkeypatch):
     # What failed after the audio was heard is caracole's, never the file's: no "couldn't read", no kv record that
     # would leave the song alone until its file changes, and the run fails (exit 1, the unit's alert).
-    import caracole.autochords.run as ac_run
+    import caracole.autochords.sheet as ac_sheet
 
     s = with_audio(conn, tmp_path, add_song(conn, "Estopa", "Vacaciones"), lyrics_status="missing")
 
     def broken(*args, **kwargs):
         raise ZeroDivisionError("division by zero")
 
-    monkeypatch.setattr(ac_run, "build_sheet", broken)
+    monkeypatch.setattr(ac_sheet, "build_sheet", broken)
     stats = run(conn, cfg)
     assert stats.generated == 0 and stats.failed == 1
     assert failures(stats) == []

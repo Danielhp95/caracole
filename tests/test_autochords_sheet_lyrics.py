@@ -111,7 +111,7 @@ def test_the_words_key_holds_through_their_spacing_and_is_another_for_other_word
 
 def test_lyrics_put_on_a_chart_keep_their_key(conn, cfg, tmp_path):
     # Then other words make the sheet due for the models, as for a sheet they made over lyrics.
-    from caracole.autochords.run import _lyrics_key
+    from caracole.autochords.sheet import song_lyrics_key as _lyrics_key
 
     audio = tmp_path / "audio.m4a"
     audio.write_bytes(b"x")

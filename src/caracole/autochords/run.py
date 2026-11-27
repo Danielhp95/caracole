@@ -19,7 +19,7 @@ with linked audio is due when:
   chords it wrote at their characters' indexes rather than their display
   columns (its version's ``raw`` has no ``columns``), or over the song's lyrics
   before they became other words (its version's ``raw["lyrics_key"]``, the key
-  of the words it was made over, ``_lyrics_key``, isn't the song's now: a pick
+  of the words it was made over, sheet.py's ``song_lyrics_key``, isn't the song's now: a pick
   of other lyrics; a sheet an older caracole made keeps none, and isn't made
   again for it): once more, each, so timed
   lyrics that don't fit the audio make a plain sheet again once, never every
@@ -30,8 +30,9 @@ with linked audio is due when:
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
   with a warning, before any model runs, and waits.
 
-For each song due, BTC recognizes the chords, beat_this finds the beats, and
-``merge.build_sheet`` lays the chords out over LRCLIB's lyrics: the synced ones
+For each song due, BTC recognizes the chords, beat_this finds the beats (``_hear``, with the
+audio's length as ``music.read_audio`` reads it: a ``sheet.Heard``), and sheet.py's ``make_sheet``, which
+reads no audio, has ``merge.build_sheet`` lay the chords out over LRCLIB's lyrics: the synced ones
 when their duration matches the audio's within 2 s; when it doesn't (LRCLIB timed
 them for another cut of the song: a video with a spoken intro, say), the synced
 ones moved by the shift ``align.lyrics_offset`` finds from the chords and the
@@ -71,7 +72,6 @@ waited for weren't heard (None for none).
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import math
 import sqlite3
@@ -85,25 +85,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from caracole.autochords.align import lyrics_offset, shifted_lrc
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import (
-    NO_CHORD,
-    ChordSegment,
-    LrcLine,
-    build_sheet,
-    parse_lrc,
-    parse_lrc_words,
-    youtube_credit,
-)
+from caracole.autochords.merge import ChordSegment, youtube_credit
 from caracole.autochords.remeasure import remeasure_once
-from caracole.autochords.sheet_lyrics import lyrics_key
+from caracole.autochords.sheet import (
+    COLUMNS,
+    Heard,
+    Made,
+    instrumental,
+    make_sheet,
+    raw_of,
+    song_lyrics_key,
+    sung_lyrics,
+    synced_key,
+    wider_lines,
+)
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
-    NOT_SUNG,
-    NOTE,
-    SILENT,
     UNREADABLE,
     Transcript,
     hearing_failed,
@@ -112,12 +111,9 @@ from caracole.autochords.transcript import (
     why_not_offered,
 )
 from caracole.autochords.transcript import heard_nothing as _heard_nothing
-from caracole.chordpro import display_columns
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
-from caracole.keys import estimate_key
 from caracole.library import SharedFolder, keep_file, keeper_of, kept_files, write_info
-from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
@@ -132,10 +128,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 PROVIDER = "auto"
-MODEL = "btc_large_voca"
-SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
-COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
 # What ``autochords_pending`` tells its ``on_step`` as each step starts: a song's chords, then, before them, its words
 # where it hears them (``hearing``).
@@ -556,8 +549,8 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
     try:
         transcript = transcript_of(conn, song)
         silent = transcript is None and _heard_nothing(conn, song)
-        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
-                           said=silent and said_not_sung(conn, song))
+        made = make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
+                          said=silent and said_not_sung(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
         _error(stats, song, e)
         return
@@ -684,64 +677,28 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     if auto is None:
         return None
     raw = get_version(conn, auto.version_id).raw
-    if raw.get("lyrics") == "none" and _sung_lyrics(song):
+    if raw.get("lyrics") == "none" and sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
     kept_transcript = transcript_of(conn, song)
     if raw.get("lyrics_source") == LYRICS_SOURCE:
-        if _sung_lyrics(song) or _instrumental(song):
+        if sung_lyrics(song) or instrumental(song):
             return None  # a site has lyrics now, or says it is instrumental: they always win, once more over them
         if kept_transcript is None or raw.get("transcript_made_at") != kept_transcript.made_at:
             return None  # over a transcript that is not the one kept now (of other audio, or made again)
-    elif raw.get("lyrics") == "none" and kept_transcript is not None and not _instrumental(song):
+    elif raw.get("lyrics") == "none" and kept_transcript is not None and not instrumental(song):
         return None  # a transcript of this audio came since: once more, over its words
-    elif (raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not _instrumental(song)
+    elif (raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not instrumental(song)
           and _heard_nothing(conn, song)):
         return None  # noted as having nothing sung since: once more, to say so
     words = raw.get("lyrics_key")  # none on a sheet an older caracole made: up to date, as it was
     if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
-            and _lyrics_key(song) not in (None, words)):
+            and song_lyrics_key(song) not in (None, words)):
         return None  # the song's lyrics are other words now (another pick): once more, over them
-    if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
+    if raw.get("lyrics") == "plain" and synced_key(song) not in (None, raw.get("synced_lyrics")):
         return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
-    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
+    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and wider_lines(song):
         return None  # its chords at their characters' indexes, before they went at display columns: once more
     return "up to date"
-
-
-def _synced_key(song: Song) -> str | None:
-    """A short hash of the song's timed lyrics, which its auto sheet's version keeps as ``synced_lyrics``: a sheet
-    over plain lyrics is made again only once other timed lyrics than those come. None when it has none, or its
-    lyrics can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return None
-    if lyrics is None or not lyrics.synced:
-        return None
-    return hashlib.sha256(lyrics.synced.encode("utf-8")).hexdigest()[:16]
-
-
-def _lyrics_key(song: Song) -> str | None:
-    """The key of the song's stored lyrics' words (``sheet_lyrics.lyrics_key`` of their plain text), which an auto
-    sheet made over them keeps as ``lyrics_key``: it is made again once they are other words. None when the song has
-    no words, or its lyrics can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return None
-    return lyrics_key(lyrics.plain) if lyrics is not None else None
-
-
-def _wider_lines(song: Song) -> bool:
-    """Whether the song's timed lyrics have a line whose display columns aren't its characters' indexes: a
-    Chinese character is two columns wide, a combining accent none. False for lyrics that can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return False
-    if lyrics is None or not lyrics.synced:
-        return False
-    return any(display_columns(text) != list(range(len(text) + 1)) for _, text in parse_lrc(lyrics.synced))
 
 
 def _models(
@@ -834,84 +791,6 @@ def _default_beats(cfg: Config) -> BeatsFn:
     return lambda path: detect_beats(path, checkpoint, device=device)
 
 
-def _instrumental(song: Song) -> bool:
-    """Whether a site says the song is instrumental: its verdict wins over a transcript, which it never gets."""
-    if song.lyrics_status == "instrumental":
-        return True
-    lyrics = song_lyrics(song)
-    return lyrics is not None and lyrics.instrumental and not lyrics.has_lyrics
-
-
-def _sung_lyrics(song: Song) -> Lyrics | None:
-    """The song's stored lyrics, when they have words (an instrumental has none)."""
-    lyrics = song_lyrics(song)
-    return lyrics if lyrics is not None and lyrics.has_lyrics else None
-
-
-@dataclass(frozen=True)
-class _Timed:
-    """Synced lyrics that fit the audio: their LRC text and, when LRCLIB timed them for audio of
-    another length, the seconds they were shifted by to fit it (``shift``, 0.0 for none) and how
-    much longer the audio is (``longer``, less than 0 for shorter)."""
-
-    text: str
-    shift: float | None = None
-    longer: float = 0.0
-
-    def note(self) -> str | None:
-        """What the sheet says of a shift, so that a wrong one shows; None for lyrics that fit as timed."""
-        if self.shift is None:
-            return None
-        if self.shift:
-            later = "later" if self.shift > 0 else "earlier"
-            return f"Lyrics' timing shifted {abs(self.shift):.1f} s {later} to fit this audio"
-        than = "shorter" if self.longer > 0 else "longer"
-        return f"Lyrics' timing unshifted: LRCLIB's audio is {abs(self.longer):.1f} s {than}"
-
-
-def _synced_for(
-    song: Song,
-    lyrics: Lyrics | None,
-    audio: Path,
-    heard: Sequence[ChordSegment],
-    beats: Sequence[float],
-    downbeats: Sequence[float],
-) -> _Timed | None:
-    """The synced lyrics, if their timings fit this audio file: as they are when the durations agree
-    within 2 s, else moved by the shift ``align.lyrics_offset`` finds clearly from the chords heard
-    and the beats; None when it finds none."""
-    if lyrics is None or not lyrics.synced or lyrics.duration is None:
-        return None
-    duration = read_audio(audio).duration_s
-    if duration is None:
-        return None
-    longer = duration - lyrics.duration
-    if abs(longer) <= SYNC_TOLERANCE_S:
-        return _Timed(lyrics.synced)
-    lines = parse_lrc(lyrics.synced)
-    try:
-        found = lyrics_offset(lines, heard, beats, downbeats, audio_s=duration, lyrics_s=lyrics.duration)
-    except Exception:  # noqa: BLE001 - a bug here must not pass for a purchase auto-chords can't read
-        log.exception("%s: looking for how far to shift LRCLIB's timed lyrics failed; the plain lyrics instead",
-                      song.display)
-        return None
-    than = "longer" if longer > 0 else "shorter"
-    if found.offset is None:
-        log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, and no shift fits them to it clearly "
-                 "(%s): the plain lyrics instead", song.display, abs(longer), than, found.why)
-        return None
-    log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, which fit it shifted by %+.1f s (%s)",
-             song.display, abs(longer), than, found.offset, found.why)
-    text = shifted_lrc(lyrics.synced, found.offset) if found.offset else lyrics.synced
-    return _Timed(text, found.offset, longer)
-
-
-def _word_timed(synced: str | None) -> list[LrcLine] | None:
-    """The synced lyrics read with their word stamps, when they time words (enhanced LRC)."""
-    lines = parse_lrc_words(synced) if synced else []
-    return lines if any(line.words for line in lines) else None
-
-
 def _from_youtube(video: Video | None) -> str | None:
     """The sheet's line for audio taken from YouTube: which video it was, by its title and channel
     (``merge.youtube_credit``); the version keeps its address (``_keep``)."""
@@ -920,85 +799,16 @@ def _from_youtube(video: Video | None) -> str | None:
     return youtube_credit(video.title, video.channel, video.id)
 
 
-@dataclass(frozen=True)
-class _Heard:
-    """What the models heard in a song's audio file: its chords and its beats."""
-
-    audio: Path
-    segments: list[ChordSegment]
-    beats: Sequence[float]
-    downbeats: Sequence[float]
-
-
-def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> _Heard:
-    """The models over the song's audio file: what fails here is the file's (one that won't decode, say), which
-    ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
+def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> Heard:
+    """The models over the song's audio file, and its length as ``music.read_audio`` reads it, the one the sheet is
+    laid out against (sheet.py, which reads no audio): what fails here is the file's (one that won't decode, say),
+    which ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
     audio = Path(song.audio_path or "")
     told(STEPS[1])
     segments = recognizer.recognize(audio)
     told(STEPS[2])
     beats, downbeats = beats_fn(audio)
-    return _Heard(audio, list(segments), beats, downbeats)
-
-
-@dataclass(frozen=True)
-class _Made:
-    """One song's auto sheet: its text, which lyrics it used ("synced", "plain" or "none"), the key of the chords
-    heard (None when they fit no key), the seconds its timed lyrics were shifted by to fit the audio (None when
-    LRCLIB timed them for audio of the same length, or they weren't used), and the transcript it was made over
-    (None unless the words are Whisper's)."""
-
-    text: str
-    used: str
-    key: str | None
-    shift: float | None
-    transcript: Transcript | None = None
-    silent: bool = False
-    said: bool = False  # silent by the owner's word, not by what was heard
-
-
-def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
-                transcript: Transcript | None = None, silent: bool = False, said: bool = False) -> _Made:
-    """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
-    purchase, on the sheet's line after the song's name; the shift has the line after it.
-
-    The song's lyrics from a site, whenever it has any (and a site's word that it is
-    instrumental wins too), else its ``transcript`` (Whisper's words from this
-    very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
-    with NOTE on the line after the shift's), else none. ``silent`` (the audio noted as having nothing sung)
-    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used;
-    NOT_SUNG where it is the owner's word (``said``, ``transcript.said_not_sung``), not what was heard.
-
-    The key is estimated from the chords as recognized, each weighed by how long it sounds,
-    before they are snapped to beats and laid out.
-    """
-    audio, segments, beats, downbeats = heard.audio, heard.segments, heard.beats, heard.downbeats
-    key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
-    lyrics = _sung_lyrics(song)
-    over = transcript if lyrics is None and not _instrumental(song) else None
-    timed = _Timed(over.lrc) if over is not None else _synced_for(song, lyrics, audio, segments, beats, downbeats)
-    synced = timed.text if timed is not None else None
-    plain = lyrics.plain if lyrics is not None else None
-    # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
-    # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
-    silent = silent and lyrics is None and over is None and not _instrumental(song)
-    said = said and silent
-    notes = (source, timed.note() if timed is not None else None, NOTE if over is not None else None,
-             (NOT_SUNG if said else SILENT) if silent else None)
-    note = "\n".join(part for part in notes if part)
-    text = build_sheet(
-        segments,
-        title=song.title,
-        artist=song.artist,
-        synced=synced,
-        synced_words=_word_timed(synced),
-        plain=plain,
-        beats=beats,
-        downbeats=downbeats,
-        source=note or None,
-    )
-    shift = timed.shift if timed is not None else None
-    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said)
+    return Heard(list(segments), beats, downbeats, read_audio(audio).duration_s)
 
 
 def _keep(
@@ -1016,40 +826,11 @@ def _keep(
     silent: bool = False,
     said: bool = False,
 ) -> None:
-    """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
-
-    The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
-    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its
-    chord lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had,
-    used or not (``synced_lyrics``, ``_synced_key``); a sheet over those lyrics, the key of their words
-    (``lyrics_key``, ``_lyrics_key``). A sheet made over a transcript keeps it as
-    ``lyrics_source``, ``transcript`` (its LRC, for the viewer's sung line) and ``transcript_made_at``
-    (``_skip_reason`` compares it with the transcript kept now). Audio from
-    YouTube (``video``) gives the version the video's address, so info.json names it, and its
-    fields.
+    """Keep one song's auto sheet, under a version of provider ``auto`` whose ``raw`` is sheet.py's ``raw_of``; the
+    song becomes found. Audio from YouTube (``video``) gives the version the video's address, so info.json names it.
     """
     audio = Path(song.audio_path or "")
-    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used, "columns": COLUMNS}
-    if key is not None:
-        raw["key"] = key
-    if shift is not None:
-        raw["lyrics_shift"] = shift
-    if transcript is not None:
-        raw["lyrics_source"] = LYRICS_SOURCE
-        raw["transcript"] = transcript.lrc
-        raw["transcript_made_at"] = transcript.made_at
-    if silent:
-        raw["heard_nothing"] = True
-    if silent and said:
-        raw["not_sung_by"] = "you"  # the owner's word, not what was heard (youtube_sheet.HOLDS["said"])
-    synced = _synced_key(song)
-    if synced is not None:
-        raw["synced_lyrics"] = synced
-    words = _lyrics_key(song) if used in ("synced", "plain") and transcript is None else None
-    if words is not None:
-        raw["lyrics_key"] = words
-    if video is not None:
-        raw["youtube"] = video.as_json()
+    raw = raw_of(song, Made(text, used, key, shift, transcript, silent, said), video=video)
     version_id = upsert_version(
         conn,
         provider=PROVIDER,
