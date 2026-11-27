@@ -63,7 +63,7 @@ class DecoderTest {
     @Test fun theStreamedMixdownIsTheArraysAndFormsAreCovered() {
         val forms = files.map { it.getString("format") }.toSet()
         assertEquals(setOf("MP3", "M4A", "Ogg", "FLAC", "WAV", "AIFF"), forms)
-        assertEquals(11, files.size)
+        assertEquals(13, files.size)
         val wav = files.first { it.getString("format") == "WAV" }
         val source = asset(wav.getJSONObject("file").getString("fixture").substringAfterLast('/'))
         val pcm = File(work, "wav.f32")

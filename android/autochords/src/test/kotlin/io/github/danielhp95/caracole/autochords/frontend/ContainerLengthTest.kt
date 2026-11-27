@@ -32,17 +32,77 @@ class ContainerLengthTest {
     private fun file(r: JsonObject): File =
         tmp.newFile(name(r).substringAfterLast('/')).apply { writeBytes(Corpus.fixture(name(r))) }
 
+    private fun fragmented(r: JsonObject) = r["fragmented"]?.jsonPrimitive?.content == "true"
+
     @Test fun anMp4sLengthIsItsSoundTracksMdhdAsMutagenReadsIt() {
-        val m4a = records.filter { it.str("format") == "M4A" }
+        val m4a = records.filter { it.str("format") == "M4A" && !fragmented(it) }
         assertEquals(2, m4a.size)
         for (r in m4a) {
             val track = assertNotNull(Mp4.audioTrack(file(r)), name(r))
             assertEquals(r["duration"]!!.jsonPrimitive.double, track.seconds, 0.0, name(r))
+            assertEquals(track.seconds, track.statedSeconds, 0.0, name(r))
         }
     }
 
+    /** yt-dlp's m4a on the phone, fragmented: no edit list, mutagen's length 0 (its empty `mdhd`), and the length the
+     * computer states, its remux's, the fragments' to the sample: where its decode ends (`frames`). */
+    @Test fun aFragmentedMp4sLengthIsItsFragmentsAsTheComputersRemuxStatesIt() {
+        val m4a = records.filter { it.str("format") == "M4A" && fragmented(it) }
+        assertEquals(2, m4a.size)
+        for (r in m4a) {
+            val track = assertNotNull(Mp4.audioTrack(file(r)), name(r))
+            assertTrue(track.fragmented, name(r))
+            assertNull(track.edit(), name(r))
+            assertEquals(0.0, track.seconds, name(r))
+            assertEquals(r["frames"]!!.jsonPrimitive.long, track.fragments, name(r))
+            assertEquals(r["duration"]!!.jsonPrimitive.double, track.statedSeconds, 0.0, name(r))
+        }
+    }
+
+    private fun box(name: String, vararg parts: ByteArray): ByteArray {
+        val body = parts.fold(ByteArray(0)) { a, b -> a + b }
+        return ByteBuffer.allocate(8 + body.size).putInt(8 + body.size).put(name.toByteArray()).put(body).array()
+    }
+
+    private fun ints(vararg xs: Int): ByteArray =
+        ByteBuffer.allocate(4 * xs.size).apply { xs.forEach { putInt(it) } }.array()
+
+    private fun fragmentedFile(vararg moofs: ByteArray): File {
+        val tkhd = box("tkhd", ints(0, 0, 0, 1, 0))  // version 0: track_ID 1
+        val mdhd = box("mdhd", ints(0, 0, 0, 1000, 0, 0))  // timescale 1000, duration 0
+        val hdlr = box("hdlr", ints(0, 0), "soun".toByteArray(), ints(0, 0, 0))
+        val moov = box("moov", box("mvhd", ints(0, 0, 0, 1000, 0)), box("trak", tkhd, box("mdia", mdhd, hdlr)),
+            box("mvex", box("trex", ints(0, 1, 1, 7, 0, 0))))  // track 1's default duration 7
+        val bytes = moofs.fold(box("ftyp", "M4A ".toByteArray(), ints(0)) + moov) { a, b -> a + b }
+        return tmp.newFile().apply { writeBytes(bytes) }
+    }
+
+    private fun traf(track: Int, flags: Int, vararg rest: ByteArray) =
+        box("traf", box("tfhd", ints(flags, track), *rest.take(1).toTypedArray()), *rest.drop(1).toTypedArray())
+
+    /** A fragment's samples timed as FFmpeg times them: from its `tfdt` (64-bit or 32-bit), else on from the one
+     * before; each sample's own duration, else its `tfhd`'s default, else the `trex`'s; another track's passed over;
+     * one cut short, or none at all, no length. */
+    @Test fun aFragmentsLengthRunsFromTheFirstDecodeTimeToTheLastSamplesEnd() {
+        val file = fragmentedFile(
+            box("moof", traf(1, 0x08, ints(10), box("tfdt", ints(0x01000000, 0, 100)), box("trun", ints(0, 3)))),
+            box("moof", traf(2, 0x08, ints(1000), box("trun", ints(0, 50)))),
+            box("moof", traf(1, 0, ByteArray(0), box("trun", ints(0x100, 3, 1, 2, 3)))),
+            box("moof", traf(1, 0, ByteArray(0), box("tfdt", ints(0, 200)), box("trun", ints(0, 2)))),
+        )
+        val track = assertNotNull(Mp4.audioTrack(file))
+        assertEquals(214L - 100L, track.fragments)
+        assertEquals(0.114, track.statedSeconds, 1e-12)
+        val cut = fragmentedFile(box("moof", traf(1, 0, ByteArray(0), box("trun", ints(0x100, 3, 1, 2)))))
+        assertNull(assertNotNull(Mp4.audioTrack(cut)).fragments)
+        val none = assertNotNull(Mp4.audioTrack(fragmentedFile()))
+        assertTrue(none.fragmented)
+        assertNull(none.fragments)
+        assertEquals(0.0, none.statedSeconds)
+    }
+
     @Test fun anMp4sEditListIsTheSamplesFfmpegKeeps() {
-        for (r in records.filter { it.str("format") == "M4A" }) {
+        for (r in records.filter { it.str("format") == "M4A" && !fragmented(it) }) {
             val track = Mp4.audioTrack(file(r))!!
             val edit = assertNotNull(track.edit(), name(r))
             assertEquals(1024L, edit.mediaTime, name(r))

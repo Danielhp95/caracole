@@ -23,7 +23,9 @@ import java.nio.ByteBuffer
  * [durationS] is the length music.py `read_audio` states for the same file, by the computer's own rule for its
  * container, the one an auto sheet is laid over:
  * - an MP4 (M4A): its sound track's `mdhd` duration over its timescale, read from its boxes ([Mp4]), as mutagen reads
- *   it: the encoder's priming and padding counted in, so a little longer than what is decoded;
+ *   it: the encoder's priming and padding counted in, so a little longer than what is decoded; a fragmented one's
+ *   (yt-dlp's m4a on the phone, with no FFmpeg to remux it), its fragments' length, which the computer's remux of it
+ *   states ([Mp4.Track.statedSeconds]);
  * - an MP3 whose first frame has a Xing header with a frame count, or a VBRI header: what [MpegHeader] reads of it as
  *   mutagen does (a LAME tag's delay and padding taken off where mutagen reads the tag);
  * - an MP3 whose first frame names no length: the frames decoded over the rate, which is mpeg_frames.py's count of
@@ -56,6 +58,9 @@ data class Decoded(
  *     trims it, whatever the last frame's padding ([Mp4]), counted in the `mdhd` timescale and made the output's
  *     ([Trim.at]: a decoder that doubles the rate gives twice as many; a rate they can't be rescaled to exactly
  *     falls to the stated delay and padding);
+ *   - a fragmented MP4 with no edit list (yt-dlp's m4a with no FFmpeg): as the computer's remux of it decodes
+ *     (yt-dlp's FixupM4a, `ffmpeg -c copy -f mp4`): nothing skipped, the encoder's priming kept (no box names it), and
+ *     ended at its fragments' length ([Mp4.Track.fragments]), the last frame's padding past it cut;
  *   - an MP3: Android's MP3 decoder ([DROPS_MP3_DELAY], the decoders measured; any other refused) always drops its
  *     own delay, the first [MP3_DECODER_DELAY] samples it decodes, and pads as many silent ones at the end. A LAME
  *     tag's
@@ -137,9 +142,13 @@ object Decoder {
             val ogg = if (mime == MediaFormat.MIMETYPE_AUDIO_OPUS || mime == MediaFormat.MIMETYPE_AUDIO_VORBIS) {
                 readContainer("its Ogg pages") { Ogg.stream(file) }
             } else null
+            val fragments = mp4?.takeIf { it.fragmented && it.edits.isEmpty() && it.timescale in 1..Int.MAX_VALUE }
+                ?.fragments
             val trim = when {
                 edit != null -> Trim.edit(edit.mediaTime, readContainer("its edit list") { mp4.keptFrames(edit) },
                     mp4.timescale.toInt(), fallback = Trim.stated(delay, padding, rate))
+                fragments != null -> Trim(skip = 0, keep = fragments, rate = mp4.timescale.toInt(),
+                    fallback = Trim.stated(delay, padding, rate))
                 ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames, rate = ogg.rate,
                     fallback = Trim.stated(delay, padding, rate))
                 silence != null -> Trim(skip = (silence.second - MP3_DECODER_DELAY).toLong(),
@@ -169,7 +178,7 @@ object Decoder {
                     out.cut(frames * result.channels)
                     val seconds = frames.toDouble() / result.rate
                     val stated = when {
-                        mp4 != null -> mp4.seconds
+                        mp4 != null -> mp4.statedSeconds
                         mp3 -> readContainer("its first MPEG frame") { MpegHeader.statedLength(file) } ?: seconds
                         else -> seconds
                     }

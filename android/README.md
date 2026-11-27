@@ -813,9 +813,10 @@ The phone decodes a song's audio as the computer does (autochords/audio.py `load
 `:ml`'s `Decoder.decode(file, into)` writes interleaved float32 PCM to a file, a buffer at a time. A WAV or an AIFF is
 read by `:autochords`' `Pcm`, with no codec, as libsndfile reads it; anything else goes through MediaExtractor and
 Android's own software decoders (`c2.android.*`, never a vendor's). `Mixdown.mono` means the channels as numpy does.
-`DecoderTest` holds it to the computer's decode of eleven files (`tests/fixtures/autochords/encode.sh`: MP3 from
-FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; Vorbis; Opus; FLAC of 16 and
-24 bits; WAV; AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
+`DecoderTest` holds it to the computer's decode of thirteen files (`tests/fixtures/autochords/encode.sh`: MP3 from
+FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; AAC as yt-dlp leaves it on the
+phone, fragmented, plain and DASH-style; Vorbis; Opus; FLAC of 16 and 24 bits; WAV; AIFF;
+`tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
 
     android/scripts/device-test.sh --ml
 
@@ -832,6 +833,10 @@ is laid over) the computer's `read_audio`'s to the bit. What a plain MediaCodec 
   the first 529 samples it makes, where FFmpeg keeps them;
 - it reads the length as mutagen does (an MP4's `mdhd`, a LAME tag's delay and padding taken off only where its
   version string is LAME's), never the extractor's;
+- a fragmented MP4 (yt-dlp's m4a with no FFmpeg: an empty `mdhd`, no edit list) it decodes as the computer's remux of
+  it does (yt-dlp's FixupM4a): its priming kept, as no box names it, and ended at its fragments' length, which is the
+  length it states (2026-11-27: both forms to the frame, 82.7 and 78.1 dB; read whole and stated by its `mdhd`, the
+  last frame's padding, 820 and 616 frames, was too many and the length 0);
 - it reads the decoder's output in the encoding it names, and refuses one it doesn't read;
 - a decoder that stops, or changes its rate or channels partway, fails the decode in words.
 
