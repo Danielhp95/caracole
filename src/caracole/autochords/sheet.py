@@ -414,6 +414,17 @@ def noted_in(raw: Mapping[str, object]) -> Noted:
     return Noted(transcript, silent, silent and raw.get("not_sung_by") == "you")
 
 
+def relays_here(song: Song) -> bool:
+    """Whether a song's auto sheet may be laid out again from what was heard on this side: it was heard from the audio
+    this side holds for the song now (``autochords_mtime`` its ``audio_mtime``: run.py ``_skip_reason``'s own notion
+    of "this audio", never the path, which a file moved or relinked changes), or this side holds no audio of the song
+    at all (a sheet taken from another caracole, the one thing this side has of it). Where it holds other audio than
+    the sheet's, the sheet is the models' to make again from it, words or not (``_skip_reason``'s new audio)."""
+    if not song.audio_path:
+        return True
+    return song.autochords_mtime is not None and song.autochords_mtime == song.audio_mtime
+
+
 def relay_due(song: Song, raw: Mapping[str, object], noted: Noted | None = None) -> str | None:
     """Why an auto sheet is to be laid out again from what was heard (``relay``), its words alone having changed, or
     None: lyrics that came to a sheet of none, or a site's to a sheet over a transcript (or its word that the song is
@@ -422,30 +433,32 @@ def relay_due(song: Song, raw: Mapping[str, object], noted: Noted | None = None)
     lines with a character not one column wide on a sheet that counted characters (``columns``). These are the words'
     reasons run.py's ``_skip_reason`` gave before what was heard was kept, moved here as they were: a sheet that keeps
     ``heard`` is never due for the models for them. One more, which a pick taken back (lyrics_pick.py ``clear_pick``)
-    gave by clearing the song's ``autochords_mtime``: a sheet over a site's words (one that kept their ``lyrics_key``)
-    whose song has none now, or a site's word that it is instrumental. ``noted`` defaults to what the sheet was laid out with
-    (``noted_in``): a caracole that knows of no transcript or verdict of its own. Lyrics stored that can't be read are
-    none. Reads no file."""
-    try:
-        return _relay_due(song, raw, noted if noted is not None else noted_in(raw))
-    except (TypeError, ValueError):  # the song's stored lyrics can't be read: nothing to lay over
+    gave by clearing the song's ``autochords_mtime``: a sheet over a site's words (one that kept their
+    ``lyrics_key``) whose song has none now, or a site's word that it is instrumental. ``noted`` defaults to what the
+    sheet was laid out with (``noted_in``): a caracole that knows of no transcript or verdict of its own. Lyrics stored
+    that can't be read are none. Reads no file. Whether the sheet may be re-laid on this side at all is
+    ``relays_here``'s, its callers' to ask first."""
+    try:  # the song's stored lyrics, which may not read: then nothing to lay over
+        lyrics, music = sung_lyrics(song), instrumental(song)
+    except (TypeError, ValueError):
         return None
+    return _relay_due(song, raw, noted if noted is not None else noted_in(raw), lyrics, music)
 
 
-def _relay_due(song: Song, raw: Mapping[str, object], noted: Noted) -> str | None:
-    lyrics = sung_lyrics(song)
+def _relay_due(song: Song, raw: Mapping[str, object], noted: Noted, lyrics: Lyrics | None,
+               music: bool) -> str | None:
     if raw.get("lyrics") == "none" and lyrics:
         return "lyrics came to a sheet of none"
     if raw.get("lyrics_source") == LYRICS_SOURCE:
         if lyrics:
             return "a site's lyrics came to a sheet over a transcript"
-        if instrumental(song):
+        if music:
             return "a site says it is instrumental, over a transcript"
         if noted.transcript is None or raw.get("transcript_made_at") != noted.transcript.made_at:
             return "its transcript is gone or made again"
-    elif raw.get("lyrics") == "none" and noted.transcript is not None and not instrumental(song):
+    elif raw.get("lyrics") == "none" and noted.transcript is not None and not music:
         return "a transcript came to a sheet of none"
-    elif raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not instrumental(song) and noted.silent:
+    elif raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not music and noted.silent:
         return "nothing sung was noted since"
     words = raw.get("lyrics_key")  # none on a sheet an older caracole made: up to date, as it was
     if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE

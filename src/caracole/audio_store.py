@@ -747,8 +747,8 @@ def _sent_name(root: Path, upload_id: str) -> str:
 def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None,
            name: str = "") -> Path:
     """The song's row naming the kept file, and the name it was given under (``NAME_KEY``: a staged upload's, else
-    ``name``), in one savepoint, then the staged record let go (a moved upload's keep over), then the file the song had there before,
-    unless another song's row names it."""
+    ``name``), in one savepoint, then the staged record let go (a moved upload's keep over), then the file the song
+    had there before, unless another song's row names it."""
     mtime = os.lstat(kept).st_mtime
     shown = _sent_name(root, upload_id) if upload_id is not None else _display_name(name)
     with savepoint(conn, "audio_named"):  # the row and its file's name together: never the new file, the old name

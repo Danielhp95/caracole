@@ -224,6 +224,31 @@ def test_a_file_given_again_replaces_the_one_given_before(setup, conn, sites, tm
     assert now != first and kept_files(setup) == [now.name]
 
 
+def test_a_file_given_over_a_sheet_that_keeps_what_was_heard_is_heard_whatever_words_come_with_it(
+        setup, conn, sites, tmp_path):
+    # Lyrics found in the same job are no reason to lay the old audio's chords out again: the new file is heard.
+    import hashlib
+
+    from caracole.library import kept_files as files_of
+    from caracole.versions import get_version
+
+    lrclib = sites
+    saved, lrclib.records = lrclib.records, []
+    assert make(setup, AudioRequest(*NICK, file=a_file(tmp_path)))[0].ok
+    lrclib.records = saved
+    song = the_song(conn)
+    update_song(conn, song.id, lyrics_at=None, lyrics_status="pending")  # asked again: LRCLIB has them now
+    recognizer = Recognizer()
+    result, heard = make(setup, AudioRequest(*NICK, file=a_file(tmp_path, 199.0, "other.wav")), recognizer=recognizer)
+    assert result.ok, result
+    now = audio_store.uploaded(setup, the_song(conn))
+    assert recognizer.calls == [now]
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    [auto] = [f for f in files_of(conn, song.id) if f.name == "sheet (auto).txt"]
+    raw = get_version(conn, auto.version_id).raw
+    assert raw["audio_sha16"] == hashlib.sha256(now.read_bytes()).hexdigest()[:16] and raw["lyrics"] == "synced"
+
+
 def test_the_same_file_again_is_up_to_date(setup, conn, sites, tmp_path):
     given = a_file(tmp_path)
     assert make(setup, AudioRequest(*NICK, file=given))[0].ok

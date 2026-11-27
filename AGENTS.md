@@ -168,11 +168,12 @@ sitemaps list by bare ids alone, and the fetch their page.
     kept: before the savepoint, so a failure to note it keeps nothing; a pick cut off between them is picked again,
     as no pass asks a found song's record), then in one savepoint `ask_anew`, found, and the auto sheet made due where the words changed
     (`autochords_mtime` cleared, as new audio clears it: run.py `_skip_reason`, so a sheet made before its
-    `lyrics_key` is remade too; never for a sheet that keeps `heard`, `_models_remake`), then info.json; the files or overrides.toml failing puts the files back
+    `lyrics_key` is remade too; never for a sheet that keeps `heard`, `_models_remake`), then info.json; the
+    files or overrides.toml failing puts the files back
     (`_put_back`), changes nothing else and fails the job (`_fail`, exit 1);
-  - chords (§4.5): a sheet that keeps `heard` laid out again over the words picked, in seconds, no model, whatever
-    auto-chords' state (staged.py `_relaid`, "chords over the lyrics"); else skipped "no new lyrics", "its sheet is a
-    site's: …", "no audio to make an auto sheet from" or
+  - chords (§4.5): a sheet that keeps `heard`, of the audio the song has now (`relays_here`), laid out again over
+    the words picked, in seconds, no model, whatever auto-chords' state (staged.py `_relaid`, "chords over the
+    lyrics"); else skipped "no new lyrics", "its sheet is a site's: …", "no audio to make an auto sheet from" or
     "auto-chords isn't here (…); tonight's run makes it again" (`youtube_fetch.autochords_problem`; a chart takes
     plain words at the PDF's render meanwhile, sheet_lyrics.py); else `_after_a_lookup`, then `_autochords_sheet`,
     which makes the sheet or makes it again (models imported only then); pdf: `render_all` whenever it keeps any
@@ -2594,8 +2595,11 @@ It is rows.js's, shared by both pages:
     `made_at` is not its own (other audio, or transcribed again), and when a sheet of none finds a transcript (not for an instrumental song).
   - youtube_sheet.py's `holds` says "chords over the transcribed lyrics" for it.
   - Those are a sheet's that keeps no `heard` alone (made before E12: the models', the design's R4). Since E13 (R2) a
-    sheet that keeps it is never due for its words: `_skip_reason` says `RELAID` while they changed, else "up to date",
-    and only new audio (or a sheet gone) makes it the models' again. Its words re-lay it with no model and no audio:
+    sheet that keeps it is never due for its words: `_skip_reason` says `RELAID` while they changed, else "up to date";
+    other audio than it was heard from (`_skip_reason`'s new audio, checked first) or a sheet gone makes it the
+    models' again, words or not. It is re-laid only where `sheet.relays_here(song)`: heard from the audio this side
+    holds now (`autochords_mtime` its `audio_mtime`, never the path), or this side holds none (`audio_path` empty: a
+    sheet taken from another caracole). Its words re-lay it with no model and no audio:
     sheet.py `relay_due(song, raw, noted=None)`, those same reasons moved as they were, plus a sheet over a site's
     words (keyed) whose song has none now or is instrumental (what a pick taken back made due by clearing
     `autochords_mtime`); `relay(song, raw, noted=None) -> Made`, `make_sheet` over `read_heard(raw["heard"])`, the
@@ -2604,21 +2608,25 @@ It is rows.js's, shared by both pages:
     `audio_name`, `audio_sha16`) that `raw_of` writes in their places, so the raw is a fresh hearing's but for those
     (`test_a_re_lay_is_the_sheet_the_models_would_have_made`), a pure function: no clock, no kv, no machine
     (`test_two_caracoles_re_lay_the_same_sheet_over_the_same_words_alike`). sheet_lyrics.py: `noted_of(conn, song,
-    raw)`, this caracole's kv (`transcript_of`, `heard_nothing`, `said_not_sung`) only where the sheet was heard from
-    the song's audio here (raw `audio` the song's, `autochords_mtime` its mtime), else `noted_in`; `relay_reason`, None
-    for a sheet without `heard` and for one whose `heard` `read_heard` refuses (a newer contract, a damaged record:
+    raw)`, this caracole's kv (`transcript_of`, `heard_nothing`, `said_not_sung`) only where the song has audio here
+    and `relays_here` (a file moved and relinked with its mtime is the same audio), else `noted_in`; `relay_reason`,
+    None for a sheet without `heard`, for one heard from other audio (`relays_here`), and for one whose `heard`
+    `read_heard` refuses (a newer contract, a damaged record:
     neither re-laid nor due, a WARNING once a process by song and reason, only where a re-lay was otherwise due);
     `relay_onto_sheets(conn, cfg, overrides=None, only=None, *, between=None) -> list[Song]`, `render_all`'s second
     step after `lyrics_onto_sheets` (which now takes only sheets without `heard`: none handled by both): one query
-    over the kept auto versions whose raw has `heard`, no file read, each candidate read as it is before its re-lay
+    over the kept auto versions whose raw has `heard` (of `only`'s ids in the SQL), no file read, each candidate read
+    as it is before its re-lay
     (`between` two, overrides.toml read again after a hand-over), not ignored, no human sheet; `set_raw` and
-    `keep_file` in one savepoint, info.json after; one that can't be laid or written logged, the others go on, never a
-    miss; the version's row (`tab_id`, `url`, `fetched_at`) untouched. `autochords_pending`'s `_due` re-lays a `RELAID`
-    song itself (its words heard that night, say), counted `AutoStats.relaid` ("1 laid out again over new words"),
-    apart from generated, skipped and failed. The staged jobs' chords stage re-lays first (staged.py `_relaid`, in
-    `_autochords_sheet` and lyrics_pick.py's `chords` before its auto-chords check: no model, no hand-over, its words
-    `holds`'), and a pick or a clear clears `autochords_mtime` only for a sheet without `heard`
-    (lyrics_pick.py `_models_remake`); transcribe_job.py's `_sheet_to_make` takes `RELAID` as a sheet to make.
+    `keep_file` in one savepoint, info.json after (its failure said as its own, the sheet re-laid all the same); one
+    that can't be laid or written logged, the others go on, never a miss, a bug one of `errors=` (the nightly pass's
+    `stats.errors`, exit 1); the version's row (`tab_id`, `url`, `fetched_at`) untouched. `autochords_pending`'s
+    `_due` re-lays a `RELAID` song itself (its words heard that night, say), counted `AutoStats.relaid` ("1 laid out
+    again over new words"), apart from generated, skipped and failed. The staged jobs' chords stage re-lays first
+    (staged.py `_relaid`, in `_autochords_sheet` and lyrics_pick.py's `chords` before its auto-chords check: no model,
+    no hand-over, its words `holds`'), where `relays_here` (new audio a job brought, a file or a video, is heard by the
+    models), and a pick or a clear clears `autochords_mtime` only for a sheet without `heard` (lyrics_pick.py
+    `_models_remake`); transcribe_job.py's `_sheet_to_make` takes `RELAID` as a sheet to make.
 - export.py, for the phone (nothing on the computer runs it but `nix build .#chord-models` and its tests): BTC and
   beat_this as ONNX graphs, `CONTRACT` what each takes and gives, torch's TorchScript exporter at opset 17:
   - `export_btc`: `btc-graph.onnx`, raw log-CQT frames (`features`, [N, 108, 144]) to `logits` ([N, 108, 170]),

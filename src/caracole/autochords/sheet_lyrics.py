@@ -25,7 +25,7 @@ from collections.abc import Callable, Collection, Mapping
 from pathlib import Path
 
 from caracole.autochords.merge import with_plain_lyrics
-from caracole.autochords.sheet import Noted, noted_in, read_heard, relay, relay_due, raw_of
+from caracole.autochords.sheet import Noted, noted_in, raw_of, read_heard, relay, relay_due, relays_here
 from caracole.autochords.sheet import lyrics_key  # sheet.py's, kept here for render.py and older callers
 from caracole.config import Config
 from caracole.library import SharedFolder, keep_file, kept_files, read_regular, write_info
@@ -100,12 +100,11 @@ def lyrics_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 def noted_of(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> Noted:
     """What this caracole notes of the words of the audio the sheet was heard from (sheet.py ``Noted``): its kv's
     transcript and nothing-sung verdict of the song's audio (transcript.py, as run.py's ``_generate`` reads them), where
-    the sheet was heard from that very audio (the raw's ``audio`` the song's, and made since it last changed); else what
-    the sheet was laid out with (``noted_in``): words heard from other audio (another caracole's, say) are never laid
-    over it."""
+    the sheet was heard from the audio this side holds now (sheet.py ``relays_here``: its mtime, never its path, which a
+    file moved and relinked changes); else, this side holding none, what the sheet was laid out with (``noted_in``)."""
     from caracole.autochords.transcript import heard_nothing, said_not_sung, transcript_of
 
-    if raw.get("audio") != song.audio_path or song.autochords_mtime != song.audio_mtime or not song.audio_path:
+    if not song.audio_path or not relays_here(song):
         return noted_in(raw)
     transcript = transcript_of(conn, song)
     silent = transcript is None and heard_nothing(conn, song)
@@ -115,15 +114,12 @@ def noted_of(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) ->
 _TOLD: set[tuple[int, str]] = set()  # the unreadable heard records said this process, by song and why
 
 
-def relay_reason(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> str | None:
-    """Why the song's auto sheet (``raw``, its version's) is to be re-laid now (sheet.py ``relay_due`` over
-    ``noted_of``), or None: always None for a sheet that keeps no ``heard`` (made before it was kept: the models'), and
-    for one whose ``heard`` can't be read (``read_heard``: a newer caracole's contract, a damaged record), which is
-    neither re-laid nor made due for its words; where it would have been, that is said once a process at WARNING, by
-    song and reason, so a render a night says it, never each of a render's songs or a lookup's every render again."""
-    if raw.get("heard") is None:
+def _relay_plan(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> tuple[str, Noted] | None:
+    """Why the song's auto sheet is to be re-laid now and what it is laid with (``relay_reason``'s), or None."""
+    if raw.get("heard") is None or not relays_here(song):
         return None
-    why = relay_due(song, raw, noted_of(conn, song, raw))
+    noted = noted_of(conn, song, raw)
+    why = relay_due(song, raw, noted)
     if why is None:
         return None
     try:
@@ -134,28 +130,47 @@ def relay_reason(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]
             log.warning("%s: its auto sheet isn't laid out again over its words (%s): what was heard can't be read "
                         "(%s); it stays as it is until its audio changes", song.display, why, e)
         return None
-    return why
+    return why, noted
+
+
+def relay_reason(conn: sqlite3.Connection, song: Song, raw: Mapping[str, object]) -> str | None:
+    """Why the song's auto sheet (``raw``, its version's) is to be re-laid now (sheet.py ``relay_due`` over
+    ``noted_of``), or None: always None for a sheet that keeps no ``heard`` (made before it was kept: the models'), for
+    one heard from other audio than this side holds now (sheet.py ``relays_here``: the models' to make again from it),
+    and for one whose ``heard`` can't be read (``read_heard``: a newer caracole's contract, a damaged record), which is
+    neither re-laid nor made due for its words; where it would have been, that is said once a process at WARNING, by
+    song and reason, so a render a night says it, never each of a render's songs or a lookup's every render again."""
+    plan = _relay_plan(conn, song, raw)
+    return plan[0] if plan is not None else None
 
 
 def _relay_candidates(conn: sqlite3.Connection, only: Collection[int] | None) -> list[int]:
-    """The songs whose kept auto sheet keeps what was heard: one query, no file read."""
+    """The songs (of ``only``, when given) whose kept auto sheet keeps what was heard: one query, no file read."""
+    where, args = "", [AUTO_SHEET]
+    if only is not None:
+        ids = sorted({int(i) for i in only})
+        if not ids:
+            return []
+        where = f" AND f.song_id IN ({', '.join('?' * len(ids))})"
+        args += ids
     rows = conn.execute(
-        "SELECT f.song_id FROM files f JOIN versions v ON v.id = f.version_id "
-        "WHERE f.name = ? AND json_valid(v.raw) AND COALESCE(json_type(v.raw, '$.heard'), 'null') != 'null' "
-        "ORDER BY f.song_id", (AUTO_SHEET,)
+        "SELECT f.song_id FROM files f JOIN versions v ON v.id = f.version_id WHERE f.name = ?" + where +
+        " AND json_valid(v.raw) AND COALESCE(json_type(v.raw, '$.heard'), 'null') != 'null' ORDER BY f.song_id", args
     ).fetchall()
-    return [song_id for (song_id,) in rows if only is None or song_id in only]
+    return [song_id for (song_id,) in rows]
 
 
 def relay_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Overrides | None = None,
-                      only: Collection[int] | None = None, *,
-                      between: Callable[[], bool] | None = None) -> list[Song]:
+                      only: Collection[int] | None = None, *, between: Callable[[], bool] | None = None,
+                      errors: list[str] | None = None) -> list[Song]:
     """Lay each auto sheet that keeps what was heard out again over its song's words, where they changed
     (``relay_reason``), with no model and no audio (sheet.py ``relay``), and return the songs re-laid: of ``only``
     when given, not ignored, with no human sheet. Each song is read as it is just before its re-lay (a lookup let in
     ``between`` two may have changed it; overrides.toml is read again then too). The version's raw and the sheet are
-    written in one savepoint, info.json after; one that can't be laid out or written is logged and left as it is,
-    stopping no other, never a miss. render.py's ``render_all`` runs this right after ``lyrics_onto_sheets``."""
+    written in one savepoint, info.json after (its failure said as its own: the sheet is re-laid); one that can't be
+    laid out or written is logged and left as it is, stopping no other, never a miss; a bug laying one out is logged
+    with its traceback and, given ``errors``, one of them ("Artist - Title: …"). render.py's ``render_all`` runs this
+    right after ``lyrics_onto_sheets``."""
     from caracole.db import savepoint
     from caracole.overrides import OverridesError, load_overrides
 
@@ -178,24 +193,31 @@ def relay_onto_sheets(conn: sqlite3.Connection, cfg: Config, overrides: Override
         if auto is None or any(f.name == HUMAN_SHEET for f in files):
             continue
         version = get_version(conn, auto.version_id)
-        why = relay_reason(conn, song, version.raw)
-        if why is None:
+        plan = _relay_plan(conn, song, version.raw)
+        if plan is None:
             continue
+        why, noted = plan
         try:
-            made = relay(song, version.raw, noted_of(conn, song, version.raw))
+            made = relay(song, version.raw, noted)
             raw = raw_of(song, made)
             with savepoint(conn, "relay"):
                 set_raw(conn, version.id, raw)
                 keep_file(conn, cfg.library_dir, song=song, version_id=version.id, name=AUTO_SHEET,
                           data=made.text.encode("utf-8"), rank=auto.kept_rank)
-            write_info(conn, cfg.library_dir, get_song(conn, song_id))
         except (OSError, SharedFolder) as e:
             log.warning("%s's auto sheet couldn't be laid out again over its words (%s): %s", song.display, why, e)
             continue
         except Exception as e:  # noqa: BLE001 - a bug laying one out must cost the others nothing
             log.error("%s's auto sheet couldn't be laid out again over its words (%s): %s: %s", song.display, why,
                       type(e).__name__, e, exc_info=True)
+            if errors is not None:
+                errors.append(f"{song.display}: {type(e).__name__}: {e}")
             continue
         log.info("%s: its auto sheet laid out again from what was heard (%s), %s lyrics", song.display, why, made.used)
+        try:
+            write_info(conn, cfg.library_dir, get_song(conn, song_id))
+        except (OSError, SharedFolder) as e:  # the sheet is re-laid all the same
+            log.warning("%s: its auto sheet was laid out again, but its info.json couldn't be written: %s",
+                        song.display, e)
         done.append(get_song(conn, song_id))
     return done

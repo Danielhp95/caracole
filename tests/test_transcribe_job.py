@@ -1072,6 +1072,24 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 
 
+def test_none_makes_a_sheet_made_before_heard_was_kept_again_by_the_models_of_its_chords_alone(conn, cfg):
+    # The pre-``heard`` path, as it was: the transcript dropped, the models make the sheet again with no words.
+    from test_lyrics_pick import before_heard
+
+    from caracole.autochords.transcript import NOT_SUNG
+
+    song = offered(conn, cfg)
+    assert make(cfg)[0].ok and kept(conn, song) is not None
+    before_heard(conn, song)
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, none=True)
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords only: you said it isn't sung")
+    assert separator.calls == transcriber.calls == [] and recognizer.calls == [Path(song.audio_path)]
+    sheet = auto_sheet(cfg, conn, get_song(conn, song.id)).read_text(encoding="utf-8")
+    assert NOT_SUNG in sheet and NOTE not in sheet and "Somos" not in sheet
+
+
 def test_none_still_runs_for_a_kept_transcript_once_a_record_is_picked_and_a_transcription_is_refused(conn, cfg):
     # Not sung, chords only, runs no Whisper: a record picked since the transcript was kept doesn't refuse it.
     from caracole.overrides import set_lyrics_record

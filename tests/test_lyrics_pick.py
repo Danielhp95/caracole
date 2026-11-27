@@ -382,6 +382,20 @@ def test_the_auto_sheet_is_made_again_over_the_picked_lyrics(cfg, conn, song, si
     assert heard.ends()["pdf"][0] == "done" and result.files
 
 
+def test_a_pick_after_the_audio_changed_has_the_models_hear_the_new_audio(cfg, conn, song, sites, here):
+    # What was heard is of the audio before: the words picked are no reason to lay it out again.
+    auto_sheet_of(cfg, conn, song)
+    other = wav(cfg.cache_dir / "audio" / "other.wav", 10.0)
+    update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime + 5.0)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    recognizer = Recognizer()
+    result, heard = pick(cfg, n=1, recognizer=recognizer)
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert recognizer.calls == [other] and auto_raw(conn, song)["audio"] == str(other)
+
+
 def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, song, sites, monkeypatch):
     # A sheet made before its version kept the words' key (D1) would keep its old words for good.
     from caracole.autochords.run import autochords_pending
