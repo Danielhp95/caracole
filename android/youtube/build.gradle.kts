@@ -2,8 +2,9 @@
 // the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries Python before the owner's
 // gate (stage Y5). Every piece is youtube/pins.json's: Chaquopy's plugin (settings.gradle.kts) and its Python, and the
 // two pure wheels, yt-dlp and yt-dlp-ejs, which android/flake.nix fetches by URL and SHA-256 into
-// CARACOLE_YTDLP_WHEELS and pip installs from there alone, `--no-index --no-deps`. Its device test, YtDlpVersionTest,
-// is run by `android/scripts/device-test.sh --youtube`; PinsTest, on the JVM, is in `gradle test`.
+// CARACOLE_YTDLP_WHEELS and pip installs from there alone, `--no-index --no-deps`. Its device tests (YtDlpVersionTest,
+// QjsTest, YtDlpServiceTest, KillTest) are run by `android/scripts/device-test.sh --youtube`; PinsTest, GlueTest and
+// GlueRefusalTest, on the JVM, are in `gradle test`.
 import groovy.json.JsonSlurper
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -159,6 +160,9 @@ kotlin {
 }
 
 dependencies {
+    // GateService's HostGate and YouTubeData (the argv's template, its tests'), core.youtube.
+    implementation(project(":core"))
+
     // PinsTest, on the JVM: `gradle :youtube:testDebugUnitTest`, in `gradle test`.
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))

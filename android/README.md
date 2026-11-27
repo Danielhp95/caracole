@@ -955,8 +955,23 @@ one, and none of those modules is there; qjs is executable in the native library
 runs a script, and yt-dlp, told of it alone (`--no-js-runtimes --js-runtimes quickjs:<path>`), names it among its
 runtimes (its `-v` with no URL: the header, then its usage error, no request). `release-check.sh` checks the release
 holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, no class under `com/chaquo/` and
-nothing under `assets/chaquopy/`, with the debug build as the control. The module sends no request yet: no route or
-service runs it.
+nothing under `assets/chaquopy/`, with the debug build as the control. No route runs it yet.
+
+Each yt-dlp run is a process of its own, `:youtube` (`YtDlpService`), as the computer runs a fresh `yt-dlp`:
+`YtDlpClient` in the main process binds it, sends the argv and its own `caracole.network` (that process has no test
+runner to set it), follows yt-dlp's stderr line by line, and once it is answered the service kills its process. The
+environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy variable). The
+service refuses an argv whose `--proxy` isn't a gate's (`http://user:secret@127.0.0.1:port`), that names another proxy,
+reads targets or options from a file, updates yt-dlp, hands a download to another program or runs a command, and under
+`caracole.network=loopback` any target that isn't an address of 127.0.0.1 or 10.0.2.2, so a test can't reach a real
+host through it. A timeout, a cancel or a close kills the `:youtube` process, and Android kills what it started with
+it (qjs among them: measured, nothing of the app's uid left 2 s after); one killed from outside is "yt-dlp stopped (the
+phone may have run out of memory)". `GateService`, in the main process, gives another process of the app a gate there.
+`YtDlpServiceTest` and `KillTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
+`tests/helpers/synth_music.py`, CC0) from a server of the test's on 127.0.0.1, by plain HTTP and by HTTPS, through the
+gate: on the x86_64 emulator the process starts about 0.1 s after the bind, Python is ready with yt-dlp imported at
+0.6–0.8 s, a `--version` run takes 0.7–0.8 s whole, and the clip's download 4.6–5.7 s (yt-dlp's own pause before a
+download, 2.5–5 s, among it).
 
 yt-dlp solves YouTube's player challenges in JavaScript, with QuickJS-NG's `qjs` (v0.18.0, MIT): no prebuilt Android
 binary exists, so `youtube/native/CMakeLists.txt` builds it by the NDK for both ABIs (upstream's `qjs` command: the

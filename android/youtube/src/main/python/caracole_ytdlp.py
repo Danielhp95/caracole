@@ -8,6 +8,21 @@ import, a bug out of `main` or out of yt-dlp-ejs) is its traceback in the err fi
 KeyboardInterrupt (or another BaseException that isn't SystemExit) goes through, as it would stop the computer's process
 too. Nothing here asks a site: what yt-dlp asks is its argv's, and the caller's to gate.
 
+Before a run, YtDlpService (its own process, one run each) asks two more:
+
+- `environ(names, values)`: `os.environ` replaced by those alone (Env.kt's, built from nothing: no proxy variable, no
+  variable of the Android process's), and `tempfile` made to read its `TMPDIR` again, where yt-dlp writes each
+  challenge script for qjs. The process's own environment, so qjs and any child yt-dlp starts inherit it too.
+- `refusal(argv, loopback, qjs)`: why the service won't run `argv`, else None. The argv is read by yt-dlp's own option
+  parser (`--help` and `--version` read through, nothing printed, no config file read, as `parseOpts` with arguments
+  given reads none), and refused: when its `--proxy`, the last as yt-dlp takes it, isn't a gate's
+  (`http://user:secret@127.0.0.1:port`) or it names another proxy (`--geo-verification-proxy`); when it would read its
+  targets or its options from a file (`--batch-file`, `--load-info-json`, `--config-locations`), update yt-dlp, hand
+  a download to another program (`--downloader`) or run a command (`--exec`: under `loopback` a test's own qjs
+  alone, `before_dl:`, KillTest's child); and under `loopback`, any target but an http or https address of
+  127.0.0.1 or 10.0.2.2 (no `ytsearch1:`, no youtube.com). Its words never hold a value of the argv: the proxy's holds
+  the gate's secret. An argv the parser can't read is refused too, in those words.
+
 What it is not:
 
 - Only Python's `sys.stdout` and `sys.stderr` are redirected, never file descriptors 1 and 2: a child process yt-dlp
@@ -18,9 +33,32 @@ What it is not:
   the product's argv has `--no-progress`.
 """
 
+import os
 import platform
+import re
+import shlex
 import sys
+import tempfile
 import traceback
+from urllib.parse import urlsplit
+
+# A gate's --proxy: HostGate's Opened.proxyArg, a user and a secret at 127.0.0.1.
+_GATE = re.compile(r"http://[^:@/\s]+:[^:@/\s]+@127\.0\.0\.1:[0-9]{1,5}")
+# The hosts a target may name under loopback (HostGate's LOOPBACK mode).
+_LOOPBACK = ("127.0.0.1", "10.0.2.2")
+
+UNREADABLE = "yt-dlp can't read its arguments"
+NO_GATE = "its --proxy isn't the app's gate"
+OTHER_PROXY = "it names a proxy beside the gate's"
+FROM_A_FILE = "it would read targets or options from a file"
+UPDATE = "it would update yt-dlp"
+DOWNLOADER = "it would hand a download to another program"
+COMMAND = "it would run a command"
+NOT_LOOPBACK = "a target isn't a loopback address, and the network is loopback's"
+
+
+class _Unreadable(Exception):
+    pass
 
 
 def version():
@@ -29,6 +67,83 @@ def version():
     from yt_dlp_ejs import version as ejs
 
     return {"python": platform.python_version(), "ytdlp": ytdlp, "ejs": ejs}
+
+
+def environ(names, values):
+    """`os.environ` made exactly `names` to `values` (two lists), and tempfile's folder read again from it; the names
+    of the variables the process had (never their values), for its log."""
+    had = sorted(os.environ)
+    os.environ.clear()
+    os.environ.update({str(name): str(value) for name, value in zip(names, values, strict=True)})
+    tempfile.tempdir = None
+    return had
+
+
+def _parsed(argv):
+    """`argv` as yt-dlp's option parser reads it: (opts, targets). Nothing printed, no file read, no exit."""
+    from yt_dlp.options import Config, create_parser
+
+    root = Config(create_parser())
+    parser = root.parser
+
+    def exit(status=0, msg=None):
+        # --help and --version print, then exit 0: here they do neither and the parse goes on; an error is unreadable.
+        if status or msg:
+            raise _Unreadable()
+
+    parser.exit = exit
+    parser.print_help = parser.print_version = parser.print_usage = lambda file=None: None
+    root.append_config(argv, label="Override")
+    return root.parse_args()
+
+
+def _loopback(target):
+    """Whether `target` is an http or https address of a loopback host, no user in it."""
+    try:
+        parts = urlsplit(target)
+        parts.port  # a port that isn't one raises
+    except ValueError:
+        return False
+    return parts.scheme in ("http", "https") and parts.hostname in _LOOPBACK and "@" not in parts.netloc
+
+
+def refusal(argv, loopback, qjs):
+    """Why `argv` isn't run, in words holding none of its values; None for an argv the service runs."""
+    argv = [str(arg) for arg in argv]
+    saved = sys.stdout, sys.stderr
+    with open(os.devnull, "w") as quiet:
+        sys.stdout = sys.stderr = quiet
+        try:
+            opts, targets = _parsed(argv)
+        except (Exception, SystemExit):
+            return UNREADABLE
+        finally:
+            sys.stdout, sys.stderr = saved
+    if opts.proxy is None or not _GATE.fullmatch(opts.proxy):
+        return NO_GATE
+    if opts.geo_verification_proxy is not None:
+        return OTHER_PROXY
+    if opts.batchfile is not None or opts.load_info_filename is not None or opts.config_locations:
+        return FROM_A_FILE
+    if opts.update_self:
+        return UPDATE
+    if opts.external_downloader:
+        return DOWNLOADER
+    for when, commands in (opts.exec_cmd or {}).items():
+        for command in commands:
+            if not (loopback and when == "before_dl" and _first_word(command) == qjs):
+                return COMMAND
+    if loopback and not all(_loopback(target) for target in targets):
+        return NOT_LOOPBACK
+    return None
+
+
+def _first_word(command):
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return None
+    return words[0] if words else None
 
 
 def run(argv, out_path, err_path):

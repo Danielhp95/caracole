@@ -37,6 +37,10 @@ import java.util.Locale
  * for ever, as http.py keeps them: under the files folder, never Android's cacheDir, which the system may clear), and
  * the mirror's `blobs/` and `manifest.json`. A lookup reaches the sites through [transport], [RealTransport] in the
  * app, read on every request.
+ *
+ * All of it is the main process's. The debug build's `:youtube` process (:youtube's YtDlpService, one yt-dlp run a
+ * process) starts none of it: the app has no Application class, its providers are the main process's, and that service
+ * touches nothing here, so no database, server or queue opens there.
  */
 object Caracole {
     /**

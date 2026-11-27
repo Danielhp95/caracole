@@ -2799,8 +2799,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `:ml`. `SoxrArm64Test` runs the NDK's static arm64 build of it (`arm64SoxrDriver`, soxr_driver.c) under
   qemu-aarch64 (the shell's `qemu-user`) over every record: NEON's cr32s the same bits as the vectors, the scalar cr32
   (`SOXR_USE_SIMD=0`) within 6e-7; skipped, saying why, without the NDK or qemu. No arm64 device is a test bed.
-- `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine alone,
-  which sends no request yet (no route, service or gate runs it); the app's `debugImplementation` alone until stage Y5,
+- `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine and
+  its process, which no route runs yet; the app's `debugImplementation` alone until stage Y5,
   so no release carries Python. Every piece is `youtube/pins.json`'s (Chaquopy 17.2.0, its plugin from Maven Central in
   settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and SHA-256; QuickJS-NG's source by its
   tag's commit and the NAR hash of its tree, never GitHub's generated archive), which android/flake.nix reads: the
@@ -2825,6 +2825,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   naming `quickjs-ng-<version>` among its runtimes. release-check.sh: no `libpython*`, `libchaquopy_java.so`,
   `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, its
   native libraries stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
+  - The process (the design's §3.2): `YtDlpService` in `:youtube` takes one request (`argv`, and `network`, the main
+    process's `caracole.network` sent by the client: the `:youtube` process has no test runner and reads no
+    property; a request without it refused), starts Python, makes the environment `Env`'s alone (the glue's
+    `environ`: `HOME` `filesDir/youtube-home`, `TMPDIR` `cacheDir/youtube-tmp` swept before and after, `XDG_*` there,
+    `LANG`, `PATH`; no proxy variable), refuses through the glue's `refusal` (yt-dlp's own option parser: a `--proxy`
+    that isn't a gate's `http://user:secret@127.0.0.1:port`, by its shape; another proxy, targets or options from a
+    file, an update, `--downloader`, `--exec` but a test's qjs `before_dl:` under loopback; under loopback a target
+    not of 127.0.0.1 or 10.0.2.2), runs it, answers, and kills its process once unbound; a second request refused.
+    `YtDlpClient(context).run(argv, timeoutS, onLine, waiting): Ran` binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one
+    run at a time in the process, follows its stderr from `cacheDir/youtube-run/`, kills its pid on a timeout,
+    `cancel()` or `close()` (Android then kills the process's cgroup, qjs with it: KillTest), waits until it is gone
+    before the next; `YtDlpStopped` for a process gone unasked, `Refused` in the glue's words. `GateService`, in the
+    main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)` there, rule YOUTUBE),
+    its `proxyArg` and its log over a Messenger (`GateService.Client`). No argv, so no secret, is logged on either
+    side. `YtDlpServiceTest` and `KillTest` (`device-test.sh --youtube`): `--version`, youtube.json's download argv
+    over a clip served on 127.0.0.1 by plain HTTP and HTTPS through the gate, the refusals, the secret in no logcat
+    line, a stop that leaves no process of the uid but the main one; `GlueRefusalTest` (JVM) the refusals.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
