@@ -49,6 +49,10 @@
   "said": "chords only: you said it isn't sung",
   "transcript": "chords over the transcribed lyrics"
  },
+ "sites_answered": [
+  "found",
+  "instrumental"
+ ],
  "words": {
   "same_file": "has this file's audio already",
   "kept_as": "kept as its audio: {format}, {length}",

@@ -62,6 +62,9 @@ class AudioRunnerTest {
 
     private val display = "Calla Lake - River Road"
 
+    /** The examiner's read, a test's to make fail. */
+    private var examine: (File, String) -> AudioStore.Audio = { _, _ -> AudioStore.Audio("M4A", 213.0, emptyMap()) }
+
     /** The vector's staged upload (its record and its M4A), the same bytes the computer's job kept. */
     private val upload = "0000000000000001"
     private val staged: Map<String, ByteArray> by lazy {
@@ -83,7 +86,7 @@ class AudioRunnerTest {
         val parts = TestParts.of(database, dir, scope, queue)
         val root = File(parts.stateDir, AudioStore.FOLDER).apply { mkdirs() }
         for ((name, bytes) in staged) File(root, name).writeBytes(bytes)
-        val store = AudioStore(parts.stateDir, { _, _ -> AudioStore.Audio("M4A", 213.0, emptyMap()) })
+        val store = AudioStore(parts.stateDir, { file, format -> examine(file, format) })
         database.writeBlocking { db ->
             val song = parts.store.add(db, "Calla Lake", "River Road", now = Stamps.now())
             Versions.updateSong(db, song.id, mapOf("lyrics_status" to "instrumental"))
@@ -141,7 +144,8 @@ class AudioRunnerTest {
     @Test fun chordModelsNotDownloadedAreARefusalThatSaysWhereToDownloadThem() {
         val phone = phone()
         val models = Models()
-        val job = run(phone, AudioRunner(phone.parts, models, phone.store, ready = { "The chord models aren't on the phone." }))
+        val job = run(phone, AudioRunner(phone.parts, models, phone.store,
+                                         problem = { AudioRunner.problemOf(models, "The chord models aren't on the phone.") }))
         assertEquals(Job.FAILED, job.state)
         assertEquals("error: caracole makes no sheet from an audio file here: the chord models aren't downloaded " +
                          "(Settings › Chords from audio)", job.steps.single().output.single())
@@ -149,10 +153,74 @@ class AudioRunnerTest {
         assertFalse(phone.store.gone(upload))
     }
 
+    /** One answer, the job's and the routes' (Phone.audioProblem): no chords, the models' not downloaded, else the
+     * chords' own reason (design §8.1), never the models' words for a reason that isn't theirs. */
+    @Test fun eachReasonNotToHearIsSaidAsItIs() {
+        val older = object : Models() {
+            override fun ready(): String = "chords from audio need Android 13 or later"
+        }
+        assertEquals(LibraryPage.AUDIO_PROBLEM, AudioRunner.problemOf(null, "The chord models aren't on the phone."))
+        assertEquals(AudioRunner.NOT_DOWNLOADED, AudioRunner.problemOf(older, "The chord models aren't on the phone."))
+        assertEquals("chords from audio need Android 13 or later", AudioRunner.problemOf(older, null))
+        assertNull(AudioRunner.problemOf(Models(), null))
+        val phone = phone()
+        val job = run(phone, AudioRunner(phone.parts, older, phone.store, problem = { AudioRunner.problemOf(older, null) }))
+        assertEquals("error: caracole makes no sheet from an audio file here: chords from audio need Android 13 or later",
+                     job.steps.single().output.single())
+        assertTrue(older.heardOf.isEmpty())
+        assertFalse(phone.store.gone(upload))
+    }
+
+    /** commands/audio.py's OSError reading the file before any stage: exit 1, "can't read …", never a bug. */
+    @Test fun theKeptFileUnreadableBeforeAnyStageExitsOneInWords() {
+        val phone = phone()
+        assertEquals(Job.DONE, run(phone, AudioRunner(phone.parts, Models(), phone.store, problem = { null })).state)
+        examine = { _, _ -> throw java.io.IOException("Input/output error") }
+        val again = run(phone, AudioRunner(phone.parts, Models(), phone.store, problem = { null }))
+        assertEquals(Job.FAILED, again.state)
+        assertEquals(1, again.steps.single().code)
+        assertEquals("error: can't read the upload: Input/output error", again.steps.single().output.single())
+    }
+
+    /** info.json failing once the sheet is kept: the stage says the sheet was kept, and the song is made of this
+     * audio (its autochords_mtime set), so the next job doesn't hear it again. */
+    @Test fun infoJsonFailingAfterTheKeepSaysTheSheetWasKept() {
+        val phone = phone()
+        File(phone.parts.store.libraryDir, "Calla Lake/River Road/info.json").mkdirs()  // a folder where it goes
+        val job = run(phone, AudioRunner(phone.parts, Models(), phone.store, problem = { null }))
+        assertEquals(Job.FAILED, job.state)
+        val (state, said) = ends(job).getValue("chords")
+        assertEquals(Job.FAILED, state)
+        assertTrue(said.startsWith("the sheet was kept (chords only, no lyrics), but its info.json couldn't be written: "),
+                   said)
+        assertTrue(autoSheet(phone))
+        val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
+        assertEquals(song.audioMtime, song.autochordsMtime)
+        val models = Models()
+        val again = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals("done" to "up to date: chords only, no lyrics", ends(again)["chords"])
+        assertTrue(models.heardOf.isEmpty())
+    }
+
+    /** The queue stopped while the models hear: what `waiting` throws propagates as itself (ChordModels' contract),
+     * the job ends as the queue's stop, its audio kept and no sheet written. */
+    @Test fun aStopMidHearingEndsTheJobAsTheQueuesStop() {
+        val phone = phone()
+        val models = Models { waiting ->
+            scope.cancel()  // the queue's stop, as the app's process ends
+            waiting()
+        }
+        val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals(Job.INTERRUPTED, job.state)
+        assertFalse(autoSheet(phone))
+        val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
+        assertTrue(phone.store.uploaded(song)?.isFile == true, "the audio kept")
+    }
+
     @Test fun anUploadGoneWithNoMarkerIsRefusedInTheStoresWords() {
         val phone = phone()
         phone.store.drop(upload)
-        val job = run(phone, AudioRunner(phone.parts, Models(), phone.store, ready = { null }))
+        val job = run(phone, AudioRunner(phone.parts, Models(), phone.store, problem = { null }))
         assertEquals(Job.FAILED, job.state)
         assertEquals("error: " + AudioStore.WORDS.getValue("gone"), job.steps.single().output.single())
         assertEquals(1, job.steps.single().code)
@@ -181,7 +249,7 @@ class AudioRunnerTest {
             waiting()
             log += "heard"
         }
-        val job = run(phone, AudioRunner(phone.parts, models, phone.store, ready = { null }))
+        val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
         assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
         assertEquals(listOf("hearing", "get Paper Boats", "heard"), log.take(3))
         runBlocking { withTimeout(30_000) { while (log.size < 4) kotlinx.coroutines.delay(10) } }
@@ -196,8 +264,10 @@ class AudioRunnerTest {
         assertEquals(JsonPrimitive("river road.m4a"), raw["audio_name"])
     }
 
-    /** The acceptance: a song given a human sheet while the models ran (a lookup kept UG's chords) ends the job as a
-     * refusal, in the computer's words, and no auto sheet is kept. */
+    /** The acceptance: a song given a human sheet while the models ran ends the job as a refusal, in the computer's
+     * words, and no auto sheet is kept. The sheet is written from the fake models' own callback: under the yield rule
+     * only another song's lookups run during a yield and no sync or removal runs mid-job, so in practice the guard is
+     * reached only through a re-key or merge another song's lookup makes; it is kept, as the computer's is. */
     @Test fun aSongGivenAHumanSheetMeanwhileEndsTheJobAsARefusal() {
         val phone = phone()
         val models = Models { waiting ->
@@ -210,7 +280,7 @@ class AudioRunnerTest {
             }
             waiting()
         }
-        val job = run(phone, AudioRunner(phone.parts, models, phone.store, ready = { null }))
+        val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
         assertEquals(Job.FAILED, job.state)
         val ends = ends(job)
         assertEquals(Job.FAILED to "$display already has a sheet", ends["song"])
@@ -231,7 +301,7 @@ class AudioRunnerTest {
             val models = object : Models() {
                 override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard = throw thrown
             }
-            val job = run(phone, AudioRunner(phone.parts, models, phone.store, ready = { null }))
+            val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
             assertEquals(Job.FAILED, job.state)
             assertEquals(Job.FAILED to said, ends(job)["chords"])
             assertEquals(Job.SKIPPED to "no sheet", ends(job)["pdf"])
@@ -241,7 +311,7 @@ class AudioRunnerTest {
         }
         // A bug laying the sheet out: caracole's, said so.
         val phone = phone()
-        val job = run(phone, AudioRunner(phone.parts, Models(), phone.store, ready = { null },
+        val job = run(phone, AudioRunner(phone.parts, Models(), phone.store, problem = { null },
                                          names = { throw IllegalStateException("no names") }))
         assertEquals(Job.FAILED to "a bug in caracole: IllegalStateException: no names", ends(job)["chords"])
         assertEquals(1, job.steps.single().code)

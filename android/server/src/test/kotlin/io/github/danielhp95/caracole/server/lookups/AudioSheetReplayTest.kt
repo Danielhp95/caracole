@@ -19,7 +19,7 @@ class AudioSheetReplayTest {
         val misses = Misses("audio-sheet")
         AudioSheetReplay.replay(misses)
         misses.assertNone()
-        assertEquals(11, AudioSheetReplay.cases().size)
+        assertEquals(12, AudioSheetReplay.cases().size)
     }
 
     /** The words the phone's job says of its pages are get.py's as staged.py names them (audio_sheet.json's `pdf`),

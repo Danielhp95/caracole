@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.core.lookup.SiteStages
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.http.caracoleResource
 import io.github.danielhp95.caracole.server.jobs.CommandExit
@@ -96,7 +97,7 @@ class AudioRunner(
     val parts: PhoneParts,
     private val chords: ChordModels?,
     private val store: AudioStore,
-    private val ready: () -> String? = { chords?.ready() },
+    private val problem: () -> String? = { problemOf(chords, null) },
     private val names: () -> Map<String, String> = { emptyMap() },
     private val readOverrides: (Db) -> Overrides = Overrides::read,
     private val stages: SiteStages = SiteStages.ALL,
@@ -114,12 +115,14 @@ class AudioRunner(
         } catch (e: OverridesError) {
             throw CommandExit(2, e.message.orEmpty())
         }
-        val problem = if (chords == null) LibraryPage.AUDIO_PROBLEM else ready()?.let { NOT_DOWNLOADED }
+        val problem = if (chords == null) LibraryPage.AUDIO_PROBLEM else problem()
         if (problem != null) throw CommandExit(1, Words.text("no_chords").replace("{problem}", problem))
         val given = try {
             given(upload)
         } catch (e: AudioStore.AudioError) {
             throw CommandExit(if (e.status == 400) 2 else 1, e.message.orEmpty())
+        } catch (e: IOException) {  // commands/audio.py's OSError reading the file: exit 1, "can't read …"
+            throw CommandExit(1, "can't read ${Words.text("the_upload")}: ${e.message ?: e.javaClass.simpleName}")
         }
         val artist = Py.strip(display.substringBefore(" - "))
         val title = Py.strip(display.substringAfter(" - ", ""))
@@ -278,7 +281,7 @@ class AudioRunner(
             var said = Words.text("in_book")
             val found = Songs.byKey(db, key) ?: run {
                 said = LookupWords.ADDED
-                val ms = given.duration.takeIf { it >= 1 }?.let { Math.round(it * 1000) }
+                val ms = given.duration.takeIf { it >= 1 }?.let { PyFormat.roundHalfEven(it * 1000) }
                 try {
                     parts.store.add(db, artist, title, given.album, ms, now = stamp)
                 } catch (e: IllegalArgumentException) {
@@ -342,6 +345,8 @@ class AudioRunner(
             try {
                 file = if (mark != null && !mark.done) store.adopt(db, current, upload)
                        else store.keep(db, current, store.staged(upload))
+                // The kept file read again, as audio_sheet.py's `audio_store.examine(kept)`: should that fail, the stage
+                // fails with the audio kept, and Try again goes on by the same-file path (the marker, done).
                 found = store.formatAndLength(file)
             } catch (e: AudioStore.AudioError) {
                 val said = e.message.orEmpty().trimEnd('.')
@@ -357,7 +362,7 @@ class AudioRunner(
             keptLength = found.second
             if (file == before) return@writeBlocking "done" to Words.text("same_file")
             val said = Words.text("kept_as").replace("{format}", found.first)
-                .replace("{length}", JobCommands.formatDuration(Math.round(found.second * 1000)))
+                .replace("{length}", JobCommands.formatDuration(PyFormat.roundHalfEven(found.second * 1000)))
             "done" to said + (replaced?.let { Words.text("replaces").replace("{replaced}", it) } ?: "")
         }
 
@@ -385,12 +390,13 @@ class AudioRunner(
             return end ?: ("skipped" to (result.refused ?: ""))
         }
 
-        /** The phone hears no words: the vocals' skip in the offer's words where a site gave words or its verdict (or
-         * none was asked yet), else the phone's reason, as youtube_sheet.py's `_why_not_heard` orders them. */
+        /** The phone hears no words: the vocals' skip in the offer's words where a site gave words or its verdict
+         * (SITES_ANSWERED), else the phone's reason (lyrics missing, or pending after a site's error, block or spent
+         * budget), as youtube_sheet.py's `_why_not_heard` orders them. */
         private fun vocals(): Pair<String, String> {
             if (states["audio"] != "done") return "skipped" to Words.text("no_audio")
             val status = song!!.lyricsStatus
-            if (status != "missing") {
+            if (status in Words.sitesAnswered) {  // youtube_sheet.SITES_ANSWERED: said first, whatever the phone does
                 return "skipped" to Words.text("not_offered")
                     .replace("{why}", Words.text("lyrics_are").replace("{status}", status))
             }
@@ -466,9 +472,16 @@ class AudioRunner(
                                "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
                 Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
             }
-            InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
+            val info = try {
+                InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
+                null
+            } catch (e: Exception) {  // the sheet is kept: said so, and made of this audio (no hearing again)
+                if (e is CancellationException) throw e
+                e.message ?: e.javaClass.simpleName
+            }
             Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
             again(db)
+            info?.let { return fail(INFO_FAILED.replace("{held}", holds(raw)).replace("{why}", it)) }
             return "done" to holds(raw)
         }
 
@@ -501,6 +514,9 @@ class AudioRunner(
             data.getValue("stages").jsonArray.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.content }
         }
         val steps: List<String> by lazy { data.getValue("steps").jsonArray.map { it.jsonPrimitive.content } }
+        val sitesAnswered: Set<String> by lazy {
+            data.getValue("sites_answered").jsonArray.map { it.jsonPrimitive.content }.toSet()
+        }
         val holds: Map<String, String> by lazy {
             data.getValue("holds").jsonObject.mapValues { it.value.jsonPrimitive.content }
         }
@@ -526,6 +542,17 @@ class AudioRunner(
         const val NOT_DOWNLOADED = "the chord models aren't downloaded (Settings › Chords from audio)"
         const val UNREADABLE = "audio the phone can't read: "
         const val AUDIO_CHANGED = "{display}: its audio changed while its chords were worked out"
+        const val INFO_FAILED = "the sheet was kept ({held}), but its info.json couldn't be written: {why}"
+
+        /** Why this phone makes no sheet from an audio file now, or null: the one answer for the job and the audio
+         * routes (server.audio's `why`). No [chords] (the release, nothing wired): [LibraryPage.AUDIO_PROBLEM]; the
+         * models not installed ([modelsReady], ModelsRunner.ready's answer): [NOT_DOWNLOADED], the design's §8.1 words;
+         * else the chords' own reason ([ChordModels.ready]: "chords from audio need Android 13 or later", …). */
+        fun problemOf(chords: ChordModels?, modelsReady: String?): String? = when {
+            chords == null -> LibraryPage.AUDIO_PROBLEM
+            modelsReady != null -> NOT_DOWNLOADED
+            else -> chords.ready()
+        }
 
         /** youtube_sheet.holds: what the auto sheet's version (its [raw]) says the sheet holds. */
         fun holds(raw: JsonObject): String {

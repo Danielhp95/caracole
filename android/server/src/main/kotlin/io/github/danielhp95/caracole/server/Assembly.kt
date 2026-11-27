@@ -212,11 +212,14 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         models.sweep()  // what a download killed in its middle left beside the models' folder
         commands[ModelsRunner.COMMAND] = models
         audio = AudioStore(deps.stateDir, deps.examiner)
-        commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio,
-                                                    ready = { models.ready() ?: deps.chords?.ready() },
+        commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio, problem = ::audioProblem,
                                                     names = models::names)
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
     }
+
+    /** Why this phone makes no sheet from an audio file now, or null (AudioRunner.problemOf over [PhoneDeps.chords]
+     * and [ModelsRunner.ready]): the audio job's refusal, and the one answer E24's routes and `server.audio` give. */
+    fun audioProblem(): String? = AudioRunner.problemOf(deps.chords, models.ready())
 
     /** The kept audio files no song names deleted (audio_store.tidy, the computer's scan step's): at the phone's start
      * and after a sync's take, in a write of their own, never under the store's lock. */

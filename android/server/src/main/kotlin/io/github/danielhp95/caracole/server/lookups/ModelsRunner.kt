@@ -244,7 +244,10 @@ class ModelsRunner(
         const val NOT_BEFORE = "models:not-before"
 
         /** The keys of the jobs that use the models, while one of which waits or runs [remove] is refused: their
-         * download, and a sheet from an audio file (AudioRunner's, `audio:<song key>`). */
+         * download, and a sheet from an audio file (AudioRunner's, `audio:<song key>`). Not closed yet, the next
+         * tasks' (the `:ml` wiring, Settings): [remove] can slip in between an audio job's queueing and its
+         * `ChordModels.hear`, as the `inUse` check here holds nothing the audio job takes (the job then fails in the
+         * models' own words, nothing kept but its audio). */
         val USES: List<String> = listOf(PhoneKinds.MODELS.key, JobCommands.AUDIO_SHEET)
 
         /** This build's words for a build with no models (core.models' ModelsNotCarried's): asked of [ModelFiles.carried]

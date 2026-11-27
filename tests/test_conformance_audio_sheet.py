@@ -2,8 +2,8 @@
 ``AudioRunner`` (the chords-on-the-phone design's §3.2, the plan's E21) to agree with.
 
 **Data** (``data/caracole/library/audio_sheet.json``, ``audio_sheet_json``): audio_sheet.py's ``STAGES``, run.py's
-``STEPS``, youtube_sheet.py's ``HOLDS``, and every word of the job the phone says as the computer does, by its
-constant: audio_sheet.py's (``SAME_FILE``, ``KEPT_AS``, ``REPLACES``, ``GIVEN_BEFORE``, ``CANT_KEEP``,
+``STEPS``, youtube_sheet.py's ``HOLDS`` and ``SITES_ANSWERED``, and every word of the job the phone says as the
+computer does, by its constant: audio_sheet.py's (``SAME_FILE``, ``KEPT_AS``, ``REPLACES``, ``GIVEN_BEFORE``, ``CANT_KEEP``,
 ``THE_UPLOAD``), youtube_sheet.py's (``IGNORED``, ``HAS_SHEET``, ``IN_BOOK``, ``NOT_OFFERED``, ``NOT_HERE``,
 ``NO_AUDIO``), transcript.py's (``PHONE``, ``LYRICS_ARE``), transcribe_job.py's ``NO_VOCALS``, staged.py's (``LEFT``
 with ``StagedRun.MAKING``, ``BUG``, ``UP_TO_DATE``, ``NO_SHEET``, ``RELAY_FAILED``) and commands/audio.py's
@@ -32,13 +32,16 @@ River Road, the fake lyrics sites by address), each with:
   get.py's at the lookup pace where the computer's job asks at the bulk pace in youtube_sheet.py's; ``chords`` for a
   hearing that fails (the phone's words, ``audio the phone can't read: …`` and the setup's, are its own); the
   events' runs and the pauses (the bulk pace's against the lookup's); and ``kv`` prefixes Python writes and the
-  phone doesn't (``autochords:status``, the to-do page's; ``autochords:failed:``, which the phone never records).
+  phone doesn't (``autochords:status``, the to-do page's; ``autochords:failed:``, which the phone never records),
+  and, where LRCLIB errs, ``provider:lrclib``, the error the lookup's envelope records and the job's bulk pass
+  doesn't.
 
 Every path under the world's state folder is written ``{state}``, which the replay reads as its own.
 
 The cases: a song new to the library, its timed lyrics found and the chords over them; one the library has, its line
 of no length (LRCLIB asked with the file's), plain lyrics; no lyrics anywhere (chords only); an instrumental; an
-ignored song and one with a human sheet, refused; the same job again once done (its file's audio already, the sheet
+LRCLIB erring, the song's lyrics left pending (the words not heard here, as for none found); an ignored song and one
+with a human sheet, refused; the same job again once done (its file's audio already, the sheet
 up to date); the same job again after a keep cut off between its move and the song's row (``adopt``); the models
 failing on the file, and their setup failing. And ``fn: "caracole.autochords.sheet_lyrics.relay_onto_sheets"``: a
 sheet the phone made (its ``made_by`` the phone's id, ``kw.own``), chords only, then the song's lyrics found and the
@@ -111,7 +114,7 @@ def audio_sheet_json() -> str:
         "no_chords": audio_cmd.NO_CHORDS, "refused": audio_cmd.REFUSED,
     }
     data = {"stages": [list(s) for s in audio_sheet.STAGES], "steps": list(run.STEPS),
-            "holds": dict(youtube_sheet.HOLDS), "words": words,
+            "holds": dict(youtube_sheet.HOLDS), "sites_answered": list(youtube_sheet.SITES_ANSWERED), "words": words,
             "pdf": {"no_pdfs": staged.NO_PDFS, "pages_made": staged.PAGES_MADE, "library_page": staged.LIBRARY_PAGE}}
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
@@ -314,6 +317,7 @@ def job(w: World, case: str, upload: str, sites: Sites, *, hearing: str = "ok",
                            "exit": 0 if result.ok else 1}, "progress": heard.events}
 
     leaves = {"kv": [*LEAVES_OUT["kv"], "autochords:status", "autochords:failed:"], "files": LEAVES_OUT["files"]}
+    # The phone writes neither: the to-do page's record of a run, and the file auto-chords couldn't read.
     with Patched(frozen_store()):
         made = record_lookup(w.cfg, fn="caracole.audio_sheet.make_audio_sheet", call=call, answers=sites, now=NOW,
                              case=case, kw={}, settle=w.settled(NOW), leaves_out=leaves)
@@ -336,7 +340,9 @@ def job(w: World, case: str, upload: str, sites: Sites, *, hearing: str = "ok",
             out["maker"] = {k: raw.pop(k) for k in MAKER if k in raw}
 
             row["raw"] = json.dumps(raw, ensure_ascii=False)
-    made["apart"] = {"lyrics": True, "events_run": True, "pauses": True, "kv": leaves["kv"][1:], **(apart or {})}
+    extra = dict(apart or {})
+    made["apart"] = {"lyrics": True, "events_run": True, "pauses": True,
+                     "kv": ["autochords:status", "autochords:failed:", *extra.pop("kv", [])], **extra}
     return placed(made, state)
 
 
@@ -380,6 +386,17 @@ def instrumental(tmp: Path) -> dict[str, Any]:
     record.update(instrumental=True, plainLyrics=None, syncedLyrics=None)
     return job(w, "LRCLIB says it is instrumental: chords only, no other site asked", up,
                lake_sites(lrclib_get=ok(json.dumps(record), JSON)))
+
+
+def lyrics_pending(tmp: Path) -> dict[str, Any]:
+    w = world(tmp, "pending")
+    w.song()
+    up = staged(w)
+    return job(w, "LRCLIB erring: the song's lyrics left pending (an error is never a miss), its chords alone, the words "
+                  "not heard here", up, lake_sites(lrclib_get=status(500, "Internal Server Error")),
+               # The lookup's envelope records the site's error (get.py's ``asking``), where the job's bulk LRCLIB pass
+               # records none: its health record is each pace's own.
+               apart={"kv": ["provider:lrclib"]})
 
 
 def ignored(tmp: Path) -> dict[str, Any]:
@@ -488,7 +505,8 @@ def phone_made_relaid(tmp: Path) -> dict[str, Any]:
 
 
 def records(tmp: Path) -> list[dict[str, Any]]:
-    return [new_song(tmp), known_song(tmp), no_lyrics(tmp), instrumental(tmp), ignored(tmp), human_sheet(tmp),
+    return [new_song(tmp), known_song(tmp), no_lyrics(tmp), instrumental(tmp), lyrics_pending(tmp), ignored(tmp),
+            human_sheet(tmp),
             again_done(tmp), again_moved(tmp), models_fail(tmp, "audio"), models_fail(tmp, "setup"),
             phone_made_relaid(tmp)]
 
@@ -528,6 +546,8 @@ def test_the_cases_come_to_what_they_say(made):
     assert new["chords"] == ["done", "chords over the lyrics"]
     assert new["pdf"] == ["skipped", "no PDFs on this scribe"]
     assert _ends(by["a song of the library with no length on its line"])["chords"] == ["done", "chords, then the lyrics"]
+    pending = _ends(by["LRCLIB erring"])
+    assert pending["lyrics"][0] == "failed" and pending["vocals"] == ["skipped", f"not transcribed here: {transcript.PHONE}"]
     none = _ends(by["no lyrics on any site"])
     assert none["vocals"] == ["skipped", f"not transcribed here: {transcript.PHONE}"]
     assert none["chords"] == ["done", "chords only, no lyrics"]

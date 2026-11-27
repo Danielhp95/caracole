@@ -230,7 +230,7 @@ object AudioSheetReplay : AreaReplay {
                               "--song=${request.getValue("artist").jsonPrimitive.content} - " +
                                   request.getValue("title").jsonPrimitive.content)
             val exit = try {
-                runBlocking { AudioRunner(parts, chords, store, ready = { null }, names = { NAMES }).run(args, told) }
+                runBlocking { AudioRunner(parts, chords, store, problem = { null }, names = { NAMES }).run(args, told) }
                 0
             } catch (e: CommandExit) {
                 e.code

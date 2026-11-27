@@ -16,7 +16,9 @@ import java.io.IOException
  *   the models", "hearing the chords", "finding the beats"), and the phone's "waiting for the phone to cool"; [waiting]
  *   called about every second while the models work, a hand-over point (the lookups queued meanwhile go first). Audio
  *   that can't be decoded is [AudioUnreadable]; the models' setup failing (missing, stopped, too hot, the battery too
- *   low) [ChordsUnavailable], each in words.
+ *   low) [ChordsUnavailable], each in words. Whatever [waiting] throws (the queue's CancellationException, from
+ *   its yield, when the queue stops mid-hearing) propagates as itself, never wrapped as [ChordsUnavailable]: a stop
+ *   is no setup's failure.
  * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.32.0"); null where it says none.
  */
 interface ChordModels {
