@@ -65,7 +65,7 @@ class PipelineCheckpointsTest {
         val pipeline = Pipeline(File("no-models"), cool, graphs = graphs)
         val first = pipeline.hear(audio, work) {}
         assertEquals(1 to 1, graphs.chords to graphs.beats)
-        assertEquals(12.0, first.heard.duration, 0.0)
+        assertEquals(12.0, first.heard.duration!!, 0.0)
         val points = first.points
         assertFalse("the samples go once the beats are kept", points.has(Checkpoints.PCM))
         assertTrue(points.has(Checkpoints.PCM_META))

@@ -1,9 +1,9 @@
 {
- "vectors_total": 89100000,
+ "vectors_total": 89450000,
  "data_total": 12000000,
  "areas": {
   "autochords": 6500000,
-  "autochords-sheet": 450000,
+  "autochords-sheet": 800000,
   "canonical": 1000000,
   "catalogues": 50000,
   "corpus": 100000,

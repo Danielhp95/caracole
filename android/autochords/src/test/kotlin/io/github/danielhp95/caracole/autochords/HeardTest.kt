@@ -30,12 +30,13 @@ class HeardTest {
         assertEquals(listOf("contract", "duration", "chords", "beats", "downbeats"), doc.keys.toList())
         assertEquals(1, doc["contract"]!!.jsonPrimitive.int)
         assertEquals("[1.204,3.5,\"Am7\"]", doc["chords"]!!.jsonArray[1].toString())
+        assertTrue(heard.json().startsWith("{\"contract\": 1, \"duration\": 225.31, \"chords\": [[0.0, 1.204, \"N\"]"))
         assertEquals(heard, Heard.read(heard.json()))
     }
 
     @Test
     fun `a heard of another contract is never read`() {
-        val other = heard.json().replace("\"contract\":1", "\"contract\":2")
+        val other = heard.json().replace("\"contract\": 1", "\"contract\": 2")
         assertFailsWith<IllegalArgumentException> { Heard.read(other) }
     }
 

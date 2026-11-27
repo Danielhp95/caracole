@@ -78,7 +78,7 @@ class PipelineTest {
             val heard = chords.hear(audio(name), { steps += it }, {})
             val took = (System.nanoTime() - started) / 1e9
             assertEquals(name, Pipeline.STEPS, steps)
-            assertEquals(name, Pcm.format(audio(name))!!.seconds, heard.duration, 0.0)
+            assertEquals(name, Pcm.format(audio(name))!!.seconds, heard.duration!!, 0.0)
             val btc = clip.getJSONObject("btc")
             val argmax = ints(btc.getJSONArray("argmax"))
             val scores = scores(name, argmax, btc.getJSONArray("segments"), clip.getJSONObject("beats"), chords, heard)

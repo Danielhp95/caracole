@@ -75,7 +75,7 @@ class ParityRunTest {
                     chords.lastStagesNanos[stage]?.let { "$stage ${"%.1f".format(it / 1e9)} s" }
                 }
                 PipelineTest.report("${file.name}: ${s.line()}; ${"%.1f".format(took)} s end to end (RTF " +
-                    "${"%.3f".format(took / heard.duration)}: ${stages.joinToString()}), :ml's " +
+                    "${"%.3f".format(took / heard.duration!!)}: ${stages.joinToString()}), :ml's " +
                     PipelineTest.peak(chords))
                 failures += s.failures(gates).map { "${file.name}: $it" }
             } catch (e: Exception) {

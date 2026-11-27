@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.render.InfoJson
 import io.github.danielhp95.caracole.viewer.render.OwnVersions
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -41,7 +42,7 @@ import java.nio.file.Files
  * - [lyricsKeys]: PlainLyrics.lyricsKey is sheet_lyrics.lyrics_key, text for text (the key both sides write into an
  *   auto sheet's version, so into the song's unit);
  * - [facts]: each fixture library's first pass as far as no page is built: the lyrics put on its auto sheets
- *   (PlainLyrics), the own versions as they play now (OwnVersions), then each song's info.json (InfoJson) and unit's
+ *   (PlainLyrics), those that keep what was heard laid out again (Relay), the own versions as they play now (OwnVersions), then each song's info.json (InfoJson) and unit's
  *   digest as Python had them after that pass;
  * - [passes]: every step of each record, its fixture loaded into a fresh database and library folder, each render
  *   PhoneRender.render of its songs (every song for null; the record's build, `corpus-build`): the failures, every
@@ -103,6 +104,7 @@ object RenderReplay : AreaReplay {
                 database.writeBlocking { db ->
                     LibraryStore(library).ensureCurrentKeys(db)
                     PlainLyrics.onto(db, library, Overrides.read(db), only = ids(db, first))
+                    Relay.onto(db, library, Overrides.read(db), only = ids(db, first))
                     OwnVersions.upgraded(db, library, Overrides.read(db))
                     for ((path, text) in out.getValue("info").jsonObject) {
                         val song = Songs.list(db).firstOrNull { infoOf(library, it) == path }

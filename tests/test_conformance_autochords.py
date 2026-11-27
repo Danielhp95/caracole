@@ -22,10 +22,11 @@ What it writes:
   - ``round``: ``round(k * FRAME_SECONDS, 3)`` for every k of a range (``from``, ``to``, ``step``), the segments'
     times over the first 3,000 frames one by one and over four hours sparsely.
 
-And, for the phone's ``viewer.autochords`` (merge.py and align.py, area ``autochords-sheet``):
+And, for the phone's ``viewer.autochords`` (merge.py, align.py and sheet.py, area ``autochords-sheet``):
 
-- ``data/caracole/viewer/autochords.json`` (``autochords_json``): merge.py's constants and patterns (``merge``) and
-  align.py's (``align``), under their Python names (a leading underscore dropped), read by ``viewer.autochords``.
+- ``data/caracole/viewer/autochords.json`` (``autochords_json``): merge.py's constants and patterns (``merge``),
+  align.py's (``align``), sheet.py's (``sheet``) and transcript.py's the sheet reads (``transcript``), under their Python
+  names (a leading underscore dropped), read by ``viewer.autochords``.
 
 Each vector record a call of
 the real function (``fn``, its ``args`` or ``kw``) and its whole answer (``out``), or what it raised (``err``, the
@@ -49,6 +50,23 @@ exception's class name):
   literals, ``LRC_EDGES`` and ``STAMP_EDGES`` (minutes past a Long) at several offsets; ``math.fsum``. An ``Alignment`` is its
   fields, a float that is no number written as the string Python's ``repr`` writes (``"-inf"``).
 
+- ``vectors/autochords-sheet/sheet.jsonl``, sheet.py's sheet half for ``SheetHalf``, ``Heard`` and ``Relay``: ``heard``
+  records name each hearing (``_hearings``: four chords, of no length, float corners, an empty one, the aligning song
+  with a talk before it or an outro after, seeded songs), by its json.dumps text, which the others name;
+  ``read_heard`` over ``HEARD_TEXTS`` (every shape it reads and every one it refuses: ``err`` ValueError), its ``out``
+  heard_record's text; ``make_sheet`` (``kw``: the song's ``SONG_FIELDS``, a hearing's name, the source, a
+  transcript, silent, said, the video's as_json text, the maker, its models as pairs) and its ``out``: the sheet, what
+  it used, the key, the shift, silent, said, and ``raw``, raw_of's text as versions.set_raw stores it; ``relay``
+  (``kw``: the song, a raw's text, its ``heard`` a hearing's name where it is one, ``noted``): relay_due, noted_in, and
+  relay with the raw raw_of then writes, or ``err``; ``relays_here``, ``made_by_another`` and ``Timed.note``. A sheet or
+  a raw past ``SHEET_WHOLE`` characters is its digest.
+- ``vectors/autochords-sheet/relay.jsonl``: sheet_lyrics.py's ``relay_onto_sheets`` over one library (``_library``:
+  sheets made on the phone, here, from replaced audio, elsewhere over other audio, with an unreadable ``heard``,
+  ignored, in ``[ignore]``, beside a human sheet, over a transcript, up to date, of no columns; a transcript and nothing
+  sung noted here), ``args`` its fixture (``sync:id`` among its kv) and its steps (``{"relay": song ids or null}``),
+  ``out`` each step's songs re-laid, the songs' folders' files, every version's raw, each song unit's digest and each
+  info.json.
+
 A list of beats ``[s + k * step for k in range(n)]`` is written ``{"start": s, "step": step, "n": n}`` (where Python's
 list is exactly that), a sheet past ``WHOLE_MOST`` characters by ``{"sha256": first 16 hex digits, "size": len}``,
 and ``synced_words`` that are ``parse_lrc_words(synced)`` as ``true``.
@@ -56,6 +74,7 @@ and ``synced_words`` that are ``parse_lrc_words(synced)`` as ``true``.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import math
@@ -66,11 +85,20 @@ from contextlib import contextmanager
 
 import test_autochords_align
 import test_autochords_merge
-from helpers.corpus import DATA, VECTORS, check, jsonl
+from conftest import add_song
+from helpers import phone_render
+from helpers.corpus import DATA, VECTORS, check, dump_fixture, jsonl
 from test_autochords_models import COMMON_NAMES, FRAMES, SPELLINGS, spelling_song
 from test_conformance_viewer_sheet import literals
 
-from caracole.autochords import ChordSegment, align, btc, merge
+from caracole.autochords import ChordSegment, align, btc, merge, sheet, transcript
+from caracole.autochords.sheet_lyrics import relay_onto_sheets
+from caracole.autochords.transcript import Transcript, keep_transcript, note_heard_nothing
+from caracole.overrides import load_overrides
+from caracole.songs import AUTO_SHEET, get_song, list_songs, update_song
+from caracole.lyrics import Lyrics
+from caracole.songs import Song
+from caracole.youtube import Video
 
 MADE_BY = "tests/test_conformance_autochords.py"
 AREA = VECTORS / "autochords"
@@ -290,6 +318,16 @@ def autochords_json() -> str:
             "STEADY_BARS": a.STEADY_BARS, "REPEAT_CHARS": a.REPEAT_CHARS, "REPEATS_PER_LINE": a.REPEATS_PER_LINE,
             "EPS": a._EPS, "WORD": a._WORD.pattern,
         },
+        "sheet": {
+            "MODEL": sheet.MODEL, "CONTRACT": sheet.CONTRACT, "SYNC_TOLERANCE_S": sheet.SYNC_TOLERANCE_S,
+            "COLUMNS": sheet.COLUMNS, "MAKER_MEMBERS": list(sheet.MAKER_MEMBERS),
+            "RELAY_KEEPS": list(sheet.RELAY_KEEPS),
+        },
+        "transcript": {
+            "LYRICS_SOURCE": transcript.LYRICS_SOURCE, "NOTE": transcript.NOTE, "SILENT": transcript.SILENT,
+            "NOT_SUNG": transcript.NOT_SUNG, "TRANSCRIPT": transcript.TRANSCRIPT,
+            "HEARD_NOTHING": transcript.HEARD_NOTHING,
+        },
     })
 
 
@@ -317,8 +355,8 @@ def _lrc_lines(lines):
             for line in lines]
 
 
-def _text(text: str):
-    if len(text) <= WHOLE_MOST:
+def _text(text: str, most: int = WHOLE_MOST):
+    if len(text) <= most:
         return text
     return {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16], "size": len(text)}
 
@@ -817,3 +855,495 @@ def test_merge_vectors():
 
 def test_align_vectors():
     check(SHEET_AREA / "align.jsonl", jsonl(align_records(), corpus="autochords-sheet/align", made_by=MADE_BY))
+
+
+# --- sheet.py and sheet_lyrics.py's re-lay: viewer.autochords' SheetHalf and Relay (area autochords-sheet) -------
+
+PHONE_ID = "f0f0f0f0f0f0f0f0"  # the sync id of the caracole that made a phone-made sheet
+HERE_ID = "1a2b3c4d5e6f7a8b"  # this side's, in relay.jsonl's library (kv sync:id)
+PHONE_MAKER = sheet.Maker("phone", PHONE_ID, {"chords": "btc_large_voca@0123456789abcdef",
+                                              "beats": "beat_this final0@fedcba9876543210 fp16"},
+                          "onnxruntime 1.32.0", "song.mp3", "00112233aabbccdd")
+COMPUTER_MAKER = sheet.Maker("computer", HERE_ID, {"chords": "btc_large_voca@0123456789abcdef",
+                                                   "beats": "beat_this final0@fedcba9876543210"},
+                             "torch 2.13.0", "Song (purchase).m4a", "8899aabbccddeeff")
+BARE_MAKER = sheet.Maker("computer", None, {}, None, None, None)  # only the side known: the rest left out
+SONG_FIELDS = ("title", "artist", "lyrics_status", "lyrics_json", "audio_path", "audio_mtime", "autochords_mtime")
+SHEET_VIDEO = {"id": "lzN7Thn3FV4", "title": "Longships  (Official Audio)", "channel": "Nobody - Topic",
+               "duration": 46.0}
+PURCHASE = "Audio from a purchase: Nobody - River Road.m4a"
+SYNCED_FOUR = "[00:00.50]Walking down the river road\n[00:05.20]Singing to the morning light\n"
+WORDS_FOUR = "[00:00.00]<00:00.00>Walking <00:00.60>down <00:01.20>the <00:03.00>river <00:03.60>road\n"
+CHINESE_FOUR = "[00:00.50]我们一起走在河边的路上\n[00:05.20]唱着早晨的歌\n"
+ASTRAL_FOUR = ("[00:00.50]\U0001d401\U0001d428\U0001d425\U0001d41d \U00020000\U00020001 \U0001f600 road\n"
+               "[00:05.20]corazón \U0001d7cf\U0001d7d0 light\n")
+TRANSCRIPT_FOUR = "[00:01.00]<00:01.00>heard <00:01.50>words\n[00:06.00]<00:06.00>and <00:06.40>more\n"
+NOTE_CASES = ((None, 0.0), (0.0, 3.0), (0.0, -3.0), (0.0, 0.05), (0.0, -0.25), (12.0, 12.0), (-2.0, -2.5),
+              (0.05, 1.0), (0.15, 1.0), (0.25, 1.0), (-0.05, -1.0), (2.45, 3.0), (1e-07, 0.1), (-0.0, 0.0),
+              (1234.56789, 1234.5), (0.30000000000000004, 0.30000000000000004))
+
+
+def _song(**fields) -> Song:
+    """A song record as make_sheet and relay_due read it (only ``SONG_FIELDS`` matter)."""
+    base = dict(id=7, key="nobody|river road", artist="Nobody", title="River Road", artists=["Nobody"], album=None,
+                duration_ms=None, isrc=None, source_ids={}, added_at="2026-11-01T00:00:00Z", variant=None,
+                status="found", review=False, match_decision=None, match_step=None, match_score=None,
+                match_artist_key=None, match_song_key=None)
+    return Song(**{**base, **fields})
+
+
+def _song_kw(song: Song) -> dict:
+    return {name: getattr(song, name) for name in SONG_FIELDS}
+
+
+def _lyrics(plain: str = "", synced: str | None = None, *, duration: float | None = None,
+            instrumental: bool = False) -> str:
+    """The text of a song's ``lyrics_json``, plain lyrics from the timed ones' lines where none are given."""
+    if not plain and synced:
+        plain = "\n".join(text for _, text in merge.parse_lrc(synced))
+    return Lyrics(plain=plain, synced=synced, instrumental=instrumental, duration=duration, lrclib_id=None, raw={},
+                  provider="lrclib", url=None).to_json()
+
+
+def _transcript(lrc: str, made_at: str = "2026-11-20T01:00:00Z") -> Transcript:
+    return Transcript(lrc=lrc, audio="", audio_mtime=None, model="", language="", device="", words_dropped=0,
+                      made_at=made_at)
+
+
+def _maker_kw(maker: sheet.Maker | None) -> dict | None:
+    if maker is None:
+        return None
+    # the models as pairs, in their order: a record's objects are written with their keys sorted
+    return {"on": maker.on, "by": maker.by, "models": [list(item) for item in maker.models.items()],
+            "runtime": maker.runtime,
+            "audio_name": maker.audio_name, "audio_sha16": maker.audio_sha16}
+
+
+def _heard_text(heard: sheet.Heard) -> str:
+    """What was heard as an auto sheet's raw writes it: json.dumps of ``heard_record``."""
+    return json.dumps(sheet.heard_record(heard), ensure_ascii=False)
+
+
+SHEET_WHOLE = 320  # a sheet or a raw of sheet.jsonl longer than this is written by its digest
+
+
+def _made_out(made: sheet.Made) -> dict:
+    return {"text": _text(made.text, SHEET_WHOLE), "used": made.used, "key": made.key, "shift": made.shift,
+            "silent": made.silent, "said": made.said}
+
+
+def _raw_text(raw: dict) -> str:
+    """A raw as versions.set_raw stores it."""
+    return json.dumps(raw, ensure_ascii=False)
+
+
+@functools.cache
+def _hearings() -> dict[str, sheet.Heard]:
+    """What was heard, by name: four chords over ten seconds; the same of no length; float corners (0.1 + 0.2, 1e-07,
+    -0.0, a time a hair past a beat); an aligning song heard with a talk before it, and with less; seeded songs."""
+    four = [ChordSegment(2.0 * k, 2.0 * (k + 1), ("C", "G", "Am", "F")[k % 4]) for k in range(5)]
+    beats = [k * 0.5 for k in range(21)]
+    out = {"four": sheet.Heard(four, beats, beats[::4], 10.0),
+           "four_unmeasured": sheet.Heard(four, beats, beats[::4], None),
+           "corners": sheet.Heard([ChordSegment(-0.0, 0.1 + 0.2, "C"), ChordSegment(0.1 + 0.2, 2.0000001, "G"),
+                                   ChordSegment(2.0000001, 4.0, "Am7"), ChordSegment(4.0, 6.0, "N"),
+                                   ChordSegment(6.0, 9.5, "F#m")],
+                                  [1e-07] + [k * 0.5 for k in range(1, 20)], [1e-07, 2.0, 4.0, 6.0, 8.0], 9.5),
+           "empty": sheet.Heard([], [], [], 3.0)}
+    for name, kw in (("talk", {"before": 12.0}), ("short_talk", {"before": 1.5}), ("outro", {"after": 4.0}),
+                     ("long_talk", {"before": 31.0})):
+        _, _, segs, beats, downbeats, audio_s = test_autochords_align.build(test_autochords_align.song_form(), **kw)
+        out[name] = sheet.Heard(segs, beats, downbeats, audio_s)
+    rng = random.Random(17)
+    for n in range(6):
+        until = rng.choice((20.0, 36.0, 64.0))
+        beats = _seeded_beats(rng, until)
+        downbeats, _ = _seeded_downbeats(rng, beats)
+        segs = _seeded_segments(rng, beats, until, rng.choice((1, 6, 20, 60)))
+        out[f"seeded{n}"] = sheet.Heard(segs, beats, downbeats or [], round(until + rng.choice((0.0, 0.7)), 3))
+    return out
+
+
+def _aligning_lyrics(words: bool = False) -> tuple[str, float]:
+    """The aligning song's timed lyrics as LRCLIB timed them (a stamp before each word where ``words``), and their
+    length."""
+    lines, lyrics_s, *_ = test_autochords_align.build(test_autochords_align.song_form())
+    if words:
+        return "".join(f"{_stamp(t)}{_word_stamped(text, t)}\n" for t, text in lines), lyrics_s
+    return "".join(f"{_stamp(t)}{text}\n" for t, text in lines), lyrics_s
+
+
+def _lyric_kinds() -> dict[str, tuple[str, str | None]]:
+    """A song's lyrics of each kind, by name: (``lyrics_status``, ``lyrics_json``)."""
+    aligning, length = _aligning_lyrics()
+    return {
+        "none": ("pending", None),
+        "missing": ("missing", None),
+        "instrumental": ("instrumental", None),
+        "instrumental_record": ("found", _lyrics("", None, instrumental=True)),
+        "plain": ("found", _lyrics("Walking down the river road\n\nSinging to the morning light  \n")),
+        "plain_other": ("found", _lyrics("Other words now\nfor the river road")),
+        "plain_same": ("found", _lyrics("Walking down the river road\nSinging to the morning light")),
+        "synced": ("found", _lyrics("", SYNCED_FOUR, duration=10.0)),
+        "synced_near": ("found", _lyrics("", SYNCED_FOUR, duration=11.9)),
+        "synced_far": ("found", _lyrics("", SYNCED_FOUR, duration=25.0)),
+        "synced_unmeasured": ("found", _lyrics("", SYNCED_FOUR, duration=None)),
+        "words": ("found", _lyrics("", WORDS_FOUR, duration=10.0)),
+        "chinese": ("found", _lyrics("", CHINESE_FOUR, duration=10.0)),
+        "astral": ("found", _lyrics("", ASTRAL_FOUR, duration=9.5)),
+        "aligning": ("found", _lyrics("", aligning, duration=length)),
+        "aligning_words": ("found", _lyrics("", _aligning_lyrics(True)[0], duration=length)),
+        "unreadable": ("found", "{not json"),
+    }
+
+
+def _named(heard: sheet.Heard) -> str:
+    """The name of one of ``_hearings``' (a record names what was heard by it: the ``heard`` records)."""
+    return next(name for name, h in _hearings().items() if h == heard)
+
+
+def _make(song: Song, heard: sheet.Heard, *, source=None, transcript=None, silent=False, said=False, video=None,
+          maker=None) -> dict:
+    made = sheet.make_sheet(song, heard, source=source, transcript=transcript, silent=silent, said=said)
+    raw = sheet.raw_of(song, made, video=Video.from_json(video) if video else None, maker=maker)
+    kw = {"song": _song_kw(song), "heard": _named(heard), "source": source,
+          "transcript": {"lrc": transcript.lrc, "made_at": transcript.made_at} if transcript else None,
+          "silent": silent, "said": said, "video": _raw_text(Video.from_json(video).as_json()) if video else None,
+          "maker": _maker_kw(maker)}
+    return {"fn": "make_sheet", "kw": kw, "out": {**_made_out(made), "raw": _text(_raw_text(raw), SHEET_WHOLE)}}
+
+
+def _make_records() -> list[dict]:
+    """make_sheet and raw_of over what was heard × lyrics of each kind, sources, a transcript, nothing sung."""
+    heard, kinds = _hearings(), _lyric_kinds()
+    out = []
+    for name in ("four", "four_unmeasured", "corners", "empty"):
+        for kind, (status, lyrics) in kinds.items():
+            if kind in ("aligning", "aligning_words", "unreadable"):
+                continue
+            song = _song(lyrics_status=status, lyrics_json=lyrics, audio_path="/music/Nobody/River Road.m4a")
+            out.append(_make(song, heard[name], source=PURCHASE if kind != "plain" else None,
+                             maker=COMPUTER_MAKER if kind == "words" else None))
+    for kind in ("aligning", "aligning_words"):
+        aligning = _song(lyrics_status="found", lyrics_json=kinds[kind][1])
+        for name in ("talk", "short_talk", "outro", "long_talk"):
+            out.append(_make(aligning, heard[name], maker=PHONE_MAKER, source=PURCHASE if kind == "aligning" else None))
+    four = heard["four"]
+    for kind in ("none", "synced", "instrumental", "plain"):  # a transcript is used only where no site has words
+        song = _song(lyrics_status=kinds[kind][0], lyrics_json=kinds[kind][1])
+        out.append(_make(song, four, source=PURCHASE, transcript=_transcript(TRANSCRIPT_FOUR)))
+        for said in (False, True):  # nothing sung, by what was heard or by the owner's word
+            out.append(_make(song, four, source=PURCHASE, silent=True, said=said))
+    none = _song(lyrics_status="pending", lyrics_json=None, audio_path=None)
+    credit = merge.youtube_credit(SHEET_VIDEO["title"], SHEET_VIDEO["channel"], SHEET_VIDEO["id"])
+    for kind in ("none", "synced", "synced_far"):
+        song = _song(lyrics_status=kinds[kind][0], lyrics_json=kinds[kind][1], audio_path=None)
+        out.append(_make(song, four, source=credit, video=SHEET_VIDEO, maker=PHONE_MAKER))
+    out.append(_make(none, four, source="  ", maker=BARE_MAKER))
+    out.append(_make(none, four, source=f"{credit}\n{PURCHASE}", transcript=_transcript(TRANSCRIPT_FOUR, "x")))
+    for n in range(4):
+        for kind in ("none", "plain", "synced", "words", "chinese", "astral"):
+            song = _song(lyrics_status=kinds[kind][0], lyrics_json=kinds[kind][1])
+            out.append(_make(song, heard[f"seeded{n}"], source=PURCHASE if n % 2 else None,
+                             maker=PHONE_MAKER if n % 3 == 0 else None))
+    unreadable = _song(lyrics_status="found", lyrics_json=kinds["unreadable"][1])
+    try:
+        sheet.make_sheet(unreadable, four)
+    except ValueError:  # make_sheet reads the song's lyrics and lets their error out (JSONDecodeError)
+        out.append({"fn": "make_sheet", "kw": {"song": _song_kw(unreadable), "heard": "four",
+                                               "source": None, "transcript": None, "silent": False, "said": False,
+                                               "video": None, "maker": None}, "err": "ValueError"})
+    else:
+        raise AssertionError("unreadable lyrics made a sheet")
+    return out
+
+
+# read_heard's inputs, each as JSON text: what it reads, and what it refuses (ValueError), as the phone must.
+HEARD_TEXTS = (
+    '{"contract": 1, "duration": 10.0, "chords": [[0.0, 5.0, "C"], [5, 10.0, "G"]], "beats": [0.5, 1], '
+    '"downbeats": []}',
+    '{"contract": 1.0, "duration": null, "chords": [], "beats": [], "downbeats": [], "more": "kept out"}',
+    '{"contract": 1, "duration": 0.30000000000000004, "chords": [[1e-07, 1e+21, "Am7"], [-0.0, 3, "N"]], '
+    '"beats": [1e-07, 0.1, 2e-308, 5e-324, 1.7976931348623157e+308, 1E5, 12345678901234567890], "downbeats": [3]}',
+    '{"contract": 1, "duration": NaN, "chords": [[Infinity, -Infinity, "C"]], "beats": [NaN], "downbeats": []}',
+    '{"contract": 1, "duration": 1e400, "chords": [], "beats": [-1e400], "downbeats": []}',
+    '{"contract": 1, "duration": 9007199254740993, "chords": [[0, 1, "\U0001d401́\U00020000"]], '
+    '"beats": [], "downbeats": []}',
+    '{"contract": 2, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": true, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": "1", "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1.5, "duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
+    '{"duration": 1.0, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": true, "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": "1.0", "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": "C", "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0.0, 1.0]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0.0, 1.0, "C", "x"]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [["0.0", 1.0, "C"]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0.0, false, "C"]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0.0, 1.0, 7]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0.0, 1.0, null]], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [{"start": 0}], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": "12", "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": [0.5, true], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": [0.5, "1.0"], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": [], "downbeats": null}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": [], "downbeats": [[1.0]]}',
+    '{"contract": 1, "duration": 1.0, "chords": [], "beats": []}',
+    '{"contract": 1, "duration": 1' + "0" * 400 + ', "chords": [], "beats": [], "downbeats": []}',
+    '{"contract": 1, "duration": 1.0, "chords": [[0, -1' + "0" * 400 + ', "C"]], "beats": [], "downbeats": []}',
+    '[1, 1.0, [], [], []]',
+    'null',
+    '"heard"',
+)
+
+
+def _read_heard_records() -> list[dict]:
+    """read_heard over ``HEARD_TEXTS``, and over the records the hearings make: what heard_record then writes."""
+    out = []
+    texts = list(HEARD_TEXTS) + [_heard_text(h) for h in _hearings().values()][:4]
+    for text in texts:
+        try:
+            heard = sheet.read_heard(json.loads(text))
+        except ValueError as e:
+            out.append({"fn": "read_heard", "args": [text], "err": _err(e)})
+        else:
+            out.append({"fn": "read_heard", "args": [text], "out": _text(_heard_text(heard))})
+    return out
+
+
+def _noted_kw(noted: sheet.Noted | None) -> dict | None:
+    if noted is None:
+        return None
+    t = noted.transcript
+    return {"transcript": {"lrc": t.lrc, "made_at": t.made_at} if t else None, "silent": noted.silent,
+            "said": noted.said}
+
+
+def _relay_case(song: Song, raw: dict, noted: sheet.Noted | None = None) -> dict:
+    """relay_due of a raw over the song now, and, where it reads, relay and the raw it writes. The raw is written with
+    its ``heard`` the name of the hearing it is, where it is one of ``_hearings``' (else as it is)."""
+    names = {json.dumps(sheet.heard_record(h)): name for name, h in _hearings().items()}
+    said = {**raw, "heard": names.get(json.dumps(raw.get("heard")), raw.get("heard"))} if "heard" in raw else raw
+    kw = {"song": _song_kw(song), "raw": _raw_text(said), "noted": _noted_kw(noted)}
+    out: dict = {"due": sheet.relay_due(song, raw, noted), "noted_in": _noted_kw(sheet.noted_in(raw))}
+    try:
+        made = sheet.relay(song, raw, noted)
+    except ValueError:  # json.loads' JSONDecodeError among them: the phone's IllegalArgumentException
+        out["relay"] = {"err": "ValueError"}
+    else:
+        out["relay"] = {**_made_out(made), "raw": _text(_raw_text(sheet.raw_of(song, made)), SHEET_WHOLE)}
+    return {"fn": "relay", "kw": kw, "out": out}
+
+
+def _relay_records() -> list[dict]:
+    """relay_due's every reason, and None, over raws make_sheet wrote; relay over each; relays_here and
+    made_by_another's cases; Timed.note's."""
+    heard, kinds = _hearings(), _lyric_kinds()
+    four = heard["four"]
+
+    def song(kind, **fields):
+        return _song(lyrics_status=kinds[kind][0], lyrics_json=kinds[kind][1], **fields)
+
+    def raw(kind, *, h=four, maker=None, video=None, columns=True, **make):
+        s = song(kind)
+        made = sheet.make_sheet(s, h, **make)
+        r = sheet.raw_of(s, made, video=Video.from_json(video) if video else None, maker=maker)
+        if not columns:
+            del r["columns"]  # a sheet made before its chords went at display columns
+        return r
+
+    t = _transcript(TRANSCRIPT_FOUR)
+    out = []
+    for before in ("none", "plain", "plain_same", "synced", "synced_far", "words", "chinese", "astral",
+                   "instrumental"):
+        for now in ("none", "plain", "plain_other", "synced", "synced_far", "words", "chinese", "astral",
+                    "instrumental", "instrumental_record", "unreadable"):
+            out.append(_relay_case(song(now), raw(before, maker=PHONE_MAKER if before == "synced" else None)))
+    over_transcript = raw("none", transcript=t)
+    for now in ("none", "plain", "instrumental"):
+        out.append(_relay_case(song(now), over_transcript))
+        out.append(_relay_case(song(now), over_transcript, sheet.Noted(_transcript(TRANSCRIPT_FOUR, "later"))))
+        out.append(_relay_case(song(now), over_transcript, sheet.Noted()))
+    for noted in (sheet.Noted(t), sheet.Noted(silent=True), sheet.Noted(silent=True, said=True), sheet.Noted()):
+        out.append(_relay_case(song("none"), raw("none"), noted))
+        out.append(_relay_case(song("instrumental"), raw("none"), noted))
+    out.append(_relay_case(song("none"), raw("none", silent=True), sheet.Noted(silent=True)))
+    out.append(_relay_case(song("plain"), raw("none", silent=True, said=True)))
+    out.append(_relay_case(song("chinese"), raw("chinese", columns=False)))
+    out.append(_relay_case(song("synced"), raw("synced", columns=False)))
+    credit = merge.youtube_credit(SHEET_VIDEO["title"], SHEET_VIDEO["channel"], SHEET_VIDEO["id"])
+    out.append(_relay_case(song("synced", audio_path=None),
+                           raw("none", video=SHEET_VIDEO, source=credit, maker=PHONE_MAKER)))
+    for name in ("corners", "seeded0", "seeded3"):
+        out.append(_relay_case(song("words"), raw("none", h=heard[name], maker=COMPUTER_MAKER)))
+    talk = raw("none", h=heard["talk"], maker=PHONE_MAKER)
+    out.append(_relay_case(_song(lyrics_status="found", lyrics_json=kinds["aligning"][1]), talk))
+    for damaged in ({"contract": 2}, {"beats": [True]}, {"duration": 10**400}):
+        bad = raw("none")
+        bad["heard"] = {**bad["heard"], **damaged}
+        out.append(_relay_case(song("plain"), bad))
+    old = raw("none")
+    del old["heard"]  # made before what was heard was kept: never re-laid, though it may be due
+    out.append(_relay_case(song("plain"), old))
+    for audio_path, audio_mtime, autochords_mtime in ((None, None, None), ("/a.m4a", 100.0, 100.0),
+                                                       ("/a.m4a", 200.0, 100.0), ("/a.m4a", 100.0, None),
+                                                       ("/a.m4a", None, None), ("", 1.0, 2.0)):
+        for elsewhere in (False, True):
+            s = _song(audio_path=audio_path, audio_mtime=audio_mtime, autochords_mtime=autochords_mtime)
+            out.append({"fn": "relays_here", "args": [_song_kw(s), elsewhere], "out": sheet.relays_here(s, elsewhere)})
+    for raw_by, own in ((None, HERE_ID), (HERE_ID, HERE_ID), (PHONE_ID, HERE_ID), (PHONE_ID, None), (7, HERE_ID),
+                        ("", HERE_ID), ("", None)):
+        r = {} if raw_by is None else {"made_by": raw_by}
+        out.append({"fn": "made_by_another", "args": [_raw_text(r), own], "out": sheet.made_by_another(r, own)})
+    for shift, longer in NOTE_CASES:
+        out.append({"fn": "Timed.note", "args": [shift, longer], "out": sheet.Timed("", shift, longer).note()})
+    return out
+
+
+def sheet_records() -> list[dict]:
+    named = [{"fn": "heard", "args": [name], "out": _heard_text(h)} for name, h in _hearings().items()]
+    return _once(named + _read_heard_records() + _make_records() + _relay_records())
+
+
+def test_sheet_vectors():
+    check(SHEET_AREA / "sheet.jsonl", jsonl(sheet_records(), corpus="autochords-sheet/sheet", made_by=MADE_BY))
+
+
+# --- relay.jsonl: sheet_lyrics.relay_onto_sheets over a library ----------------------------------------------------
+
+AUDIO_AT = 1764000000.5  # the mtime of a song's audio on this side, in relay.jsonl's library
+
+
+def _kept_auto(w, song, raw: dict, text: str) -> int:
+    """An auto sheet kept as auto-chords keeps one: its version (``raw``) and ``sheet (auto).txt``."""
+    from test_conformance_viewer_render import _keep, _version
+
+    vid = _version(w, song, "auto", str(song.id), "auto", raw=raw, rating=0, votes=0)
+    _keep(w, song, vid, AUTO_SHEET, text)
+    return vid
+
+
+def _sheet_of(w, song, heard: sheet.Heard, *, maker=None, video=None, **make) -> int:
+    """An auto sheet of the song as it is now (its words, its audio), made from ``heard`` by ``maker``."""
+    s = get_song(w.conn, song.id)
+    made = sheet.make_sheet(s, heard, **make)
+    return _kept_auto(w, s, sheet.raw_of(s, made, video=Video.from_json(video) if video else None, maker=maker),
+                      made.text)
+
+
+def _library(w) -> list[dict]:
+    """The songs and their auto sheets, then what changed since each was made; the steps."""
+    from test_conformance_viewer_render import ug_sheet
+
+    four, kinds = _hearings()["four"], _lyric_kinds()
+
+    def song(title, **fields):
+        s = add_song(w.conn, "Nobody", title, added_at=f"2026-10-{len(list_songs(w.conn)) + 1:02d}T00:00:00Z")
+        if fields:
+            update_song(w.conn, s.id, **fields)
+        return get_song(w.conn, s.id)
+
+    def words(s, kind):
+        status, lyrics = kinds[kind]
+        update_song(w.conn, s.id, lyrics_status=status, lyrics_json=lyrics)
+
+    here = {"audio_path": "/music/Nobody/x.m4a", "audio_mtime": AUDIO_AT, "autochords_mtime": AUDIO_AT}
+    credit = merge.youtube_credit(SHEET_VIDEO["title"], SHEET_VIDEO["channel"], SHEET_VIDEO["id"])
+    made = {}
+    # Made on the phone over no words; this side holds no audio of it: lyrics came.
+    made["phone"] = song("Phone Made")
+    _sheet_of(w, made["phone"], four, maker=PHONE_MAKER)
+    # Made on the phone from a video's audio; timed lyrics came.
+    made["phone_video"] = song("From A Video")
+    _sheet_of(w, made["phone_video"], four, maker=PHONE_MAKER, video=SHEET_VIDEO, source=credit)
+    # Made here from the audio this side holds now (no maker named: an older sheet of this side's); other words.
+    made["here"] = song("Made Here", **here)
+    words(made["here"], "plain")
+    _sheet_of(w, made["here"], four, source=PURCHASE)
+    # Made here from audio since replaced: the models' to make again, never a re-lay.
+    made["new_audio"] = song("New Audio", **{**here, "audio_mtime": AUDIO_AT + 60})
+    _sheet_of(w, made["new_audio"], four, maker=COMPUTER_MAKER)
+    # Made on the phone; this side holds other audio of it: re-laid all the same (its own heard).
+    made["elsewhere"] = song("Made Elsewhere", **{**here, "autochords_mtime": None})
+    _sheet_of(w, made["elsewhere"], _hearings()["corners"], maker=PHONE_MAKER)
+    # What was heard can't be read (a newer contract): left as it is.
+    made["unread"] = song("Unread")
+    vid = _sheet_of(w, made["unread"], four, maker=PHONE_MAKER)
+    from caracole.versions import get_version, set_raw
+
+    raw = get_version(w.conn, vid).raw
+    set_raw(w.conn, vid, {**raw, "heard": {**raw["heard"], "contract": 2}})
+    # Ignored; in [ignore]; beside a human sheet: none re-laid.
+    made["ignored"] = song("Ignored", status="ignored")
+    _sheet_of(w, made["ignored"], four)
+    made["ignore"] = song("In Ignore")
+    _sheet_of(w, made["ignore"], four, maker=PHONE_MAKER)
+    w.overrides('[ignore]\nsongs = ["Nobody - In Ignore"]\n')
+    made["human"] = song("Beside A Human Sheet")
+    ug_sheet(w, made["human"], "[ch]G[/ch]\nwords\n", tab=93101, tonality="G")
+    _sheet_of(w, made["human"], four, maker=PHONE_MAKER)
+    # A transcript, and nothing sung, noted here of this side's own audio since its sheet of none was made.
+    made["transcript"] = song("Transcribed Since", **here)
+    _sheet_of(w, made["transcript"], four, source=PURCHASE)
+    keep_transcript(w.conn, made["transcript"], Transcript(
+        lrc=TRANSCRIPT_FOUR, audio=here["audio_path"], audio_mtime=AUDIO_AT, model="whisper-large-v3",
+        language="en", device="cpu", words_dropped=0, made_at="2026-11-20T01:00:00Z"))
+    made["silent"] = song("Nothing Sung", **here)
+    _sheet_of(w, made["silent"], four, source=PURCHASE)
+    note_heard_nothing(w.conn, made["silent"], "2026-11-20T01:00:00Z", why="sung 6.2 s", by="caracole")
+    # Made over a transcript on another caracole: the words it was laid with are its raw's; a site's lyrics came.
+    made["over_transcript"] = song("Over A Transcript")
+    _sheet_of(w, made["over_transcript"], four, maker=PHONE_MAKER, transcript=_transcript(TRANSCRIPT_FOUR))
+    # Up to date: its words are the sheet's own.
+    made["current"] = song("Up To Date")
+    words(made["current"], "synced")
+    _sheet_of(w, made["current"], four, maker=PHONE_MAKER)
+    # Chinese timed lyrics on a sheet that counted characters (an older one).
+    made["columns"] = song("Columns")
+    words(made["columns"], "chinese")
+    vid = _sheet_of(w, made["columns"], four, maker=PHONE_MAKER)
+    raw = get_version(w.conn, vid).raw
+    set_raw(w.conn, vid, {k: v for k, v in raw.items() if k != "columns"})
+    # Then the words that came since each was made.
+    for name, kind in (("phone", "synced"), ("phone_video", "words"), ("here", "plain_other"),
+                       ("new_audio", "plain"), ("elsewhere", "astral"), ("unread", "plain"), ("ignored", "plain"),
+                       ("ignore", "plain"), ("human", "plain"), ("over_transcript", "plain")):
+        words(made[name], kind)
+    w.conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES ('sync:id', ?)", (HERE_ID,))
+    return [{"relay": [made["phone"].id, made["new_audio"].id, made["ignore"].id]}, {"relay": None},
+            {"relay": None}]
+
+
+def _relay_out(w, done) -> dict:
+    from test_conformance_viewer_render import _out
+
+    out = _out(w, phone_render.PhoneRendered(done, []))
+    raws = {str(vid): text for vid, text in w.conn.execute("SELECT id, raw FROM versions ORDER BY id")}
+    return {"relaid": [s.id for s in done], "files": out["files"], "raws": raws, "units": out["units"],
+            "info": out["info"]}
+
+
+def relay_records(root) -> list[dict]:
+    from test_conformance_viewer_render import World, _settle
+
+    w = World(root / "relay")
+    try:
+        steps = _library(w)
+        _settle(w)
+        fixture = [r for r in dump_fixture(w.conn, w.cfg.library_dir, sync_id=True) if "file" not in r or "/" in r["file"]]
+        outs = []
+        for step in steps:
+            overrides = load_overrides(w.cfg.overrides_file)
+            done = relay_onto_sheets(w.conn, w.cfg, overrides, only=step["relay"])
+            outs.append(_relay_out(w, done))
+        return [{"fn": "relay_onto_sheets", "case": "library", "args": [fixture, steps], "out": outs}]
+    finally:
+        w.close()
+
+
+def test_relay_vectors(tmp_path):
+    check(SHEET_AREA / "relay.jsonl", jsonl(relay_records(tmp_path), corpus="autochords-sheet/relay",
+                                           made_by=MADE_BY))

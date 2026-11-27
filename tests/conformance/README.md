@@ -51,7 +51,10 @@ the stage that ships the models.
 The `autochords-sheet` area (`vectors/autochords-sheet/`) is the sheet laid out of what was heard, which needs no
 model: `merge.jsonl` (merge.py's `build_sheet`, `snap_to_beats`, its LRC reader and its word columns over the calls
 test_autochords_merge.py makes, the literals of both auto-chords test files and seeded hearings) and `align.jsonl`
-(align.py's `lyrics_offset` and `shifted_lrc`, and `math.fsum`), with `data/caracole/viewer/autochords.json`, both
-modules' constants and patterns, which ships in the release as the rest of `viewer/`'s data.
+(align.py's `lyrics_offset` and `shifted_lrc`, and `math.fsum`), `sheet.jsonl` (sheet.py's `make_sheet`, `raw_of`,
+`read_heard`, `relay_due` and `relay` over named hearings and lyrics of each kind) and `relay.jsonl`
+(sheet_lyrics.py's `relay_onto_sheets` over a library, step by step), with `data/caracole/viewer/autochords.json`,
+merge.py's, align.py's, sheet.py's and transcript.py's constants and patterns, which ships in the release as the rest
+of `viewer/`'s data.
 tests/test_conformance_autochords.py writes them in the default shell, and `:viewer`'s viewer.autochords replays them
 (AutochordsReplay).

@@ -76,10 +76,14 @@ def heard_record(heard: Heard) -> dict[str, object]:
 
 
 def _number(value: object) -> float:
-    """A number of a heard record, as a float: an int or a float, never a bool or a text."""
+    """A number of a heard record, as a float: an int or a float, never a bool or a text, nor an int no float holds
+    (json.loads reads ``1`` followed by 400 zeros as one)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"what was heard holds {value!r} where a number goes")
-    return float(value)
+    try:
+        return float(value)
+    except OverflowError:
+        raise ValueError("what was heard holds an int too large for a float") from None
 
 
 def _numbers(record: Mapping[str, object], member: str) -> list[float]:
@@ -92,8 +96,8 @@ def _numbers(record: Mapping[str, object], member: str) -> list[float]:
 def read_heard(record: object) -> Heard:
     """The ``Heard`` of a heard record (``heard_record``'s), read strictly, as the phone reads it: ``contract`` 1;
     ``duration`` a number or null; ``chords`` a list of ``[number, number, text]``; ``beats`` and ``downbeats`` lists
-    of numbers (a number an int or a float, never a bool or a text), each read as a float. ValueError, in words, for
-    anything else."""
+    of numbers (a number an int or a float, never a bool or a text, nor an int no float holds), each read as a float.
+    ValueError, in words, for anything else."""
     if not isinstance(record, dict):
         raise ValueError("what was heard isn't a record")
     if record.get("contract") != CONTRACT or isinstance(record.get("contract"), bool):

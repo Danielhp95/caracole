@@ -3915,6 +3915,25 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     writes it and vectors/autochords-sheet/merge.jsonl and align.jsonl (the tests' own calls, both test files'
     literals, characters past the BMP, round()'s ties, seeded hearings, each alignment's fits by digest,
     `math.fsum`), which `AutochordsReplay` (area `autochords-sheet`) replays.
+- The sheet half and its re-lay (autochords-sheet): `viewer.autochords`' `Heard`, `SheetHalf` and `Relay`,
+  autochords/sheet.py and sheet_lyrics.py's re-lay, so a sheet made on either device re-lays the same on both:
+  - `Heard` (sheet.Heard, its one home: `:autochords` and `:ml` name it by a typealias; `duration` null where the file
+    names none): `record` and `json` heard_record's, each float as Python's repr (PyJson.float), `read` and `of`
+    read_heard's, as strict (an object; `contract` a number equal to 1, never a bool; `duration` there; chords
+    `[number, number, text]`; a number an int or a float, NaN and the infinities as json.loads reads them, never a bool,
+    a text or an int no float holds), anything else an IllegalArgumentException; the chords COMMON names, as stored;
+  - `SheetHalf` (`make`: make_sheet, the song's stored lyrics given; `raw`: raw_of, its members in raw_of's order, the
+    side's `Maker` given; `syncedFor`, `Timed.note`, `syncedKey`, `songLyricsKey`, `widerLines`), its constants
+    sheet.py's and transcript.py's (autochords.json's `sheet`, `transcript`);
+  - `Relay` (`due`: relay_due's reasons word for word; `relay`, RELAY_KEEPS kept; `relaysHere`, `madeByAnother` by kv
+    `sync:id`, `notedIn`, `notedOf` over transcript.py's kv as the computer reads it; `onto`: relay_onto_sheets, one
+    query for its candidates, no file read for a sheet not due, the raw and the sheet in one savepoint, info.json
+    after, an unreadable `heard` left as it is);
+  - tests/test_conformance_autochords.py writes vectors/autochords-sheet/sheet.jsonl (make_sheet and raw_of over named
+    hearings, float corners among them, × lyrics of each kind, Chinese, past the BMP, a YouTube credit, a transcript,
+    nothing sung, three makers; read_heard's every refusal; relay_due's every reason and relay over raws make_sheet
+    wrote; relays_here, made_by_another, Timed.note) and relay.jsonl (relay_onto_sheets over a library, three steps,
+    the last writing nothing): `AutochordsReplay.sheet` and `relay`, SheetHalfTest and RelayTest.
 - The phone's own pages, `PhoneRender` (phone-render): render.py's page path with no PDF, for the songs no mirror
   page serves at their unit's digest (`owed`: kv `render:<id>:phone`'s `unit` and `build` not now's), each pass
   render_all's for the song (`SongPass`: the kept versions' pages, each sheet's .cho and page, an auto sheet's beside
@@ -3923,7 +3942,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `_kinds_data`'s, each source's name from `page/empty_library.json`'s `icons`, `PhoneRender.sourceName`, and the
   song's timed lyrics, `_timed_lyrics`' read once a song, `lyricsFromJson` then `Lyrics.syncedLines`, none for lyrics
   it can't read, given every page of its sheets and versions), after
-  `PlainLyrics` (sheet_lyrics.py) and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
+  `PlainLyrics` (sheet_lyrics.py), then `Relay.onto` (render_all's order: whoever made the sheet, whether the mirror
+  serves the song or not, as phone_render.py's reference does; a re-lay moves the song's unit, its pages then the
+  phone's), and `OwnVersions` (own_versions_upgraded); a song the mirror serves gets its
   progressions, script and info.json alone, the phone's own pages of it forgotten.
   - `WrittenPages`: kv `render:files:<id>` as render.py records it, each entry's `unit` the song unit's digest it was
     made at (Units.digestOf: an entry no pass wrote or found as written keeps its own); kv `render:<id>:phone`

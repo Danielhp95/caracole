@@ -1,6 +1,14 @@
 package io.github.danielhp95.caracole.viewer.testing.replays
 
+import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
+import io.github.danielhp95.caracole.core.sync.Units
+import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
@@ -10,8 +18,16 @@ import io.github.danielhp95.caracole.viewer.autochords.Align
 import io.github.danielhp95.caracole.viewer.autochords.Alignment
 import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.autochords.ChordSegment
+import io.github.danielhp95.caracole.viewer.autochords.Heard
 import io.github.danielhp95.caracole.viewer.autochords.Lrc
 import io.github.danielhp95.caracole.viewer.autochords.LrcLine
+import io.github.danielhp95.caracole.viewer.autochords.Maker
+import io.github.danielhp95.caracole.viewer.autochords.Made
+import io.github.danielhp95.caracole.viewer.autochords.Noted
+import io.github.danielhp95.caracole.viewer.autochords.Relay
+import io.github.danielhp95.caracole.viewer.autochords.SheetHalf
+import io.github.danielhp95.caracole.viewer.autochords.Timed
+import io.github.danielhp95.caracole.viewer.autochords.Transcript
 import io.github.danielhp95.caracole.viewer.autochords.WordStart
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -23,8 +39,11 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import java.io.File
+import java.nio.file.Files
 
 /**
  * merge.py and align.py (vectors/autochords-sheet/merge.jsonl and align.jsonl), every record answered by :viewer's
@@ -39,6 +58,8 @@ object AutochordsReplay : AreaReplay {
     override fun replay(misses: Misses) {
         merge()
         align()
+        sheet()
+        relay()
     }
 
     // --- vectors/autochords-sheet/merge.jsonl ------------------------------------------------------------------
@@ -149,6 +170,170 @@ object AutochordsReplay : AreaReplay {
         assertTrue("records of every kind: $counts",
                    counts.keys == setOf("shifted_lrc", "lyrics_offset", "math.fsum") && counts.getValue("lyrics_offset") > 30)
         misses.assertNone()
+    }
+
+    // --- vectors/autochords-sheet/sheet.jsonl ------------------------------------------------------------------
+
+    fun sheet() {
+        val misses = Misses("autochords-sheet/sheet.jsonl")
+        val records = Corpus.records("autochords-sheet/sheet.jsonl")
+        val named = records.filter { it.fn == "heard" }.associate { str(it.args[0]) to str(it.out!!) }
+        val counts = HashMap<String, Int>()
+        for (record in records) {
+            counts.merge(record.fn, 1, Int::plus)
+            val a = record.args
+            val kw = record.kw
+            when (record.fn) {
+                "heard" -> check(misses, record, record.out!!) { JsonPrimitive(Heard.read(str(record.out!!)).json()) }
+                "read_heard" -> raises(record, misses) { text(Heard.read(str(a[0])).json(), record.out!!) }
+                "make_sheet" -> raises(record, misses) {
+                    val song = song(kw.getValue("song").jsonObject)
+                    val lyrics = lyricsFromJson(song.lyricsJson)
+                    val transcript = kw["transcript"].orNull()?.jsonObject?.let(::transcript)
+                    val made = SheetHalf.make(song, lyrics, Heard.read(named.getValue(str(kw.getValue("heard")))),
+                                              kw["source"].orNull()?.let(::str), transcript,
+                                              kw.getValue("silent").jsonPrimitive.content == "true",
+                                              kw.getValue("said").jsonPrimitive.content == "true")
+                    val raw = SheetHalf.raw(song, lyrics, made, kw["video"].orNull()?.let { PyJson.loads(str(it)).jsonObject },
+                                            kw["maker"].orNull()?.jsonObject?.let(::maker))
+                    JsonObject(made(made, record.out!!.jsonObject) + ("raw" to text(PyJson.dumps(raw),
+                                                                                     record.out!!.jsonObject.getValue("raw"))))
+                }
+                "relay" -> check(misses, record, record.out!!) {
+                    val song = song(kw.getValue("song").jsonObject)
+                    val raw = withHeard(PyJson.loads(str(kw.getValue("raw"))).jsonObject, named)
+                    val noted = kw["noted"].orNull()?.jsonObject?.let(::noted)
+                    val want = record.out!!.jsonObject.getValue("relay").jsonObject
+                    val relaid = try {
+                        val made = Relay.relay(song, raw, noted)
+                        val written = SheetHalf.raw(song, lyricsFromJson(song.lyricsJson), made)
+                        JsonObject(made(made, want) + ("raw" to text(PyJson.dumps(written), want.getValue("raw"))))
+                    } catch (e: IllegalArgumentException) {
+                        JsonObject(mapOf("err" to JsonPrimitive("ValueError")))
+                    }
+                    JsonObject(linkedMapOf("due" to (Relay.due(song, raw, noted)?.let(::JsonPrimitive) ?: JsonNull),
+                                           "noted_in" to noted(Relay.notedIn(raw)), "relay" to relaid))
+                }
+                "relays_here" -> check(misses, record, record.out!!) {
+                    JsonPrimitive(Relay.relaysHere(song(a[0].jsonObject), a[1].jsonPrimitive.content == "true"))
+                }
+                "made_by_another" -> check(misses, record, record.out!!) {
+                    JsonPrimitive(Relay.madeByAnother(PyJson.loads(str(a[0])).jsonObject, a[1].orNull()?.let(::str)))
+                }
+                "Timed.note" -> check(misses, record, record.out!!) {
+                    val shift = a[0].orNull()?.jsonPrimitive?.double
+                    Timed("", shift, a[1].jsonPrimitive.double).note()?.let(::JsonPrimitive) ?: JsonNull
+                }
+                else -> fail("an unknown record: ${record.fn}")
+            }
+        }
+        assertTrue("records of every kind: $counts",
+                   counts.keys == setOf("heard", "read_heard", "make_sheet", "relay", "relays_here", "made_by_another",
+                                        "Timed.note") && counts.getValue("make_sheet") > 80 && counts.getValue("relay") > 80)
+        misses.assertNone()
+    }
+
+    /** A song as the record names it: only the members make_sheet and relay_due read matter. */
+    private fun song(kw: JsonObject): SongRow = SongRow(
+        id = 7, key = "nobody|river road", artist = str(kw.getValue("artist")), title = str(kw.getValue("title")),
+        artists = listOf(str(kw.getValue("artist"))), album = null, durationMs = null, isrc = null, sourceIds = "{}",
+        addedAt = "", variant = null, status = "found", review = false, matchDecision = null, matchStep = null,
+        matchScore = null, matchArtistKey = null, matchSongKey = null, matchCandidates = "[]", matchedAt = null,
+        ugDirty = true, ugCheckedAt = null, lyricsStatus = str(kw.getValue("lyrics_status")),
+        lyricsJson = kw["lyrics_json"].orNull()?.let(::str), lyricsAt = null, lacuerdaCheckedAt = null, createdAt = "",
+        audioPath = kw["audio_path"].orNull()?.let(::str), audioMtime = kw["audio_mtime"].orNull()?.jsonPrimitive?.double,
+        autochordsMtime = kw["autochords_mtime"].orNull()?.jsonPrimitive?.double,
+    )
+
+    private fun transcript(t: JsonObject) = Transcript(str(t.getValue("lrc")), str(t.getValue("made_at")))
+
+    private fun maker(m: JsonObject) = Maker(
+        str(m.getValue("on")), m["by"].orNull()?.let(::str),
+        m.getValue("models").jsonArray.associateTo(LinkedHashMap()) { str(it.jsonArray[0]) to str(it.jsonArray[1]) },
+        m["runtime"].orNull()?.let(::str),
+        m["audio_name"].orNull()?.let(::str), m["audio_sha16"].orNull()?.let(::str),
+    )
+
+    private fun noted(n: JsonObject) = Noted(n["transcript"].orNull()?.jsonObject?.let(::transcript),
+                                             n.getValue("silent").jsonPrimitive.content == "true",
+                                             n.getValue("said").jsonPrimitive.content == "true")
+
+    private fun noted(n: Noted): JsonElement = JsonObject(linkedMapOf(
+        "transcript" to (n.transcript?.let { JsonObject(mapOf("lrc" to JsonPrimitive(it.lrc), "made_at" to JsonPrimitive(it.madeAt))) }
+            ?: JsonNull),
+        "silent" to JsonPrimitive(n.silent), "said" to JsonPrimitive(n.said),
+    ))
+
+    /** A raw whose `heard` names one of the records' hearings (a text), that hearing's record in its place. */
+    private fun withHeard(raw: JsonObject, named: Map<String, String>): JsonObject {
+        val heard = raw["heard"] as? JsonPrimitive ?: return raw
+        if (!heard.isString) return raw
+        return JsonObject(raw.mapValues { (k, v) -> if (k == "heard") PyJson.loads(named.getValue(heard.content)) else v })
+    }
+
+    /** A Made's members as the record writes them (its text whole, or by its digest as Python's). */
+    private fun made(made: Made, want: JsonObject): Map<String, JsonElement> = linkedMapOf(
+        "text" to text(made.text, want.getValue("text")), "used" to JsonPrimitive(made.used),
+        "key" to (made.key?.let(::JsonPrimitive) ?: JsonNull), "shift" to (made.shift?.let(::num) ?: JsonNull),
+        "silent" to JsonPrimitive(made.silent), "said" to JsonPrimitive(made.said),
+    )
+
+    // --- vectors/autochords-sheet/relay.jsonl ------------------------------------------------------------------
+
+    /** relay_onto_sheets over its fixture library, step by step: the songs re-laid, every file of the songs' folders,
+     * every version's raw as stored, each song unit's digest and each info.json, as Python's after that step. */
+    fun relay() {
+        val misses = Misses("autochords-sheet/relay.jsonl")
+        val records = Corpus.records("autochords-sheet/relay.jsonl")
+        misses.check(records.isNotEmpty()) { "relay.jsonl: no records" }
+        for (record in records) {
+            val (fixture, steps) = record.args
+            val outs = record.out!!.jsonArray
+            world(fixture) { database, library ->
+                for ((n, step) in steps.jsonArray.withIndex()) {
+                    val want = outs[n].jsonObject
+                    val named = step.jsonObject.getValue("relay")
+                    database.writeBlocking { db ->
+                        val only = if (named is JsonNull) null else named.jsonArray.map { it.jsonPrimitive.long }
+                        val relaid = Relay.onto(db, library, Overrides.read(db), only).map { it.id }
+                        val wantIds = want.getValue("relaid").jsonArray.map { it.jsonPrimitive.long }
+                        misses.check(relaid == wantIds) { "step $n: re-laid $relaid, Python's $wantIds" }
+                        val raws = db.query("SELECT id, raw FROM versions ORDER BY id") { it.long(0)!!.toString() to it.text(1)!! }.toMap()
+                        for ((id, text) in want.getValue("raws").jsonObject) {
+                            misses.check(raws[id] == str(text)) { "step $n: version $id's raw is\n${raws[id]}\nPython's\n${str(text)}" }
+                        }
+                        for ((unit, digest) in want.getValue("units").jsonObject) {
+                            val mine = Units.digestOf(db, unit)
+                            misses.check(mine == str(digest)) { "step $n: $unit is $mine, Python's $digest" }
+                        }
+                    }
+                    val files = library.walkTopDown().filter { it.isFile && it.parentFile != library }
+                        .map { f -> val b = f.readBytes(); listOf(f.relativeTo(library).invariantSeparatorsPath, Canonical.sha256Hex(b), b.size.toString()) }
+                        .sortedWith { x, y -> Py.CODE_POINT_ORDER.compare(x[0], y[0]) }.toList()
+                    val wantFiles = want.getValue("files").jsonArray.map { f -> f.jsonArray.map { it.jsonPrimitive.content } }
+                    misses.check(files == wantFiles) { "step $n: files $files, Python's $wantFiles" }
+                    for ((path, text) in want.getValue("info").jsonObject) {
+                        val mine = File(library, path).takeIf { it.isFile }?.readText()
+                        misses.check(mine == str(text)) { "step $n: $path is\n$mine\nPython's\n${str(text)}" }
+                    }
+                }
+            }
+        }
+        misses.assertNone()
+    }
+
+    /** The record's fixture in a fresh database and library folder of its own, gone after [block]. */
+    private fun world(fixture: JsonElement, block: (Database, File) -> Unit) {
+        val dir = Files.createTempDirectory("caracole-relay").toFile()
+        try {
+            val library = File(dir, "library").apply { mkdirs() }
+            TestDb.fresh(dir).use { database ->
+                database.writeBlocking { db -> Fixtures.loadRecords(db, fixture.jsonArray.map { it.jsonObject }, library) }
+                block(database, library)
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     // --- shapes -------------------------------------------------------------------------------------------------

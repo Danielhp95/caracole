@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.render.internal.RenderError
 import io.github.danielhp95.caracole.viewer.render.internal.SongPass
 import kotlinx.serialization.json.Json
@@ -27,7 +28,10 @@ import java.nio.charset.CodingErrorAction
  * for the songs no mirror page serves at their unit's digest, and every song's progressions recorded.
  *
  * A song's pass ([render], [renderStale]) is render_all's for it, after the auto sheets took the lyrics that came after
- * them ([PlainLyrics]) and the own versions are as they play now ([OwnVersions]): the pages of the versions kept beside
+ * them ([PlainLyrics]), those that keep what was heard were laid out again over the words that came since (Relay, in
+ * render_all's order: after PlainLyrics, whoever made them and whether the mirror serves the song, as
+ * tests/helpers/phone_render.py does; a re-lay moves the song's unit, so its pages are then the phone's to make) and the
+ * own versions are as they play now ([OwnVersions]): the pages of the versions kept beside
  * its sheet (`version-<tab>.html`), each sheet's .cho and page (`sheet.cho`, `sheet.html`; an auto sheet's beside it,
  * which offers no export and takes the song's version but its shapes and swaps; or alone), the pages of its harmonica
  * tabs (`harmonica-N.html`), each written only when its bytes change and recorded in kv `render:files:<song id>` with
@@ -65,6 +69,7 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
     override fun render(db: Db, songIds: Collection<Long>, between: (() -> Unit)?): RenderStats {
         store.ensureCurrentKeys(db)
         PlainLyrics.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
+        Relay.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
         var overrides = OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
         val pass = Pass()
         val tally = Tally()
@@ -129,6 +134,7 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
         database.writeBlocking { db ->
             store.ensureCurrentKeys(db)
             PlainLyrics.onto(db, libraryDir, Overrides.read(db))
+            Relay.onto(db, libraryDir, Overrides.read(db))
             OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
         }
         val owed = database.read { db -> owed(db).map { it.id } }

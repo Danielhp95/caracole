@@ -36,5 +36,37 @@
   "REPEATS_PER_LINE": 6,
   "EPS": 1e-06,
   "WORD": "\\w+"
+ },
+ "sheet": {
+  "MODEL": "btc_large_voca",
+  "CONTRACT": 1,
+  "SYNC_TOLERANCE_S": 2.0,
+  "COLUMNS": "display",
+  "MAKER_MEMBERS": [
+   "made_on",
+   "made_by",
+   "models",
+   "runtime",
+   "audio_name",
+   "audio_sha16"
+  ],
+  "RELAY_KEEPS": [
+   "audio",
+   "youtube",
+   "made_on",
+   "made_by",
+   "models",
+   "runtime",
+   "audio_name",
+   "audio_sha16"
+  ]
+ },
+ "transcript": {
+  "LYRICS_SOURCE": "transcript",
+  "NOTE": "Lyrics transcribed from the audio (Whisper), unverified",
+  "SILENT": "Instrumental: nothing sung was heard in the audio",
+  "NOT_SUNG": "Chords only: you said it isn't sung",
+  "TRANSCRIPT": "transcript:",
+  "HEARD_NOTHING": "transcribe:none:"
  }
 }

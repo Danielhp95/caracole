@@ -282,6 +282,17 @@ def test_a_heard_record_of_any_other_shape_is_unreadable(member, value):
         read_heard(record)
 
 
+def test_an_int_past_a_float_is_an_unreadable_heard_record_never_an_overflow():
+    # json.loads reads 10**400 as an int, which float() can't hold: an unreadable record, as any other, so that
+    # heard_of and a re-lay's plan pass it over (its ValueError) rather than stop a render with an OverflowError.
+    from caracole.autochords.sheet import read_heard
+
+    for member, value in (("duration", 10**400), ("beats", [0.5, -10**400]), ("chords", [[0, 10**400, "C"]])):
+        with pytest.raises(ValueError, match="what was heard"):
+            read_heard({**GOOD, member: value})
+        assert heard_of({"heard": {**GOOD, member: value}}) is None
+
+
 def test_a_heard_record_reads_its_numbers_as_floats():
     from caracole.autochords.sheet import read_heard
 
