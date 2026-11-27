@@ -20,6 +20,7 @@ import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.youtube.BenchRan
 import io.github.danielhp95.caracole.youtube.BenchReport
 import io.github.danielhp95.caracole.youtube.BenchRun
+import io.github.danielhp95.caracole.youtube.DbLedger
 import io.github.danielhp95.caracole.youtube.GateService
 import io.github.danielhp95.caracole.youtube.Qjs
 import io.github.danielhp95.caracole.youtube.RunFolders
@@ -60,7 +61,8 @@ class YouTubeBenchActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), 0, dp(16), 0) }
         TextView(this).apply {
             text = "Up to 3 lines: “Artist - Title” or a YouTube video id. A song is a search and a download: " +
-                "at most 6 yt-dlp runs in any 24 hours, every run of the phone's counted."
+                (if (DbLedger.DAY_CAP_LIFTED) "every yt-dlp run of the phone's counted, no daily limit while this " +
+                    "is developed." else "at most 6 yt-dlp runs in any 24 hours, every run of the phone's counted.")
             setPadding(0, dp(12), 0, dp(4))
         }.also(root::addView)
         queries = EditText(this).apply {
@@ -128,8 +130,7 @@ class YouTubeBenchActivity : Activity() {
         Thread {
             val words = try {
                 YouTubeBenchLedger.Client(app).use { ledger ->
-                    val s = ledger.state()
-                    "${maxOf(s.budget - s.runs, 0)} of ${s.budget} runs left in the last 24 hours"
+                    BenchRun.runsWords(ledger.state())
                 }
             } catch (e: Exception) {
                 "the phone's record of runs: ${e.message}"
@@ -206,7 +207,7 @@ class YouTubeBenchActivity : Activity() {
                 val probe = YouTubeBenchProbe(app)
                 val report = BenchReport.of(probe.device(), probe.network(), session.gate, session.mode.name,
                     utc(session.startedAt), session.idle, session.budgetBefore to session.budgetAfter,
-                    session.budgetOf, session.runs, session.killCheck, session.firstStart, session.stopped)
+                    session.budgetOf, session.capLifted, session.runs, session.killCheck, session.firstStart, session.stopped)
                 val name = "caracole-ytbench-${utc(session.startedAt).replace(":", "")}.json"
                 val file = File(app.getExternalFilesDir(FOLDER), name)
                 file.writeText(PRETTY.encodeToString(JsonObject.serializer(), report) + "\n")

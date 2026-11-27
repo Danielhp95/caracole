@@ -30,9 +30,10 @@ import kotlin.test.assertTrue
 /**
  * The YouTube bench on the JVM: [BenchReport]'s numbers from stamped synthetic lines and fixed timings (the challenge,
  * the requests after a block, each gate's numbers, idle), and [BenchRun]'s terms over fakes and a real database
- * ([DbLedger]): the day's six counted from the bench's own record and `events`, the 7th run refused, a block that
- * stops the session and is recorded once, the pause after the phone's last run, a public host's query refused under
- * loopback before any run.
+ * ([DbLedger]): the day's six counted from the bench's own record and `events`, the 7th run refused with the cap put
+ * back, and with it lifted (the owner's word of 2026-11-27) every run counted and none refused for the count, a block
+ * that stops the session and is recorded once, the pause after the phone's last run, a public host's query refused
+ * under loopback before any run.
  */
 class BenchReportTest {
     private val dir: File = Files.createTempDirectory("caracole-ytbench-").toFile()
@@ -53,7 +54,7 @@ class BenchReportTest {
 
     private fun report(runs: List<BenchRunRecord>, idle: BenchIdle = BenchIdle(5, 5, 2, 2, false, false)) =
         BenchReport.of(JsonObject(mapOf("device" to JsonPrimitive("x"))), JsonObject(emptyMap()), "enforce",
-                       "NETWORK", "2026-11-26T20:00:00Z", idle, 0 to runs.size, 6, runs,
+                       "NETWORK", "2026-11-26T20:00:00Z", idle, 0 to runs.size, 6, false, runs,
                        JsonObject(mapOf("run" to JsonPrimitive(true), "left" to kotlinx.serialization.json.JsonArray(emptyList()))),
                        JsonObject(emptyMap()), null)
 
@@ -189,7 +190,7 @@ class BenchReportTest {
         val first = JsonObject(linkedMapOf("first_after_install" to JsonPrimitive(true),
                                            "process_start_ms" to JsonPrimitive(95), "python_ready_ms" to JsonPrimitive(3_400)))
         return BenchReport.of(device, network, BenchRun.ENFORCE, HostGate.Mode.NETWORK.name, "2026-11-28T18:00:00Z",
-                              BenchIdle(0, 0, 0, 0, false, false), 0 to 6, 6, runs, kill, first, null)
+                              BenchIdle(0, 0, 0, 0, false, false), 0 to 6, 6, true, runs, kill, first, null)
     }
 
     /** The committed sample is what [BenchReport.of] writes for [sampleReport]'s inputs, member for member, so the
@@ -232,10 +233,15 @@ class BenchReportTest {
     /** The day's runs as the ledger counted them while each run went. */
     private val countedDuring = mutableListOf<Int>()
 
+    /** Whether the day's cap is lifted for the ledger (DbLedger.DAY_CAP_LIFTED's place): the cap's own tests put it
+     * back, the lifted ones lift it. */
+    private var lifted = false
+
     private val ledger = object : BenchRun.Ledger {
-        override fun state() = db.read { DbLedger.state(it, now, 0, 0, false) }
-        override fun reserve(first: Boolean) =
-            db.writeBlocking { DbLedger.reserve(it, now, first, Draws { low, _ -> low }) { now.epochSecond.toDouble() } }
+        override fun state() = db.read { DbLedger.state(it, now, 0, 0, false, lifted) }
+        override fun reserve(first: Boolean) = db.writeBlocking {
+            DbLedger.reserve(it, now, first, Draws { low, _ -> low }, { now.epochSecond.toDouble() }, lifted)
+        }
         override fun release(stamp: String) = db.writeBlocking { DbLedger.release(it, stamp) }
         override fun record(entry: BenchRun.Entry, sessionStart: Instant) {
             if (recordThrows) throw java.io.IOException("the bench's ledger didn't answer")
@@ -346,7 +352,7 @@ class BenchReportTest {
         db.writeBlocking { it.execute("DELETE FROM events") }
         assertEquals(6, runs())
         assertEquals(BenchRun.budgetWords(1, 0, 6), db.writeBlocking {
-            DbLedger.reserve(it, now, false, Draws { low, _ -> low }) { 0.0 }
+            DbLedger.reserve(it, now, false, Draws { low, _ -> low }, { 0.0 }, capLifted = false)
         }.refused)
     }
 
@@ -500,7 +506,7 @@ class BenchReportTest {
         }.words)
         assertTrue(ran.isEmpty() && opened.isEmpty())
         assertEquals(0L, db.read { d -> d.one("SELECT COUNT(*) FROM events") { it.long(0) } })
-        // Four lines are more than the day allows.
+        // Four lines are more than a session takes.
         assertFailsWith<BenchRun.Refused> { bench().session(listOf("a - b", "c - d", "e - f", "g - h"), false) }
     }
 
@@ -510,5 +516,83 @@ class BenchReportTest {
         val s = bench(HostGate.Mode.LOOPBACK).session(listOf(url), false)
         assertEquals(listOf(url, url), ran.take(2).map { it.last() })
         assertEquals("loopback", s.runs[1].chosenBy)
+    }
+
+    // -- the day's cap lifted at the owner's word (2026-11-27) ---------------------------------------------------
+
+    @Test
+    fun `the day's cap is lifted while the feature is developed, the owner's word of 2026-11-27`() {
+        assertTrue(DbLedger.DAY_CAP_LIFTED)
+        assertTrue(db.read { DbLedger.state(it, now, 0, 0, false) }.capLifted)
+    }
+
+    @Test
+    fun `with the cap lifted a session past the day's six runs goes, each run still reserved and counted`() {
+        lifted = true
+        sentBefore(7)
+        val s = bench().session(listOf("A - T", "B - U", "C - V"), false)
+        assertEquals(6, s.runs.size)
+        // The day's count is the larger of events' and the bench's own stamps, as ever: the 7 rows before, then each
+        // run's row; and each run's stamp, kept by its reservation before it ran.
+        assertEquals(listOf(7, 8, 9, 10, 11, 12), countedDuring)
+        assertEquals(6, db.read { d -> kotlinx.serialization.json.Json.parseToJsonElement(d.kvGet(DbLedger.RUNS)!!) }
+            .jsonArray.size)
+        assertEquals(7, s.budgetBefore)
+        assertEquals(13, s.budgetAfter)
+        assertEquals(6, s.budgetOf)
+        assertTrue(s.capLifted)
+        assertNull(s.stopped)
+        assertEquals(13, runs())
+        assertEquals(13L, events())
+        // A reservation past the budget is a stamp, never the day's refusal.
+        val r = db.writeBlocking { DbLedger.reserve(it, now, false, Draws { low, _ -> low }, { 0.0 }, capLifted = true) }
+        assertNull(r.refused)
+        assertEquals(7, db.read { d -> kotlinx.serialization.json.Json.parseToJsonElement(d.kvGet(DbLedger.RUNS)!!) }
+            .jsonArray.size)
+    }
+
+    @Test
+    fun `with the cap lifted the provider off, a cooldown, a block and three songs still bind`() {
+        lifted = true
+        sentBefore(9)
+        exit = 1
+        stderr = { "ERROR: [youtube] x: Sign in to confirm you're not a bot\n" }
+        val s = bench().session(listOf("A - T", "B - U"), false)
+        assertEquals(1, ran.size)
+        assertEquals(BenchRun.BLOCKED_STOP, s.stopped)
+        val cooling = assertFailsWith<BenchRun.Refused> { bench().session(listOf("C - V"), false) }
+        assertTrue("cooling" in cooling.words, cooling.words)
+        assertEquals(1, ran.size)
+        db.writeBlocking { it.execute("DELETE FROM kv WHERE key = 'provider:youtube'") }
+        db.writeBlocking { it.kvSet("phone:settings", """{"providers": {"youtube": {"enabled": false}}}""") }
+        assertEquals(BenchRun.OFF, assertFailsWith<BenchRun.Refused> { bench().session(listOf("C - V"), false) }.words)
+        assertEquals(BenchRun.TOO_MANY, assertFailsWith<BenchRun.Refused> {
+            bench().session(listOf("a - b", "c - d", "e - f", "g - h"), false)
+        }.words)
+        assertEquals(1, ran.size)
+    }
+
+    @Test
+    fun `the screen's count is the runs left of the six, or the count and no daily limit while it is lifted`() {
+        fun state(runs: Int, lifted: Boolean) =
+            BenchRun.State(true, 6, 3.75 to 7.5, runs, null, null, 0, 0, false, lifted)
+        assertEquals("2 of 6 runs left in the last 24 hours", BenchRun.runsWords(state(4, false)))
+        assertEquals("0 of 6 runs left in the last 24 hours", BenchRun.runsWords(state(9, false)))
+        assertEquals("7 runs in the last 24 hours (no daily limit while this is developed)",
+                     BenchRun.runsWords(state(7, true)))
+        assertEquals("1 run in the last 24 hours (no daily limit while this is developed)",
+                     BenchRun.runsWords(state(1, true)))
+    }
+
+    @Test
+    fun `the report's budget says whether the cap was lifted, of the provider's six`() {
+        val runs = listOf(run())
+        fun budget(lifted: Boolean) = BenchReport.of(JsonObject(emptyMap()), JsonObject(emptyMap()), "enforce",
+            "NETWORK", "2026-11-26T20:00:00Z", BenchIdle(0, 0, 0, 0, false, false), 8 to 9, 6, lifted, runs,
+            JsonObject(mapOf("run" to JsonPrimitive(false), "why" to JsonPrimitive("x"))), JsonObject(emptyMap()), null)
+            .getValue("budget").jsonObject
+        assertEquals(JsonObject(mapOf("before" to JsonPrimitive(8), "after" to JsonPrimitive(9),
+                                      "of" to JsonPrimitive(6), "lifted" to JsonPrimitive(true))), budget(true))
+        assertEquals(JsonPrimitive(false), budget(false)["lifted"])
     }
 }

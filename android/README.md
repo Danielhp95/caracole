@@ -1017,11 +1017,14 @@ QuickJS, how much memory and how many bytes a song costs, which hosts it asks. T
 measures it, run by hand, a few songs at a time. No test runs on your phone, and no test reaches YouTube: on the
 emulator the bench reaches a loopback clip alone (`YouTubeBenchTest`, `device-test.sh --youtube`).
 
-It keeps the owner's terms by itself, on the phone's own records. At most 6 yt-dlp runs in any 24 hours, every run of
-the phone's counted (kv `ytbench:runs` and the `events` rows of provider `youtube`, the larger): each run reserves its
-slot in the main process before its gate opens, so it counts whatever ends it, and only a run that never started gives
-its slot back; a session that would pass the six is refused and says how many runs are left; a clock set back only
-counts more runs, never fewer. The computer's pause between runs (3.75–7.5 s, and after the phone's last run, kv
+It keeps the owner's terms by itself, on the phone's own records. Every run of the phone's counted (kv `ytbench:runs`
+and the `events` rows of provider `youtube` of the last 24 hours, the larger): each run reserves its slot in the main
+process before its gate opens, so it counts whatever ends it, and only a run that never started gives its slot back; a
+clock set back only counts more runs, never fewer. Its cap of 6 runs in any 24 hours is lifted while the feature is
+developed, the owner's word of 2026-11-27 ("ignore the run limits while developing this feature. as connection is
+patchy"): no count refuses a session, the screen says the count and that there is no daily limit, and the report's
+`budget` says `lifted`; `DbLedger.DAY_CAP_LIFTED = false` puts it back (a session that would pass the six then refused,
+saying how many runs are left). The computer's pause between runs (3.75–7.5 s, and after the phone's last run, kv
 `http:last_request:youtube`). One run at a time (the client's lock, across the app's processes) and one session at a
 time. A block honoured: recorded as the runner records one, the session stops, and none starts until the cooldown
 ends. YouTube turned off, no session. Each song is a search (`ytsearch8:`), the computer's `choose`, and a download,
@@ -1036,7 +1039,7 @@ a session starts by a tap alone. Start enforces YouTube's hosts; Start, observin
 asks but reaches no address that isn't public (`jnn-pa.googleapis.com` still refused), and is that button's alone. The
 kill check runs at the end of every session, on your phone too, and never leaves it: a trickled download from a small
 server inside the bench, through a gate that can reach 127.0.0.1 alone, stopped 2 s in, then no `:youtube` or qjs
-process may be left and the next run must work. It spends none of the six.
+process may be left and the next run must work. It spends none of the day's runs.
 
 What three songs can't show: a success rate, how the timings spread across player versions, and what YouTube does
 after days of a phone asking. `after_block_requests` is 0 by construction (a session stops at a block): it says the
@@ -1044,9 +1047,11 @@ bench sent nothing after one, not how YouTube treats the phone afterwards.
 
 1. **Install the debug build**: `android/scripts/phone-install.sh` (above), and leave the app otherwise idle (no sync,
    no library page open: the report's `idle` says whether it was).
-2. **Open the bench**: Debug caracole › Settings › YouTube bench. It says how many runs are left in the last 24 hours.
+2. **Open the bench**: Debug caracole › Settings › YouTube bench. It says how many runs the last 24 hours held (no
+   daily limit while the feature is developed).
 3. **Type or paste up to three songs**, a line each: "Artist - Title" (AC/DC's slash is fine) or a YouTube video id.
-   Three songs are six runs, the day's whole budget: the next session goes on another day.
+   Three songs are six runs. A session lost to the network (an error, no block) may be run again the same day: the
+   cap is lifted; a block still ends the day's sessions until its cooldown ends.
 4. **Tap Start** on mobile data (enforce), or **Start, observing every host** on Wi-Fi. Keep the screen open until it
    says `report:`; a session started again while one runs is refused.
 5. **Bring the report back**: `caracole-ytbench-<UTC>.json` (§4.3 of the design: the device and the app, the pins as
@@ -1067,10 +1072,10 @@ Two sessions, on two days, and only when you say so: no one else starts one, and
 
 - **Day 1, on Wi-Fi**: three songs, **Start, observing every host**.
 - **Day 2, on mobile data**: three songs, **Start** (enforce).
-- At most 6 runs in any 24 hours, any session counted (three songs are six), and the optional Termux smoke test's
-  (Y0.0, the design's §4.0) too: a day with it has no bench session. A session that would pass the bench's count is
-  refused (it can't see Termux's runs). A block ends the day's session: the next one waits for its cooldown and
-  another day.
+- Every run counted, any session's (three songs are six), and the optional Termux smoke test's (Y0.0, the design's
+  §4.0) too, which the bench can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27,
+  above); a report written before it, which says no `lifted`, is still held to six in any 24 hours. A block ends the
+  day's session: the next one waits for its cooldown and another day.
 - Each session by a tap on Start, the app otherwise idle (no sync, no library page open).
 
 Then pull the reports after each day (step 5, the same folder) and, from the repository's root, give the checker
@@ -1079,9 +1084,10 @@ both:
     nix develop -c python -m tests.helpers.ytbench_gate [--apk-growth-mb N] ~/ytbench/caracole-ytbench-*.json
 
 It says whether the two sessions are there (one observed on Wi-Fi, one enforced on mobile data, on two days: without
-both the verdict is UNDECIDED), each row of §4.4 (Y0-W works … Y0-C start) and the owner's terms (six runs in any 24
-hours by the runs' own stamps, nothing after a block, each day's gate mode, a kill check that spent none, no host
-outside YouTube's reached, no proxy secret in a report): PASS, FAIL or UNDECIDED, the numbers and why, then how often an
+both the verdict is UNDECIDED), each row of §4.4 (Y0-W works … Y0-C start; a run's error said with its reason, a
+network's failure apart from a block) and the owner's terms (six runs in any 24 hours by the runs' own stamps for a
+report without `lifted`, the busiest 24 hours said where the cap was lifted, nothing after a block, each day's gate
+mode, a kill check that spent none, no host outside YouTube's reached, no proxy secret in a report): PASS, FAIL or UNDECIDED, the numbers and why, then how often an
 observed session asked `youtubei.googleapis.com` (the controller decides it), then the whole verdict. It exits 0 only
 when every gate passed, 1 for a fail, 2 for undecided or a report that won't read. Y0-S is no report's:
 `--apk-growth-mb` gives the release-equivalent arm64 APK's growth. Three songs show no rate: what they can't decide is

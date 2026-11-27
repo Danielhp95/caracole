@@ -32,7 +32,8 @@
     "budget": {
         "before": 0,
         "after": 6,
-        "of": 6
+        "of": 6,
+        "lifted": true
     },
     "runs": [
         {

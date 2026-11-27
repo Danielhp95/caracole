@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * The YouTube bench's record of runs, in the app's main process (no `android:process`), where the phone's database,
  * server and queue are: the bench's `:ytbench` asks it [STATE] (DbLedger's, with the server's requests served and the
- * queue's jobs for `idle`), [RESERVE] (a run's slot of the day's six, before its gate opens: the provider on, no
- * cooldown, fewer runs than the budget, its stamp kept, and the first run's pause), [RELEASE] (a run that never
+ * queue's jobs for `idle`), [RESERVE] (a run's slot of the day's, before its gate opens: the provider on, no
+ * cooldown, fewer runs than the budget unless DbLedger.DAY_CAP_LIFTED, its stamp kept, and the first run's pause), [RELEASE] (a run that never
  * started gives its slot back) and [RECORD] (a sent run's `events` row, kv `http:last_request:youtube`, a block's
  * strike), each in one read or write of the phone's database. The debug build's alone. Nothing it is asked
  * throws on its thread (the main process's server and queue would end with it): a failure is said in the answer.
@@ -66,6 +66,7 @@ class YouTubeBenchLedger : Service() {
                     answer.putLong("served", state.served)
                     answer.putLong("jobs", state.jobs)
                     answer.putBoolean("running", state.running)
+                    answer.putBoolean("capLifted", state.capLifted)
                 }
                 RESERVE -> {
                     val r = database.writeBlocking { db ->
@@ -125,7 +126,7 @@ class YouTubeBenchLedger : Service() {
             return BenchRun.State(a.getBoolean("enabled"), a.getInt("budget"),
                 a.getDouble("delayLow") to a.getDouble("delayHigh"), a.getInt("runs"), a.getString("cooling"),
                 if (a.containsKey("lastSent")) a.getDouble("lastSent") else null, a.getLong("served"), a.getLong("jobs"),
-                a.getBoolean("running"))
+                a.getBoolean("running"), a.getBoolean("capLifted"))
         }
 
         override fun reserve(first: Boolean): BenchRun.Reservation {

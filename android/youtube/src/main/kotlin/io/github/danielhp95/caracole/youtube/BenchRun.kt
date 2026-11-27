@@ -50,10 +50,14 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  * observe every host), and a loopback session's targets are addresses the runner's search and download don't take. So
  * it holds the owner's terms itself, each as the runner does, on the same records:
  *
- * - the day's runs: at most the provider's budget (PhoneConfig's `youtube`, 6) in any 24 hours, every yt-dlp run the
- *   phone sent counted ([DbLedger]: kv `ytbench:runs` and `events`' sent runs of provider `youtube`, the larger), the
- *   session refused when it would pass them; and each run RESERVED before its gate opens ([Ledger.reserve]: in one
- *   write of the main process, the provider on, no cooldown, fewer than the budget, and its stamp appended to
+ * - the day's runs: every yt-dlp run the phone sent counted ([DbLedger]: kv `ytbench:runs` and `events`' sent runs
+ *   of provider `youtube` of the last 24 hours, the larger); at most the provider's budget (PhoneConfig's `youtube`,
+ *   6) in any 24 hours, the session refused when it would pass them, unless the cap is lifted
+ *   ([DbLedger.DAY_CAP_LIFTED], the owner's word of 2026-11-27, said in [State.capLifted] and the report's
+ *   `budget.lifted`): then no count refuses a session or a run, and the count is said all the same; and each run
+ *   RESERVED before its gate opens ([Ledger.reserve]: in one
+ *   write of the main process, the provider on, no cooldown, fewer than the budget (unless lifted), and its stamp
+ *   appended to
  *   `ytbench:runs`), so a run is counted whatever ends it (this process killed, a gate's log or close that throws,
  *   its record that fails); only a run the client says never started (`YtDlpNotStarted`, `Refused`, or its gate that
  *   wouldn't open) gives its slot back ([Ledger.release]);
@@ -87,7 +91,7 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  * download would have: yt-dlp's own solver starts qjs for YouTube alone), a trickled download of [TrickleServer]'s
  * bytes on 127.0.0.1 in this process, cancelled 2 s into its body; 2 s later the `:youtube` and qjs processes the
  * [Probe] finds (none must be left), then a `--version` run through the same gate (the next run works). It never
- * leaves the phone: no reservation, none of the six spent; it keeps one run at a time (the client's lock).
+ * leaves the phone: no reservation, no run of the day's counted; it keeps one run at a time (the client's lock).
  *
  * The downloaded audio is deleted once it is measured: nothing of a session but its report stays.
  */
@@ -129,9 +133,11 @@ class BenchRun(
     }
 
     /** What the phone's records say now: whether `youtube` is on, its budget and delay, the sent runs of the last
-     * 24 hours, the cooldown's words, the last sent run (epoch seconds), and the app's server and queue (idle). */
+     * 24 hours, the cooldown's words, the last sent run (epoch seconds), the app's server and queue (idle), and
+     * whether the day's cap is lifted ([DbLedger.DAY_CAP_LIFTED]: the runs counted, none refused for them). */
     data class State(val enabled: Boolean, val budget: Int, val delay: Pair<Double, Double>, val runs: Int,
-                     val cooling: String?, val lastSent: Double?, val served: Long, val jobs: Long, val running: Boolean)
+                     val cooling: String?, val lastSent: Double?, val served: Long, val jobs: Long, val running: Boolean,
+                     val capLifted: Boolean)
 
     /** One run to record: its run id, target, status, decision (the runner's), words, and whether it was a block. */
     data class Entry(val runId: String, val target: String, val status: Int?, val decision: String,
@@ -144,7 +150,8 @@ class BenchRun(
     interface Ledger {
         fun state(): State
 
-        /** One write: the provider on, no cooldown, fewer runs than the budget in 24 h, then this run's stamp kept. */
+        /** One write: the provider on, no cooldown, fewer runs than the budget in 24 h (unless the cap is lifted),
+         * then this run's stamp kept. */
         fun reserve(first: Boolean): Reservation
 
         /** A reserved run that never started: its stamp taken back, in one write. */
@@ -187,7 +194,8 @@ class BenchRun(
 
     /** What a session came to. */
     class Session(val startedAt: Instant, val gate: String, val mode: HostGate.Mode, val runs: List<BenchRunRecord>,
-                  val budgetBefore: Int, val budgetAfter: Int, val budgetOf: Int, val idle: BenchIdle,
+                  val budgetBefore: Int, val budgetAfter: Int, val budgetOf: Int, val capLifted: Boolean,
+                  val idle: BenchIdle,
                   val killCheck: JsonObject, val firstStart: JsonObject, val stopped: String?)
 
     /** One song of a session: as typed, and what its runs are. */
@@ -230,8 +238,10 @@ class BenchRun(
         if (!before.enabled) throw Refused(OFF)
         before.cooling?.let { throw Refused(it) }
         val needed = runsOf(songs)
-        if (before.runs + needed > before.budget) throw Refused(budgetWords(needed, before.budget - before.runs, before.budget))
-        say("$needed runs: ${before.budget - before.runs} of ${before.budget} left in the last 24 hours")
+        if (!before.capLifted && before.runs + needed > before.budget) {
+            throw Refused(budgetWords(needed, before.budget - before.runs, before.budget))
+        }
+        say("$needed runs: ${runsWords(before)}")
         val extracted = probe.pythonExtracted()
         folders.cache.deleteRecursively()
         folders.cache.mkdirs()
@@ -284,7 +294,7 @@ class BenchRun(
             "python_ready_ms" to JsonPrimitive(first?.pythonReadyMs ?: -1),
         ))
         return Session(start, if (observe) OBSERVE else ENFORCE, gates.mode, runs, before.runs, after.runs,
-                       before.budget, BenchIdle(before.served, after.served, before.jobs, after.jobs, before.running,
+                       before.budget, before.capLifted, BenchIdle(before.served, after.served, before.jobs, after.jobs, before.running,
                                                 after.running), kill, firstStart, stopped)
     }
 
@@ -535,7 +545,7 @@ class BenchRun(
         private const val PLACEHOLDER_ID = "aaaaaaaaaaa"
 
         const val NO_QUERY = "No query: type up to 3 lines, “Artist - Title” or a video id."
-        const val TOO_MANY = "Three queries at most: the day's runs are six."
+        const val TOO_MANY = "Three queries at most: a session is six runs at most."
         const val NO_OBSERVE = "Observing every host is never asked under the tests' network: loopback alone is reached."
         const val OFF = "YouTube is turned off on this phone (its provider's switch): no run."
         const val BLOCKED_STOP = "YouTube blocked a run: the session stops, and no run starts until its cooldown ends."
@@ -545,6 +555,15 @@ class BenchRun(
             "loopback alone (127.0.0.1, 10.0.2.2), so no run is made."
 
         fun notAQuery(q: String) = "“$q” isn't a query: “Artist - Title” or a YouTube video id."
+
+        /** The day's runs in words, the screen's and a session's first line: those left of the budget, or, the cap
+         * lifted, the count and that no daily limit holds while the feature is developed. */
+        fun runsWords(state: State): String = if (state.capLifted) {
+            "${state.runs} run${if (state.runs == 1) "" else "s"} in the last 24 hours " +
+                "(no daily limit while this is developed)"
+        } else {
+            "${maxOf(state.budget - state.runs, 0)} of ${state.budget} runs left in the last 24 hours"
+        }
 
         fun budgetWords(needed: Int, left: Int, budget: Int) =
             "This session's $needed runs would pass the day's $budget: ${maxOf(left, 0)} left in the last 24 hours."
@@ -577,23 +596,35 @@ class BenchRun(
  *
  * - The day's runs: the larger of kv `ytbench:runs` (the bench's own, a JSON list of UTC stamps, those of the last
  *   24 hours kept) and `events`' sent runs of provider `youtube` of the last 24 hours (every run the phone sent: the
- *   bench's own are rows there too, so a later product job and the bench share the six). A clock set back only
+ *   bench's own are rows there too, so a later product job and the bench share one count). A clock set back only
  *   counts more runs, never fewer (a stamp later than now is still within 24 hours of it).
- * - A reservation: the provider on, no cooldown, fewer runs than its budget, then the run's stamp appended, in one
- *   write; the first run's pause asked of Pace.pauseAfterLastRequest itself (its sleep taken as the answer).
+ * - A reservation: the provider on, no cooldown, fewer runs than its budget (unless [DAY_CAP_LIFTED]), then the run's
+ *   stamp appended, in one write; the first run's pause asked of Pace.pauseAfterLastRequest itself (its sleep taken
+ *   as the answer).
  * - A record: the run's `events` row under its run id (EventLog), kv `http:last_request:youtube` for a sent decision
  *   (as the runner writes it), and for a block `Health.recordBlock` at the session's start (one strike), its message
  *   the runner's ProviderBlocked's, its status kept only where it is one of the data's `block_statuses`.
  */
 object DbLedger {
     const val RUNS = "ytbench:runs"
+
+    /**
+     * The debug bench's cap of the provider's budget (6) yt-dlp runs in any 24 hours, lifted while the feature is
+     * developed: the owner's word of 2026-11-27, "ignore the run limits while developing this feature. as connection
+     * is patchy". No count of runs refuses a session or a reservation; every run is still reserved before its gate
+     * opens, counted ([runs]) and reported (the report's `budget`: `before`, `after`, `of` and `lifted`). Everything
+     * else holds: the pause, one run and one session at a time, a block and its cooldown, no retry, the provider's
+     * switch, the gate's hosts, three songs a session, the kill check. `false` puts the cap back.
+     */
+    const val DAY_CAP_LIFTED = true
     private const val PROVIDER = "youtube"
     private val DAY = Duration.ofHours(24)
 
-    fun state(db: Db, now: Instant, served: Long, jobs: Long, running: Boolean): BenchRun.State {
+    fun state(db: Db, now: Instant, served: Long, jobs: Long, running: Boolean,
+              capLifted: Boolean = DAY_CAP_LIFTED): BenchRun.State {
         val policy = PhoneConfig.read(db).provider(PROVIDER)
         return BenchRun.State(policy.enabled, policy.budget.toInt(), policy.delay, runs(db, now), cooling(db, now),
-                              Pace.lastRequest(db, PROVIDER), served, jobs, running)
+                              Pace.lastRequest(db, PROVIDER), served, jobs, running, capLifted)
     }
 
     /** The sent runs of the last 24 hours before [now]: the larger of the bench's own stamps and `events`'. */
@@ -612,12 +643,13 @@ object DbLedger {
     } else null
 
     /** One write (the caller's): the run's slot, or why none. */
-    fun reserve(db: Db, now: Instant, first: Boolean, draws: Draws, wall: () -> Double): BenchRun.Reservation {
+    fun reserve(db: Db, now: Instant, first: Boolean, draws: Draws, wall: () -> Double,
+                capLifted: Boolean = DAY_CAP_LIFTED): BenchRun.Reservation {
         val policy = PhoneConfig.read(db).provider(PROVIDER)
         if (!policy.enabled) return BenchRun.Reservation(null, BenchRun.OFF, 0.0)
         cooling(db, now)?.let { return BenchRun.Reservation(null, it, 0.0) }
         val budget = policy.budget.toInt()
-        if (runs(db, now) >= budget) return BenchRun.Reservation(null, BenchRun.budgetWords(1, 0, budget), 0.0)
+        if (!capLifted && runs(db, now) >= budget) return BenchRun.Reservation(null, BenchRun.budgetWords(1, 0, budget), 0.0)
         val stamp = utc(now)
         val since = utc(now.minus(DAY))
         db.kvSet(RUNS, JsonArray((stamps(db).filter { it >= since } + stamp).map(::JsonPrimitive)).toString())

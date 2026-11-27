@@ -285,9 +285,15 @@ def test_start_fails_past_twenty_seconds_more_and_is_undecided_with_no_first_run
 # -- the owner's terms: refused, loudly ----------------------------------------------------------------------------
 
 
+def capped(report: dict) -> dict:
+    """The report as a bench of the six-run cap wrote it, before the owner lifted it: no ``lifted`` in its budget."""
+    report["budget"].pop("lifted", None)
+    return report
+
+
 def test_more_than_six_runs_in_any_24_hours_across_the_reports_fails_the_terms():
-    one = session("2026-11-28", "wifi", "observe")
-    two = session("2026-11-28", "cellular", "enforce")
+    one = capped(session("2026-11-28", "wifi", "observe"))
+    two = capped(session("2026-11-28", "cellular", "enforce"))
     two = json.loads(json.dumps(two).replace("2026-11-28T18:", "2026-11-28T23:"))
     v = gate([one, two])["terms"]
     assert v.passed is False and "runs within 24 hours" in v.why
@@ -568,3 +574,75 @@ def test_the_apks_growth_is_taken_anywhere_and_a_negative_or_nan_one_refused(tmp
     for bad in ("-1", "nan", "inf"):
         assert main([paths[0], "--apk-growth-mb", bad, paths[1]]) == 2
         assert "--apk-growth-mb" in capsys.readouterr().err
+
+
+# -- the day's cap, lifted at the owner's word of 2026-11-27 ----------------------------------------------------------
+
+
+def test_the_sample_says_the_cap_was_lifted_and_an_old_report_without_it_reads():
+    assert read(SAMPLE)["budget"]["lifted"] is True
+    report = capped(session())
+    report["budget"] = {"before": 0, "after": 1, "of": 6}
+    report["runs"] = report["runs"][:1]
+    yg.check_shape(report)
+
+
+def test_a_lifted_member_that_isnt_a_bool_is_unreadable(tmp_path):
+    report = session()
+    report["budget"]["lifted"] = "yes"
+    path = tmp_path / "r.json"
+    path.write_text(json.dumps(report))
+    with pytest.raises(ReportError, match="'lifted' is a str"):
+        read(path)
+
+
+def test_lifted_sessions_past_six_runs_in_24_hours_keep_the_terms_and_say_the_count():
+    one = session("2026-11-28", "wifi", "observe")
+    two = session("2026-11-28", "cellular", "enforce")
+    two = json.loads(json.dumps(two).replace("2026-11-28T18:", "2026-11-28T23:"))
+    two["budget"].update(before=6, after=12)
+    v = gate([one, two])["terms"]
+    assert v.passed is True, v.why
+    assert v.numbers["most_in_24h"] == 12 and v.numbers["lifted"] == 2
+    assert "12 runs in the busiest 24 hours" in v.why
+    assert "the six-run cap lifted at the owner's word (2026-11-27)" in v.why
+
+
+def test_a_capped_report_is_still_bound_by_the_six_even_beside_a_lifted_one():
+    lifted = session("2026-11-28", "wifi", "observe")
+    old = capped(session("2026-11-28", "cellular", "enforce"))
+    old = json.loads(json.dumps(old).replace("2026-11-28T18:", "2026-11-28T23:"))
+    v = gate([lifted, old])["terms"]
+    assert v.passed is False and "runs within 24 hours" in v.why and "the day's runs are 6" in v.why
+    # A capped session's runs before a lifted one's: the cap bound the capped runs alone, which kept it.
+    early = capped(session("2026-11-28", "wifi", "observe"))
+    late = json.loads(json.dumps(session("2026-11-28", "cellular", "enforce")).replace("2026-11-28T18:",
+                                                                                      "2026-11-28T23:"))
+    assert gate([early, late])["terms"].passed is True
+
+
+def test_a_lifted_reports_count_past_its_of_is_no_fail_a_capped_ones_is():
+    wifi, mobile = pair()
+    mobile["budget"].update(before=7, after=13)
+    assert gate([wifi, mobile])["terms"].passed is True
+    capped(mobile)
+    v = gate([wifi, mobile])["terms"]
+    assert v.passed is False and "13 runs in 24 hours after it, of 6" in v.why
+
+
+TIMEOUT = "ERROR: [youtube:search] x: Unable to download API page: _ssl.c:983: The handshake operation timed out"
+
+
+def test_a_session_the_network_failed_says_its_error_and_no_block():
+    report = session("2026-11-28", "wifi", "observe")
+    report["runs"] = report["runs"][:1]
+    report["runs"][0].update(outcome="error", reason=TIMEOUT)
+    report["budget"].update(before=0, after=1)
+    verdicts = gate([report])
+    w = verdicts["Y0-W"]
+    assert w.passed is None
+    assert "1 song(s), not 3" in w.why and f"error: {TIMEOUT}" in w.why
+    assert w.numbers["wifi"][0]["blocked"] == 0
+    assert verdicts["Y0-B"].passed is True and verdicts["Y0-B"].numbers["blocked_runs"] == 0
+    assert verdicts["terms"].passed is True
+

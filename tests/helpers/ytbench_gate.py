@@ -8,7 +8,9 @@
 - ``gate(reports, *, apk_growth_mb=None) -> dict[str, Verdict]``: a verdict for each row of §4.4, by the row's name
   (``Y0-W`` … ``Y0-C``); ``sessions``, §4.4's "two sessions on two days" (an observed Wi-Fi one and an enforced
   mobile-data one on two UTC days, else undecided, and Y0-W too, which is over both); and ``terms``, the owner's terms
-  as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, nothing after a block, the gate
+  as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, for the runs of a report without
+  ``lifted``: one whose budget says it, the owner's word of 2026-11-27, has its busiest 24 hours said, never failed for
+  them; nothing after a block, the gate
   mode each day asks for, a kill check that spent none, no host reached outside YouTube's under enforce, no
   gate-shaped proxy address or bare user:secret pair anywhere). ``Verdict(passed, numbers, why)``: ``passed`` True, False, or
   None for undecided (another day, or the owner's word), ``numbers`` what it was decided on, ``why`` in words. A
@@ -42,6 +44,10 @@ FORMAT = 1  # BenchReport.FORMAT
 
 # The owner's terms (AGENTS.md, "The one exception is YouTube"; the plan's Global Constraints).
 RUNS_A_DAY = 6  # yt-dlp runs in any 24 hours on the phone, every session counted
+# The owner's word of 2026-11-27, "ignore the run limits while developing this feature. as connection is patchy": the
+# debug bench's six lifted while the feature is developed, its runs still counted. A report says it in its budget's
+# ``lifted`` (DbLedger.DAY_CAP_LIFTED); one without it (the bench before that day) is bound by the six as ever.
+CAP_LIFTED_ON = "2026-11-27"
 DAY = timedelta(hours=24)
 
 # §4.4, row by row.
@@ -115,6 +121,7 @@ NETWORK_MEMBERS = {"transport": ("str", "null"), "metered": ("bool",), "validate
 IDLE_MEMBERS = {"served_before": ("int",), "served_after": ("int",), "jobs_before": ("int",), "jobs_after": ("int",),
                 "running_before": ("bool",), "running_after": ("bool",)}
 BUDGET_MEMBERS = {"before": ("int",), "after": ("int",), "of": ("int",)}
+BUDGET_LIFTED = {"lifted": ("bool",)}  # written from 2026-11-27 on; a report of before it has none
 FIRST_START_MEMBERS = {"first_after_install": ("bool",), "process_start_ms": ("int",), "python_ready_ms": ("int",)}
 CHALLENGE_MEMBERS = {"seconds": _NUM, "runtime": ("str",)}
 FILE_MEMBERS = {"ext": ("str",), "bytes": ("int",), "duration": ("int", "float", "null")}
@@ -182,7 +189,9 @@ def check_shape(report: Any, name: str = "the report") -> None:
     _check(report["pins"], PINS_MEMBERS, f"{name}'s pins")
     _check(report["network"], NETWORK_MEMBERS, f"{name}'s network")
     _check(report["idle_detail"], IDLE_MEMBERS, f"{name}'s idle_detail")
-    _check(report["budget"], BUDGET_MEMBERS, f"{name}'s budget")
+    budget = report["budget"]
+    said_lifted = BUDGET_LIFTED if isinstance(budget, dict) and "lifted" in budget else {}
+    _check(budget, {**BUDGET_MEMBERS, **said_lifted}, f"{name}'s budget")
     _check(report["first_start"], FIRST_START_MEMBERS, f"{name}'s first_start")
     kill = report["kill_check"]
     _check(kill, KILL_RAN_MEMBERS if kill.get("run") is True else KILL_NOT_RUN_MEMBERS, f"{name}'s kill_check")
@@ -289,16 +298,27 @@ def _days_said(reports: Sequence[dict[str, Any]]) -> tuple[dict[str, Any], str]:
 # -- the gates ---------------------------------------------------------------------------------------------------------
 
 
+def lifted(report: dict[str, Any]) -> bool:
+    """Whether the bench that wrote ``report`` had the six-run cap lifted (the owner's word of 2026-11-27)."""
+    return report["budget"].get("lifted") is True
+
+
 def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     broken: list[str] = []
-    stamps = sorted(_stamp(run["started_at"], "a run") for r in reports for run in r["runs"])
+    runs = sorted((_stamp(run["started_at"], "a run"), lifted(r)) for r in reports for run in r["runs"])
+    stamps = [at for at, _ in runs]
     most = 0
     for i, at in enumerate(stamps):
-        within = sum(1 for later in stamps[i:] if later - at < DAY)
-        if within > most:
-            most = within
+        most = max(most, sum(1 for later in stamps[i:] if later - at < DAY))
+    # The cap binds each run a capped bench sent: with the runs of the 24 hours up to it, every report's, no more than
+    # six (the capped bench counted them all before it ran one). A lifted bench's runs are bound by none.
+    for j, (at, its_cap_lifted) in enumerate(runs):
+        if its_cap_lifted:
+            continue
+        within = sum(1 for earlier in stamps[:j + 1] if at - earlier < DAY)
         if within > RUNS_A_DAY:
-            broken.append(f"{within} runs within 24 hours from {at:%Y-%m-%dT%H:%M:%SZ}: the day's runs are "
+            first = next(earlier for earlier in stamps[:j + 1] if at - earlier < DAY)
+            broken.append(f"{within} runs within 24 hours from {first:%Y-%m-%dT%H:%M:%SZ}: the day's runs are "
                           f"{RUNS_A_DAY}")
             break
     for r in reports:
@@ -312,7 +332,7 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
             broken.append(f"{label}: after_block_requests is {r['after_block_requests']}, not 0")
         if r["kill_check"]["run"] and r["kill_check"]["spends"] != 0:
             broken.append(f"{label}: the kill check spent {r['kill_check']['spends']} of the day's runs, not 0")
-        if r["budget"]["after"] > r["budget"]["of"]:
+        if not lifted(r) and r["budget"]["after"] > r["budget"]["of"]:
             broken.append(f"{label}: {r['budget']['after']} runs in 24 hours after it, of {r['budget']['of']}")
         transport = r["network"]["transport"]
         if transport == "cellular" and r["gate"] != "enforce":
@@ -329,11 +349,14 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                                       "a bug of the gate's")
         for where in _secrets(r):
             broken.append(f"{label}: a gate-shaped proxy address (its secret) at {where}")
-    numbers = {"runs": len(stamps), "most_in_24h": most, "sessions": len(reports)}
+    n_lifted = sum(1 for r in reports if lifted(r))
+    numbers = {"runs": len(stamps), "most_in_24h": most, "sessions": len(reports), "lifted": n_lifted}
     if broken:
         return Verdict(False, numbers, "; ".join(broken))
-    return Verdict(True, numbers, f"at most {most} runs in any 24 hours, nothing after a block, each day's gate mode, "
-                                  "kill checks that spent none, "
+    count = (f"{most} runs in the busiest 24 hours, the six-run cap lifted at the owner's word ({CAP_LIFTED_ON}) "
+             f"for {n_lifted} of {len(reports)} session(s), the capped ones' runs within it" if n_lifted else
+             f"at most {most} runs in any 24 hours")
+    return Verdict(True, numbers, f"{count}, nothing after a block, each day's gate mode, kill checks that spent none, "
                                   "no host reached outside YouTube's under enforce, no proxy secret")
 
 
@@ -351,7 +374,9 @@ def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
     def session(r: dict[str, Any]) -> dict[str, Any]:
         ends = {song: _song_end(runs) for song, runs in _songs(r)}
         decoded = sum(1 for run in _ok_downloads(r) if run["decoded"] is not None)
-        return {"session": _label(r), "day": _day(r), "songs": len(ends), "ends": list(ends.values()),
+        errors = [f"{run['kind']} of “{run['song']}”: error: {run['reason'] or 'no reason given'}"
+                  for run in r["runs"] if run["outcome"] == "error"]
+        return {"session": _label(r), "day": _day(r), "songs": len(ends), "ends": list(ends.values()), "errors": errors,
                 "decoded": decoded, "ok": sum(1 for e in ends.values() if e == "ok"),
                 "downloads_ok": len(_ok_downloads(r)),
                 "blocked": sum(1 for run in r["runs"] if run["outcome"] == "blocked"), "stopped": r["stopped"]}
@@ -370,19 +395,24 @@ def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
         return Verdict(None, numbers, f"no Wi-Fi session: Y0-W is Wi-Fi's; {mobile_said}")
     passed, failed, short = [], [], []
     fail_days = set()
+
+    def errors(w: dict[str, Any]) -> str:
+        # A run that failed with no block (the network's, a TLS handshake timed out) said as what it was.
+        return f" (its runs' errors, no block: {'; '.join(w['errors'])})" if w["errors"] else ""
+
     for w in wifi:
         # A block first: the bench stops a session at its first block, which leaves fewer songs.
         if w["blocked"]:
             failed.append(f"{w['session']}: blocked after {w['songs']} song(s) (songs ended {', '.join(w['ends'])})")
             fail_days.add(w["day"])
         elif w["stopped"] is not None and w["songs"] < W_SONGS:
-            short.append(f"{w['session']}: stopped after {w['songs']} song(s): {w['stopped']}")
+            short.append(f"{w['session']}: stopped after {w['songs']} song(s): {w['stopped']}{errors(w)}")
         elif w["songs"] < W_SONGS:
-            short.append(f"{w['session']}: {w['songs']} song(s), not {W_SONGS}")
+            short.append(f"{w['session']}: {w['songs']} song(s), not {W_SONGS}{errors(w)}")
         elif all(e in SONG_ENDS_WELL or e == "no fit" for e in w["ends"]) and w["decoded"] >= W_WIFI_DECODED:
             passed.append(w["session"])
         else:
-            failed.append(f"{w['session']}: songs ended {', '.join(w['ends'])}, {w['decoded']} decoded")
+            failed.append(f"{w['session']}: songs ended {', '.join(w['ends'])}, {w['decoded']} decoded{errors(w)}")
             fail_days.add(w["day"])
     if passed and not mobile:
         return Verdict(None, numbers, f"Wi-Fi: {', '.join(passed)} passed, but {mobile_said}: §4.4's row is over both "

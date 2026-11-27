@@ -2888,11 +2888,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `YtDlpClient` itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback
     targets), and holds the terms on the runner's records through the main process's `YouTubeBenchLedger`
     (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under 6 in 24 h by kv
-    `ytbench:runs` and `events`, its stamp kept; given back only for a run that never started), its `events` row
+    `ytbench:runs` and `events` unless `DbLedger.DAY_CAP_LIFTED`, the owner's word of 2026-11-27 (Politeness), its
+    stamp kept; given back only for a run that never started), its `events` row
     written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
     the gate's `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService
     `OPEN_LOOPBACK`: LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the
-    six spent; its report `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest), Gate Y0's verdict of the
+    day's runs spent; its report (its `budget`'s `lifted` the switch's, which ytbench_gate.py reads: a report without
+    it held to six in any 24 hours) `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest), Gate Y0's verdict of the
     owner's reports `python -m tests.helpers.ytbench_gate` (test_ytbench_gate.py; its one shape
     tests/fixtures/ytbench/sample.json, which BenchReportTest holds to `BenchReport.of`); an observing gate only for an
     ask naming `:ytbench` and never under loopback (GateService
@@ -4641,6 +4643,13 @@ picks one).
   - a stop or Ctrl-C stops its process group too;
   - a bot check, an HTTP 429 or 403, a rate limit or a captcha is `ProviderBlocked`, honoured like any block
     (tests/test_youtube.py).
+- The debug build's YouTube bench (android/README.md, "The YouTube bench"), a few songs by hand on the owner's phone,
+  keeps these terms on the phone's records, but for one: its cap of 6 yt-dlp runs in any 24 hours is lifted while the
+  feature is developed, the owner's choice of 2026-11-27 ("ignore the run limits while developing this feature. as
+  connection is patchy"; `DbLedger.DAY_CAP_LIFTED`, `false` puts it back): the run count alone, every run still
+  reserved, counted and reported; the pause, one run and one session at a time, a block and its cooldown, no retry,
+  the provider's switch, the gate's hosts and three songs a session stay. Nothing else's budget changes (`YtDlp`'s,
+  PhoneConfig's `youtube`, the computer's).
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.
