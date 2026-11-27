@@ -192,7 +192,7 @@ object OverrideWriters {
     fun setLyricsName(db: Db, display: String, name: String?): Boolean = setLyrics(db, display, asked = Part.Set(name))
 
     /** [setLyricsName] of a name in its two parts, written "Artist - Title" as lyrics_search.py writes it. */
-    fun setLyricsName(db: Db, display: String, name: Pair<String, String>?): Boolean =
+    fun setLyricsNameParts(db: Db, display: String, name: Pair<String, String>?): Boolean =
         setLyricsName(db, display, name?.let { "${it.first} - ${it.second}" })
 
     /** overrides.set_lyrics_record: the lyrics record you picked for the song (`lrclib:ID`, `megalobiz:ID`,

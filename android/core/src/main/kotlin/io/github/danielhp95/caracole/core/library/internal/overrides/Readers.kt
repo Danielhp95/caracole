@@ -148,7 +148,7 @@ internal object Readers {
                           table["record"]?.let { lyricsRecord(it, where, value) })
     }
 
-    internal fun lyricsRefused(value: JsonElement, where: String) =
+    private fun lyricsRefused(value: JsonElement, where: String) =
         OverridesError("$where: expected $LYRICS_SHAPE, got ${PyValues.repr(value)}")
 
     /** str.partition: the text before the first [sep], and the rest after it; null without one. */

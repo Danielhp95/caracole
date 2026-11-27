@@ -43,14 +43,14 @@ class OverrideWritersTest {
         Misses(OverridesReplay.WRITES).also { OverridesReplay.writes(it) }.assertNone()
 
     @Test fun aLyricsNameInTwoPartsIsWrittenAsLyricsSearchWritesItAndTheSameAgainWritesNothing() {
-        assertTrue(write { db -> OverrideWriters.setLyricsName(db, "Blur - Song 2", "Blur" to "Song Two") })
+        assertTrue(write { db -> OverrideWriters.setLyricsNameParts(db, "Blur - Song 2", "Blur" to "Song Two") })
         val after = rows()
         assertEquals(listOf(listOf("lyrics", "blur/song-2", "Blur - Song 2", """{"as":"Blur - Song Two"}""")), after)
         assertFalse(write { db -> OverrideWriters.setLyricsName(db, "BLUR - SONG 2", "Blur - Song Two") })
         assertTrue(write { db -> OverrideWriters.setLyricsRecord(db, "blur - song 2", "lrclib:9") })
         assertEquals("""{"as":"Blur - Song Two","record":"lrclib:9"}""", rows().single()[3])
         assertEquals("Blur - Song 2", rows().single()[2])  // the name it was written under kept
-        assertTrue(write { db -> OverrideWriters.setLyricsName(db, "Blur - Song 2", null as Pair<String, String>?) })
+        assertTrue(write { db -> OverrideWriters.setLyricsNameParts(db, "Blur - Song 2", null) })
         assertTrue(write { db -> OverrideWriters.clearLyricsRecord(db, "Blur - Song 2") })
         assertEquals(emptyList(), rows())
     }
