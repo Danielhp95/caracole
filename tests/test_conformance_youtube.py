@@ -617,6 +617,8 @@ SEARCH_TEXTS = [
     + '}]}',
     # Brackets inside strings are no nesting: a shallow answer whose title is long and bracketed.
     '{"entries": [{"id": "AAAAAAAAAAA", "title": "' + "[{" * 400 + '", "duration": 1' + "0" * 400 + '}]}',
+    # Its twin with a duration a float holds: that bracketed title read whole, a video.
+    '{"entries": [{"id": "AAAAAAAAAAA", "title": "' + "[{" * 400 + '", "duration": 239.5}]}',
 ]
 VIDEO_TEXTS = [
     (json.dumps({"id": ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 239}), ID),
@@ -929,6 +931,11 @@ RUN_SCENARIOS = [
      (0.5, 0.5)),
     ("download", {"videos": {ID: {"title": "Creep", "channel": "Radiohead - Topic", "duration": 238.5,
                                   "data": "AAC bytes"}}},
+     [("download", ID, 0.0)], 6, None),
+    # The line yt-dlp prints after a download names an int duration too big for a float: an answer error, in the
+    # words of a video's answer that isn't JSON, never a bug.
+    ("download-overflow", {"videos": {ID: {"title": "Creep", "channel": "Radiohead - Topic", "duration": 10 ** 400,
+                                           "data": "AAC bytes"}}},
      [("download", ID, 0.0)], 6, None),
 ]
 

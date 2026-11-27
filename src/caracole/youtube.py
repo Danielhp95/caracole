@@ -743,7 +743,7 @@ class YtDlp:
         path = Path(str(info.get("filepath") or ""))
         if not _audio_in(path, into):
             raise ProviderError(PROVIDER, url, None, NO_AUDIO_LEFT.format(folder=into.name))
-        duration = _number(info.get("duration"))
+        duration = _duration(info.get("duration"), url, VIDEO_NOT_JSON)  # an int no float holds: an answer error
         video = Video(video_id, str(info.get("title") or ""), str(info.get("channel") or info.get("uploader") or ""),
                       duration)
         return Download(path, video)

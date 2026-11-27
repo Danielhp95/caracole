@@ -372,7 +372,11 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   m4a by its format alone, QuickJS, the gate as `--proxy`; no run of a target but a video's plain address, a value
   holding a NUL, an empty search or download folder) and `classify` (`CLASSIFY_STEPS`: `_OUTDATED`,
   `PHONE_PASS_OVER` on the ERROR line, out of date after a broken solver's warning, `_DEGRADED`), the corpus's
-  youtube/youtube.json (tests/test_conformance_youtube.py).
+  youtube/youtube.json (tests/test_conformance_youtube.py). `choose` reads a song's artist forms in `name_forms`'
+  order, the whole name first (`_Names.artist_slugs`, a tuple, never a set), so `choose` is the same under any hash
+  seed (a featuring artist's video was accepted or dropped by a set's order); a duration no float holds (an int
+  past one, in a search's, a video's or a download's answer) is an answer error in the words of an answer that isn't
+  JSON (`_duration`), never a bug.
 - youtube_urls.py: a video's address.
 - youtube_fetch.py: the step.
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a

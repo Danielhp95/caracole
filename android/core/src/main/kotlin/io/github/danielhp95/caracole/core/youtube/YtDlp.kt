@@ -133,8 +133,14 @@ class YtDlp(
         if (!audioIn(path, into)) {
             throw ProviderError(PROVIDER, url, null, YouTubeData.fillAll(words("no_audio_left"), mapOf("folder" to into.name)))
         }
+        // _duration: an int duration no float holds is an answer error, in the words of a video's answer that isn't JSON.
+        val duration = try {
+            PyValues.number(info?.get("duration"))
+        } catch (e: ArithmeticException) {
+            throw ProviderError(PROVIDER, url, null, YouTubeData.fillOnce(answerWords("video_not_json"), "{}", e.message ?: ""))
+        }
         val video = Video(videoId, Videos.str(info?.get("title")), Videos.str(Videos.or(info?.get("channel"), info?.get("uploader"))),
-                          PyValues.number(info?.get("duration")))
+                          duration)
         return Download(path, video)
     }
 
@@ -247,6 +253,9 @@ class YtDlp(
         private const val OUTDATED = "outdated"
 
         private fun words(name: String): String = DATA.text(name, DATA.runner)
+
+        /** A word of the data's `answers`: what an answer that can't be read says. */
+        private fun answerWords(name: String): String = DATA.text(name, DATA.json.getValue("answers") as JsonObject)
 
         /** `_reason`: yt-dlp's last ERROR line less that word, else its last line, else `said_nothing`; cut to
          * `reason_chars` code points, its last `reason_cut`. Every line read, `[debug]` ones too, as the computer's. */
