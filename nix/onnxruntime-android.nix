@@ -1,7 +1,7 @@
 # ONNX Runtime 1.27.1 for the phone's chords (the chords-on-the-phone design's §3.5, Gate R: the owner's "Build 1.27.1"
 # of 2026-11-27), built from its source with no network: android/scripts/build-onnxruntime.sh for each ABI the app ships,
 # then an AAR of the two (its Java bindings compiled from the same tree) in a Maven folder of its own, which
-# android/settings.gradle.kts reads in Maven Central's place ($CARACOLE_ONNXRUNTIME, android/flake.nix).
+# android/settings.gradle.kts reads in Maven Central's place (the variable android/flake.nix sets for every shell).
 #
 # The source is nixpkgs' pin of the tag v1.27.1 (its fixed-output hash, below), which cache.nixos.org serves:
 # github.com/microsoft/onnxruntime answers 404 since 2026-11. Each CMake dependency is the zip deps.txt names, pinned
