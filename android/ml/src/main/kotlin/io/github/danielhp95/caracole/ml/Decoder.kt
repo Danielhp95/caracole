@@ -60,7 +60,8 @@ data class Decoded(
  *     falls to the stated delay and padding);
  *   - a fragmented MP4 with no edit list (yt-dlp's m4a with no FFmpeg): as the computer's remux of it decodes
  *     (yt-dlp's FixupM4a, `ffmpeg -c copy -f mp4`): nothing skipped, the encoder's priming kept (no box names it), and
- *     ended at its fragments' length ([Mp4.Track.fragments]), the last frame's padding past it cut;
+ *     ended at its fragments' length ([Mp4.Track.fragments]), the last frame's padding past it cut; one whose
+ *     fragments can't be read (a download cut short) refused, never stated as 0 or cut to nothing ([fragmentsKeep]);
  *   - an MP3: Android's MP3 decoder ([DROPS_MP3_DELAY], the decoders measured; any other refused) always drops its
  *     own delay, the first [MP3_DECODER_DELAY] samples it decodes, and pads as many silent ones at the end. A LAME
  *     tag's
@@ -142,12 +143,11 @@ object Decoder {
             val ogg = if (mime == MediaFormat.MIMETYPE_AUDIO_OPUS || mime == MediaFormat.MIMETYPE_AUDIO_VORBIS) {
                 readContainer("its Ogg pages") { Ogg.stream(file) }
             } else null
-            val fragments = mp4?.takeIf { it.fragmented && it.edits.isEmpty() && it.timescale in 1..Int.MAX_VALUE }
-                ?.fragments
+            val fragments = fragmentsKeep(mp4)
             val trim = when {
                 edit != null -> Trim.edit(edit.mediaTime, readContainer("its edit list") { mp4.keptFrames(edit) },
                     mp4.timescale.toInt(), fallback = Trim.stated(delay, padding, rate))
-                fragments != null -> Trim(skip = 0, keep = fragments, rate = mp4.timescale.toInt(),
+                fragments != null -> Trim(skip = 0, keep = fragments, rate = mp4!!.timescale.toInt(),
                     fallback = Trim.stated(delay, padding, rate))
                 ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames, rate = ogg.rate,
                     fallback = Trim.stated(delay, padding, rate))

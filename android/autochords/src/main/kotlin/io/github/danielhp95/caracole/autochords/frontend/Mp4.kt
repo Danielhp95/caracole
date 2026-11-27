@@ -41,9 +41,13 @@ object Mp4 {
 
         /** The length the computer states of this audio as it holds it: mutagen's [seconds]; of a [fragmented] file,
          * which the computer's yt-dlp remuxes before anything reads it (FixupM4a), the remux's `mdhd`, its
-         * [fragments]' length over the timescale (mutagen's where that isn't read). */
-        val statedSeconds: Double
-            get() = if (fragmented && fragments != null && timescale > 0) fragments.toDouble() / timescale else seconds
+         * [fragments]' length over the timescale, and none where that isn't read (never its empty `mdhd`'s 0). */
+        val statedSeconds: Double?
+            get() = when {
+                !fragmented -> seconds
+                fragments != null && timescale > 0 -> fragments.toDouble() / timescale
+                else -> null
+            }
 
         /** The one media edit (empty ones aside), or none: no list, several media edits, which are not trimmed
          * exactly here, or numbers that lead nowhere (a timescale of 0, a segment of no length or less, as a
@@ -117,8 +121,10 @@ object Mp4 {
      * [track]'s fragments' length in its media's timescale, as FFmpeg's mov demuxer times their samples and its remux
      * writes the `mdhd`: from the first fragment's decode time (its `tfdt`, else 0) to its last sample's end, each
      * `traf` of the track starting at its `tfdt` (else where the one before ended), each sample's duration its
-     * `trun`'s, else its `tfhd`'s default, else the `trex`'s ([default]). Null where none is read, or one is cut short
-     * or leads past a Long: an unknown length.
+     * `trun`'s, else its `tfhd`'s default, else the `trex`'s ([default]). Null, an unknown length, never a wrong one:
+     * where none is read; where the file's top-level boxes can't all be read (a download cut short, trailing junk, a
+     * `moof` past [MOOV_MOST]); where one is cut short or leads past a Long; where a `tfdt` goes back before the end
+     * of the fragment before it; where the length comes to 0 or less (samples of no duration at all).
      */
     private fun fragmentsLength(f: RandomAccessFile, track: Long, default: Long): Long? {
         var first: Long? = null
@@ -136,12 +142,14 @@ object Mp4 {
                     u32(tfhd, at)
                 } else default
                 child(traf, "tfdt")?.let { tfdt ->
-                    end = when {
+                    val time = when {
                         tfdt.remaining() >= 12 && tfdt.get(0).toInt() == 1 ->
                             tfdt.getLong(4).also { if (it < 0) return null }
                         tfdt.remaining() >= 8 && tfdt.get(0).toInt() == 0 -> u32(tfdt, 4)
                         else -> return null
                     }
+                    if (first != null && time < end) return null  // back before where the fragment before ended
+                    end = time
                 }
                 if (first == null) first = end
                 for (trun in children(traf, "trun")) {
@@ -164,7 +172,7 @@ object Mp4 {
                 }
             }
         }
-        return if (any) end - first!! else null
+        return if (any) (end - first!!).takeIf { it > 0 } else null
     }
 
     /** A `mvhd` or `mdhd` payload's timescale and duration, or null for a version mutagen doesn't read. */

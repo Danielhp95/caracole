@@ -695,8 +695,9 @@ _LOSSLESS = ("FLAC", "WAV", "AIFF")
 # FFmpeg to remux it) is never one the computer holds: its yt-dlp remuxes it (FixupM4a, ``ffmpeg -c copy -f mp4``)
 # before anything reads it. Its record is the computer's audio as it would hold it: the remux's length (its ``mdhd``,
 # which FFmpeg writes from the fragments' sample durations: ``_fragments_length``) and the remux's decode, which is
-# FFmpeg's decode of the fragmented file ended at that length (checked by hand on both files, 2026-11-27: the
-# fragmented file read whole is the last frame's padding longer, and mutagen states no length of it).
+# FFmpeg's decode of the fragmented file ended at that length; ``decode_records`` checks both against the remux
+# encode.sh writes beside each (``<name>-remux.m4a``). The fragmented file read whole is the last frame's padding
+# longer, and mutagen states no length of it.
 DECODE_FRAGMENTED = ("the computer's audio as its yt-dlp would hold it, remuxed (FixupM4a, ffmpeg -c copy -f mp4): "
                      "FFmpeg's decode ended at the fragments' length (their trun sample durations, from the tfdt), "
                      "which is also the length stated; no edit list, so the encoder's priming is kept")
@@ -846,6 +847,9 @@ def decode_records() -> list[dict]:
             timescale, length = fragments
             assert timescale == rate and len(y) >= length, (name, timescale, rate, len(y), length)
             y, duration = y[:length], length / timescale
+            remux = path.with_name(path.stem + "-remux.m4a")  # the computer's copy of it: the ruling's premise
+            assert np.array_equal(audio.load_mono(remux, rate), y), name
+            assert read_audio(remux).duration_s == duration, name
         record = {"kind": "file", "file": fixture_ref(path), "format": form, "rate": rate, "channels": channels,
                   "reader": read[-1] if read else "libsndfile", "frames": len(y), "duration": duration,
                   "mono_sha256": _sha256(y)}

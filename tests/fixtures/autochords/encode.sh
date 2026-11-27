@@ -27,9 +27,11 @@
 #   ("writing DASH m4a"): decode-frag.m4a is decode.m4a's very AAC frames (-c copy) as fragmented MP4 (an empty moov,
 #   its samples in a moof); decode-dash.m4a the clip as YouTube's itag 140 is coded, AAC-LC at 128 kb/s and 44.1 kHz
 #   stereo (the right channel 0.6 of the left), as a DASH-style fragmented MP4: a dash brand, a global sidx, a moof and
-#   an mdat a second. FFmpeg writes no edit list in either: the encoder's priming is in no box (README.md). Written on
-#   2026-11-27 by `encode.sh fragmented`, which writes these two alone, with ffmpeg 9.0.1 (which writes decode.m4a
-#   byte for byte as it is).
+#   an mdat a second. FFmpeg writes no edit list in either: the encoder's priming is in no box (README.md). Beside
+#   each, its remux as the computer's yt-dlp makes it (FixupM4a: -map 0 -dn -ignore_unknown -c copy -f mp4),
+#   decode-frag-remux.m4a and decode-dash-remux.m4a, against which tests/test_conformance_autochords_models.py checks
+#   its record. Written on 2026-11-27 by `encode.sh fragmented`, which writes these four alone, with ffmpeg 9.0.1
+#   (which writes decode.m4a byte for byte as it is).
 set -euo pipefail
 cd "$(dirname "$0")"
 plain=(-map_metadata -1 -fflags +bitexact -flags:a +bitexact)
@@ -45,6 +47,10 @@ fragmented() {
   ff -i decode.m4a -c copy "${plain[@]}" "${frag[@]}" decode-frag.m4a
   ff "${clip[@]}" "${plain[@]}" -af "$stereo" -ar 44100 -c:a aac -aac_pns 0 -b:a 128k "$work/itag140.m4a"
   ff -i "$work/itag140.m4a" -c copy "${plain[@]}" "${dash[@]}" decode-dash.m4a
+  local name
+  for name in decode-frag decode-dash; do
+    ff -i "$name.m4a" -map 0 -dn -ignore_unknown -c copy "${plain[@]}" -f mp4 "$name-remux.m4a"
+  done
 }
 if [ "${1:-}" = fragmented ]; then
   fragmented

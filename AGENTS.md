@@ -2947,27 +2947,27 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     interleaved little-endian float32 written a buffer at a time, `into` deleted on any failure, every failure
     `UndecodableAudio` in words. `Decoded`: rate, frames, channels, the codec, what was trimmed, and `durationS`, the
     length music.py `read_audio` states by the computer's rule for the container (an MP4's `mdhd`, `Mp4`; a fragmented
-    one's, yt-dlp's m4a on the phone, which has no FFmpeg to remux it, its fragments' length, `statedSeconds`, what
-    the computer's remux of it states, yt-dlp's FixupM4a; an MP3's Xing frames less a LAME tag's delay and padding
-    where mutagen reads the tag, `MpegHeader`; else the frames decoded, an MP3 that names no length's counted so). A WAV or an AIFF by `autochords.frontend.Pcm`, no codec; else
-    MediaExtractor's first audio track and Android's own software decoder (`c2.android.*`, `softwareDecoder`), float
-    PCM asked for (but `audio/raw`, a FLAC the extractor decodes itself), its output read in the encoding it names
-    (`PcmEncoding`; one caracole doesn't read refused). Trimmed here, never by the codec: where the format names
-    `encoder-delay` and `encoder-padding` the framework's codecs may trim them themselves (this emulator's do), so
-    caracole takes both keys out of the codec's format and trims (`Trim`, its counts made the output's rate's at its
-    first format, `Trim.at`: rescaled exactly, else the stated delay): an MP4 to its one media edit exactly, a
-    fragmented one with no edit list to its fragments' length, its priming kept (no box names it), as the computer's
-    remux of it decodes, an Ogg to its last page's granule less Opus's pre-skip (`Ogg`), an MP3 by the decoder's own 529 samples
-    (`DROPS_MP3_DELAY`, the decoders measured, any other refused: a LAME tag's delay after them, a headerless file's
-    whole by a `silentFrame` first), else the delay and padding stated. Its loop is `CodecLoop` (plain code behind
-    `CodecPort` and `SamplePort`: a decoder that stops is given up, a rate or a channel count that changes partway
-    refused; `CodecLoopTest` on the JVM). `Mixdown.mono`, numpy's float32 mean of the channels, an array's or a
+    one's, yt-dlp's m4a on the phone, which has no FFmpeg to remux it, its fragments' length, `statedSeconds`, what the
+    computer's remux of it states, yt-dlp's FixupM4a; an MP3's Xing frames less a LAME tag's delay and padding where
+    mutagen reads the tag, `MpegHeader`; else the frames decoded, an MP3 that names no length's counted so). A WAV or an
+    AIFF by `autochords.frontend.Pcm`, no codec; else MediaExtractor's first audio track and Android's own software
+    decoder (`c2.android.*`, `softwareDecoder`), float PCM asked for (but `audio/raw`, a FLAC the extractor decodes
+    itself), its output read in the encoding it names (`PcmEncoding`; one caracole doesn't read refused). Trimmed here,
+    never by the codec: where the format names `encoder-delay` and `encoder-padding` the framework's codecs may trim
+    them themselves (this emulator's do), so caracole takes both keys out of the codec's format and trims (`Trim`, its
+    counts made the output's rate's at its first format, `Trim.at`: rescaled exactly, else the stated delay): an MP4 to
+    its one media edit exactly, a fragmented one with no edit list to its fragments' length, its priming kept (no box
+    names it), as the computer's remux of it decodes (one whose fragments can't be read, a download cut short, refused:
+    `fragmentsKeep`), an Ogg to its last page's granule less Opus's pre-skip (`Ogg`), an MP3 by the decoder's own 529
+    samples (`DROPS_MP3_DELAY`, the decoders measured, any other refused: a LAME tag's delay after them, a headerless
+    file's whole by a `silentFrame` first), else the delay and padding stated. Its loop is `CodecLoop` (plain code
+    behind `CodecPort` and `SamplePort`: a decoder that stops is given up, a rate or a channel count that changes
+    partway refused; `CodecLoopTest` on the JVM). `Mixdown.mono`, numpy's float32 mean of the channels, an array's or a
     file's. `DecoderTest` (`device-test.sh --ml`) holds it to vectors/autochords/decode.jsonl, every threshold its
     meta's `gates`: the lossless files sample for sample (a 24-bit FLAC, which Android gives as 16-bit, by the 16-bit
-    gate), the lossy ones at offset 0 and SNR ≥ 60 dB whole and each second, every file's frames the computer's and
-    its stated length within 2 samples (yt-dlp's two fragmented shapes, `decode-frag.m4a` and `decode-dash.m4a`,
-    against the computer's remux of each: tests/fixtures/autochords/README.md); android/README.md says what it doesn't
-    cover.
+    gate), the lossy ones at offset 0 and SNR ≥ 60 dB whole and each second, every file's frames the computer's and its
+    stated length within 2 samples (yt-dlp's two fragmented shapes, `decode-frag.m4a` and `decode-dash.m4a`, against the
+    computer's remux of each: tests/fixtures/autochords/README.md); android/README.md says what it doesn't cover.
   - The whole hearing (E9), in a process of its own: `MlService` (`:ml`'s manifest, `android:process=":ml"`, not
     exported, the debug build's alone; one hearing a process, the process ended once its client lets go, a `CANCEL`
     or the unbind stopping it at its next chunk) runs `Pipeline.hear(audio, work, say)`, the computer's path step for
