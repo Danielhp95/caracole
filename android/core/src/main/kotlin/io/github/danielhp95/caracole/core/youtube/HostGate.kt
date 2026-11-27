@@ -189,7 +189,7 @@ class HostGate(
         server = socket
         val port = socket.localPort
         acceptor = spawn("caracole-gate-$port-accept") { accept(socket) }!!
-        return Opened(port, "http://$user:$secret@127.0.0.1:$port", this)
+        return Opened(port, "$PROXY_SCHEME://$user:$secret@$PROXY_HOST:$port", this)
     }
 
     /** Each host asked for, in the order first asked; at most [LOG_HOSTS] names, the rest under [OTHER_HOSTS]. */
@@ -570,6 +570,22 @@ class HostGate(
         const val WHY_MALFORMED = "malformed"
         const val WHY_METHOD = "not CONNECT or GET"
 
+        /** The scheme and host of every [Opened.proxyArg]: the gate listens on 127.0.0.1 alone. */
+        const val PROXY_SCHEME = "http"
+        const val PROXY_HOST = "127.0.0.1"
+
+        /** The hosts a [Mode.LOOPBACK] gate allows, as a target names them (LOOPBACK_HOSTS's bytes). */
+        val LOOPBACK_NAMES: List<String> = listOf("127.0.0.1", "10.0.2.2")
+
+        /** [Opened.proxyArg]'s shape, a Python regex matched whole (`re.fullmatch`): the gate's scheme, a user and a
+         * secret of [TOKEN_BYTES] random bytes in lowercase hex each, its host and a port. What `:youtube`'s glue holds
+         * a `--proxy` to. */
+        val PROXY_PATTERN: String = "$PROXY_SCHEME://[0-9a-f]{${2 * TOKEN_BYTES}}:[0-9a-f]{${2 * TOKEN_BYTES}}@" +
+            PROXY_HOST.replace(".", "\\.") + ":[0-9]{1,5}"
+
+        /** The user's and the secret's random bytes. */
+        const val TOKEN_BYTES = 16
+
         /**
          * Whether [ip] is a public address: not loopback, any-local, link-local, site-local or multicast (the JDK's
          * checks), nor 0.0.0.0/8, 100.64.0.0/10 (shared, CGNAT), 255.255.255.255, fc00::/7 (unique local), nor an
@@ -608,7 +624,7 @@ class HostGate(
         private val random = SecureRandom()
 
         private fun token(): String {
-            val bytes = ByteArray(16)
+            val bytes = ByteArray(TOKEN_BYTES)
             random.nextBytes(bytes)
             return buildString { for (b in bytes) append(HEX[(b.toInt() shr 4) and 15]).append(HEX[b.toInt() and 15]) }
         }

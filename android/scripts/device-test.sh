@@ -378,7 +378,7 @@ fi
 if [ "$want_youtube" = 1 ]; then
     # Each class in an `am instrument` of its own: yt-dlp keeps module state, one run a process (the glue's rule), and
     # the instrumentation's process is where QjsTest and YtDlpVersionTest run theirs.
-    for name in YtDlpVersionTest QjsTest YtDlpServiceTest KillTest; do
+    for name in YtDlpVersionTest QjsTest YtDlpServiceTest KillTest GateServiceTest; do
         out="$(adb shell am instrument -w -e class "$ns.youtube.$name" \
             "$ns.youtube.test/$ns.youtube.YoutubeTestRunner" 2>&1 | tr -d '\r')" || true
         echo "$out"

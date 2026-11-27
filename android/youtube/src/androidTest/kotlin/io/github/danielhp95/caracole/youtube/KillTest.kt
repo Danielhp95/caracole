@@ -6,19 +6,23 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.danielhp95.caracole.youtube.Runs.context
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * A run stopped leaves nothing behind: a trickled download cancelled 2 s into its body, then, 2 s later, no process of
- * this app's uid but this one (the main); a run whose yt-dlp started a child, qjs (`--exec before_dl:`, under loopback
- * alone, the glue's one exception), cancelled 2 s after the child appears, the child gone with it; the next run works;
- * and the `:youtube` process killed by another (a SIGKILL from outside the client, as the low-memory killer sends one:
- * `am kill` leaves a process a foreground one binds) is [YtDlpStopped], this process answering after it. Run by
+ * A run stopped leaves nothing behind: a trickled download stopped 2 s into its body by a cancel, by a close and by
+ * its timeout, then, 2 s later, no process of this app's uid but this one (the main); a run whose yt-dlp started a
+ * child, qjs (the glue's one `--exec` form, under LOOPBACK alone), cancelled 2 s after the child appears, the child gone
+ * with it; a run stopped before its STARTED came (the service's seam holds it back), its process killed all the same;
+ * a run cancelled or closed while it waits its turn, which starts nothing; and the `:youtube` process killed by another
+ * (a SIGKILL from outside the client, as the low-memory killer sends one: `am kill` leaves a process a foreground one
+ * binds) is [YtDlpStopped], this process answering after it. Each time the next run works. Run by
  * `android/scripts/device-test.sh --youtube`, on the emulator alone.
  */
 @RunWith(AndroidJUnit4::class)
@@ -45,36 +49,68 @@ class KillTest {
     private fun nothingLeft(ms: Long, what: String) {
         SystemClock.sleep(ms)
         val left = Runs.others()
-        Runs.said("$what: ${ms} ms after the stop, processes of this uid but the main one: $left")
+        Runs.said("$what: $ms ms after the stop, processes of this uid but the main one: $left")
         assertEquals("left behind: $left", emptyMap<Int, String>(), left)
     }
 
+    /** The next run, of a fresh client: its own answer, whole. */
     private fun theNextRunWorks() {
-        val ran = client.run(Runs.version(gate.proxyArg), 120.0, { _, _ -> }, {})
-        assertEquals(ran.stderrTail, 0, ran.exit)
+        YtDlpClient(context).use { next ->
+            val ran = next.run(Runs.version(gate.proxyArg), 120.0, { _, _ -> }, {})
+            assertEquals(ran.stderrTail, 0, ran.exit)
+            assertTrue(ran.stdout, Regex("""\d{4}\.\d+\.\d+\n""").matches(ran.stdout))
+        }
+    }
+
+    private fun trickled() = LoopbackServer(Runs.clip, trickle = 256, pause = 100)
+
+    /** A trickled download, stopped by [stop] 2 s into its body. */
+    private fun stoppedInItsBody(name: String, timeoutS: Double = 120.0, stop: () -> Unit): Ran = trickled().use { s ->
+        val stopper = Thread {
+            if (s.bodyBegun.await(120, TimeUnit.SECONDS)) {
+                SystemClock.sleep(2_000)
+                stop()
+            }
+        }.apply { start() }
+        val ran = client.run(Runs.download(gate.proxyArg, s.url(), Runs.into(name)), timeoutS, { _, _ -> }, {})
+        stopper.join()
+        ran
     }
 
     @Test
-    fun aTrickledDownloadStoppedLeavesNoProcess() {
-        LoopbackServer(Runs.clip, trickle = 256, pause = 100).use { server ->
-            val stopper = Thread {
-                if (server.bodyBegun.await(120, TimeUnit.SECONDS)) {
-                    SystemClock.sleep(2_000)
-                    client.cancel()
-                }
-            }.apply { start() }
-            val ran = client.run(Runs.download(gate.proxyArg, server.url(), Runs.into("trickle")), 120.0, { _, _ -> }, {})
-            stopper.join()
-            assertTrue("not stopped: exit ${ran.exit}\n${ran.stderrTail}", ran.killed)
+    fun aTrickledDownloadCancelledLeavesNoProcess() {
+        val ran = stoppedInItsBody("cancel") { client.cancel() }
+        assertTrue("not stopped: exit ${ran.exit}\n${ran.stderrTail}", ran.killed)
+        assertFalse(ran.timedOut)
+        assertEquals(-1, ran.exit)
+        nothingLeft(2_000, "a trickled download cancelled")
+        theNextRunWorks()
+    }
+
+    @Test
+    fun aTrickledDownloadClosedLeavesNoProcess() {
+        val ran = stoppedInItsBody("close") { client.close() }
+        assertTrue(ran.killed)
+        assertFalse(ran.timedOut)
+        nothingLeft(2_000, "a trickled download closed")
+        theNextRunWorks()
+    }
+
+    @Test
+    fun aTrickledDownloadPastItsTimeoutLeavesNoProcess() {
+        // The download's own pause (2.5–5 s) and 2 s or so of its body: past 9 s, the run is killed mid-body.
+        trickled().use { s ->
+            val ran = client.run(Runs.download(gate.proxyArg, s.url(), Runs.into("timeout")), 9.0, { _, _ -> }, {})
+            assertTrue(ran.killed && ran.timedOut)
             assertEquals(-1, ran.exit)
+            assertTrue("the body never began", s.bodyBegun.count == 0L)
         }
-        nothingLeft(2_000, "a trickled download")
+        nothingLeft(2_000, "a trickled download past its timeout")
         theNextRunWorks()
     }
 
     @Test
     fun aChildOfYtDlpGoesWithItsProcess() {
-        val qjs = Qjs.path(context).path
         LoopbackServer(Runs.clip).use { server ->
             var child = -1
             var groups = ""
@@ -90,9 +126,7 @@ class KillTest {
                 }
                 client.cancel()
             }.apply { start() }
-            val argv = Runs.download(gate.proxyArg, server.url(), Runs.into("child"),
-                                     // A script with no `{}`, which --exec would fill with the file's path.
-                                     listOf("--exec", "before_dl:$qjs -e 'while (true);'"))
+            val argv = Runs.download(gate.proxyArg, server.url(), Runs.into("child"), Runs.child())
             val ran = client.run(argv, 120.0, { _, _ -> }, {})
             stopper.join()
             Runs.said("a child of yt-dlp: qjs $child; this process ${Process.myPid()} (group " +
@@ -104,15 +138,70 @@ class KillTest {
         theNextRunWorks()
     }
 
+    /** Stopped once the request was sent and before STARTED came: the client waits for it, then kills. */
+    @Test
+    fun aRunStoppedBeforeItsStartIsKilledWhenItsStartComes() {
+        client.startedDelayMs = 2_500
+        val ran = client.run(Runs.version(gate.proxyArg), 1.0, { _, _ -> }, {})
+        assertTrue(ran.killed && ran.timedOut)
+        assertEquals(-1, ran.processStartMs)
+        nothingLeft(2_000, "a run stopped before its STARTED")
+        theNextRunWorks()
+    }
+
+    /** Stopped before STARTED, which comes after the client's wait: the client finds the process by its name. */
+    @Test
+    fun aRunStoppedLongBeforeItsStartIsFoundByItsName() {
+        client.startedDelayMs = YtDlpClient.START_WAIT_MS + 3_000
+        val ran = client.run(Runs.version(gate.proxyArg), 1.0, { _, _ -> }, {})
+        assertTrue(ran.killed && ran.timedOut)
+        nothingLeft(2_000, "a run stopped long before its STARTED")
+        theNextRunWorks()
+    }
+
+    /** Another client's run in the way: this one's cancel or close while it waits its turn starts nothing. */
+    @Test
+    fun aRunStoppedWhileItWaitsItsTurnStartsNothing() {
+        for (stop in listOf<(YtDlpClient) -> Unit>({ it.cancel() }, { it.close() })) {
+            trickled().use { s ->
+                val other = YtDlpClient(context)
+                val waits = CountDownLatch(1)
+                var ran: Ran? = null
+                var took = 0L
+                val waiter = Thread {
+                    val t0 = SystemClock.elapsedRealtime()
+                    ran = other.run(Runs.version(gate.proxyArg), 120.0, { _, _ -> }, { waits.countDown() })
+                    took = SystemClock.elapsedRealtime() - t0
+                }
+                val first = Thread {
+                    client.run(Runs.download(gate.proxyArg, s.url(), Runs.into("first")), 120.0, { _, _ -> }, {})
+                }.apply { start() }
+                assertTrue(s.bodyBegun.await(120, TimeUnit.SECONDS))
+                waiter.start()
+                assertTrue("the second run didn't wait", waits.await(30, TimeUnit.SECONDS))
+                stop(other)
+                SystemClock.sleep(500)
+                client.cancel()
+                first.join()
+                waiter.join()
+                other.close()
+                assertTrue("the waiting run ran: $ran", ran!!.killed && ran!!.processStartMs == -1L)
+                assertTrue("it waited past the first's end: $took ms", took < 60_000)
+            }
+            nothingLeft(2_000, "a run stopped while it waited its turn")
+        }
+        theNextRunWorks()
+    }
+
     @Test
     fun theProcessKilledByAnotherIsYtDlpStopped() {
-        LoopbackServer(Runs.clip, trickle = 256, pause = 100).use { server ->
+        trickled().use { server ->
             // `am kill` kills a background process alone: :youtube, bound BIND_IMPORTANT by this foreground one, it
             // leaves (measured: the run then ends as ever). So the process is killed as the low-memory killer kills
             // one, a SIGKILL, from outside the client (Process.killProcess, which this uid may send its own).
             val killer = Thread {
                 if (server.bodyBegun.await(120, TimeUnit.SECONDS)) {
-                    val youtube = Runs.others().entries.first { it.value.endsWith(":youtube") }.key
+                    val youtube = checkNotNull(Runs.youtube()) { "no :youtube process" }
                     Runs.said("killing :youtube, $youtube, from outside the client")
                     Process.killProcess(youtube)
                 }

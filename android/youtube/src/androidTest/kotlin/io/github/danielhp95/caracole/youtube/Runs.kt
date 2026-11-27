@@ -36,8 +36,40 @@ object Runs {
         return argv.subList(0, dash) + extra + listOf("--", target)
     }
 
-    /** `--version` through [proxy]. */
-    fun version(proxy: String) = listOf("--ignore-config", "--proxy", proxy, "--version")
+    /** youtube.json's search argv, filled. */
+    fun search(proxy: String): List<String> {
+        val data = YouTubeData.read()
+        return data.argv("search", data.searchTarget("anything"), File(context.cacheDir, "yt-dlp").path,
+                         Qjs.path(context).path, proxy)
+    }
+
+    /** `--version` through [proxy]: the tests' own form, which the service runs under LOOPBACK alone. */
+    fun version(proxy: String) = listOf("--ignore-config", "--no-plugin-dirs", "--proxy", proxy, "--version")
+
+    /** KillTest's child, the glue's one `--exec` form: the app's qjs on a script of an endless loop in the cache. */
+    fun child(): List<String> {
+        val script = File(into("child-script"), "loop.js").apply { writeText("while (true);\n") }
+        return listOf("--exec", "before_dl:${Qjs.path(context).path} ${script.path}")
+    }
+
+    /** The app's `:youtube` process's pid, or null: from /proc, by its command line. */
+    fun youtube(): Int? = others().entries.firstOrNull { it.value.endsWith(YtDlpClient.PROCESS) }?.key
+
+    /** Waits until no process of this uid but this one is left, at most [ms]; what is left then. */
+    fun settle(ms: Long): Map<Int, String> {
+        val until = android.os.SystemClock.elapsedRealtime() + ms
+        while (others().isNotEmpty() && android.os.SystemClock.elapsedRealtime() < until) {
+            android.os.SystemClock.sleep(50)
+        }
+        return others()
+    }
+
+    /** The app's logcat lines (this uid reads its own processes' alone, the :youtube process's among them). */
+    fun logcat(): String = ProcessBuilder("logcat", "-d", "-v", "brief").redirectErrorStream(true).start().let {
+        val text = it.inputStream.readBytes().decodeToString()
+        it.waitFor()
+        text
+    }
 
     /** Every process of this app's uid but this one: pid to its command line (an app's /proc shows its own uid's). */
     fun others(): Map<Int, String> {

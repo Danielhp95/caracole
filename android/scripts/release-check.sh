@@ -20,6 +20,8 @@
 # - and of Python: no lib/*/libpython*, no libchaquopy_java.so, none of the libraries Chaquopy's Python links
 #   (lib<name>_python.so, lib<name>_chaquopy.so: OpenSSL's, SQLite's), no class under com/chaquo/ (Chaquopy's) in its
 #   dex and no entry under assets/chaquopy/ (the standard library, yt-dlp, the glue);
+# - and of :youtube's own: no class under io/github/danielhp95/caracole/youtube/ in its dex, and its manifest no
+#   YtDlpService, GateService or ":youtube" process;
 # - and of QuickJS-NG: no lib/*/libqjs.so; and its native libraries packaged as before the debug build's
 #   useLegacyPackaging (app/build.gradle.kts): every lib/*/*.so entry of the APK stored uncompressed and 16 KB aligned
 #   (zipalign -c -P 16's "(OK)", counted against the APK's own lib/*/*.so entries, so one zipalign leaves unsaid
@@ -70,10 +72,12 @@ model_file='\.(onnx|pt)$'
 weights_file='(^|/)(btc_model_large_voca\.pt|beat_this[^/]*\.onnx)$'
 
 # One APK's probes, a count each: "libs ortclasses mlclasses benchdex rowwords autochords assets models weights
-# provider benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets" (providers, every
-# provider the manifest declares: the dump read is a manifest's).
+# provider benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest"
+# (providers, every provider the manifest declares: the dump read is a manifest's; ytclasses, classes of :youtube,
+# io/github/danielhp95/caracole/youtube/, in its dex; ytmanifest, the manifest's YtDlpService, GateService or
+# ":youtube" process).
 probes() {
-    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 chaquoclasses=0 dex dump
+    local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 chaquoclasses=0 ytclasses=0 dex dump
     rm -rf "$probe/dex" && mkdir "$probe/dex"
     unzip -q -o "$apk" 'classes*.dex' -d "$probe/dex"
     for dex in "$probe"/dex/classes*.dex; do
@@ -85,6 +89,8 @@ probes() {
         benchdex=$((benchdex + $({ grep -a -o -E 'ChordsBench|BenchService' "$dex" || true; } | wc -l)))
         rowwords=$((rowwords + $({ grep -a -o 'Chords bench' "$dex" || true; } | wc -l)))
         chaquoclasses=$((chaquoclasses + $(grep -c "Class descriptor *: 'Lcom/chaquo/" <<<"$dump" || true)))
+        ytclasses=$((ytclasses + $(grep -c "Class descriptor *: 'Lio/github/danielhp95/caracole/youtube/" <<<"$dump" \
+            || true)))
     done
     [ "$dexes" -gt 0 ] || { echo "release-check.sh: no classes*.dex in $apk" >&2; exit 2; }
     nix develop ./android -c sh -c '"$ANDROID_HOME"/build-tools/36.0.0/aapt2 dump xmltree --file AndroidManifest.xml \
@@ -104,7 +110,9 @@ probes() {
         "$(grep -c '^lib/[^/]*/libchaquopy_java\.so$' "$probe/entries" || true)" \
         "$(grep -c -E '^lib/[^/]*/lib[a-z0-9]+_(python|chaquopy)\.so$' "$probe/entries" || true)" \
         "$chaquoclasses" \
-        "$(grep -c '^assets/chaquopy/' "$probe/entries" || true)"
+        "$(grep -c '^assets/chaquopy/' "$probe/entries" || true)" \
+        "$ytclasses" \
+        "$(grep -c -E 'YtDlpService|GateService|:youtube"' "$probe/manifest" || true)"
 }
 
 # One APK's native libraries: "qjs stored compressed extracted total" (libqjs.so entries; lib/*/*.so stored
@@ -139,7 +147,7 @@ check "the control: the debug classpath names project :youtube" \
     "$(yes_if '[ "$(grep -c "project :youtube" <<<"$debug_classpath" || true)" -gt 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
-    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets \
+    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest \
     < <(probes "$release")
 echo "release APK $release: $libs libonnxruntime*, $ortclasses classes under ai/onnxruntime/, $mlclasses of :ml," \
     "$benchdex bench names and $rowwords of Settings' row's words in its dex, $autochords entries under" \
@@ -165,6 +173,11 @@ check "release APK holds no libchaquopy_java.so" "$(yes_if '[ "$chaquojni" = 0 ]
 check "release APK holds no lib*_python.so or lib*_chaquopy.so" "$(yes_if '[ "$chaquolinked" = 0 ]')"
 check "release APK holds no class under com/chaquo/" "$(yes_if '[ "$chaquoclasses" = 0 ]')"
 check "release APK holds nothing under assets/chaquopy/" "$(yes_if '[ "$chaquoassets" = 0 ]')"
+echo "release APK: $ytclasses classes of :youtube in its dex, $ytmanifest YtDlpService, GateService or :youtube" \
+    "entries in its manifest"
+check "release APK holds no class of :youtube (io/github/danielhp95/caracole/youtube/)" "$(yes_if '[ "$ytclasses" = 0 ]')"
+check "release APK's manifest names no YtDlpService, GateService or :youtube process" \
+    "$(yes_if '[ "$ytmanifest" = 0 ]')"
 read -r qjs stored compressed extracted total < <(natives "$release")
 echo "release APK: $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed, of $total" \
     "lib/*/*.so entries, extractNativeLibs=true $extracted"
@@ -179,7 +192,7 @@ check "release APK's native libraries are every one stored uncompressed and 16 K
 check "release APK's manifest says no extractNativeLibs=true" "$(yes_if '[ "$extracted" = 0 ]')"
 
 read -r libs ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider benchmanifest \
-    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets \
+    providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest \
     < <(probes "$debug")
 echo "debug APK (the control) $debug, $(stat -c %s "$debug") bytes: $libs libonnxruntime*, $ortclasses classes" \
     "under ai/onnxruntime/, $mlclasses of :ml, $benchdex bench names and $rowwords of Settings' row's words in its" \
@@ -206,6 +219,11 @@ check "the control: the debug APK holds lib*_python.so and lib*_chaquopy.so" \
     "$(yes_if '[ "$chaquolinked" -gt 0 ]')"
 check "the control: the debug APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses" -gt 0 ]')"
 check "the control: the debug APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
+echo "debug APK (the control): $ytclasses classes of :youtube, $ytmanifest YtDlpService, GateService or :youtube" \
+    "entries in its manifest"
+check "the control: the debug APK holds classes of :youtube" "$(yes_if '[ "$ytclasses" -gt 0 ]')"
+check "the control: the debug APK's manifest names YtDlpService, GateService and :youtube" \
+    "$(yes_if '[ "$ytmanifest" -ge 3 ]')"
 read -r qjs stored compressed extracted total < <(natives "$debug")
 echo "debug APK (the control): $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed," \
     "of $total lib/*/*.so entries, extractNativeLibs=true $extracted"

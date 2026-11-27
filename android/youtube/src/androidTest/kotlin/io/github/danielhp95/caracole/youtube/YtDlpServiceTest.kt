@@ -120,33 +120,118 @@ class YtDlpServiceTest {
 
     @Test
     fun aSearchUnderLoopbackIsRefused() {
-        val argv = listOf("--ignore-config", "--proxy", gate.proxyArg, "--flat-playlist", "--dump-single-json", "--",
-                          "ytsearch1:anything")
-        val why = refused(argv)
+        val why = refused(Runs.search(gate.proxyArg))
         assertTrue(why, "loopback" in why)
         assertTrue(gate.log().toString(), gate.log().isEmpty())
     }
 
-    /** The gate's secret crosses the binder in the argv and is written to no log, of either process. */
+    /** A request whose mode isn't exactly LOOPBACK or NETWORK, none included, is refused before Python starts, and
+     * its process ends. */
+    @Test
+    fun aRequestOfNoModeOrAnotherIsRefused() {
+        for (mode in listOf(null, "", "loopback", "network", "OBSERVE")) {
+            RawService().use { raw ->
+                raw.send(7) {
+                    putStringArray(YtDlpService.Wire.ARGV, Runs.version(gate.proxyArg).toTypedArray())
+                    if (mode != null) putString(YtDlpService.Wire.NETWORK, mode)
+                }
+                val refused = raw.next(YtDlpService.Wire.REFUSED)
+                assertNotNull("$mode: not refused", refused)
+                assertEquals(7L, refused!!.getLong(YtDlpService.Wire.RUN_ID))
+                assertEquals(YtDlpService.BAD_MODE, refused.getString(YtDlpService.Wire.WORDS))
+                assertEquals(null, raw.next(YtDlpService.Wire.READY, 1))
+            }
+            assertEquals(emptyMap<Int, String>(), Runs.settle(10_000))
+        }
+    }
+
+    /** One request a process: a second on the same binding is refused, and the process ends, the first with it. */
+    @Test
+    fun aSecondRequestInOneProcessIsRefusedAndTheProcessEnds() {
+        RawService().use { raw ->
+            raw.send(1) {
+                putStringArray(YtDlpService.Wire.ARGV, Runs.version(gate.proxyArg).toTypedArray())
+                putString(YtDlpService.Wire.NETWORK, "LOOPBACK")
+                putLong(YtDlpService.Wire.DELAY_STARTED, 3_000)
+            }
+            raw.send(2) {
+                putStringArray(YtDlpService.Wire.ARGV, Runs.version(gate.proxyArg).toTypedArray())
+                putString(YtDlpService.Wire.NETWORK, "LOOPBACK")
+            }
+            val refused = raw.next(YtDlpService.Wire.REFUSED)
+            assertEquals(2L, refused?.getLong(YtDlpService.Wire.RUN_ID))
+            assertEquals(YtDlpService.ONE_RUN, refused?.getString(YtDlpService.Wire.WORDS))
+            assertEquals(emptyMap<Int, String>(), Runs.settle(10_000))
+            assertEquals(null, raw.next(YtDlpService.Wire.DONE, 1))
+        }
+    }
+
+    /** A request let go of before it began runs nothing: the service asks whether it is still bound before Python,
+     * the check and the run, and ends. */
+    @Test
+    fun aRequestLetGoOfRunsNothing() {
+        Env.err(context).delete()
+        RawService().use { raw ->
+            raw.send(3) {
+                putStringArray(YtDlpService.Wire.ARGV, Runs.version(gate.proxyArg).toTypedArray())
+                putString(YtDlpService.Wire.NETWORK, "LOOPBACK")
+                putLong(YtDlpService.Wire.DELAY_STARTED, 2_000)
+            }
+            raw.unbind()
+            assertNotNull("STARTED never came", raw.next(YtDlpService.Wire.STARTED, 20))
+            assertEquals(emptyMap<Int, String>(), Runs.settle(10_000))
+            assertEquals(null, raw.next(YtDlpService.Wire.READY, 1))
+        }
+        assertFalse("yt-dlp ran", Env.err(context).exists())
+    }
+
+    /** yt-dlp's `-v` prints its proxy map, the gate's secret in it: the client redacts it from every line, the tail
+     * and the stdout. */
+    @Test
+    fun verboseOutputIsRedacted() {
+        LoopbackServer(Runs.clip).use { server ->
+            val ran = run(Runs.download(gate.proxyArg, server.url(), Runs.into("verbose"), listOf("-v")))
+            assertEquals(ran.stderrTail, 0, ran.exit)
+            val map = lines.firstOrNull { it.startsWith("[debug] Proxy map:") }
+            assertNotNull(lines.joinToString("\n"), map)
+            assertTrue(map, YtDlpClient.PROXY_SAID in map!!)
+            assertNoSecret(ran)
+        }
+    }
+
+    private val secret get() = gate.proxyArg.removePrefix("http://").substringBefore('@')
+
+    private fun assertNoSecret(ran: Ran?) {
+        for (part in listOf(gate.proxyArg, secret.substringBefore(':'), secret.substringAfter(':'))) {
+            assertFalse("the gate's secret in a line", lines.any { part in it })
+            if (ran != null) assertFalse("the gate's secret in Ran", part in ran.stderrTail || part in ran.stdout)
+        }
+    }
+
+    /** The gate's secret crosses the binder in the argv and is written to no log, of either process: after a
+     * download, a refusal, a run that fails, and a verbose run. */
     @Test
     fun theSecretIsInNoLog() {
         LoopbackServer(Runs.clip).use { server ->
             val ran = run(Runs.download(gate.proxyArg, server.url(), Runs.into("secret")))
             assertEquals(ran.stderrTail, 0, ran.exit)
+            assertNoSecret(ran)
+            refused(Runs.search(gate.proxyArg))
+            val missing = run(Runs.download(gate.proxyArg, server.url().replace("clip.m4a", "none.m4a"),
+                                            Runs.into("missing")))
+            assertTrue(missing.stderrTail, missing.exit != 0)
+            assertNoSecret(missing)
+            val verbose = run(Runs.download(gate.proxyArg, server.url(), Runs.into("secret-v"), listOf("-v")))
+            assertNoSecret(verbose)
         }
         val marker = "caracole-ytdlp-test-marker-${SystemClock.elapsedRealtime()}"
         Runs.said(marker)
-        // This app's uid reads its own processes' lines alone, the :youtube process's among them.
-        val log = ProcessBuilder("logcat", "-d", "-v", "brief").redirectErrorStream(true).start().let {
-            val text = it.inputStream.readBytes().decodeToString()
-            it.waitFor()
-            text
-        }
+        val log = Runs.logcat()
         assertTrue("logcat read nothing of this process", marker in log)
         assertTrue("logcat read nothing of :youtube", Regex("""/caracole-ytdlp\s*\(""").containsMatchIn(log))
-        val secret = gate.proxyArg.removePrefix("http://").substringBefore('@')
-        assertFalse("the gate's user and secret are in logcat", secret in log)
-        assertFalse("the gate's secret is in logcat", secret.substringAfter(':') in log)
-        assertFalse("the gate's secret is in stderr", lines.any { secret.substringAfter(':') in it })
+        assertTrue("logcat read no refusal", "refused a run" in log)
+        for (part in listOf(secret, secret.substringBefore(':'), secret.substringAfter(':'))) {
+            assertFalse("the gate's secret is in logcat", part in log)
+        }
     }
 }

@@ -2823,25 +2823,34 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   none of the standard library's modules the design leaves out (Chaquopy packages none of them). `QjsTest` (the same
   APK): qjs executable there, its `--version` the tag, a script run, and yt-dlp's `-v` (no URL: its header, exit 2)
   naming `quickjs-ng-<version>` among its runtimes. release-check.sh: no `libpython*`, `libchaquopy_java.so`,
-  `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, its
-  native libraries stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
-  - The process (the design's §3.2): `YtDlpService` in `:youtube` takes one request (`argv`, and `network`, the main
-    process's `caracole.network` sent by the client: the `:youtube` process has no test runner and reads no
-    property; a request without it refused), starts Python, makes the environment `Env`'s alone (the glue's
+  `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, no
+  class of `:youtube` and no `YtDlpService`, `GateService` or `:youtube` in its manifest, its native libraries every
+  one stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
+  - The process (the design's §3.2): `YtDlpService` in `:youtube` takes one request a process (`TAKEN`, process-wide;
+    a second refused and the process ended), each answer carrying its run's id: `argv`, and `network`, exactly
+    `LOOPBACK` or `NETWORK` (`HostGate.Mode`'s names, the main process's `caracole.network` sent by the client: the
+    `:youtube` process has no test runner and reads no property; anything else refused). It runs nothing once its
+    client let go (still bound? before Python, the check and the run), makes the environment `Env`'s alone (the glue's
     `environ`: `HOME` `filesDir/youtube-home`, `TMPDIR` `cacheDir/youtube-tmp` swept before and after, `XDG_*` there,
-    `LANG`, `PATH`; no proxy variable), refuses through the glue's `refusal` (yt-dlp's own option parser: a `--proxy`
-    that isn't a gate's `http://user:secret@127.0.0.1:port`, by its shape; another proxy, targets or options from a
-    file, an update, `--downloader`, `--exec` but a test's qjs `before_dl:` under loopback; under loopback a target
-    not of 127.0.0.1 or 10.0.2.2), runs it, answers, and kills its process once unbound; a second request refused.
-    `YtDlpClient(context).run(argv, timeoutS, onLine, waiting): Ran` binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one
-    run at a time in the process, follows its stderr from `cacheDir/youtube-run/`, kills its pid on a timeout,
-    `cancel()` or `close()` (Android then kills the process's cgroup, qjs with it: KillTest), waits until it is gone
-    before the next; `YtDlpStopped` for a process gone unasked, `Refused` in the glue's words. `GateService`, in the
-    main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)` there, rule YOUTUBE),
-    its `proxyArg` and its log over a Messenger (`GateService.Client`). No argv, so no secret, is logged on either
-    side. `YtDlpServiceTest` and `KillTest` (`device-test.sh --youtube`): `--version`, youtube.json's download argv
-    over a clip served on 127.0.0.1 by plain HTTP and HTTPS through the gate, the refusals, the secret in no logcat
-    line, a stop that leaves no process of the uid but the main one; `GlueRefusalTest` (JVM) the refusals.
+    `LANG`, `PATH`; no proxy variable), and runs the argv only through the glue's `refusal`, an allowlist: read by
+    yt-dlp's own option parser (an alias as what it expands to), it must be one of youtube.json's `phone_argv`
+    templates as that parser reads them (`GlueRules`: the templates, their placeholders and targets through
+    `YouTubeData`, the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from `HostGate`): each option a template sets with
+    its value or a value its placeholder's check passes, every other at the parser's default; under LOOPBACK the
+    tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). It kills
+    its process once unbound. `YtDlpClient(context).run(argv, timeoutS, onLine, waiting): Ran` (`killed`,
+    `timedOut`) binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one run at a time in the process, each run its own stop
+    (`cancel()`, `close()`, a run still waiting its turn included), follows its stderr from `cacheDir/youtube-run/`,
+    redacts the `--proxy` from every line, the tail and the stdout (`Redact`), kills its pid on a stop (waiting for
+    STARTED, else finding `:youtube` by its name; Android then kills the process's cgroup, qjs with it: KillTest;
+    never a process-group kill, the uid's processes sharing zygote's), and waits until it is gone before the next;
+    `YtDlpStopped` for a process gone unasked, `YtDlpNotStarted` for none started, `Refused` in the glue's words.
+    `GateService`, in the main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)`
+    there, rule YOUTUBE), its `proxyArg` and its log over a Messenger (`GateService.Client`, each ask matched to its
+    answer); nothing it is asked throws on its thread; a client's gates close with its close or its process's death.
+    No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest` and `GateServiceTest`
+    (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
+    in no logcat line, a stop of every kind that leaves no process of the uid but the main one.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

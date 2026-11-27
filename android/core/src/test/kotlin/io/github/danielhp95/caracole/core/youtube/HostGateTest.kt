@@ -427,6 +427,21 @@ class HostGateTest {
         assertTrue(opened.proxyArg.endsWith("@127.0.0.1:${opened.port}"))
     }
 
+    /** PROXY_PATTERN, the shape `:youtube`'s glue holds a `--proxy` to (a Python regex; this one reads the same in
+     * Java's), matches every proxyArg whole, and nothing of another host, scheme or token. */
+    @Test
+    fun theProxyPatternIsProxyArgsShape() {
+        val pattern = Regex(HostGate.PROXY_PATTERN)
+        repeat(3) {
+            val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            assertTrue(pattern.matches(opened.proxyArg), opened.proxyArg)
+            assertFalse(pattern.matches(opened.proxyArg.replace("127.0.0.1", "127.0.0.2")))
+            assertFalse(pattern.matches(opened.proxyArg.replace("http://", "socks5://")))
+            assertFalse(pattern.matches(opened.proxyArg.replace("@", "0@")))
+        }
+        assertEquals(listOf("127.0.0.1", "10.0.2.2"), HostGate.LOOPBACK_NAMES)
+    }
+
     @Test
     fun closeStopsAcceptingClosesEveryTunnelAndLeavesNoThread() {
         val server = ServerSocket(0, 50, loopback).also { servers += it }

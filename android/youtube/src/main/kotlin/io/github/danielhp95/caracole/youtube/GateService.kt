@@ -12,6 +12,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.os.RemoteException
+import android.os.SystemClock
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import java.io.Closeable
 import java.io.IOException
@@ -19,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The app's gate for another process of the app (the phone-youtube design's §3.3): a [HostGate] runs in the main process
@@ -29,13 +32,24 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Over a [Messenger]: [OPEN] starts a gate and answers its id, port and `proxyArg` (which holds its secret, carried in
  * the answer alone, never logged); [LOG] answers a gate's [HostGate.log] and [HostGate.refusedAny]; [CLOSE] closes one;
- * every gate is closed once no client is bound. [Client] is that from the other side.
+ * [CLOSE_ALL] a client's every gate (its close), each gate is closed too when the process that asked for it dies, and
+ * every gate when the service ends. Nothing it is asked throws on its thread (where an uncaught
+ * exception would end the main process, its server and queue with it): a gate that won't start is said in the answer,
+ * and an answer to an asker gone closes the gate opened for it. [Client] is that from the other side, each ask matched
+ * to its own answer.
  */
 class GateService : Service() {
     private val thread = HandlerThread("caracole-gate-service").apply { start() }
     private val gates = ConcurrentHashMap<Int, HostGate>()
+    /** Each gate's asker: the binder of the Messenger it asked with, whose client's close, or process's death, closes
+     * it. */
+    private val owners = ConcurrentHashMap<Int, IBinder>()
     private val serial = AtomicInteger()
     private val messenger by lazy { Messenger(Handler(thread.looper) { msg -> receive(msg); true }) }
+
+    override fun onCreate() {
+        running = this
+    }
 
     override fun onBind(intent: Intent): IBinder = messenger.binder
 
@@ -45,27 +59,58 @@ class GateService : Service() {
     }
 
     override fun onDestroy() {
+        if (running === this) running = null
         closeAll()
         thread.quitSafely()
     }
 
     private fun closeAll() {
-        for (id in gates.keys.toList()) gates.remove(id)?.close()
+        for (id in gates.keys.toList()) closeGate(id)
+    }
+
+    private fun closeGate(id: Int) {
+        owners.remove(id)
+        gates.remove(id)?.close()
+    }
+
+    private fun closeOf(owner: IBinder) {
+        for ((id, of) in owners.entries.toList()) if (of == owner) closeGate(id)
     }
 
     private fun receive(msg: Message) {
         val reply = msg.replyTo ?: return
         val id = msg.data.getInt(ID, -1)
-        val answer = Bundle()
+        val ask = msg.data.getLong(ASK, -1)
+        val answer = Bundle().apply { putLong(ASK, ask) }
+        var opened = -1
         when (msg.what) {
             OPEN -> {
-                val gate = HostGate(HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK)), HostGate.HostRule.YOUTUBE)
-                val open = gate.start()
-                val n = serial.incrementAndGet()
-                gates[n] = gate
-                answer.putInt(ID, n)
-                answer.putInt(PORT, open.port)
-                answer.putString(PROXY, open.proxyArg)
+                var gate: HostGate? = null
+                val open = try {
+                    makeGate(HostGate.Mode.of(System.getProperty(YtDlpClient.NETWORK))).also { gate = it }.start()
+                } catch (e: Exception) {
+                    // A gate that won't listen (no port, a socket refused): said to the asker, never thrown here,
+                    // where an uncaught exception would end the main process.
+                    gate?.close()
+                    null
+                }
+                if (open == null || gate == null) {
+                    answer.putString(FAILED, "the gate couldn't start")
+                } else {
+                    opened = serial.incrementAndGet()
+                    gates[opened] = gate!!
+                    val owner = reply.binder
+                    owners[opened] = owner
+                    try {
+                        // An asker of another process that dies has its gates closed with it.
+                        owner.linkToDeath({ closeOf(owner) }, 0)
+                    } catch (_: RemoteException) {
+                        closeGate(opened)
+                    }
+                    answer.putInt(ID, opened)
+                    answer.putInt(PORT, open.port)
+                    answer.putString(PROXY, open.proxyArg)
+                }
             }
             LOG -> {
                 val gate = gates[id]
@@ -81,20 +126,38 @@ class GateService : Service() {
                         putString("why", use.why)
                     })
                     answer.putBoolean(REFUSED_ANY, gate.refusedAny())
+                } else {
+                    answer.putString(FAILED, "no such gate")
                 }
             }
-            CLOSE -> {
-                gates.remove(id)?.close()
-            }
+            CLOSE -> closeGate(id)
+            CLOSE_ALL -> closeOf(reply.binder)
             else -> return
         }
-        reply.send(Message.obtain(null, msg.what).apply { data = answer })
+        if (answerDelayMs > 0) SystemClock.sleep(answerDelayMs)
+        try {
+            reply.send(Message.obtain(null, msg.what).apply { data = answer })
+        } catch (e: RemoteException) {
+            // The asker died between asking and the answer (a DeadObjectException): the gate it would have had is
+            // closed now, never left listening until the last unbind; nothing thrown on this thread.
+            if (opened > 0) closeGate(opened)
+        }
     }
+
+    /** How many gates are open now. */
+    internal fun openGates(): Int = gates.size
+
+    /** The id of the gate opened last. */
+    internal fun newest(): Int = serial.get()
 
     /** A gate opened in the main process, asked from another: its [port] and [proxyArg] (with its secret: never log
      * it), its [log] and [refusedAny] as [HostGate.Opened]'s. */
-    class Gate internal constructor(private val client: Client, private val id: Int, val port: Int, val proxyArg: String) :
-        Closeable {
+    class Gate internal constructor(
+        private val client: Client,
+        internal val id: Int,
+        val port: Int,
+        val proxyArg: String,
+    ) : Closeable {
         fun log(): Map<String, HostGate.HostUse> = client.log(id).first
 
         fun refusedAny(): Boolean = client.log(id).second
@@ -109,6 +172,7 @@ class GateService : Service() {
         private val context = context.applicationContext
         private val replies = HandlerThread("caracole-gate-client").apply { start() }
         private val answers = LinkedBlockingQueue<Message>()
+        private val asks = AtomicLong()
         private val incoming = Messenger(Handler(replies.looper) { msg ->
             answers.put(Message.obtain(msg))
             true
@@ -152,19 +216,40 @@ class GateService : Service() {
             ask(CLOSE, id)
         }
 
+        /** One ask and its own answer: an answer of another (an earlier ask's, late) is passed over. */
         @Synchronized
         private fun ask(what: Int, id: Int): Bundle {
-            answers.clear()
+            val ask = asks.incrementAndGet()
             service.send(Message.obtain(null, what).apply {
                 replyTo = incoming
-                data = Bundle().apply { putInt(ID, id) }
+                data = Bundle().apply {
+                    putInt(ID, id)
+                    putLong(ASK, ask)
+                }
             })
-            val answer = answers.poll(WAIT_S, TimeUnit.SECONDS) ?: throw IOException("the gate's service didn't answer")
-            return Bundle(answer.data)
+            val until = SystemClock.elapsedRealtime() + waitMs
+            while (true) {
+                val left = until - SystemClock.elapsedRealtime()
+                val answer = (if (left > 0) answers.poll(left, TimeUnit.MILLISECONDS) else null)
+                    ?: throw IOException("the gate's service didn't answer")
+                if (answer.what != what || answer.data.getLong(ASK, -1) != ask) continue
+                val data = Bundle(answer.data)
+                data.getString(FAILED)?.let { throw IOException(it) }
+                return data
+            }
         }
 
-        /** Lets go of the service, which closes every gate it opened once no client is bound. */
+        /** How long an ask waits for its answer (a test's shorter). */
+        internal var waitMs = WAIT_S * 1000
+
+        /** Closes every gate this client opened (one whose answer came too late among them), then lets go of the
+         * service. */
         override fun close() {
+            try {
+                if (asks.get() > 0) ask(CLOSE_ALL, -1)
+            } catch (_: IOException) {
+                // The service gone or slow: its gates go with it, or at its end.
+            }
             try {
                 context.unbindService(connection)
             } catch (_: IllegalArgumentException) {
@@ -177,12 +262,24 @@ class GateService : Service() {
         const val OPEN = 1
         const val LOG = 2
         const val CLOSE = 3
+        const val CLOSE_ALL = 4
 
         private const val ID = "id"
+        private const val ASK = "ask"
+        private const val FAILED = "failed"
         private const val PORT = "port"
         private const val PROXY = "proxy"
         private const val HOSTS = "hosts"
         private const val REFUSED_ANY = "refusedAny"
         private const val WAIT_S = 10L
+
+        /** How a gate is made: a test's seam (a gate that won't start). */
+        @Volatile internal var makeGate: (HostGate.Mode) -> HostGate = { mode -> HostGate(mode, HostGate.HostRule.YOUTUBE) }
+
+        /** A test's seam: each answer held back that long, as a slow main process would. */
+        @Volatile internal var answerDelayMs = 0L
+
+        /** The service running in this process, for a test to count its gates. */
+        @Volatile internal var running: GateService? = null
     }
 }

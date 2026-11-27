@@ -958,16 +958,26 @@ holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy
 nothing under `assets/chaquopy/`, with the debug build as the control. No route runs it yet.
 
 Each yt-dlp run is a process of its own, `:youtube` (`YtDlpService`), as the computer runs a fresh `yt-dlp`:
-`YtDlpClient` in the main process binds it, sends the argv and its own `caracole.network` (that process has no test
-runner to set it), follows yt-dlp's stderr line by line, and once it is answered the service kills its process. The
-environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy variable). The
-service refuses an argv whose `--proxy` isn't a gate's (`http://user:secret@127.0.0.1:port`), that names another proxy,
-reads targets or options from a file, updates yt-dlp, hands a download to another program or runs a command, and under
-`caracole.network=loopback` any target that isn't an address of 127.0.0.1 or 10.0.2.2, so a test can't reach a real
-host through it. A timeout, a cancel or a close kills the `:youtube` process, and Android kills what it started with
+`YtDlpClient` in the main process binds it, sends the argv and its own mode (`caracole.network`, as `LOOPBACK` or
+`NETWORK`: that process has no test runner to set it, and refuses any other value), follows yt-dlp's stderr line by
+line, and once it is answered the service kills its process; one request a process, and none run once its client let
+go. The environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy
+variable). The service runs an argv only as one of the phone's own templates (youtube.json's `phone_argv`) reads to
+yt-dlp's own option parser: each option a template sets with its value, or a value its placeholder's check passes
+(the gate's `--proxy` shape, the app's qjs, folders inside the app's own, a YouTube search or video on the network and
+a 127.0.0.1 or 10.0.2.2 address under `LOOPBACK`), every other at its default; under `LOOPBACK` the tests' own forms
+too (`--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). So a test can't reach a real host through
+it, and no argv runs a command, loads a plugin, reads cookies or writes outside the app. A timeout, a cancel or a close
+kills the `:youtube` process (found by its name when its pid hasn't come yet), and Android kills what it started with
 it (qjs among them: measured, nothing of the app's uid left 2 s after); one killed from outside is "yt-dlp stopped (the
 phone may have run out of memory)". `GateService`, in the main process, gives another process of the app a gate there.
-`YtDlpServiceTest` and `KillTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
+
+Two cautions for what builds on it. Never kill a process group: every process of the app's uid, the main one
+included, shares one (zygote's). And yt-dlp's `-v` prints its proxy map, the gate's secret in it: `YtDlpClient` redacts
+the `--proxy` from every line and the output it gives back, but a bench or a debug run that adds `-v` must keep those
+`[debug]` lines out of every log, report and screen but through it.
+
+`YtDlpServiceTest`, `KillTest` and `GateServiceTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
 `tests/helpers/synth_music.py`, CC0) from a server of the test's on 127.0.0.1, by plain HTTP and by HTTPS, through the
 gate: on the x86_64 emulator the process starts about 0.1 s after the bind, Python is ready with yt-dlp imported at
 0.6–0.8 s, a `--version` run takes 0.7–0.8 s whole, and the clip's download 4.6–5.7 s (yt-dlp's own pause before a
