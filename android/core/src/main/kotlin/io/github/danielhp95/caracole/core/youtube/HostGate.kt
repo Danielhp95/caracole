@@ -64,7 +64,8 @@ class HostGate(
     /**
      * Which hosts a [Mode.NETWORK] gate allows: [YOUTUBE] (the design's §3.3 list, CONNECT on 443 alone) or [OBSERVE]
      * (the bench's, set by a button press alone: every host and port, CONNECT and GET, logged). Names are compared
-     * lowercased as ASCII with no trailing dot; an IP literal never matches a name. Kotlin data in this one place.
+     * lowercased as ASCII with no trailing dot; an IP literal never matches a name. The names, the suffixes, the port,
+     * the hosts reported apart and those refused by name are youtube.py's PHONE_GATE (youtube.json's `gate`).
      */
     class HostRule private constructor(
         private val label: String,
@@ -89,16 +90,18 @@ class HostGate(
         override fun toString() = "HostRule.$label"
 
         companion object {
-            /** Refused by name whatever the rule: Google's attestation (BotGuard's `Waa`). A CONNECT hides the path. */
-            val REFUSED: List<String> = listOf("jnn-pa.googleapis.com")
+            private val data = YouTubeData.read()
 
-            private val APART = setOf("consent.youtube.com", "redirector.googlevideo.com")
+            /** Refused by name whatever the rule: Google's attestation (BotGuard's `Waa`). A CONNECT hides the path. */
+            val REFUSED: List<String> = data.texts("refused", data.gate)
+
+            private val APART = data.texts("apart", data.gate).toSet()
 
             val YOUTUBE = HostRule(
                 "YOUTUBE",
-                setOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "consent.youtube.com"),
-                listOf(".googlevideo.com"),
-                port = 443,
+                data.texts("names", data.gate).toSet(),
+                data.texts("suffixes", data.gate),
+                port = data.number("port", data.gate).toInt(),
                 plainGet = false,
                 apart = APART,
             )
@@ -136,8 +139,15 @@ class HostGate(
         val why: String? = null,
     )
 
-    /** A started gate: its port, and the `--proxy` value yt-dlp is given, which holds the user and the secret. */
-    class Opened internal constructor(val port: Int, val proxyArg: String) {
+    /**
+     * A started gate: its port, and the `--proxy` value yt-dlp is given, which holds the user and the secret; and its
+     * gate's [log] and [refusedAny], which a run reads before anything else (YtDlp).
+     */
+    class Opened internal constructor(val port: Int, val proxyArg: String, private val gate: HostGate) {
+        fun log(): Map<String, HostUse> = gate.log()
+
+        fun refusedAny(): Boolean = gate.refusedAny()
+
         override fun toString() = "HostGate.Opened(127.0.0.1:$port)"
     }
 
@@ -179,7 +189,7 @@ class HostGate(
         server = socket
         val port = socket.localPort
         acceptor = spawn("caracole-gate-$port-accept") { accept(socket) }!!
-        return Opened(port, "http://$user:$secret@127.0.0.1:$port")
+        return Opened(port, "http://$user:$secret@127.0.0.1:$port", this)
     }
 
     /** Each host asked for, in the order first asked; at most [LOG_HOSTS] names, the rest under [OTHER_HOSTS]. */

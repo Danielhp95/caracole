@@ -91,10 +91,10 @@ object Videos {
     }
 
     /** Python's `a or b`. */
-    private fun or(a: JsonElement?, b: JsonElement?): JsonElement? = if (PyValues.truthy(a)) a else b
+    internal fun or(a: JsonElement?, b: JsonElement?): JsonElement? = if (PyValues.truthy(a)) a else b
 
     /** Python's `str(v or "")`. */
-    private fun str(v: JsonElement?): String = when {
+    internal fun str(v: JsonElement?): String = when {
         !PyValues.truthy(v) -> ""
         v is JsonPrimitive && v.isString -> v.content
         else -> PyValues.repr(v)

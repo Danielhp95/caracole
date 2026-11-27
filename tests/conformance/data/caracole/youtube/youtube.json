@@ -496,5 +496,40 @@
   "asked_for_days": 30,
   "failed_for_seconds": 3600,
   "failures_pause": 3
+ },
+ "gate": {
+  "names": [
+   "youtube.com",
+   "www.youtube.com",
+   "m.youtube.com",
+   "music.youtube.com",
+   "consent.youtube.com"
+  ],
+  "suffixes": [
+   ".googlevideo.com"
+  ],
+  "port": 443,
+  "apart": [
+   "consent.youtube.com",
+   "redirector.googlevideo.com"
+  ],
+  "refused": [
+   "jnn-pa.googleapis.com"
+  ],
+  "refusal": "yt-dlp asked for {host}, which caracole doesn't allow"
+ },
+ "runner": {
+  "cache_folder": "yt-dlp",
+  "budget_spent": "budget of {budget} yt-dlp runs spent",
+  "blocked_earlier": "blocked earlier this run",
+  "unavailable_said": "video unavailable: {reason}",
+  "timed_out": "yt-dlp took longer than {timeout:g} s and was stopped",
+  "said_nothing": "yt-dlp failed and said nothing",
+  "no_audio_left": "yt-dlp left no audio file in {folder}",
+  "reason_cut": "…",
+  "block_statuses": [
+   403,
+   429
+  ]
  }
 }

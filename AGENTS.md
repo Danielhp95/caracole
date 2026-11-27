@@ -3083,7 +3083,19 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `Choose`: `choose` and `ranked` (`_ranked`'s key: tier, title, closeness, official, rank), in code points, names by
     core.keys.Normalize, patterns through PyRegex;
   - `Classify`: `of` (classify), `ofRun` (the exit status first), `OK_EXIT`, `OK`, `GATE` (the runner's, before both);
-  - vectors/youtube/argv, classify, parse and choose.jsonl (`YouTubeReplay`, area `youtube`).
+  - `HostGate.HostRule.YOUTUBE`: youtube.py's `PHONE_GATE` (youtube.json's `gate`: names, suffixes, port, the hosts
+    reported apart, those refused by name, the refusal's words); the computer has no gate;
+  - `YtDlp` (Y1.3), youtube.py's `YtDlp` over a `YtDlpProcess` (`Ran`; `NotStarted`, nothing sent): `budget` runs
+    (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), the pause
+    after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
+    gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
+    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block), then a timeout, the exit status and
+    `Classify.of`: `ProviderBlocked` (`Health.recordBlock` at the job's start, every later run refused with no
+    process), `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the
+    computer's for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their
+    place);
+  - vectors/youtube/argv, classify, parse, choose and runs.jsonl (`YouTubeReplay`, area `youtube`; runs.jsonl the
+    computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
 
 ##### The Requests tab on the phone
 

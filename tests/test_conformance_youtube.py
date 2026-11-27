@@ -51,7 +51,16 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
   and ``key``, in words, the order of the videos that fit;
 - ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``) and ``give_up_after`` (``GIVE_UP_AFTER``);
 - ``search``: youtube_search.py's ``searches_per_hour``, ``asked_for_days`` (``ASKED_FOR``, the 30 days),
-  ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``.
+  ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
+- ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
+  under one of ``suffixes``, on ``port`` by CONNECT; ``apart``, allowed and reported apart; ``refused``, by name in
+  every mode; ``refusal``, a run's error when the gate refused a host (``{host}``), read from its log first;
+- ``runner``: ``YtDlp``'s words and folder: ``cache_folder`` (``CACHE_FOLDER``, under the cache folder given),
+  ``budget_spent`` (``{budget}``), ``blocked_earlier``, ``unavailable_said`` (``{reason}``), ``timed_out``
+  (``{timeout:g}``, Python's ``format(timeout, "g")``), ``said_nothing`` (a failed run's reason when stderr has no
+  line), ``reason_cut`` (what ends a reason cut to ``reason_chars``), ``no_audio_left`` (``{folder}``, the folder's
+  name) and
+  ``block_statuses`` (a block's status when stderr names one of them, else none).
 
 argv.jsonl: ``{"phone": {what, target, cache_dir, qjs, proxy, into}, "argv": [...]}``, ``phone_argv``'s answer (each
 also the template filled by ``fill``'s rule); ``{"phone": {...}, "refused": true}`` for a target no run is made of;
@@ -73,20 +82,37 @@ classify.jsonl: ``{"stderr", "exit", "class", "provisional"}``: ``classify(stder
 than 0, ``ok`` for one that exited 0. ``provisional`` is null for the computer's own samples (tests/test_youtube.py)
 and the rules' edges; else it says the text was composed from yt-dlp's source, not taken from a run, and Gate Y0's
 logs confirm or replace it.
+
+runs.jsonl: the computer's ``YtDlp`` over FakeYtDlp, a scenario a record (test_youtube.py's: the budget and the pace,
+blocks, unavailable videos, any other error, a timeout, a download; and a pass-over and an out of date run, which the
+computer reads as errors): ``{"scenario", "budget", "delay", "timeouts", "draws", "calls", "events", "slept",
+"requests_made", "block"}``. ``draws`` are the policy's ``uniform`` draws in order; the clock moves only by ``slept``
+and each call's ``gap`` (the caller's time before it). Each call is ``{"call", "arg", "gap", "argv", "ran",
+"classify", "outcome"}``: ``argv`` the run's kind, target and ``into`` (``<into>``: the folder given) as the phone's
+template fills them, null for no process; ``ran`` what the process gave (``exit``, ``stdout``, ``stderr``; or
+``timed_out``) and, for a download, the file it ``writes`` in ``into``; ``classify`` youtube.classify of a failed
+run's stderr (null for an ok, a timed out or no run), beside the computer's own reading; ``outcome`` what the call
+returned (a search's ids, a video's or a download's ``[id, title, channel, duration]`` and its ``file``) or
+``raised`` (the class, ``message`` its str()). ``events`` ``[url, status, decision, message]`` each, in order;
+``block`` the computer's ``record_block`` of the first block (its message, the cooldown's hours after the run's start).
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import random
 import re
+import subprocess
+from datetime import UTC, datetime
 
 import pytest
 from helpers.corpus import DATA, VECTORS, check, jsonl
 from helpers.fake_ytdlp import FakeYtDlp, entry
 
-from caracole import youtube, youtube_fetch, youtube_search
+from caracole import db, health, youtube, youtube_fetch, youtube_search
 from caracole.config import ProviderPolicy
+from caracole.http import BudgetExhausted, ProviderError
 from caracole.youtube_urls import VIDEO_ID, watch_url
 
 MADE_BY = "tests/test_conformance_youtube.py"
@@ -195,6 +221,14 @@ def youtube_json() -> str:
                    "asked_for_days": youtube_search.ASKED_FOR.days,
                    "failed_for_seconds": int(youtube_search.FAILED_FOR.total_seconds()),
                    "failures_pause": youtube_search.FAILURES_PAUSE},
+        "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
+                 "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
+                 "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal},
+        "runner": {"cache_folder": youtube.CACHE_FOLDER, "budget_spent": youtube.BUDGET_SPENT,
+                   "blocked_earlier": youtube.BLOCKED_EARLIER, "unavailable_said": youtube.UNAVAILABLE_SAID,
+                   "timed_out": youtube.TIMED_OUT, "said_nothing": youtube.SAID_NOTHING,
+                   "no_audio_left": youtube.NO_AUDIO_LEFT, "reason_cut": youtube.REASON_CUT,
+                   "block_statuses": list(youtube.BLOCK_STATUSES)},
     }
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
@@ -716,3 +750,190 @@ def test_the_choose_corpus():
                         "ranked": [[v.id, *key] for key, v in ranked]})
     assert len({r["chosen"] for r in records}) > 30 and sum(r["chosen"] is None for r in records) > 10
     check(VECTORS / "youtube" / "choose.jsonl", jsonl(records, corpus="youtube/choose", made_by=MADE_BY))
+
+
+# --- runs.jsonl ---------------------------------------------------------------------------------------------------
+
+class _Clock:
+    """test_youtube.py's: it moves only when slept, or by a call's gap."""
+
+    def __init__(self):
+        self.t = 1000.0
+        self.slept: list[float] = []
+
+    def __call__(self) -> float:
+        return self.t
+
+    def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.t += seconds
+
+
+class _Draws:
+    """random.Random's uniform, each draw kept, its bounds the policy's."""
+
+    def __init__(self, seed: int, delay: tuple[float, float]):
+        self.rng, self.delay, self.drawn = random.Random(seed), delay, []
+
+    def uniform(self, low: float, high: float) -> float:
+        assert (low, high) == self.delay
+        x = self.rng.uniform(low, high)
+        self.drawn.append(x)
+        return x
+
+
+B = "ERROR: [youtube] dQw4w9WgXcQ: "
+LONG = "ERROR: Unable to download API page: " + "a reason that goes on and on, " * 15
+# (name, the plan, the calls: (call, arg, gap), budget, timeouts)
+RUN_SCENARIOS = [
+    ("paced", {"searches": {"a": [entry(ID, "Creep", "Radiohead - Topic", 239)], "b": []},
+               "videos": {ID: {}}},
+     [("search", "a", 0.0), ("search", "b", 1.5), ("video", ID, 10.0), ("search", "c", 0.0), ("search", "d", 0.0)],
+     3, None),
+    *[(f"blocked-{i}", {"videos": {ID: {"stderr": e, "exit": 1}}},
+       [("download", ID, 0.0), ("search", "anything", 0.0), ("video", ID, 0.0)], 6, None)
+      for i, e in enumerate([
+          B + "Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication.",
+          "ERROR: unable to download video data: HTTP Error 429: Too Many Requests",
+          "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+          B + "This content isn't available, try again later. The current session has been rate-limited by YouTube.",
+      ])],
+    *[(f"unavailable-{i}", {"videos": {ID: {"stderr": e, "exit": 1}}, "searches": {"next": []}},
+       [("download", ID, 0.0), ("search", "next", 2.0)], 6, None)
+      for i, e in enumerate([B + "Video unavailable", B + "Private video. Sign in if you've been granted access",
+                             B + "This video is DRM protected"])],
+    ("error", {"searches": {"q": {"stderr": "WARNING: something\nERROR: Unable to download API page: [Errno -3] "
+                                            "Temporary failure in name resolution", "exit": 1}}},
+     [("search", "q", 0.0), ("search", "q", 0.0)], 6, None),
+    ("said-nothing", {"searches": {"q": {"exit": 1}}}, [("search", "q", 0.0)], 6, None),
+    ("long-reason", {"searches": {"q": {"stderr": LONG, "exit": 2}}}, [("search", "q", 0.0)], 6, None),
+    ("pass-over", {"videos": {ID: {"stderr": NO_FORMAT, "exit": 1}}, "searches": {"next": []}},
+     [("download", ID, 0.0), ("search", "next", 0.0)], 6, None),
+    ("outdated", {"videos": {ID: {"stderr": B + "Unable to extract player version", "exit": 1},
+                             "AAAAAAAAAAA": {"stderr": "ERROR: [youtube] AAAAAAAAAAA: Precondition check failed.",
+                                             "exit": 1}}},
+     [("download", ID, 0.0), ("video", "AAAAAAAAAAA", 0.0)], 6, None),
+    ("timeout", {"searches": {"slow": {"sleep": 5}}}, [("search", "slow", 0.0), ("search", "slow", 0.0)], 1,
+     (0.5, 0.5)),
+    ("download", {"videos": {ID: {"title": "Creep", "channel": "Radiohead - Topic", "duration": 238.5,
+                                  "data": "AAC bytes"}}},
+     [("download", ID, 0.0)], 6, None),
+]
+
+
+def _plan(fake: FakeYtDlp, plan: dict) -> None:
+    for query, spec in plan.get("searches", {}).items():
+        if isinstance(spec, list):
+            fake.search(query, *spec)
+        else:
+            fake.search(query, **spec)
+    for vid, spec in plan.get("videos", {}).items():
+        fake.video(vid, **spec)
+
+
+def _kind(argv: list[str], into: str) -> dict:
+    """The run's kind, target and folder, from the computer's argv."""
+    what = "download" if "-o" in argv else "video" if "--skip-download" in argv else "search"
+    given = {"what": what, "target": argv[-1]}
+    if what == "download":
+        assert argv[argv.index("-o") + 1] == f"{into}/{youtube.OUTPUT_NAME}"
+        given["into"] = "<into>"
+    return given
+
+
+def _outcome(call: str, got, into) -> dict:
+    if call == "search":
+        return {"videos": [v.id for v in got]}
+    if call == "video":
+        return {"video": [got.id, got.title, got.channel, got.duration]}
+    v = got.video
+    return {"video": [v.id, v.title, v.channel, v.duration], "file": got.path.relative_to(into).as_posix()}
+
+
+@pytest.mark.slow
+def test_the_runs_corpus(tmp_path, monkeypatch):
+    ran: list[dict] = []
+    real = subprocess.Popen
+
+    class Recorded(real):
+        noted = False
+
+        def communicate(self, *args, **kwargs):
+            try:
+                out, err = super().communicate(*args, **kwargs)
+            except subprocess.TimeoutExpired:
+                if not self.noted:
+                    self.noted = True
+                    ran.append({"timed_out": True})
+                raise
+            if not self.noted:
+                self.noted = True
+                ran.append({"exit": self.returncode, "stdout": out.decode(), "stderr": err.decode()})
+            return out, err
+
+    monkeypatch.setattr(subprocess, "Popen", Recorded)
+    records = []
+    for n, (name, plan, calls, budget, timeouts) in enumerate(RUN_SCENARIOS):
+        here = tmp_path / name
+        fake = FakeYtDlp(here / "bin")
+        _plan(fake, plan)
+        into = here / "into"
+        into.mkdir()
+        delay = (3.75, 7.5)
+        clock, draws, events = _Clock(), _Draws(n, delay), []
+        yt = youtube.YtDlp(fake.bin, ProviderPolicy(budget=budget, delay=delay), here / "cache",
+                           on_event=events.append, sleep=clock.sleep, clock=clock, rng=draws,
+                           **({"timeouts": timeouts} if timeouts else {}))
+        conn = db.connect(here / "caracole.sqlite")
+        started = datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
+        block = None
+        said = []
+        ran.clear()
+        for call, arg, gap in calls:
+            clock.t += gap
+            before = len(ran)
+            try:
+                got = getattr(yt, call)(*((arg, into) if call == "download" else (arg,)))
+                outcome = _outcome(call, got, into)
+            except (ProviderError, BudgetExhausted) as e:
+                outcome = {"raised": type(e).__name__, "message": str(e)}
+                if isinstance(e, youtube.ProviderBlocked) and block is None and len(ran) > before:
+                    state = health.record_block(conn, youtube.PROVIDER, started, str(e))
+                    block = {"message": str(e),
+                             "cooldown_hours": (state.cooldown_until - started).total_seconds() / 3600}
+            process = ran[before] if len(ran) > before else None
+            said.append({"call": call, "arg": arg, "gap": gap, "process": process, "outcome": outcome})
+        conn.close()
+        argvs = fake.argvs()
+        assert len(argvs) == sum(c["process"] is not None for c in said)
+        runs, i = [], 0
+        for c in said:
+            p = c.pop("process")
+            c["argv"], c["ran"], c["classify"] = None, None, None
+            if p is not None:
+                c["argv"] = _kind(argvs[i], str(into))
+                i += 1
+                if "stdout" in p:
+                    p["stdout"] = p["stdout"].replace(str(into), "<into>")
+                    if c["call"] == "download" and p["exit"] == 0:
+                        p["writes"] = {"name": "audio.m4a", "data": (into / "audio.m4a").read_text()}
+                    if p["exit"] != 0:
+                        c["classify"] = youtube.classify(p["stderr"])
+                c["ran"] = p
+            # The phone's reading agrees with the computer's where the computer has one.
+            raised = c["outcome"].get("raised")
+            if c["classify"] == "blocked":
+                assert raised == "ProviderBlocked"
+            elif c["classify"] == "unavailable":
+                assert raised == "VideoUnavailable"
+            elif c["classify"] is not None:
+                assert raised == "ProviderError"
+            runs.append(c)
+        assert all(str(tmp_path) not in json.dumps(c) for c in runs)
+        records.append({"scenario": name, "budget": budget, "delay": list(delay),
+                        "timeouts": list(timeouts) if timeouts else [youtube.SEARCH_TIMEOUT, youtube.DOWNLOAD_TIMEOUT],
+                        "draws": draws.drawn, "calls": runs,
+                        "events": [[e.url, e.status, e.decision, e.message] for e in events],
+                        "slept": clock.slept, "requests_made": yt.requests_made, "block": block})
+    assert {c["classify"] for r in records for c in r["calls"]} >= {*youtube.RUN_CLASSES}
+    check(VECTORS / "youtube" / "runs.jsonl", jsonl(records, corpus="youtube/runs", made_by=MADE_BY))

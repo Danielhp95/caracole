@@ -64,6 +64,18 @@ class YouTubeData private constructor(val json: JsonObject) {
     /** The `classify` member. */
     val classify: JsonObject get() = json.getValue("classify").jsonObject
 
+    /** The `gate` member: the phone's gate's hosts and its refusal's words (youtube.py's PHONE_GATE). */
+    val gate: JsonObject get() = json.getValue("gate").jsonObject
+
+    /** The `runner` member: YtDlp's words and its cache folder. */
+    val runner: JsonObject get() = json.getValue("runner").jsonObject
+
+    /** A text of [within]. */
+    fun text(name: String, within: JsonObject): String = within.getValue(name).jsonPrimitive.content
+
+    /** A list of texts of [within]. */
+    fun texts(name: String, within: JsonObject): List<String> = within.getValue(name).jsonArray.map { it.jsonPrimitive.content }
+
     /** The `choose` member. */
     val choose: JsonObject get() = json.getValue("choose").jsonObject
 

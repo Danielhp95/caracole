@@ -36,7 +36,9 @@ The phone's half, which the computer never runs (the conformance corpus's youtub
 Android app): ``phone_argv``, the computer's arguments but audio chosen by its format alone (``PHONE_DOWNLOAD_ARGS``:
 no FFmpeg there to extract it), QuickJS as the challenges' runtime and the app's gate as the proxy; and ``classify``,
 which tells a run that failed out of date (``_OUTDATED``: yt-dlp can't read YouTube's page) or passed over
-(``PHONE_PASS_OVER``: the video has no stream of that format) apart from blocked and unavailable.
+(``PHONE_PASS_OVER``: the video has no stream of that format) apart from blocked and unavailable; ``PHONE_GATE``,
+the hosts the app's gate lets yt-dlp reach (the computer has no gate); and the runner's words (``BUDGET_SPENT``…),
+which the phone's runner says as ``YtDlp`` does.
 """
 
 from __future__ import annotations
@@ -494,6 +496,7 @@ _UNAVAILABLE = re.compile(
 )
 _STATUS = re.compile(r"HTTP Error (\d{3})")
 REASON_CHARS = 300
+REASON_CUT = "…"  # what ends a reason cut to REASON_CHARS
 # The phone's alone, read on a failed run's ERROR line (classify): yt-dlp can't read YouTube's page (its extractor is
 # out of date), and the video has no stream of the format the phone asks.
 _OUTDATED = re.compile(
@@ -532,6 +535,45 @@ CLASSIFY_STEPS = (
 )
 
 
+# The runner's words (YtDlp): its events' and errors', which the phone's runner says alike (youtube.json's ``runner``).
+CACHE_FOLDER = "yt-dlp"  # in the cache folder given: the player's code and signatures, between runs
+BUDGET_SPENT = "budget of {budget} yt-dlp runs spent"
+BLOCKED_EARLIER = "blocked earlier this run"
+UNAVAILABLE_SAID = "video unavailable: {reason}"
+TIMED_OUT = "yt-dlp took longer than {timeout:g} s and was stopped"
+SAID_NOTHING = "yt-dlp failed and said nothing"
+CANT_RUN = "can't run yt-dlp ({binary}): {why}"
+NO_AUDIO_LEFT = "yt-dlp left no audio file in {folder}"
+BLOCK_STATUSES = (403, 429)  # a block's status, when stderr names one of these; else none
+
+
+@dataclass(frozen=True)
+class PhoneGate:
+    """The phone's gate (the app's HostGate, the phone-YouTube design's §3.3): the proxy every yt-dlp run on the phone
+    is given, and the hosts it lets yt-dlp reach. The computer itself has no gate: its yt-dlp is given no proxy, and
+    nothing here is read on the computer; the conformance corpus carries it to the Android app (youtube.json's
+    ``gate``).
+
+    - ``names``, and any name under one of ``suffixes``, on ``port`` alone, by CONNECT: the YouTube rule;
+    - ``apart``: allowed, and reported apart (the owner is in the EU: the consent page, and the redirector);
+    - ``refused``: refused by name, and any name under it, in every mode and by every rule (Google's attestation,
+      BotGuard's ``Waa``: a CONNECT hides the path, so the host is the rule);
+    - ``refusal``: a run whose gate refused a host is an error in these words (``{host}`` the host), decided from the
+      gate's log before stderr is read: never a block, never unavailable, never retried.
+    """
+
+    names: tuple[str, ...] = ("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
+                              "consent.youtube.com")
+    suffixes: tuple[str, ...] = (".googlevideo.com",)
+    port: int = 443
+    apart: tuple[str, ...] = ("consent.youtube.com", "redirector.googlevideo.com")
+    refused: tuple[str, ...] = ("jnn-pa.googleapis.com",)
+    refusal: str = "yt-dlp asked for {host}, which caracole doesn't allow"
+
+
+PHONE_GATE = PhoneGate()
+
+
 class VideoUnavailable(ProviderError):
     """YouTube answered that the video can't be had without logging in, or at all: removed,
     private, age-restricted, members-only, not in this country. No block, and no miss."""
@@ -556,8 +598,8 @@ def _error_line(stderr: str) -> str | None:
 def _reason(stderr: str) -> str:
     """yt-dlp's reason, one line: its last error, else its last word."""
     error = _error_line(stderr)
-    text = error if error is not None else (_lines(stderr) or ["yt-dlp failed and said nothing"])[-1]
-    return text if len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + "…"
+    text = error if error is not None else (_lines(stderr) or [SAID_NOTHING])[-1]
+    return text if len(text) <= REASON_CHARS else text[: REASON_CHARS - 1] + REASON_CUT
 
 
 def classify(stderr: str) -> str:
@@ -647,7 +689,7 @@ class YtDlp:
         self.provider = PROVIDER
         self.binary = binary
         self.policy = policy
-        self.cache_dir = cache_dir / "yt-dlp"  # the player's code and signatures, between runs
+        self.cache_dir = cache_dir / CACHE_FOLDER  # the player's code and signatures, between runs
         self.requests_made = 0
         self._on_event = on_event
         self._sleep = sleep
@@ -690,7 +732,7 @@ class YtDlp:
                 break
         path = Path(str(info.get("filepath") or ""))
         if not _audio_in(path, into):
-            raise ProviderError(PROVIDER, url, None, f"yt-dlp left no audio file in {into.name}")
+            raise ProviderError(PROVIDER, url, None, NO_AUDIO_LEFT.format(folder=into.name))
         duration = _number(info.get("duration"))
         video = Video(video_id, str(info.get("title") or ""), str(info.get("channel") or info.get("uploader") or ""),
                       duration)
@@ -711,11 +753,11 @@ class YtDlp:
 
     def _run(self, args: list[str], target: str, what: str, timeout: float) -> str:
         if self._blocked is not None:
-            raise ProviderBlocked(PROVIDER, target, self._blocked.status, "blocked earlier this run")
+            raise ProviderBlocked(PROVIDER, target, self._blocked.status, BLOCKED_EARLIER)
         if self.requests_made >= self.policy.budget:
             if not self._budget_reported:
                 self._budget_reported = True
-                self._event(target, None, "budget", f"budget of {self.policy.budget} yt-dlp runs spent")
+                self._event(target, None, "budget", BUDGET_SPENT.format(budget=self.policy.budget))
             raise BudgetExhausted(PROVIDER)
         self._pause()
         argv = [self.binary, *_BASE_ARGS, "--cache-dir", str(self.cache_dir), *args, "--", target]
@@ -726,7 +768,8 @@ class YtDlp:
                                     env=env, start_new_session=True)
         except OSError as e:  # no yt-dlp there: nothing was sent
             held.give_back()
-            raise ProviderError(PROVIDER, target, None, f"can't run yt-dlp ({self.binary}): {e.strerror or e}") from e
+            raise ProviderError(PROVIDER, target, None,
+                                CANT_RUN.format(binary=self.binary, why=e.strerror or e)) from e
         except BaseException:
             held.give_back()
             raise
@@ -738,7 +781,7 @@ class YtDlp:
         except subprocess.TimeoutExpired:
             _stop(proc)
             self._last = self._clock()
-            message = f"yt-dlp took longer than {timeout:g} s and was stopped"
+            message = TIMED_OUT.format(timeout=timeout)
             self._log(what, target, "timed out")
             self._event(target, None, "error", message)
             raise ProviderError(PROVIDER, target, None, message) from TimeoutError(message)
@@ -756,11 +799,11 @@ class YtDlp:
         status = int(status_m.group(1)) if status_m else None
         self._log(what, target, reason)
         if _BLOCKED.search(stderr):
-            self._blocked = ProviderBlocked(PROVIDER, target, status if status in (403, 429) else None, reason)
+            self._blocked = ProviderBlocked(PROVIDER, target, status if status in BLOCK_STATUSES else None, reason)
             self._event(target, status, "blocked", reason)
             raise self._blocked
         if _UNAVAILABLE.search(stderr):
-            self._event(target, status, "ok", f"video unavailable: {reason}")
+            self._event(target, status, "ok", UNAVAILABLE_SAID.format(reason=reason))
             raise VideoUnavailable(PROVIDER, target, status, reason)
         self._event(target, status, "error", reason)
         raise ProviderError(PROVIDER, target, status, reason)

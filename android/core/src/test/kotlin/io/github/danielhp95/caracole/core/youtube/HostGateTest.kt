@@ -837,4 +837,32 @@ class HostGateTest {
         for (answer in bad) assertEquals(502, status(ask(opened, get)), answer)
         assertEquals(200, status(ask(opened, get)), "a tab is allowed")
     }
+
+    @Test
+    fun theYouTubeRulesHostsAreTheDatas() {
+        val data = YouTubeData.read()
+        val gate = data.gate
+        val names = data.texts("names", gate)
+        val port = data.number("port", gate).toInt()
+        val rule = HostGate.HostRule.YOUTUBE
+        assertEquals(listOf("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "consent.youtube.com"),
+                     names)
+        for (name in names) {
+            assertTrue(rule.allows(name, port, connect = true), name)
+            assertFalse(rule.allows(name, port + 1, connect = true), name)
+            assertFalse(rule.allows(name, port, connect = false), name)
+        }
+        for (suffix in data.texts("suffixes", gate)) {
+            assertTrue(rule.allows("rr3---sn-abc$suffix", port, connect = true), suffix)
+            assertFalse(rule.allows(suffix.removePrefix("."), port, connect = true) && suffix.removePrefix(".") !in names)
+        }
+        assertFalse(rule.allows("youtubei.googleapis.com", port, connect = true))
+        assertEquals(data.texts("refused", gate), HostGate.HostRule.REFUSED)
+        for (name in data.texts("refused", gate)) {
+            assertFalse(rule.allows(name, port, connect = true))
+            assertFalse(HostGate.HostRule.OBSERVE.allows("x.$name", port, connect = true))
+        }
+        for (name in data.texts("apart", gate)) assertTrue(rule.reportsApart(name), name)
+        assertFalse(rule.reportsApart("www.youtube.com"))
+    }
 }

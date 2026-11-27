@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 
 /**
  * No yt-dlp flag, pattern or word of youtube.py is typed under core/youtube/: each is youtube.json's (the plan's "One
- * source for the rules"). Every file of the package is read, HostGate.kt among them (its host list is Kotlin data
- * for now, a list of names, which no rule here forbids); its string literals, comments aside, may hold none of:
+ * source for the rules"). Every file of the package is read, HostGate.kt and YtDlp.kt among them (its host list is
+ * youtube.json's, read through YouTubeData); its string literals, comments aside, may hold none of:
  *
  * - `--` or `-x` at the start: a flag;
  * - yt-dlp's line prefixes, `ERROR:`, `WARNING:` and `[debug]`, or a target's, `ytsearch` and `watch?v=`;
@@ -21,7 +21,7 @@ class NoLiteralsTest {
     @Test fun noFlagPatternOrPrefixIsTypedInThePackage() {
         val files = root.listFiles { f -> f.name.endsWith(".kt") }.orEmpty().sortedBy { it.name }
         assertTrue(files.map { it.name }.containsAll(listOf("Choose.kt", "Classify.kt", "HostGate.kt", "Videos.kt",
-            "YouTubeData.kt")), "the package's files: ${files.map { it.name }}")
+            "YouTubeData.kt", "YtDlp.kt", "YtDlpProcess.kt")), "the package's files: ${files.map { it.name }}")
         val found = files.flatMap { f -> scan(f.readText()).map { "${f.name}: $it" } }
         assertEquals(emptyList(), found)
     }

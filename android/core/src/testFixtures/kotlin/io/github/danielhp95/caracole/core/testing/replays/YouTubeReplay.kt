@@ -1,6 +1,20 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
+import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.Pacing
+import io.github.danielhp95.caracole.core.testing.youtube.FakeYtDlpProcess
+import io.github.danielhp95.caracole.core.youtube.Download
+import io.github.danielhp95.caracole.core.youtube.HostGate
+import io.github.danielhp95.caracole.core.youtube.Ran
+import io.github.danielhp95.caracole.core.youtube.YtDlp
+import java.io.File
+import java.nio.file.Files
+import java.time.Duration
+import java.time.Instant
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -19,6 +33,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -31,14 +46,20 @@ import kotlinx.serialization.json.jsonPrimitive
  * - classify.jsonl: Classify.ofRun of each run's exit status and stderr (`ok` for an exit of 0);
  * - parse.jsonl: Videos.parseSearch, parseVideo and searchQuery, each video's duration as Python's repr, an
  *   AnswerError in Python's words (where its record gives them) or an ArithmeticException for its OverflowError;
- * - choose.jsonl: Choose.choose's video and Choose.ranked's videos with their keys.
+ * - choose.jsonl: Choose.choose's video and Choose.ranked's videos with their keys;
+ * - runs.jsonl: YtDlp over [FakeYtDlpProcess] replaying each scenario's recorded runs, through a real HostGate in
+ *   loopback mode, on a fresh database: each call's outcome (the phone's class where classify, beside, says
+ *   pass_over or outdated; Python's otherwise, its message too), each run's argv (the phone's template of the
+ *   record's kind, target and folder, the gate's proxyArg in it once), the events, the draws and the pauses, the runs
+ *   made, the block's record (Health's state: its message, the cooldown from the job's start), and kv
+ *   `http:last_request:youtube` written once a run was sent.
  */
 object YouTubeReplay : AreaReplay {
     override val area = "youtube"
 
     override fun replay(misses: Misses) {
         val counts = mapOf("argv" to argv(misses), "classify" to classify(misses), "parse" to parse(misses),
-            "choose" to choose(misses))
+            "choose" to choose(misses), "runs" to runs(misses))
         for ((name, n) in counts) misses.check(n > 0) { "youtube/$name.jsonl holds no record" }
     }
 
@@ -167,4 +188,137 @@ object YouTubeReplay : AreaReplay {
         }
         return n
     }
+
+    private fun runs(misses: Misses): Int {
+        val data = YouTubeData.read()
+        var n = 0
+        for (r in records("runs")) {
+            n++
+            val name = text(r, "scenario")!!
+            val delay = r.getValue("delay").jsonArray.let { it[0].jsonPrimitive.double to it[1].jsonPrimitive.double }
+            val timeouts = r.getValue("timeouts").jsonArray.let { it[0].jsonPrimitive.double to it[1].jsonPrimitive.double }
+            val budget = r.getValue("budget").jsonPrimitive.int
+            val draws = ArrayDeque(r.getValue("draws").jsonArray.map { it.jsonPrimitive.double })
+            val calls = r.getValue("calls").jsonArray.map { it.jsonObject }
+            val dir = Files.createTempDirectory("caracole-ytdlp-runs").toFile()
+            val into = File(dir, "into").also { it.mkdir() }
+            val cache = File(dir, "cache")
+            val gate = HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            try {
+                val opened = gate.start()
+                PoliteDb.with { db ->
+                    var t = 1000.0
+                    val slept = mutableListOf<Double>()
+                    val started = Instant.parse("2026-11-26T12:00:00Z")
+                    val pacing = Pacing(
+                        sleep = { slept += it; t += it },
+                        draws = Draws { low, high ->
+                            misses.check(low to high == delay) { "runs $name: a draw of ($low, $high), the policy's $delay" }
+                            draws.removeFirstOrNull() ?: run { misses.check(false) { "runs $name: a draw Python didn't make" }; low }
+                        },
+                        wallSeconds = { 1_795_000_000.0 + t }, monotonic = { t }, clock = { started },
+                    )
+                    val planned = calls.mapNotNull { c ->
+                        val ran = c["ran"]?.takeIf { it !is JsonNull }?.jsonObject ?: return@mapNotNull null
+                        if (ran["timed_out"]?.jsonPrimitive?.boolean == true) return@mapNotNull FakeYtDlpProcess.Planned(Ran.timedOut())
+                        val writes = ran["writes"]?.jsonObject
+                        FakeYtDlpProcess.Planned(
+                            Ran(ran.getValue("exit").jsonPrimitive.int, text(ran, "stdout")!!.replace(INTO, into.path),
+                                text(ran, "stderr")!!),
+                            during = { if (writes != null) File(into, text(writes, "name")!!).writeText(text(writes, "data")!!) },
+                        )
+                    }
+                    val fake = FakeYtDlpProcess(planned)
+                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { opened }, db, pacing,
+                                   budget = budget, runId = "youtube-replay", timeouts = timeouts)
+                    var made = 0
+                    for (c in calls) {
+                        t += c.getValue("gap").jsonPrimitive.double
+                        val call = text(c, "call")!!
+                        val arg = text(c, "arg")!!
+                        val got: Any? = try {
+                            when (call) {
+                                "search" -> yt.search(arg).map { it.id }
+                                "video" -> yt.video(arg).let { listOf(it.id, it.title, it.channel, it.duration) }
+                                else -> yt.download(arg, into).let { d: Download ->
+                                    listOf(d.video.id, d.video.title, d.video.channel, d.video.duration) to
+                                        d.path.relativeTo(into).invariantSeparatorsPath
+                                }
+                            }
+                        } catch (e: Exception) {
+                            (e::class.simpleName ?: "?") to e.message
+                        }
+                        val outcome = c.getValue("outcome").jsonObject
+                        val raised = text(outcome, "raised")
+                        val want: Any? = when {
+                            raised != null -> (PHONE_CLASS[raised to text(c, "classify")] ?: raised) to text(outcome, "message")
+                            call == "search" -> outcome.getValue("videos").jsonArray.map { it.jsonPrimitive.content }
+                            else -> outcome.getValue("video").jsonArray.let {
+                                listOf(it[0].jsonPrimitive.content, it[1].jsonPrimitive.content, it[2].jsonPrimitive.content,
+                                       it[3].jsonPrimitive.doubleOrNull)
+                            }.let { v -> if (call == "video") v else v to text(outcome, "file") }
+                        }
+                        misses.check(got == want) { "runs $name: $call($arg) = $got, Python's $want" }
+                        val argv = c["argv"]?.takeIf { it !is JsonNull }?.jsonObject
+                        if (argv != null) {
+                            val given = fake.argvs.getOrNull(made)
+                            made++
+                            val folder = text(argv, "into")?.let { into.path }
+                            val expected = data.argv(text(argv, "what")!!, text(argv, "target")!!,
+                                                     File(cache, data.text("cache_folder", data.runner)).path, QJS,
+                                                     opened.proxyArg, folder)
+                            misses.check(given == expected && given.count { it == opened.proxyArg } == 1) {
+                                "runs $name: $call($arg)'s argv $given, the phone's template ${expected.size} long"
+                            }
+                        }
+                    }
+                    misses.check(made == fake.argvs.size && fake.unmade == 0) {
+                        "runs $name: ${fake.argvs.size} runs made, $made planned, ${fake.unmade} left"
+                    }
+                    misses.check(yt.requestsMade == r.getValue("requests_made").jsonPrimitive.int) {
+                        "runs $name: ${yt.requestsMade} runs counted, Python's ${r["requests_made"]}"
+                    }
+                    misses.check(draws.isEmpty()) { "runs $name: Python drew ${draws.size} more" }
+                    val wantSlept = r.getValue("slept").jsonArray.map { it.jsonPrimitive.double }
+                    misses.check(slept == wantSlept) { "runs $name: slept $slept, Python's $wantSlept" }
+                    val events = db.query("SELECT url, status, decision, message FROM events ORDER BY id") { row ->
+                        listOf(row.text(0), row.long(1)?.toInt(), row.text(2), row.text(3))
+                    }
+                    val wantEvents = r.getValue("events").jsonArray.map { e ->
+                        val f = e.jsonArray
+                        listOf(text0(f[0]), f[1].jsonPrimitive.intOrNull, text0(f[2]), text0(f[3]))
+                    }
+                    misses.check(events == wantEvents) { "runs $name: events $events, Python's $wantEvents" }
+                    val sent = wantEvents.any { it[2] in Pace.SENT }
+                    misses.check((db.kvGet(Pace.LAST_SENT + "youtube") != null) == sent) {
+                        "runs $name: kv http:last_request:youtube ${db.kvGet(Pace.LAST_SENT + "youtube")}, a run sent: $sent"
+                    }
+                    val state = Health.state(db, "youtube")
+                    val block = r["block"]?.takeIf { it !is JsonNull }?.jsonObject
+                    if (block == null) {
+                        misses.check(state.cooldownUntil == null) { "runs $name: a cooldown with no block" }
+                    } else {
+                        val hours = block.getValue("cooldown_hours").jsonPrimitive.double
+                        misses.check(state.lastError == text(block, "message") &&
+                                     state.cooldownUntil == started.plus(Duration.ofMinutes((hours * 60).toLong()))) {
+                            "runs $name: block recorded $state, Python's $block"
+                        }
+                    }
+                }
+            } finally {
+                gate.close()
+                dir.deleteRecursively()
+            }
+        }
+        return n
+    }
+
+    private fun text0(e: JsonElement): String? = if (e is JsonNull) null else e.jsonPrimitive.content
+
+    private const val INTO = "<into>"
+    private const val QJS = "/data/app/lib/arm64/libqjs.so"
+
+    /** The phone's class for what the computer raised, by classify beside it: the computer's otherwise. */
+    private val PHONE_CLASS = mapOf(("ProviderError" to "pass_over") to "PassedOver",
+                                    ("ProviderError" to "outdated") to "ExtractorOutdated")
 }
