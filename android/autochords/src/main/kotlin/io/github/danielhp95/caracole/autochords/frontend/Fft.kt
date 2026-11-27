@@ -11,6 +11,10 @@ import kotlin.math.sin
  * `cos` and `sin` of each angle, never a recurrence. An instance holds its buffers: one thread at a time.
  */
 class Fft(val n: Int) {
+    init {
+        require(n >= 2 && n and (n - 1) == 0) { "an FFT of a power of 2, not $n" }  // first: the arrays need it
+    }
+
     private val half = n / 2
     private val bits = Integer.numberOfTrailingZeros(maxOf(half, 1))
     private val reverse = IntArray(half) { Integer.reverse(it) ushr (32 - bits) }
@@ -20,10 +24,6 @@ class Fft(val n: Int) {
     private val sinN = DoubleArray(half + 1) { sin(2 * PI * it / n) }
     private val zr = DoubleArray(half)
     private val zi = DoubleArray(half)
-
-    init {
-        require(n >= 2 && n and (n - 1) == 0) { "an FFT of a power of 2, not $n" }
-    }
 
     /** [x]'s first [n] samples' transform into [re] and [im], each of [n] / 2 + 1. */
     fun real(x: DoubleArray, re: DoubleArray, im: DoubleArray) {

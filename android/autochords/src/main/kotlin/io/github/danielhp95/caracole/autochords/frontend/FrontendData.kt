@@ -68,6 +68,7 @@ object FrontendData {
                    sparse(octave.obj("basis")))
         }
         val lengths = values(o.obj("lengths"), "float64")
+        require(lengths.size == o.int("bins")) { "${lengths.size} lengths for ${o.int("bins")} bins" }
         return Cqt(o.int("rate"), o.int("hop"), o.int("bins"), o.int("chunk"), o.int("min_tail"), o.double("floor"),
                    steps, lengths)
     }

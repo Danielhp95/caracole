@@ -793,7 +793,10 @@ def test_two_processes_of_other_hash_seeds_write_the_same_records(_models):
     if _committed_meta() and _committed_meta().get("cpu_capability") != cpu_capability():
         pytest.skip("the records were made on another CPU's kernels: test_frontend_and_models_vectors says why")
     want = [(AREA / name).read_text(encoding="utf-8") for name in ("frontend.jsonl", "models.jsonl")]
+    frontend_json = (MODELS_DATA / "frontend.json").read_text(encoding="utf-8")
     for seed in ("0", "4242"):
         got = _fresh_texts(PYTHONHASHSEED=seed)
         assert [hashlib.sha256(t.encode()).digest() for t in got] == \
             [hashlib.sha256(t.encode()).digest() for t in want], f"PYTHONHASHSEED={seed}"
+        (data,) = _child_texts(_FRONTEND_JSON, ("frontend.json",), PYTHONHASHSEED=seed)
+        assert data == frontend_json, f"frontend.json, PYTHONHASHSEED={seed}"

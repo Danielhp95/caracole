@@ -37,7 +37,8 @@ class CorpusOnDeviceTest(private val area: String) {
         Corpus.open = { name -> runCatching { assets.open("conformance/$name") }.getOrNull() }
         Corpus.openFixture = { name -> runCatching { assets.open("fixtures/$name") }.getOrNull() }
         AutochordsReplay.report = { line ->
-            instrumentation.sendStatus(0, Bundle().apply { putString("stream", "$line\n") })
+            // A status code no runner uses (AndroidJUnitRunner's own are -4 to 2): a line, never a test's end.
+            instrumentation.sendStatus(REPORT_STATUS, Bundle().apply { putString("stream", "$line\n") })
         }
     }
 
@@ -49,6 +50,9 @@ class CorpusOnDeviceTest(private val area: String) {
     }
 
     companion object {
+        /** The status a replay's report line is sent under: none of AndroidJUnitRunner's (-4 to 2). */
+        const val REPORT_STATUS = 2026
+
         private val EVERY: List<AreaReplay> = Replays.all + ServerReplays.all + ViewerReplays.all +
             AutochordsReplays.all
         private val ALL: Map<String, AreaReplay> = EVERY.associateBy { it.area }

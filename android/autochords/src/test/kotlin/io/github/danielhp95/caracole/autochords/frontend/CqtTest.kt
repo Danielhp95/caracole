@@ -43,8 +43,8 @@ class CqtTest {
 
     @Test
     fun `audio shorter than one hop is refused, as btc_py refuses it`() {
-        assertFailsWith<IllegalArgumentException> { Cqt.logFeatures(FloatArray(Cqt.HOP - 1)) }
-        assertEquals(2 * Cqt.BINS, Cqt.logFeatures(FloatArray(Cqt.HOP)).size)
+        assertFailsWith<IllegalArgumentException> { Cqt.logFeatures(FloatArray(Cqt.MIN_AUDIO - 1)) }
+        assertEquals(2 * Cqt.BINS, Cqt.logFeatures(FloatArray(Cqt.MIN_AUDIO)).size)
     }
 
     @Test
@@ -52,9 +52,9 @@ class CqtTest {
         val long = FrontendRecords.sources.first { it.name == "long" }.samples
         val chunk = Cqt.CHUNK
         val whole = Cqt.logFeatures(long.copyOfRange(0, chunk))
-        assertContentEquals(whole, Cqt.logFeatures(long.copyOfRange(0, chunk + Cqt.HOP - 1)))
-        val tail = Cqt.logFeatures(long.copyOfRange(chunk, chunk + Cqt.HOP))
-        assertContentEquals(whole + tail, Cqt.logFeatures(long.copyOfRange(0, chunk + Cqt.HOP)))
+        assertContentEquals(whole, Cqt.logFeatures(long.copyOfRange(0, chunk + Cqt.MIN_AUDIO - 1)))
+        val tail = Cqt.logFeatures(long.copyOfRange(chunk, chunk + Cqt.MIN_AUDIO))
+        assertContentEquals(whole + tail, Cqt.logFeatures(long.copyOfRange(0, chunk + Cqt.MIN_AUDIO)))
     }
 
     @Test

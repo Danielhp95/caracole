@@ -28,7 +28,9 @@ object Mel {
         val d = data
         require(d.padMode == "reflect") { "an STFT of padding ${d.padMode}" }
         val fb = d.filterbank
-        require(fb.cols == d.nFft / 2 + 1 && fb.im == null)
+        require(fb.cols == d.nFft / 2 + 1 && fb.im == null) {
+            "a filterbank of ${fb.cols} columns${if (fb.im != null) ", complex" else ""}, not ${d.nFft / 2 + 1} real ones"
+        }
         val mels = fb.rows
         val stft = Stft(d.nFft, d.hop)
         val magnitudes = DoubleArray(fb.cols)

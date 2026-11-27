@@ -12,7 +12,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.security.MessageDigest
 import java.util.Base64
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -52,6 +54,7 @@ object FrontendRecords {
         val wav = SoxrRecords.wav(Corpus.fixture(name))
         if (record.str("kind") == "clip") {
             check(wav.size == record["samples"]!!.jsonPrimitive.int) { "$name: its samples' count" }
+            check(sha256(wav) == record.str("decoded_sha256")) { "$name: its samples, as the computer decoded them" }
             return Source(record.str("clip"), wav, matrix(record["cqt"]!!.jsonObject, 144),
                           matrix(record["mel"]!!.jsonObject, 128))
         }
@@ -59,6 +62,15 @@ object FrontendRecords {
         val count = record["count"]!!.jsonPrimitive.int
         return Source("$name[$offset, +$count]", wav.copyOfRange(offset, offset + count),
                       matrix(record["cqt"]!!.jsonObject, 144), null)
+    }
+
+    /** The SHA-256 of [samples]' little-endian float32 bytes, as the generator hashes them. */
+    private fun sha256(samples: FloatArray): String {
+        val bytes = ByteBuffer.allocate(4 * samples.size).order(ByteOrder.LITTLE_ENDIAN)
+        samples.forEach { bytes.putFloat(it) }
+        return MessageDigest.getInstance("SHA-256").digest(bytes.array()).joinToString("") {
+            Integer.toHexString((it.toInt() and 0xFF) or 0x100).substring(1)
+        }
     }
 
     /** A stored `[frames, width]` array, float32 or float16, as float32. */
@@ -87,18 +99,30 @@ object FrontendRecords {
         }
     }
 
-    /** What the gate makes of [got] against [want], both `[frames, width]`. */
+    /** Ours, beside the design's gate (the gate of record): no value of a frame that isn't silent further than this
+     * from the stored one. A per-frame cosine can't see a small error over a whole octave of log features (a √2
+     * scale slip in one octave of 24 bins moves 1 − cosine by about 1e-4); the port's are 4.5e-4 (log-CQT) and
+     * 3.8e-3 (log-mel) at most (2026-11-26). */
+    const val MAX_ABS_TRIPWIRE = 1e-2
+
+    /** What the gate makes of [got] against [want], both `[frames, width]`: [maxAbs] over every frame, [loudMaxAbs]
+     * over those that aren't silent, which [MAX_ABS_TRIPWIRE] bounds. */
     class Score(val what: String, val frames: Int, val wanted: Int, val silent: Int, val loudWhereSilent: Int,
-                val median: Double, val least: Double, val leastAt: Int, val maxAbs: Double, val millis: Long) {
+                val median: Double, val least: Double, val leastAt: Int, val maxAbs: Double, val millis: Long,
+                val loudMaxAbs: Double = maxAbs) {
         fun passes(gate: Gate): Boolean = frames == wanted && loudWhereSilent == 0 &&
-            median >= gate.cosineMedianMin && least >= gate.cosineMin
+            median >= gate.cosineMedianMin && least >= gate.cosineMin && loudMaxAbs <= MAX_ABS_TRIPWIRE
 
         override fun toString(): String =
             "$what: $frames frames of $wanted ($silent silent" +
                 (if (loudWhereSilent > 0) ", $loudWhereSilent of them not silent here" else "") +
-                "), cosine median 1 - ${"%.2e".format(1 - median)}, least 1 - ${"%.2e".format(1 - least)} " +
-                "(frame $leastAt), max abs ${"%.3g".format(maxAbs)}, $millis ms"
+                "), cosine median 1 - ${e(1 - median, 2)}, least 1 - ${e(1 - least, 2)} " +
+                "(frame $leastAt), max abs ${e(maxAbs, 2)} (${e(loudMaxAbs, 2)} where not silent, at most " +
+                "$MAX_ABS_TRIPWIRE), $millis ms"
     }
+
+    /** [x] in scientific notation of [digits] decimals, the same on every device's locale. */
+    private fun e(x: Double, digits: Int): String = String.format(Locale.ROOT, "%.${digits}e", x)
 
     fun score(what: String, got: FloatArray, want: FloatArray, width: Int, floor: Double, millis: Long,
               gate: Gate = this.gate): Score {
@@ -114,15 +138,19 @@ object FrontendRecords {
         var least = Double.POSITIVE_INFINITY
         var leastAt = -1
         var maxAbs = 0.0
+        var loudMaxAbs = 0.0
         for (f in 0 until frames) {
+            var frameMax = 0.0
             for (i in 0 until width) {
-                maxAbs = maxOf(maxAbs, abs(got[f * width + i].toDouble() - want[f * width + i]))
+                frameMax = maxOf(frameMax, abs(got[f * width + i].toDouble() - want[f * width + i]))
             }
+            maxAbs = maxOf(maxAbs, frameMax)
             if (silent(want, f)) {
                 silentFrames++
                 if (!silent(got, f)) loud++
                 continue
             }
+            loudMaxAbs = maxOf(loudMaxAbs, frameMax)
             var dot = 0.0
             var a = 0.0
             var b = 0.0
@@ -149,7 +177,7 @@ object FrontendRecords {
             else -> (cosines[n / 2 - 1] + cosines[n / 2]) / 2
         }
         return Score(what, frames, wanted, silentFrames, loud, median, if (n == 0) Double.NaN else least, leastAt,
-                     maxAbs, millis)
+                     maxAbs, millis, loudMaxAbs)
     }
 
     /** [Cqt.logFeatures] of [source]'s samples against its stored log-CQT. */
