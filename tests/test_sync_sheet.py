@@ -679,6 +679,63 @@ def test_a_conflict_stops_it_card_by_card_with_each_sides_lines_and_the_sides_na
         assert fake.posted("/sync/apply") == []  # nothing sent until the last card is answered
 
 
+def auto_sheet_doc(raw: dict, *, lyrics="found", lyrics_json=None) -> dict:
+    """A song's document whose one sheet is its auto sheet, its version's raw record ``raw``."""
+    doc = song_doc("Eagles", "Hotel California", pick=("auto", "42"), lyrics=lyrics)
+    doc["versions"][0].update(raw=json.dumps(raw), files=[{"name": "sheet (auto).txt", "sha256": "e5" * 32,
+                                                           "kept_rank": 1}])
+    doc["song"]["lyrics_json"] = lyrics_json
+    return doc
+
+
+HOSTILE = '<img src=x onerror="window.pwned=1">.mp3'
+
+
+@in_chromium
+@pytest.mark.parametrize("device", ["computer", "phone"])
+def test_a_conflict_of_two_auto_sheets_says_who_made_each_from_what_over_which_words(served, tmp_path, device):
+    lrclib = json.dumps({"plain": "On a dark desert highway", "synced": "[00:01.00] On a dark desert highway",
+                         "instrumental": False, "duration": 391.0, "lrclib_id": 9, "raw": {}, "provider": "lrclib",
+                         "url": None})
+    fake = FakeSync(state=PHONE_STATE if device == "phone" else STATE)
+    here_id, there_id = fake.state["server"], fake.comparison["peer"]["server"]
+    fake.units["song/eagles/hotel california"] = {
+        "here": auto_sheet_doc({"made_on": device, "made_by": here_id, "audio_name": "song.mp3", "lyrics": "synced"},
+                               lyrics_json=lrclib),
+        "there": auto_sheet_doc({"made_on": "computer", "made_by": there_id, "youtube": {"id": "dQw4w9WgXcQ"},
+                                 "lyrics": "synced", "lyrics_source": "transcript"}, lyrics="missing")}
+    fake.units["song/oasis/wonderwall"] = {
+        "here": auto_sheet_doc({"made_on": device, "made_by": here_id, "audio_name": HOSTILE, "lyrics": "none"},
+                               lyrics="missing"),
+        "there": auto_sheet_doc({"lyrics": "none"}, lyrics="missing")}  # made before who made it was kept
+    url = served(fake, sync="sheet" if device == "phone" else "tab") + "#sheet=sync"
+    with opened(tmp_path, url, **({"width": 390, "height": 844, "mobile": True} if device == "phone" else {})) as page:
+        at_view(page, "what")
+        assert page.wait("!document.getElementById('sync-go').disabled")
+        page.click("#sync-go")
+        at_card(page)
+        here, there = ("this computer", "Studio") if device == "computer" else ("the phone", "the computer")
+        card = page.js(CARD)
+        assert (card["here"], card["there"]) == (
+            ["Its auto sheet", f"made on {here} from “song.mp3”, chords over LRCLIB's timed lyrics",
+             "Its lyrics", "found"],
+            ["Its auto sheet", f"made on {there} from its YouTube audio, chords over the transcribed lyrics",
+             "Its lyrics", "missing"])
+        page.click("#sync-keep-there")  # choosing a side works as ever
+        assert page.wait("document.getElementById('sync-card-at').textContent === '2 of 2'")
+        assert page.wait("document.querySelector('#sync-card-here .sync-lines').dataset.state === ''")
+        card = page.js(CARD)
+        # A device's file name is text: no element made of it, nothing run.
+        assert (card["here"], card["there"]) == (
+            ["Its auto sheet", f"made on {here} from “{HOSTILE}”, chords only"], ["Its auto sheet", "chords only"])
+        assert page.js("[document.querySelectorAll('#sync-conflict img').length, typeof window.pwned]") == [
+            0, "undefined"]
+        page.click("#sync-keep-here")
+        at_view(page, "going")
+        [form] = fake.awaited("/sync/apply")
+        assert form["choices"] == ["there\tsong/eagles/hotel california\nhere\tsong/oasis/wonderwall"]
+
+
 @in_chromium
 def test_same_for_the_other_n_settles_every_conflict_left_and_sync_posts_one_field_of_choices(served, tmp_path):
     fake = FakeSync()

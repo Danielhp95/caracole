@@ -28,7 +28,8 @@ from audio of the song this computer has or gets later. New words lay it out aga
 sheet here: an audio file, a video, `caracole autochords --song`, or Transcribe the lyrics. The sheet is then this
 computer's. One exception: if every lyrics site missed and this computer hears the words in its own audio, its sheet
 over them replaces a chords-only one from the other device. A copied database given a new id (`caracole peer new-id`)
-counts every sheet made before as the other caracole's.
+counts every sheet made before as the other caracole's. If both devices made one before a sync, the sync asks which
+to keep, and says of each who made it, from what, and over which words.
 
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then

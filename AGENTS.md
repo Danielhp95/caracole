@@ -1481,7 +1481,11 @@ It is rows.js's, shared by both pages:
   the file) told apart by sync-words.js's `differ`, this device on the left; a button for each side, named for it
   (Phone and Computer, This computer and the server's name, File: `#sync-keep-here`, `#sync-keep-there`), and Same
   for the other N, `#sync-same`, a checkbox the next side pressed applies to every conflict left. No Skip, and nothing
-  who changed what, or when.
+  who changed what, or when. A song's auto sheet is a line of its own, "Its auto sheet" (`autoOf`, from the auto
+  version's raw the document carries whole: "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics",
+  "none"): its maker named by sync id as the sides are (sync.js `makersNow`: GET /api/sync's `server`, the peer's;
+  a third caracole "another caracole", a raw that names none no maker), its audio's name as text cut at 60
+  characters, the words' site the song's own found lyrics'; no unit, digest or route changes for it.
 - **Cancel queues nothing**, at any step before Sync goes, and forgets every side chosen on a card; Escape is Cancel
   before it and Done after it. Sync posts the parts and each conflict's side in one field (`POST /sync/apply`); a 409
   says the server's words and compares again, keeping, within that opening, the side of each conflict as it was.

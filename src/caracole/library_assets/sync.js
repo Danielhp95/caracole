@@ -161,6 +161,15 @@
   };
   const sidesNow = () => W.sides(device(), isFile() ? { kind: "file", name: nameOf() }
     : { kind: device() === "phone" ? "computer" : null, name: nameOf(), address: source && source.address });
+  // Who each side is by its sync id, for an auto sheet's maker on a card (sync-words.js ``autoOf``): this caracole's
+  // (GET /api/sync's ``server``) and the other's (the comparison's peer's); a file's caracole named by the device the
+  // record names, never "the file".
+  const makersNow = () => {
+    const named = sidesNow();
+    return { here: { id: me && typeof me.server === "string" ? me.server : null, the: named.here.the },
+             there: { id: typeof peerOf().server === "string" ? peerOf().server : null,
+                      the: isFile() ? null : named.there.the } };
+  };
   const lowered = (text) => String(text).charAt(0).toLowerCase() + String(text).slice(1);
   const say = (text, tone) => {
     status.replaceChildren();
@@ -552,7 +561,7 @@
         list.replaceChildren(el("dd", null, shown.error));
       } else {
         list.dataset.state = "";
-        const lines = W.differ(kindOf(d), shown.here, shown.there);
+        const lines = W.differ(kindOf(d), shown.here, shown.there, makersNow());
         if (lines.length) drawLines(box, lines, which);
         else list.replaceChildren(el("dd", null, shown[which] ? "As the other side's" : W.NONE));
       }

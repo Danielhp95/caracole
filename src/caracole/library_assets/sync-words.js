@@ -3,13 +3,14 @@
 // (docs/superpowers/plans/2026-11-03-sync-redesign.md §3.7). It builds no element and asks nothing of anyone: every
 // answer is text, which sync.js puts in with textContent.
 //
-// ``differ(kind, here, there)``: a unit's two documents (GET /api/sync/unit's ``here`` and ``there``, each
+// ``differ(kind, here, there, makers)``: a unit's two documents (GET /api/sync/unit's ``here`` and ``there``, each
 // peer_sync.unit_document's ``unit``, or null where a side hasn't got it), told apart aspect by aspect, a line each
 // that the two hold differently: ``{what, here, there}``, each value text, "–" for none. A song's own key (its
 // ``[version]``), its sheet (the version of the lowest pick rank, its site named as the page's ``icons`` name it), its
-// versions, its kept files, its lyrics, its status, its album, length and variant, and any other override; a
-// songbook's set list, the songs one has and the other lacks, its order and a song's setting; a removal, an artist's
-// slugs or UG page, a blocked tab, by their values. ``changed(change, side)``: "added on the phone".
+// auto sheet (``autoOf``, below, with ``makers``: who made it, from what, over which words), its versions, its kept
+// files, its lyrics, its status, its album, length and variant, and any other override; a songbook's set list, the
+// songs one has and the other lacks, its order and a song's setting; a removal, an artist's slugs or UG page, a
+// blocked tab, by their values. ``changed(change, side)``: "added on the phone".
 // ``sides(device, peer)``: this device's and the other side's names, as headings, as places and in sentences, and
 // their icons. ``tabs(n, signed)``: 1,503,236 and +12,130 (a minus sign for a fall), digits grouped by hand, no locale.
 // ``sizeOf(have, size)``: "1.5 of 2.1 GB", what has come of a size, in its unit. ``day(stamp)`` and ``when(stamp)``:
@@ -261,7 +262,94 @@
     if (Array.isArray(value)) return value.map(text).join(", ") || "set";
     return "set";
   };
-  const songAspects = (doc) => {
+  // --- a song's auto sheet: who made it, from what, over which words (its version's raw record) ------------------
+  // ``autoOf(doc, makers)``: "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics"; "none" for a song
+  // with no auto sheet. Its maker (``made_by``, a caracole's sync id) is named as this sync's sides are, by
+  // ``makers``' ids (``{here: {id, the}, there: {id, the}}``: GET /api/sync's ``server`` and the comparison's peer's,
+  // each with its side's ``the``; one whose ``the`` is null, a file's caracole, by the device the record names), and
+  // "another caracole" is a third one; with no ids, by the device it names (``made_on``); a record that names neither,
+  // made before who made it was kept, says no maker. A file's name is data a device wrote: text alone, its spaces
+  // folded, cut at ``NAME_MOST`` characters. Timed or plain lyrics name the site of the song's own lyrics, read as
+  // lyrics.py reads them, only while they are found.
+  const AUTO = "auto";
+  const NAME_MOST = 60;
+  const ON = { phone: "the phone", computer: "the computer" };
+  const LYRICS_SITES = { lrclib: "LRCLIB's", megalobiz: "Megalobiz's", azlyrics: "AZLyrics'" };
+  const autoVersionOf = (doc) => {
+    const autos = versionsOf(doc).filter((v) => v.provider === AUTO);
+    return autos.find((v) => listOf(v.files).length) || autos[0] || null;
+  };
+  const makerOf = (raw, makers) => {
+    const by = typeof raw.made_by === "string" && raw.made_by ? raw.made_by : null;
+    const device = own.call(ON, raw.made_on) ? ON[raw.made_on] : null;
+    const given = objOf(makers) || {};
+    const ids = ["here", "there"].map((which) => objOf(given[which]) || {});
+    if (by) {
+      const side = ids.find((s) => typeof s.id === "string" && s.id === by);
+      if (side) return text(side.the) || device || "another caracole";
+      if (ids.every((s) => typeof s.id === "string" && s.id)) return "another caracole";
+    }
+    if (by || (raw.made_on !== undefined && raw.made_on !== null)) return device || "another caracole";
+    return null;
+  };
+  const fileName = (value) => {
+    const chars = Array.from(text(value).replace(/\s+/g, " ").trim());
+    return chars.length > NAME_MOST ? chars.slice(0, NAME_MOST - 1).join("") + "…" : chars.join("");
+  };
+  const sourceOf = (raw) => {
+    if (objOf(raw.youtube)) return "its YouTube audio";
+    const name = typeof raw.audio_name === "string" ? fileName(raw.audio_name) : "";
+    return name ? "“" + name + "”" : null;
+  };
+  const storedLyrics = (song) => {
+    if (typeof song.lyrics_json !== "string" || !song.lyrics_json.trim()) return null;
+    try {
+      return objOf(JSON.parse(song.lyrics_json));
+    } catch (err) {
+      return null;
+    }
+  };
+  const lyricsSite = (song) => {
+    const stored = song.lyrics_status === "found" ? storedLyrics(song) : null;
+    if (!stored) return "";
+    const named = own.call(stored, "raw") && own.call(stored, "plain") && typeof stored.provider === "string";
+    const provider = named && stored.provider ? stored.provider : "lrclib";  // stored before lyrics named their site
+    return own.call(LYRICS_SITES, provider) ? LYRICS_SITES[provider] + " " : "";
+  };
+  const instrumental = (song) => {
+    if (song.lyrics_status === "instrumental") return true;
+    const stored = storedLyrics(song);
+    return Boolean(stored && stored.instrumental === true && !text(stored.plain).trim());
+  };
+  const wordsOf = (raw, song) => {
+    if (raw.lyrics_source === "transcript") return "chords over the transcribed lyrics";
+    if (raw.lyrics === "synced") return "chords over " + lyricsSite(song) + "timed lyrics";
+    if (raw.lyrics === "plain") return "chords over " + lyricsSite(song) + "plain lyrics";
+    if (raw.lyrics !== "none") return null;
+    if (raw.heard_nothing === true && raw.not_sung_by === "you") return "chords only: you said it isn't sung";
+    if (raw.heard_nothing === true) return "chords only: nothing sung was heard";
+    if (instrumental(song)) return "chords only: the lyrics sites say it's instrumental";
+    return "chords only";
+  };
+  const autoOf = (doc, makers) => {
+    const version = objOf(doc) ? autoVersionOf(doc) : null;
+    if (!version) return "none";
+    let raw = {};
+    if (typeof version.raw === "string" && version.raw.trim()) {
+      try {
+        raw = JSON.parse(version.raw);
+      } catch (err) {
+        raw = null;
+      }
+    }
+    if (!objOf(raw)) return "an auto sheet whose record can't be read";
+    const maker = makerOf(raw, makers);
+    const source = sourceOf(raw);
+    const made = maker || source ? "made" + (maker ? " on " + maker : "") + (source ? " from " + source : "") : "";
+    return [made, wordsOf(raw, objOf(doc.song) || {})].filter(Boolean).join(", ") || "an auto sheet";
+  };
+
+  const songAspects = (doc, makers) => {
     const song = objOf(doc.song) || {};
     const names = objOf(doc.names) || {};
     const overrides = objOf(doc.overrides) || {};
@@ -269,6 +357,7 @@
     const aspects = [
       ["Its own key", ownKey(overrides.version), overrides.version || null],
       ["Its sheet", sheetOf(doc)],
+      ["Its auto sheet", autoOf(doc, makers)],
       ["Its versions", String(versionsOf(doc).length)],
       ["Its kept files", files.length ? files.join(", ") : NONE],
       ["Its lyrics", worded(song.lyrics_status)],
@@ -279,9 +368,9 @@
     ];
     return { aspects, overrides };
   };
-  const songLines = (here, there) => {
-    const a = songAspects(here);
-    const b = songAspects(there);
+  const songLines = (here, there, makers) => {
+    const a = songAspects(here, makers);
+    const b = songAspects(there, makers);
     const lines = [];
     for (let i = 0; i < a.aspects.length; i += 1) {
       const [what, mine, mineKey] = a.aspects[i];
@@ -368,7 +457,7 @@
     block: (doc) => (doc.tab === undefined || doc.tab === null ? NONE : "tab " + text(doc.tab)),
   };
   const WHAT = { alias: "Its slugs", artist_url: "Its UG page", block: "Blocked" };
-  const differ = (kind, here, there) => {
+  const differ = (kind, here, there, makers) => {
     const a = objOf(here);
     const b = objOf(there);
     if (!a && !b) return [];
@@ -383,13 +472,14 @@
       const held = (doc) => (!doc ? NONE : kind === "songbook" ? counted(entriesOf(doc).length, "song") : "Kept");
       lines = [{ what: kind === "songbook" ? "The songbook" : "The song", here: held(a), there: held(b) }];
     } else {
-      lines = kind === "song" ? songLines(a, b) : kind === "songbook" ? bookLines(a, b) : [];
+      lines = kind === "song" ? songLines(a, b, makers) : kind === "songbook" ? bookLines(a, b) : [];
     }
     // Two versions that differ only where no line above looks (a version's rating, a record's time): said so.
     return lines.length || same(a, b) ? lines : [{ what: "Its other details", here: "one way", there: "another way" }];
   };
 
   window.caracoleSyncWords = Object.freeze({
-    NONE, differ, changed, sides, tabs, counted, size, sizeOf, day, when, readOn, bookChange, ownKey, indexNews, newTabs, went,
+    NONE, differ, changed, sides, tabs, counted, size, sizeOf, day, when, readOn, bookChange, ownKey, autoOf, indexNews,
+    newTabs, went,
   });
 })();
