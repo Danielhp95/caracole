@@ -146,15 +146,16 @@ signed with another key. Keep a copy of both outside the repository.
 YouTube breaks older yt-dlp often: the phone then says "YouTube changed what yt-dlp … reads". A fix is one pin moved
 and the usual release, under an hour once yt-dlp has one:
 
-1. Move the pin to PyPI's latest yt-dlp, or to a release you name:
+1. Move the pin to PyPI's latest yt-dlp, or to a release you name (a tag's `2026.01.05` is PyPI's `2026.1.5`):
 
-       nix develop ./android -c android/scripts/bump-ytdlp.sh [VERSION]
+       nix develop ./android -c android/scripts/bump-ytdlp.sh [--older] [VERSION]
 
    It reads PyPI's JSON for yt-dlp and for the yt-dlp-ejs its wheel requires (`Requires-Dist: yt-dlp-ejs==…; extra
    == 'default'`), fetches both wheels into Nix's store (`nix-prefetch-url`), checks each is PyPI's SHA-256 and the
-   version its `METADATA` says, and rewrites `youtube/pins.json`'s `ytdlp` and `ejs`. A version not on PyPI, yanked,
-   or older than the pin, and a wheel of other bytes, are refused with `pins.json` as it was; the version pinned
-   already changes nothing. It prints the steps below.
+   version its `METADATA` says, and rewrites `youtube/pins.json`'s `ytdlp` and `ejs`. A version not on PyPI or
+   yanked, a wheel anywhere but `https://files.pythonhosted.org/…/<its file name>` or of other bytes, and a version
+   older than the pin are refused with `pins.json` as it was; `--older VERSION` goes back to an older one after a
+   yt-dlp regression, every check still made. The version pinned already changes nothing. It prints the steps below.
 2. `git add android/youtube/pins.json` (the flake reads only what git tracks), then
    `nix develop ./android -c gradle -p android :youtube:testDebugUnitTest`: `PinsTest` holds the wheels to the pins.
 3. On the emulator, `android/scripts/device-test.sh --youtube`: `YtDlpVersionTest`, the app runs the pinned yt-dlp.
