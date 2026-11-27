@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesError
@@ -33,9 +34,10 @@ import java.util.concurrent.CancellationException
  *   asking the command's (LookupJobs.context, the lookup's pace);
  * - `chords`: where the song's auto sheet keeps what was heard, laid out again over the words with no model
  *   ([Relay.onto], its end youtube_sheet.py's `holds`); one another caracole made whose `heard` this side can't read,
- *   or no audio of its own, a site's sheet: skipped in lyrics_pick.py's words; else the phone's own audio heard by
- *   [chords] (the lookups queued meanwhile going first) and the sheet kept as AudioRunner keeps one
- *   ([AudioRunner.keepAutoSheet]); a phone that hears no chords now skips it in [problem]'s words;
+ *   or no audio of its own, a site's sheet: skipped in lyrics_pick.py's words; a phone that hears no chords now skips
+ *   it in its own words ([PHONE_NOT_HERE], [PHONE_NOT_DOWNLOADED]: it has no nightly run); a sheet up to date of the
+ *   audio as it is, run.py's UP_TO_DATE with no model; else the phone's own audio heard by [chords] (the lookups
+ *   queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]);
  * - `pdf` and `pages`: the song's pages (PhoneParts.pages, PhoneRender), get.py's words for a caracole that makes no
  *   PDF, [LookupWords.LIBRARY_PAGE].
  *
@@ -195,6 +197,7 @@ internal class LyricsPickJob(
             ask.close()
         }
         again(db)
+        overrides = LookupJobs.overrides(db)  // the record noted: Relay.onto is handed the pick's
         if (ended.failed) fail(ended.detail) else ended.state to ended.detail
     }
 
@@ -205,9 +208,13 @@ internal class LyricsPickJob(
         if (why != null) return "skipped" to why
         val models = chords
         val problem = problem() ?: if (models == null || store == null) AudioRunner.problemOf(null, null) else null
-        if (problem != null) return "skipped" to "auto-chords isn't here ($problem); tonight's run makes it again"
+        if (problem != null) {
+            return "skipped" to if (problem == AudioRunner.NOT_DOWNLOADED) PHONE_NOT_DOWNLOADED
+                                else PHONE_NOT_HERE.replace("{problem}", problem)
+        }
         context.yieldToQueued()  // the models take a minute: the lookups queued meanwhile go first
         parts.database.writeBlocking { db -> whyNoChords(db.also { again(it) }) }?.let { return "skipped" to it }
+        parts.database.read { db -> upToDate(db) }?.let { return it }
         val audio = File(song!!.audioPath!!)
         val heard = try {
             hold {
@@ -224,11 +231,23 @@ internal class LyricsPickJob(
         return parts.database.writeBlocking { db ->
             val s = again(db)
             if (s.audioPath != audio.path) throw Stop(AudioRunner.AUDIO_CHANGED.replace("{display}", s.display))
-            val (ended, info) = AudioRunner.keepAutoSheet(parts, store!!, models!!, names, db, s, heard, audio)
+            val (ended, info) = AudioRunner.keepAutoSheet(parts, store!!, models!!, names, db, s, heard, audio,
+                                                          Stamps.of(now))
             models.forget(audio)
             again(db)
             info?.let { fail(it) } ?: ended
         }
+    }
+
+    /** run.py `_skip_reason`'s up to date: the auto sheet already made of the song's audio as it is now
+     * (`autochords_mtime` its `audio_mtime`): no model runs, its end staged.py's UP_TO_DATE. A sheet whose words
+     * changed was re-laid already ([relaid]), or made due at the keep (LyricsPickCommands.modelsRemake). */
+    private fun upToDate(db: Db): Pair<String, String>? {
+        val s = again(db)
+        val auto = Kept.keptFiles(db, s.id).firstOrNull { it.name == Versions.SHEET_FILE_NAMES[1] } ?: return null
+        if (s.autochordsMtime == null || s.autochordsMtime != s.audioMtime) return null
+        val raw = Versions.get(db, auto.versionId)?.raw ?: return null
+        return "done" to AudioRunner.Words.text("up_to_date").replace("{held}", AudioRunner.holds(raw))
     }
 
     /** staged.py `_relaid`: the auto sheet laid out again over the new words, where it keeps what was heard. */
@@ -282,5 +301,12 @@ internal class LyricsPickJob(
     private companion object {
         const val MAKING = "its lyrics were picked"
         const val MADE_ELSEWHERE = "made by another caracole from your audio there"
+
+        /** lyrics_pick.PHONE_NOT_HERE and PHONE_NOT_DOWNLOADED: the phone's chords stage where it can't make the sheet
+         * now; it has no nightly run to make it later (the computer says "tonight's run makes it again"). */
+        const val PHONE_NOT_HERE = "auto-chords isn't here ({problem}); pick these lyrics again once it is, and the " +
+            "sheet is made over them"
+        const val PHONE_NOT_DOWNLOADED = "the chord models aren't downloaded: Settings › Chords from audio; then pick " +
+            "these lyrics again"
     }
 }

@@ -3408,9 +3408,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   lyrics_pick.py's song and lyrics stages (`findSong`, `cachedLrclib`: LRCLIB's record from the search's answers in
   the phone's HTTP cache, no request; `lyrics`: the files, `setLyricsRecord`, then `askAnew` and the song found in one
   savepoint), and server/lookups' `LyricsPickJob` (`lyrics --song --record --progress`, `lyricsPickSteps`, the
-  queue's): its chords `Relay.onto` where the auto sheet keeps what was heard, else the phone's own audio through
-  `ChordModels` (`AudioRunner.keepAutoSheet`, the audio job's keep), else skipped in lyrics_pick.py's words; pdf and
-  pages PhoneRender's. tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
+  queue's): its chords `Relay.onto` where the auto sheet keeps what was heard, up to date (`autochords_mtime` its
+  `audio_mtime`: staged.py's UP_TO_DATE, no model), else the phone's own audio through `ChordModels`
+  (`AudioRunner.keepAutoSheet`, the audio job's keep, at the job's stamp), else skipped in lyrics_pick.py's words, and
+  where the phone hears no chords now in its own (lyrics_pick.py `PHONE_NOT_HERE`, `PHONE_NOT_DOWNLOADED`: no nightly
+  run makes it later); the record noted in the lyrics' savepoint, a failure to note it putting the files back; pdf and
+  pages PhoneRender's, which write info.json, so a picked record's `lyrics_from` follows at the pdf stage (a song with
+  no sheet: at its next render). tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
   `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request), then the song's pages.
 - The card's lyrics panel on the phone (E31): server/routes' `LyricsRoutes` (`POST /lyrics/search`, `GET
   /api/lyrics/search`, `POST /lyrics/pick`, `POST /lyrics/clear`, web/lyrics_routes.py's answers and refusals, the

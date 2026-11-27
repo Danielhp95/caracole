@@ -17,7 +17,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -38,6 +37,11 @@ import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.Heard
 import kotlinx.serialization.json.Json
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.InteractiveAsk
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.sites.LyricsPickCommands
 import org.junit.Test
 import java.nio.file.Files
 import java.time.Instant
@@ -88,9 +92,34 @@ class LyricsRunnerTest {
         override val isCancelled: Boolean = false
     }
 
+    /** What the last pick replayed sent its sites, and how many times a chord model was asked to hear. */
+    private var sent: List<String> = emptyList()
+    private var heardTimes = 0
+
+    /** A chord model that hears nothing: a pick of `models` (a sheet up to date) asks it none. */
+    private val noModel = object : ChordModels {
+        override fun ready(): String? = null
+        override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
+            heardTimes++
+            throw AssertionError("a model ran on $audio")
+        }
+    }
+
+    /** The repository's root, where the generator ran: a song's own audio (`tests/fixtures/audio/…`) is under it. */
+    private val root: File = File(System.getProperty("caracole.conformance")).parentFile.parentFile.parentFile
+
     private val picking = LookupScenariosReplay.Run { w ->
         val display = w.kw.getValue("song").jsonPrimitive.content
-        val steps = JobCommands.lyricsPickSteps(display, w.kw.getValue("record").jsonPrimitive.content)
+        val record = w.kw["record"]?.takeIf { it != JsonNull }?.jsonPrimitive?.content
+        val row = w.kw["pick"]?.takeIf { it != JsonNull }?.jsonPrimitive?.content
+        val args = if (record != null) JobCommands.lyricsPickSteps(display, record).single().args
+                   else listOf("lyrics", "--song=$display", "--pick=$row", "--progress")
+        val models = w.kw["models"]?.jsonPrimitive?.content == "true"
+        val relative = w.database.read { db -> db.query("SELECT id, audio_path FROM songs WHERE audio_path LIKE 'tests/%'") {
+            it.long(0)!! to it.text(1)!! } }
+        w.database.writeBlocking { db ->
+            for ((id, path) in relative) db.execute("UPDATE songs SET audio_path = ? WHERE id = ?", File(root, path).path, id)
+        }
         val scope = CoroutineScope(SupervisorJob())
         try {
             val state = File(w.cacheDir.parentFile, "state").apply { mkdirs() }
@@ -99,11 +128,17 @@ class LyricsRunnerTest {
                                    searchesLacuerda = false)
             val told = Told(w.progress)
             val stamped = w.database.read { db -> db.query("SELECT id, created_at FROM files") { it.long(0)!! to it.text(1) }.toMap() }
+            val runner = if (models) LyricsRunner(parts, chords = noModel, store = AudioStore(state, { _, _ ->
+                error("no file examined") })) else LyricsRunner(parts)
             val exit = try {
-                runBlocking { LyricsRunner(parts).run(steps.single().args, told) }
+                runBlocking { runner.run(args, told) }
                 0
             } catch (e: CommandExit) {
                 e.code
+            }
+            sent = w.transport.said
+            w.database.writeBlocking { db ->  // the song's audio as Python's record names it
+                for ((id, path) in relative) db.execute("UPDATE songs SET audio_path = ? WHERE id = ?", path, id)
             }
             w.database.writeBlocking { db ->  // a file kept at the clock's time, as Python's at SQLite's: both at `now`
                 for ((id, at) in db.query("SELECT id, created_at FROM files") { it.long(0)!! to it.text(1) }) {
@@ -130,12 +165,54 @@ class LyricsRunnerTest {
         assertEquals(records.map { it.getValue("case").jsonPrimitive.content }, replayed)
     }
 
-    @Test fun anLrclibPickSendsNoRequestAndAReLayRunsNoModel() {
-        val lrclib = records.first { it.getValue("case").jsonPrimitive.content.startsWith("LRCLIB's record") }
-        val out = lrclib.getValue("out").jsonObject
-        assertEquals(JsonArray(emptyList()), out.getValue("requests"))
-        val ends = out.getValue("result").jsonObject.getValue("result").jsonObject.getValue("states").jsonObject
-        assertEquals(JsonPrimitive("done"), ends["chords"])  // replayed above with no chord models at all
+    @Test fun anLrclibPickSendsNoRequestAndAReLayOrASheetUpToDateRunsNoModel() {
+        val cases = records.map { it.getValue("case").jsonPrimitive.content }
+        val lrclib = cases.first { it.startsWith("LRCLIB's record") }
+        val misses = Misses("lyrics-pick")
+        var told: JsonObject? = null
+        LookupScenariosReplay.replay(PICKS, misses, { w -> picking.run(w).also { told = it.result } }, only = setOf(lrclib))
+        misses.assertNone()
+        assertEquals(emptyList(), sent)  // what the phone's run sent: nothing
+        assertEquals(JsonPrimitive("done"), told!!.getValue("states").jsonObject["chords"])  // re-laid, no models given
+        val upToDate = cases.first { it.startsWith("the same record again, its sheet of its own audio up to date") }
+        LookupScenariosReplay.replay(PICKS, misses, { w -> picking.run(w).also { told = it.result } }, only = setOf(upToDate))
+        misses.assertNone()
+        assertEquals(0, heardTimes)
+        assertEquals(JsonPrimitive("up to date: chords over the lyrics"), told!!.getValue("details").jsonObject["chords"])
+    }
+
+    /** A record that can't be noted (the song's `[lyrics]` entry one the reader refuses, written after the job read
+     * the overrides): the stage fails, the lyric files put back (none), nothing else changed (lyrics_pick._keep's). */
+    @Test fun aRecordThatCantBeNotedPutsTheLyricFilesBack() {
+        val mega = records.map { it.getValue("case").jsonPrimitive.content }.first { it.startsWith("Megalobiz's record, one") }
+        var ended: LyricsPickCommands.Ended? = null
+        var files: List<String> = emptyList()
+        var status: String? = null
+        LookupScenariosReplay.replay(PICKS, Misses("put back"), { w ->
+            w.database.writeBlocking { db ->
+                val now = Instant.parse(w.record.getValue("now").jsonPrimitive.content)
+                val picked = LyricsPickCommands.findSong(db, "Nick Cani", "Vikingos veganos", Overrides(), now,
+                                                         "megalobiz:5001")
+                db.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES ('lyrics', ?, ?, '\"x\"')",
+                           picked.song.key, picked.song.display)
+                val ask = InteractiveAsk(w.clients(), db, Pace.lookupRunId(now), now, Alerts.NONE, w.config)
+                val c = object : CommandContext {
+                    override val db = db
+                    override val asking = ask
+                    override val now = now
+                    override fun say(line: String) {}
+                }
+                ended = LyricsPickCommands.lyrics(c, w.config, w.cacheDir, w.store, picked, null)
+                status = db.one("SELECT lyrics_status FROM songs") { it.text(0) }
+            }
+            files = w.store.libraryDir.walkTopDown().filter { it.isFile }.map { it.name }.toList()
+            LookupScenariosReplay.Ran(JsonObject(emptyMap()))
+        }, only = setOf(mega))
+        assertTrue(ended!!.failed && ended!!.state == "failed", "${ended?.detail}")
+        assertTrue(ended!!.detail.startsWith("couldn't note the record in overrides.toml: ") &&
+                       ended!!.detail.endsWith("; nothing kept"), ended!!.detail)
+        assertTrue(files.none { it.startsWith("lyrics.") }, "$files")
+        assertEquals("missing", status)
     }
 
     @Test fun aStrayPickIsTold() {
@@ -174,8 +251,9 @@ class LyricsRunnerTest {
                                o.getValue("headers").jsonArray.map { it.jsonArray[0].jsonPrimitive.content to it.jsonArray[1].jsonPrimitive.content },
                                Scenarios.body(o.getValue("body")))
                 }
+                var ticks = 0L  // a clock that moves a minute each time it is read: every stamp is the job's own
                 val pacing = Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { now.epochSecond.toDouble() },
-                                    monotonic = { 0.0 }, clock = { now })
+                                    monotonic = { 0.0 }, clock = { now.plusSeconds(60 * ticks++) })
                 val cache = File(dir, "cache")
                 val parts = PhoneParts(database, LibraryStore(library, File(state, AudioStore.FOLDER)), state,
                                        { PhoneConfig.DEFAULTS }, JobQueue(scope), MirrorPageData(null),
@@ -204,6 +282,10 @@ class LyricsRunnerTest {
                     val made = Json.parseToJsonElement(raw).jsonObject
                     assertEquals(JsonPrimitive("phone"), made["made_on"])
                     assertEquals(JsonPrimitive("synced"), made["lyrics"])
+                    val stamps = db.query("SELECT fetched_at FROM versions WHERE provider = 'auto' UNION ALL SELECT " +
+                                              "created_at FROM files WHERE name = 'sheet (auto).txt'") { it.text(0)!! }
+                    assertEquals(1, stamps.toSet().size, "$stamps")
+                    assertEquals(db.one("SELECT lyrics_at FROM songs") { it.text(0) }, stamps.first())
                 }
             }
         } finally {

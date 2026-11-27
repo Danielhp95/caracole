@@ -473,7 +473,7 @@ class AudioRunner(
         private fun keepSheet(db: Db, heard: Heard, audio: File): Pair<String, String> {
             val s = again(db)
             stillOurs(db, s)
-            val (ended, info) = keepAutoSheet(parts, store, chords, names, db, s, heard, audio)
+            val (ended, info) = keepAutoSheet(parts, store, chords, names, db, s, heard, audio, stamp)
             sheetKept = true
             again(db)
             return info?.let { fail(it) } ?: ended
@@ -518,12 +518,12 @@ class AudioRunner(
          * run.py's `_generate` past the models and `_keep`: the sheet laid out from what was [heard], over the song's
          * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
          * `autochords_mtime` last; the chords stage's end, and info.json's failure in [INFO_FAILED]'s words (the
-         * sheet kept all the same). The audio job's and a lyrics pick's (LyricsPickJob) alike.
+         * sheet kept all the same). The audio job's and a lyrics pick's (LyricsPickJob) alike, every time [stamp],
+         * the job's own (its start's, as `autochords_pending(now=…)` is given the job's).
          */
         internal fun keepAutoSheet(parts: PhoneParts, store: AudioStore, chords: ChordModels,
                                    names: () -> Map<String, String>, db: Db, s: SongRow, heard: Heard,
-                                   audio: File): Pair<Pair<String, String>, String?> {
-            val stamp = Stamps.of(parts.pacing.clock().truncatedTo(ChronoUnit.SECONDS))
+                                   audio: File, stamp: String): Pair<Pair<String, String>, String?> {
             val lyrics = lyricsFromJson(s.lyricsJson)
             val maker = Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime,
                               store.givenName(db, s), sha16(audio))

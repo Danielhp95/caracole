@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.LyricsRecord
 import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.SharedFolder
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -103,7 +104,7 @@ object LyricsPickCommands {
 
     /** lyrics_pick._Pick._cached_lrclib: LRCLIB's record of [id] as the search's answers in the HTTP cache hold it (its
      * search, then its get of the name and the audio's length), with no request; null when the cache no longer does. */
-    fun cachedLrclib(cacheDir: File, search: LyricsSearchCommands.Search, id: Long): Lyrics? {
+    fun cachedLrclib(cacheDir: File, search: LyricsSearchCommands.Search, id: BigInteger): Lyrics? {
         val cache = CachedAnswers(Lrclib.PROVIDER, cacheDir)
         val (artist, title) = search.asked
         val get = Lrclib.getParams(artist, title, album = null, durationS = search.length)
@@ -116,7 +117,7 @@ object LyricsPickCommands {
                 continue
             }
             for (record in if (found is JsonArray) found else listOf(found)) {
-                if (record is JsonObject && PyValues.bigInt(record["id"]) == BigInteger.valueOf(id)) {
+                if (record is JsonObject && PyValues.bigInt(record["id"]) == id) {
                     return Lyrics.fromRecord(record)
                 }
             }
@@ -148,13 +149,13 @@ object LyricsPickCommands {
 
     private fun read(c: CommandContext, config: PhoneConfig, cacheDir: File, picked: Picked, site: String,
                      id: String): Pair<Lyrics?, Ended?> {
-        if (site == Lrclib.PROVIDER) cachedLrclib(cacheDir, picked.search, id.toLong())?.let { return it to null }
+        if (site == Lrclib.PROVIDER) cachedLrclib(cacheDir, picked.search, BigInteger(id))?.let { return it to null }
         LyricsSearchCommands.notNow(config, c.db, c.now, site)?.let { (_, said) ->
             return null to Ended("skipped", "$said$NOTHING_KEPT")
         }
         val asked = c.asking.ask(site) { client ->
             when (site) {
-                Lrclib.PROVIDER -> Lrclib.fetchRecord(client, id.toLong())
+                Lrclib.PROVIDER -> Lrclib.fetchRecord(client, BigInteger(id).longValueExact())  // 12 digits at most
                 Megalobiz.PROVIDER -> Megalobiz.fetchRecord(client, BigInteger(id))
                 else -> AzLyrics.fetchAzLyrics(client, "", "", page = "${AzLyrics.SITE}lyrics/$id.html")
             }
@@ -182,14 +183,21 @@ object LyricsPickCommands {
         } catch (e: SharedFolder) {
             return Ended("failed", "couldn't write its lyrics (${e.message})${putBack(folder, before)}", failed = true)
         }
-        OverrideWriters.setLyricsRecord(db, song.display, record)
         val otherWords = before == null || before.plain != lyrics.plain || before.synced != lyrics.synced
         val columns = linkedMapOf<String, Any?>("lyrics_status" to "found", "lyrics_json" to lyrics.toJson(),
                                                 "lyrics_at" to Stamps.of(c.now))
         if (otherWords && modelsRemake(db, song)) columns["autochords_mtime"] = null
-        db.savepoint("lyrics_pick") {
-            LyricsSearchCommands.askAnew(db, song, c.now)
-            Versions.updateSong(db, song.id, columns, Stamps.of(c.now))
+        // On the phone the record is in the database: noted in the same savepoint, so a failure to note it (an
+        // entry of the song's the reader refuses) keeps nothing, the files put back, as Python's put-back does.
+        try {
+            db.savepoint("lyrics_pick") {
+                OverrideWriters.setLyricsRecord(db, song.display, record)
+                LyricsSearchCommands.askAnew(db, song, c.now)
+                Versions.updateSong(db, song.id, columns, Stamps.of(c.now))
+            }
+        } catch (e: OverridesError) {
+            return Ended("failed", "couldn't note the record in overrides.toml: ${e.message}${putBack(folder, before)}",
+                         failed = true)
         }
         return null
     }

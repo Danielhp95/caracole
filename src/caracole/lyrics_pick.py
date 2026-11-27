@@ -72,6 +72,10 @@ KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last li
 CLEARED = "Cleared the record you picked"  # how ``clear_pick``'s line begins, which caracole serve's request line reads
 # ``--clear``'s refusal, after the song's name
 NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
+# The phone's chords stage where it can't make the sheet now (it has no nightly run to make it later): its own words,
+# recorded in the conformance corpus (tests/test_conformance_lyrics_pick.py), used by nothing here.
+PHONE_NOT_HERE = "auto-chords isn't here ({problem}); pick these lyrics again once it is, and the sheet is made over them"
+PHONE_NOT_DOWNLOADED = "the chord models aren't downloaded: Settings › Chords from audio; then pick these lyrics again"
 
 
 @dataclass(frozen=True)
