@@ -246,6 +246,11 @@ object JobCommands {
         listOf(Command("Searching LaCuerda",
                        listOf("lacuerda", "--search=$query", "--progress") + if (auto) listOf("--auto") else emptyList()))
 
+    /** Look a song's lyrics up now under [name] ("Artist - Title", the one typed): `caracole lyrics --song --as`,
+     * no `--progress` and no stages, its line its last line (jobs.lyrics_search_steps). */
+    fun lyricsSearchSteps(display: String, name: String): List<Command> =
+        listOf(Command("Looking for lyrics under “$name”", listOf("lyrics", "--song=$display", "--as=$name")))
+
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
         listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))

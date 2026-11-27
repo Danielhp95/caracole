@@ -330,6 +330,27 @@ class LookupRunnersTest {
         }
     }
 
+    @Test fun aLyricsSearchIsALookupALongJobLetsGoFirstAndItsCommandLineIsRead() {
+        val steps = JobCommands.lyricsSearchSteps("Radiohead - Creep", "Radiohead - Creep (Live)")
+        assertTrue(JobCommands.isLookup(steps.single().args))
+        assertEquals(listOf("lyrics", "--song=Radiohead - Creep", "--as=Radiohead - Creep (Live)"), steps.single().args)
+        for ((args, said) in listOf(
+            listOf("lyrics", "--as=A - B") to Pair(2, "error: --song goes with one of --as, --pick, --record and " +
+                "--clear: caracole lyrics --song \"Artist - Title\" --as \"Artist - Title\"."),
+            listOf("lyrics", "--song=Radiohead - Creep", "--as=Creep") to
+                Pair(2, "error: --as: expected \"Artist - Title\", got 'Creep'"),
+            steps.single().args to Pair(1, "error: No song \"Radiohead - Creep\" in the library. Add it with " +
+                "`caracole add` first."),
+        )) {
+            job(listOf(io.github.danielhp95.caracole.server.jobs.Command("Ask", args)), { p ->
+                mapOf("lyrics" to LyricsRunner(p))
+            }) { job, _ ->
+                assertEquals(said.first, job.steps.single().code, "$args")
+                assertEquals(said.second, job.steps.single().output.last())
+            }
+        }
+    }
+
     @Test fun aLaCuerdaSearchCountsInTheHoursSearches() = TestDb.fresh(tmp.newFolder()).use { database ->
         val scope = CoroutineScope(SupervisorJob())
         val p = parts(database, scope, JobQueue(scope))

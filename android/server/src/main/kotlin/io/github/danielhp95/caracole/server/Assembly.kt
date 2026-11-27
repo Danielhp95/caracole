@@ -50,6 +50,7 @@ import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
 import io.github.danielhp95.caracole.server.lookups.InboxRetry
 import io.github.danielhp95.caracole.server.lookups.InboxRunner
 import io.github.danielhp95.caracole.server.lookups.LaCuerdaRunner
+import io.github.danielhp95.caracole.server.lookups.LyricsRunner
 import io.github.danielhp95.caracole.server.lookups.RenderRunner
 import io.github.danielhp95.caracole.server.lookups.ReviewRunner
 import io.github.danielhp95.caracole.server.lookups.UgLinkRunner
@@ -194,6 +195,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
                            songbookPages.seam, deps.alerts, deps.pacing, deps.searchesLacuerda)
         commands["get"] = GetRunner(parts)
+        commands["lyrics"] = LyricsRunner(parts)
         commands["versions"] = VersionsRunner(parts)
         commands["lacuerda"] = LaCuerdaRunner(parts)
         commands["harptabs"] = HarpTabsRunner(parts)

@@ -187,7 +187,9 @@ object LookupScenariosReplay : AreaReplay {
                 }
 
                 val want = said.getValue("result").jsonObject
-                check("states" in ran.result && "details" in ran.result) { "the run told no stage's end" }
+                if ("states" in want) {  // a lookup's, or a staged job's; a command of no stages (lyrics --as) tells lines
+                    check("states" in ran.result && "details" in ran.result) { "the run told no stage's end" }
+                }
                 for (k in ran.result.keys) {
                     check(k in want) { "the run tells $k, which Python's result hasn't" }
                 }

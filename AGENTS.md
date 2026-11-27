@@ -3393,6 +3393,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
     page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
     LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
+- A song's lyrics searched under a name typed (lyrics-search, the chords-on-the-phone plan's E29): core.lookup.sites'
+  `LyricsSearchCommands`, lyrics_search.py (`search`, `askAnew`, `notNow`, `stopped`, `lastLine`, `notes`, `rowFacts`,
+  `askedLine`, `lastSearch`, `keptSearch`, `rowOf`; `lines`, commands/lyrics.py `_lyrics_as`'s), through a
+  CommandContext's asking, LRCLIB's get a second ask of its client; its name noted by `OverrideWriters.setLyricsName`,
+  kv `lyrics-search:<id>` as Python writes it; run by server/lookups' `LyricsRunner` (`lyrics --song --as`, a lookup:
+  `JobCommands.isLookup`, `lyricsSearchSteps`). tests/test_conformance_lyrics_search.py writes
+  vectors/lookup/lyrics_search.jsonl, `LyricsSearchReplay` over LookupScenariosReplay's world. A block alerts once, as
+  every lookup's on the phone; the audio's length is the line's or its YouTube video's (no tag reader in :core).
 - harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):

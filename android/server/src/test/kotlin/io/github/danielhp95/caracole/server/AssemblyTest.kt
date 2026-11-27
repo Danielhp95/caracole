@@ -294,8 +294,9 @@ class AssemblyTest {
         assertEquals(Job.FAILED, over.state)  // no runner of "nothing" on the phone
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
-        assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
-                           "inbox", "backup", "catalogues", "models", "audio"), phone.queue.commands.runners.keys)
+        assertEquals(setOf("get", "lyrics", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render",
+                           "songbook", "inbox", "backup", "catalogues", "models", "audio"),
+                     phone.queue.commands.runners.keys)
         // The JVM's classpath carries no models.json, as the release's: the models' job is offered and says so.
         assertEquals(null, phone.models.folder())
         assertEquals("This build carries no chord models.", phone.models.ready())
