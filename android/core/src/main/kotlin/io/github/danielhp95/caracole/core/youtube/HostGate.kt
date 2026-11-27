@@ -641,8 +641,9 @@ class HostGate(
         const val HEAD_MAX = 16 * 1024
         /** Hosts named in the log at most; any other is counted under [OTHER_HOSTS]. */
         const val LOG_HOSTS = 256
-        const val OTHER_HOSTS = "(other hosts)"
-        const val MALFORMED = "(malformed)"
+        /** The log's names that are no host's: youtube.json's `gate.other_hosts` and `gate.malformed`. */
+        val OTHER_HOSTS: String by lazy { YouTubeData.read().text("other_hosts", YouTubeData.read().gate) }
+        val MALFORMED: String by lazy { YouTubeData.read().text("malformed", YouTubeData.read().gate) }
         /** Listed once the acceptor stopped by a bug of the gate's own: youtube.json's `gate.stopped`. */
         val STOPPED: String by lazy { YouTubeData.read().text("stopped", YouTubeData.read().gate) }
 

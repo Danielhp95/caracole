@@ -55,8 +55,8 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
 - ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
   under one of ``suffixes``, on ``port`` by CONNECT; ``apart``, allowed and reported apart; ``refused``, by name in
   every mode; ``refusal``, a run's error when the gate refused a host (``{host}``), read from its log first;
-  ``stopped``, the name its log lists once it stopped accepting by a bug of its own, and ``stopped_said``, a run's
-  error then, read from its log first too;
+  ``stopped``, the name its log lists once it stopped accepting by a bug of its own (``malformed`` and ``other_hosts``
+  its other two names that are no host's), and ``stopped_said``, a run's error then, read from its log first too;
 - ``runner``: ``YtDlp``'s words and folder: ``cache_folder`` (``CACHE_FOLDER``, under the cache folder given),
   ``budget_spent`` (``{budget}``), ``blocked_earlier``, ``unavailable_said`` (``{reason}``), ``timed_out``
   (``{timeout:g}``, Python's ``format(timeout, "g")``), ``said_nothing`` (a failed run's reason when stderr has no
@@ -268,7 +268,8 @@ def youtube_json() -> str:
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
                  "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal,
-                 "stopped": youtube.PHONE_GATE.stopped, "stopped_said": youtube.PHONE_GATE.stopped_said},
+                 "stopped": youtube.PHONE_GATE.stopped, "stopped_said": youtube.PHONE_GATE.stopped_said,
+                 "malformed": youtube.PHONE_GATE.malformed, "other_hosts": youtube.PHONE_GATE.other_hosts},
         "runner": {"cache_folder": youtube.CACHE_FOLDER, "budget_spent": youtube.BUDGET_SPENT,
                    "blocked_earlier": youtube.BLOCKED_EARLIER, "unavailable_said": youtube.UNAVAILABLE_SAID,
                    "timed_out": youtube.TIMED_OUT, "said_nothing": youtube.SAID_NOTHING,

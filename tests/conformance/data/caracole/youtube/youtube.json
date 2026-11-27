@@ -557,7 +557,9 @@
   ],
   "refusal": "yt-dlp asked for {host}, which caracole doesn't allow",
   "stopped": "(the gate stopped)",
-  "stopped_said": "caracole's gate stopped taking yt-dlp's connections"
+  "stopped_said": "caracole's gate stopped taking yt-dlp's connections",
+  "malformed": "(malformed)",
+  "other_hosts": "(other hosts)"
  },
  "runner": {
   "cache_folder": "yt-dlp",

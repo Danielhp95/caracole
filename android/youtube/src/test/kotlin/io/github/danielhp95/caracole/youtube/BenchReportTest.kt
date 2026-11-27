@@ -102,7 +102,10 @@ class BenchReportTest {
         val s = report(runs).getValue("summary").jsonObject
         assertEquals(12.0, s["T"]!!.jsonObject["cold_challenge_s"]!!.jsonPrimitive.double, 1e-9)
         assertEquals(23.0, s["T"]!!.jsonObject["cold_whole_s_less_sleeps"]!!.jsonPrimitive.double, 1e-9)
-        assertEquals(listOf(9.0), s["T"]!!.jsonObject["warm_downloads_s"]!!.jsonArray.map { it.jsonPrimitive.double })
+        assertEquals(25.0, s["T"]!!.jsonObject["cold_whole_s_with_sleeps"]!!.jsonPrimitive.double, 1e-9)
+        // The gate's bound reads the warm download less yt-dlp's own sleeps (§4.4's cold rule); both are shown.
+        assertEquals(listOf(9.0), s["T"]!!.jsonObject["warm_downloads_s_with_sleeps"]!!.jsonArray.map { it.jsonPrimitive.double })
+        assertEquals(listOf(9.0), s["T"]!!.jsonObject["warm_downloads_s_less_sleeps"]!!.jsonArray.map { it.jsonPrimitive.double })
         assertEquals(0.5, s["F"]!!.jsonObject["decoded_vs_duration_s"]!!.jsonArray.single().jsonPrimitive.double, 1e-9)
         assertEquals(320.0, s["M"]!!.jsonObject["pss_peak_mb"]!!.jsonPrimitive.double, 1e-9)
         assertEquals(3_000.0, s["C"]!!.jsonObject["first_python_ready_ms"]!!.jsonPrimitive.double, 1e-9)

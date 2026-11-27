@@ -265,7 +265,7 @@ def test_kill_fails_on_a_process_left_and_is_undecided_unrun_or_with_no_qjs_seen
     assert "no qjs seen" in gate([wifi, mobile])["Y0-K"].why
 
 
-@pytest.mark.parametrize(("youtube", "passed"), [(400.0, True), (600.0, None), (900.0, False)])
+@pytest.mark.parametrize(("youtube", "passed"), [(400.0, True), (600.0, None), (900.0, None)])
 def test_memory_by_the_peak_of_youtube_and_qjs_together(youtube, passed):
     wifi, mobile = pair()
     run_of(mobile, 2, "download")["pss_peak_mb"]["youtube"] = youtube
@@ -401,3 +401,141 @@ def test_python_dash_m_runs_it(tmp_path):
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines()[-1] == "Gate Y0: PASS"
 
+
+
+# -- fix round 1 ---------------------------------------------------------------------------------------------------
+
+
+def _same_day() -> list[dict]:
+    """One of each on one UTC day, two songs' worth of runs each (four in all: the day's six kept)."""
+    wifi = session("2026-11-28", "wifi", "observe", first_after_install=True)
+    mobile = json.loads(json.dumps(session("2026-11-28", "cellular", "enforce"))
+                        .replace("2026-11-28T18:0", "2026-11-28T20:0"))
+    for r in (wifi, mobile):
+        r["runs"] = r["runs"][:2]
+    return [wifi, mobile]
+
+
+@pytest.mark.parametrize(("reports", "given"), [
+    (lambda: [session("2026-11-28", "wifi", "observe", first_after_install=True)], "1 observed on Wi-Fi, 0 enforced"),
+    (lambda: [session("2026-11-28", "wifi", "observe", first_after_install=True),
+              session("2026-11-30", "wifi", "observe")], "2 observed on Wi-Fi, 0 enforced"),
+    (lambda: [session("2026-11-28", "cellular", "enforce", first_after_install=True),
+              session("2026-11-30", "cellular", "enforce")], "0 observed on Wi-Fi, 2 enforced"),
+    (lambda: _same_day(), "on one UTC day"),
+])
+def test_gate_y0_needs_an_observed_wifi_session_and_an_enforced_mobile_one_on_two_days(reports, given):
+    verdicts = gate(reports(), apk_growth_mb=30)
+    assert verdicts["sessions"].passed is None
+    assert "two sessions on two days: one observed on Wi-Fi, one enforced on mobile data" in verdicts["sessions"].why
+    assert given in verdicts["sessions"].why
+    assert whole(verdicts) is None
+
+
+def test_the_two_sessions_on_two_days_are_the_one_pass():
+    verdicts = gate(pair(), apk_growth_mb=30)
+    assert verdicts["sessions"].passed is True and whole(verdicts) is True
+
+
+def test_works_with_wifi_alone_is_undecided_it_needs_the_mobile_session_too():
+    v = gate([session("2026-11-28", "wifi", "observe")])["Y0-W"]
+    assert v.passed is None and "no mobile-data session" in v.why
+
+
+def _blocked_at(report: dict, run: int) -> dict:
+    """The session as the bench leaves it when run ``run`` (from 0) is blocked: no run after it, its stop said."""
+    report["runs"] = report["runs"][:run + 1]
+    report["runs"][run].update(outcome="blocked", file=None, decoded=None, reason="Sign in to confirm")
+    report["stopped"] = "YouTube blocked a run: the session stops, and no run starts until its cooldown ends."
+    return report
+
+
+@pytest.mark.parametrize("run", [0, 1, 3])
+def test_a_wifi_session_a_block_cut_short_fails_works_never_too_few_songs(run):
+    wifi, mobile = pair()
+    v = gate([_blocked_at(wifi, run), mobile])["Y0-W"]
+    assert v.passed is False and "run again another day after any cooldown" in v.why
+    assert "not 3" not in v.why
+
+
+def test_two_wifi_days_cut_short_by_a_block_name_the_fallbacks_trigger():
+    one = _blocked_at(session("2026-11-28", "wifi", "observe"), 0)
+    two = _blocked_at(session("2026-11-30", "wifi", "observe"), 1)
+    v = gate([one, two, session("2026-11-29", "cellular", "enforce")])["Y0-W"]
+    assert v.passed is False and "§3.8's trigger (Y0.7)" in v.why
+
+
+def test_a_session_stopped_without_a_block_is_undecided_in_its_stops_words():
+    wifi, mobile = pair()
+    wifi["runs"] = wifi["runs"][:2]
+    wifi["stopped"] = "YouTube is cooling down after a block: no run."
+    v = gate([wifi, mobile])["Y0-W"]
+    assert v.passed is None and "cooling down" in v.why
+
+
+@pytest.mark.parametrize("text", [f"{'a' * 32}:{'b' * 32}", f"x{'c' * 32}:{'d' * 32}y"])
+def test_a_bare_user_and_secret_pair_fails_the_terms(text):
+    wifi, mobile = pair()
+    run_of(mobile, 0, "search")["said"].append(f"WARNING: {text}")
+    assert gate([wifi, mobile])["terms"].passed is False
+
+
+def test_a_kill_check_that_spent_runs_fails_the_terms():
+    wifi, mobile = pair()
+    mobile["kill_check"]["spends"] = 1
+    v = gate([wifi, mobile])["terms"]
+    assert v.passed is False and "kill check spent 1" in v.why
+
+
+@pytest.mark.parametrize(("member", "words"), [
+    ("stopped", "the gate stopped taking connections: a bug of the gate's"),
+    ("malformed", "requests the gate couldn't read"),
+    ("other_hosts", "more hosts than the gate's log names"),
+])
+def test_the_gates_own_log_keys_fail_hosts_saying_what_they_are(member, words):
+    key = json.loads(yg.YOUTUBE_JSON.read_text())["gate"][member]
+    wifi, mobile = pair()
+    run_of(wifi, 0, "download")["hosts"][key] = {"connects": 0, "bytes_up": 0, "bytes_down": 0, "refused": 1,
+                                                "apart": False}
+    v = gate([wifi, mobile])["Y0-H"]
+    assert v.passed is False and words in v.why and "a flag or a client" not in v.why
+
+
+def test_time_with_no_warm_download_is_undecided():
+    wifi, mobile = pair()
+    for r in (wifi, mobile):
+        for song in (1, 2):
+            run_of(r, song, "download")["outcome"] = "error"
+    v = gate([wifi, mobile])["Y0-T"]
+    assert v.passed is None and "no warm download" in v.why
+
+
+def test_the_checkers_numbers_are_the_benchs_summary_for_every_gate_both_compute():
+    report = read(SAMPLE)
+    s, v = report["summary"], gate([report])
+    w = v["Y0-W"].numbers["mobile"][0]
+    assert (w["songs"], w["downloads_ok"], w["decoded"], w["blocked"]) == \
+        (s["W"]["songs"], s["W"]["downloads_ok"], s["W"]["decoded"], s["W"]["blocked"])
+    t = v["Y0-T"].numbers["sessions"][0]
+    assert t["cold_challenge_s"] == s["T"]["cold_challenge_s"]
+    assert t["cold_whole_s_less_sleeps"] == s["T"]["cold_whole_s_less_sleeps"]
+    assert t["cold_whole_s"] == s["T"]["cold_whole_s_with_sleeps"]
+    assert t["warm_s_less_sleeps"] == s["T"]["warm_downloads_s_less_sleeps"]
+    assert t["warm_s"] == s["T"]["warm_downloads_s_with_sleeps"]
+    assert set(v["Y0-H"].numbers["hosts"]) == set(s["H"]["hosts"])
+    assert v["Y0-H"].numbers["refused_by_name_asked"] == s["H"]["refused_by_name_asked"]
+    assert len(v["Y0-B"].numbers["unclassified"]) == s["B"]["unclassified"]
+    assert [d["gap_s"] for d in v["Y0-F"].numbers["downloads"]] == s["F"]["decoded_vs_duration_s"]
+    assert len(v["Y0-K"].numbers["checks"][0]["left"]) == s["K"]["left"]
+    assert v["Y0-M"].numbers["pss_peak_mb"] == s["M"]["pss_peak_mb"]
+    assert v["Y0-C"].numbers["first_after_install_python_ready_ms"] == s["C"]["first_python_ready_ms"]
+    assert v["Y0-C"].numbers["least_warm_python_ready_ms"] == s["C"]["least_later_python_ready_ms"]
+
+
+def test_the_apks_growth_is_taken_anywhere_and_a_negative_or_nan_one_refused(tmp_path, capsys):
+    paths = write(tmp_path, pair())
+    assert main([*paths, "--apk-growth-mb", "30"]) == 0
+    capsys.readouterr()
+    for bad in ("-1", "nan", "inf"):
+        assert main([paths[0], "--apk-growth-mb", bad, paths[1]]) == 2
+        assert "--apk-growth-mb" in capsys.readouterr().err

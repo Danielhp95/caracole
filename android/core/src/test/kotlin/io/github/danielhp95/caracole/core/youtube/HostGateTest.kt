@@ -473,6 +473,16 @@ class HostGateTest {
         assertEquals(listOf("127.0.0.1", "10.0.2.2"), HostGate.LOOPBACK_NAMES)
     }
 
+    /** The log's names that are no host's are youtube.json's (`gate`: youtube.py's PHONE_GATE), which the bench's
+     * checker reads too. */
+    @Test
+    fun theLogsOwnNamesAreTheDatas() {
+        val data = YouTubeData.read()
+        assertEquals(data.text("malformed", data.gate), HostGate.MALFORMED)
+        assertEquals(data.text("other_hosts", data.gate), HostGate.OTHER_HOSTS)
+        assertEquals(data.text("stopped", data.gate), HostGate.STOPPED)
+    }
+
     @Test
     fun closeStopsAcceptingClosesEveryTunnelAndLeavesNoThread() {
         val server = ServerSocket(0, 50, loopback).also { servers += it }

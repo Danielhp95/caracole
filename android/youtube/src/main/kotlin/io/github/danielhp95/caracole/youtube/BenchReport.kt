@@ -181,7 +181,8 @@ object BenchReport {
 
     /**
      * Each gate's numbers (§4.4) from a [report]: W the songs, their downloads ok and decoded, the runs blocked; T the
-     * cold download's challenge, the cold song's search and download less yt-dlp's sleeps, the warm downloads' times;
+     * cold download's challenge, the cold song's search and download less yt-dlp's sleeps and with them, the warm
+     * downloads' times with yt-dlp's sleeps and less them (the gate's bound reads them less, as §4.4's cold row does);
      * H the hosts named, any refused by name asked for, each run's uid bytes against its gate's, and idle; B the runs
      * left unclassified and the requests after a block; F each decoded file's length against yt-dlp's duration; K
      * what the kill check left; M the peak PSS of `:youtube` and qjs together; C the first run's Python start against
@@ -196,6 +197,8 @@ object BenchReport {
         val coldSong = cold?.let { c -> runs.filter { s(it, "song") == s(c, "song") } }.orEmpty()
         val coldWhole = if (coldSong.isEmpty()) null
             else coldSong.sumOf { (d(it, "seconds") ?: 0.0) - (d(it, "sleeps_seconds") ?: 0.0) }
+        val coldWithSleeps = if (coldSong.isEmpty()) null else coldSong.sumOf { d(it, "seconds") ?: 0.0 }
+        val warm = downloads.filter { s(it, "cache") == "warm" }
         val hosts = runs.flatMap { it["hosts"]?.jsonObject?.keys.orEmpty() }.distinct()
         val refusedByName = runs.flatMap { r -> r["hosts"]?.jsonObject?.keys.orEmpty() }
             .filter { HostGate.HostRule.refusedByName(it) }.distinct()
@@ -227,8 +230,10 @@ object BenchReport {
                        "blocked" to num(runs.count { s(it, "outcome") == BLOCKED })),
             "T" to obj("cold_challenge_s" to (cold?.get("challenge")?.takeIf { it !is JsonNull }?.jsonObject?.get("seconds") ?: JsonNull),
                        "cold_whole_s_less_sleeps" to (coldWhole?.let(::num) ?: JsonNull),
-                       "warm_downloads_s" to JsonArray(downloads.filter { s(it, "cache") == "warm" }
-                           .map { it["seconds"] ?: JsonNull })),
+                       "cold_whole_s_with_sleeps" to (coldWithSleeps?.let(::num) ?: JsonNull),
+                       "warm_downloads_s_with_sleeps" to JsonArray(warm.map { it["seconds"] ?: JsonNull }),
+                       "warm_downloads_s_less_sleeps" to JsonArray(warm.map { r ->
+                           d(r, "seconds")?.let { num(it - (d(r, "sleeps_seconds") ?: 0.0)) } ?: JsonNull })),
             "H" to obj("hosts" to JsonArray(hosts.map(::str)),
                        "refused_by_name_asked" to JsonArray(refusedByName.map(::str)),
                        "bytes" to JsonArray(bytes), "idle" to (report["idle"] ?: JsonNull)),
