@@ -186,6 +186,60 @@ class AudioStoreTest {
     }
 
     @Test
+    fun aDiskThatFillsAsTheUploadComesIsRefusedNoRoomBeforeTheBodyIsWhole() {
+        val w = World()
+        var read = 0L
+        val start = AudioStore.ROOM + (3L shl 20)
+        val store = AudioStore(w.state, examiner, { start - read }, { clock }) // each byte spooled takes a byte of room
+        val body = generated(10L shl 20) { read = it }
+        assertEquals(AudioStore.WORDS["no_room"], refused(507) { store.stage(body, "big.wav", emptySet()) }.message)
+        assertTrue(read < 5L shl 20, "read $read bytes of a body the disk can't hold") // refused as the room ran out
+        assertEquals(emptyList(), w.names())
+    }
+
+    @Test
+    fun theUploadsThatWouldGoAreRoomTheEarlyCheckCounts() {
+        val w = World()
+        val other = w.stage(mp3.copyOf(3 shl 20), "other.mp3")
+        // Python lets the other go before it checks: what it frees is room an early check mustn't refuse for.
+        free = AudioStore.ROOM + (2L shl 20)
+        var read = 0L
+        val store = AudioStore(w.state, examiner, { free - read + if (w.store.root.list()!!.any { it.startsWith(".upload-${other.id}.") }) 0 else (3L shl 20) }, { clock })
+        val up = store.stage(generated(2L shl 20) { read = it }, "two.wav", emptySet())
+        assertEquals(2L shl 20, up.size)
+        refused(404) { w.store.staged(other.id) }
+    }
+
+    @Test
+    fun aBodyThatIsntAudioIsRefusedOnceItsHeadIsIn() {
+        val w = World()
+        var read = 0L
+        val body = object : InputStream() {
+            override fun read(): Int = throw AssertionError("read a chunk at a time")
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                val n = minOf(len, 1 shl 16)
+                b.fill('x'.code.toByte(), off, off + n)
+                read += n
+                return n
+            }
+        }
+        assertEquals(AudioStore.WORDS["not_audio"], refused(415) { w.store.stage(body, "notes.mp3", emptySet()) }.message)
+        assertTrue(read <= 1 shl 16, "read $read bytes of a body whose head says it isn't audio")
+        assertEquals(emptyList(), w.names())
+    }
+
+    @Test(timeout = 10_000)
+    fun aStreamThatReadsNothingForeverIsABrokenStreamNeverASpin() {
+        val w = World()
+        val stuck = object : InputStream() {
+            override fun read(): Int = throw AssertionError("read a chunk at a time")
+            override fun read(b: ByteArray, off: Int, len: Int): Int = 0
+        }
+        assertFailsWith<IOException> { w.store.stage(stuck, "stuck.mp3", emptySet()) }
+        assertEquals(emptyList(), w.names())
+    }
+
+    @Test
     fun tooLittleRoomIsRefusedAsPythonsCheckForTheBytesStaged() {
         val w = World()
         // Python's check before writing: free < 2 * size + ROOM. The spooled bytes are on the disk by then, counted free.
@@ -462,6 +516,62 @@ class AudioStoreTest {
         w.store.sweep(emptySet(), clock)
         assertEquals(emptyList(), w.markers())
         assertEquals(emptyList(), w.names())
+    }
+
+    @Test
+    fun keepTakesAPurchasesPlaceAndLeavesItsFileInMusic() {
+        // The owner's decision of 2026-11-25: a file given a song is its audio, whatever it had.
+        val w = World()
+        val song = w.song()
+        val bought = File(tmp.newFolder("Music"), "Radiohead - Creep.wav").apply { writeBytes(wav) }
+        w.db { Versions.updateSong(it, song.id, mapOf("audio_path" to bought.path, "audio_mtime" to 5.0)) }
+        val kept = w.db { w.store.keep(it, it.row(song), w.stage(flac, "mine.flac")) }
+        assertEquals(kept.path, w.row(song).audioPath)
+        assertTrue(bought.readBytes().contentEquals(wav))
+        assertEquals(listOf(bought.name), bought.parentFile.list()!!.toList())
+    }
+
+    /** Two songs an older normalizer kept apart (test_audio_store.py's _two_spellings), each given a file: the older
+     * one's [olderAt] and the newer's [newerAt] their audio_mtime; their files. */
+    private fun World.twoGiven(olderAt: Double, newerAt: Double): Pair<File, File> {
+        val newer = song("Enanitos Verdes", "Lamento Boliviano")
+        val olderFile = File(store.root, "${newer.id + 1}-${"1".repeat(16)}.mp3")
+        val newerFile = File(store.root, "${newer.id}-${"2".repeat(16)}.wav")
+        store.root.mkdirs()
+        olderFile.writeBytes(mp3)
+        newerFile.writeBytes(wav)
+        db {
+            it.execute("INSERT INTO songs (id, key, artist, title, artists, source_ids, added_at, created_at, updated_at, " +
+                           "audio_path, audio_mtime) VALUES (?, 'los-enanitos-verdes/lamento-boliviano', 'Los Enanitos Verdes', " +
+                           "'Lamento Boliviano', '[\"Los Enanitos Verdes\"]', '{}', '2026-09-01T00:00:00Z', " +
+                           "'2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z', ?, ?)", newer.id + 1, olderFile.path, olderAt)
+            // The newer record keeps the lower id: it is the one the merge keeps.
+            Versions.updateSong(it, newer.id, mapOf("audio_path" to newerFile.path, "audio_mtime" to newerAt))
+            it.kvDelete("songs:key_version")
+            library.ensureCurrentKeys(it)
+        }
+        return olderFile to newerFile
+    }
+
+    @Test
+    fun aMergeKeepsTheFileGivenAndTidyLetsItBe() {
+        val w = World()
+        val (given, _) = w.twoGiven(olderAt = 9.0, newerAt = 5.0)
+        val (song) = w.db { Songs.list(it) }
+        assertEquals(given.path, song.audioPath)
+        assertEquals(1, w.db { w.store.tidy(it) }) // the other upload, no song's now
+        assertTrue(given.exists())
+        assertEquals(given, w.store.uploaded(song))
+    }
+
+    @Test
+    fun aMergeOfTwoUploadsKeepsTheNewerAndTidyLetsTheOtherGo() {
+        val w = World()
+        val (older, newer) = w.twoGiven(olderAt = 1.0, newerAt = 7.5)
+        val (song) = w.db { Songs.list(it) }
+        assertEquals(newer.path, song.audioPath)
+        assertEquals(1, w.db { w.store.tidy(it) })
+        assertTrue(newer.exists() && !older.exists())
     }
 
     // --- a removal --------------------------------------------------------------------------------------------------

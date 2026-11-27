@@ -117,7 +117,7 @@ internal object Removal {
                 audio = path
             } catch (_: NoSuchFileException) {
             } catch (e: IOException) { // the next tidy deletes it (AudioStore.tidy): no song names it now
-                errors += "can't delete $path: ${e.message}"
+                errors += "can't delete $path: ${why(e)}"
             }
         }
         return Result(stone, deleted, kept, gone, errors, audio)
@@ -157,6 +157,16 @@ internal object Removal {
         }.sortedWith(Canonical.KEY_ORDER)
     }
 
+    /** Why a file couldn't be deleted, as Python's `e.strerror or e` says it: an NIO exception's message is mostly
+     * the path again, so its reason, or the strerror its class stands for. */
+    internal fun why(e: IOException): String = when (e) {
+        is java.nio.file.AccessDeniedException -> e.reason ?: "Permission denied"
+        is java.nio.file.DirectoryNotEmptyException -> e.reason ?: "Directory not empty"
+        is java.nio.file.NoSuchFileException -> e.reason ?: "No such file or directory"
+        is java.nio.file.FileSystemException -> e.reason ?: e.javaClass.simpleName
+        else -> e.message ?: e.javaClass.simpleName
+    }
+
     /** removal._wanted_keys: the song's key, and its wanted.txt source ids. */
     private fun wantedKeys(song: SongRow): List<String> {
         val ids = SongKv.sourceIds(song.sourceIds)[SongKv.WANTED].orEmpty()
@@ -186,7 +196,7 @@ internal object Removal {
             } catch (_: NoSuchFileException) {
                 continue
             } catch (e: IOException) {
-                errors += "can't delete ${plan.folder.joinToString("/")}/$name: ${e.message}"
+                errors += "can't delete ${plan.folder.joinToString("/")}/$name: ${why(e)}"
                 continue
             }
             deleted += name

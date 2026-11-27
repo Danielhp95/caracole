@@ -33,7 +33,7 @@
   "staged_audio": "\\.upload-(?P<id>[0-9a-f]{16})(?:\\.mp3|\\.m4a|\\.flac|\\.wav|\\.ogg|\\.aiff)",
   "marker": "\\.upload-(?P<id>[0-9a-f]{16})\\.kept",
   "kept": "[0-9]+-[0-9a-f]{16}(?:\\.mp3|\\.m4a|\\.flac|\\.wav|\\.ogg|\\.aiff)",
-  "part": "\\.keep-[0-9a-f]{16}\\.part",
+  "part": "\\.keep\\-[0-9a-f]{16}\\.part",
   "sha256": "[0-9a-f]{64}",
   "display_split": "[/\\\\]"
  },

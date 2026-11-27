@@ -3,10 +3,11 @@ vectors, so that the phone stages and keeps a file the computer's way.
 
 **Data** (``data/caracole/library/audio_store.json``, ``audio_store_json``): every constant of audio_store.py the
 phone's store reads (the folder, ``NAME_KEY``, ``AUDIO_MAX``, ``MAX_SECONDS``, ``ROOM``, ``EXPIRES``, ``MARKED``,
-``HEAD``, ``_RECORD_MAX``, ``FORMATS`` in order, ``_MP4_BRANDS``), its name patterns (``ID``, ``_PIECE``,
-``_STAGED_AUDIO``, ``_MARKER``, ``KEPT``, ``_PART``, a record's SHA-256 and ``_display_name``'s split: Python's, for
-``PyRegex``), the names it builds them of, the members of a staged upload's record and of a marker, and every refusal's
-words with the status caracole serve answers it with; and removal.py's words of a removal that deletes the file you
+``HEAD``, ``_RECORD_MAX``, ``FORMATS`` in order, ``_MP4_BRANDS``, ``DISPLAY_MOST``, ``TAGS``), its name patterns
+(``ID``, ``_PIECE``, ``_STAGED_AUDIO``, ``_MARKER``, ``KEPT``, ``_PART``, ``_SHA256`` and ``_SPLIT``: Python's, for
+``PyRegex``), the names it builds them of, the members of a staged upload's record and of a marker (``MARKER_FIELDS``),
+and every refusal's words with the status caracole serve answers it with, each found by provoking the refusal
+(``statuses``); and removal.py's words of a removal that deletes the file you
 gave (``UPLOADED_GOES``, ``UPLOADED_BRIEF``).
 
 **Vectors** (``vectors/library/audio_store.jsonl``), a header, then a record a line:
@@ -55,8 +56,6 @@ from caracole.audio_store import FORMATS, HEAD, Staged
 MADE_BY = "tests/test_conformance_audio_store.py"
 AUDIO_STORE_JSON = DATA / "library" / "audio_store.json"
 VECTOR = VECTORS / "library" / "audio_store.jsonl"
-SHA256 = re.compile(r"[0-9a-f]{64}")  # _read_record's check of a record's digest
-SPLIT = re.compile(r"[/\\]")  # _display_name's split of a name into its parts
 
 
 def _pattern(p: re.Pattern[str]) -> str:
@@ -64,10 +63,70 @@ def _pattern(p: re.Pattern[str]) -> str:
     return p.pattern
 
 
-def audio_store_json() -> str:
-    words = {name.lower(): getattr(audio_store, name) for name in (
-        "NOT_AUDIO", "TOO_BIG", "TOO_LONG", "NO_ROOM", "EMPTY", "NO_NAME", "WHICH", "GONE", "NOT_IN_BOOK",
-        "NOT_A_STORE")}
+WORDS = ("NOT_AUDIO", "TOO_BIG", "TOO_LONG", "NO_ROOM", "EMPTY", "NO_NAME", "WHICH", "GONE", "NOT_IN_BOOK",
+         "NOT_A_STORE")
+
+
+def statuses(tmp_path: Path) -> dict[str, int]:
+    """Each refusal's status, as audio_store.py raises it: every refusal provoked, its words checked to be the
+    constant's (``NOT_IN_BOOK`` and ``NOT_A_STORE`` formatted), so a status changed there changes the data."""
+    from types import SimpleNamespace
+    from unittest import mock
+
+    from conftest import add_song, migrated_database
+
+    from caracole import db
+    from caracole.config import load_config
+
+    def config(home: Path):
+        return load_config(None, env={"HOME": str(home / "home"), "STATE_DIRECTORY": str(home / "state"),
+                                      "CACHE_DIRECTORY": str(home / "cache")})
+
+    root = tmp_path / "statuses"
+    cfg = config(root)
+    cfg.state_dir.mkdir(parents=True)
+    (root / "db.sqlite").write_bytes(migrated_database())
+    conn = db.connect(root / "db.sqlite")
+    roomy = mock.patch.object(audio_store, "disk_usage", lambda p: SimpleNamespace(total=10**15, used=0, free=10**15))
+    found: dict[str, int] = {}
+
+    def refusal(name: str, call, words: str | None = None) -> None:
+        with pytest.raises(audio_store.AudioError) as e:
+            call()
+        assert str(e.value) == (words or getattr(audio_store, name)), (name, str(e.value))
+        found[name.lower()] = e.value.status
+
+    with roomy:
+        refusal("NOT_AUDIO", lambda: audio_store.stage(cfg, b"not really audio" * 10, "a.mp3", named=()))
+        refusal("TOO_LONG", lambda: audio_store.stage(cfg, audio("FLAC", audio_store.MAX_SECONDS + 1), "a.flac",
+                                                      named=()))
+        with mock.patch.object(audio_store, "AUDIO_MAX", 10):
+            refusal("TOO_BIG", lambda: audio_store.stage(cfg, audio("MP3"), "a.mp3", named=()))
+        refusal("EMPTY", lambda: audio_store.stage(cfg, b"", "a.mp3", named=()))
+        refusal("NO_NAME", lambda: audio_store.stage(cfg, audio("MP3"), "\x00/", named=()))
+        refusal("WHICH", lambda: audio_store.staged(cfg, "nope"))
+        refusal("GONE", lambda: audio_store.staged(cfg, "0123456789abcdef"))
+        song = add_song(conn, "Radiohead", "Creep")
+        conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+        up = audio_store.stage(cfg, audio("MP3"), "a.mp3", named=())
+        refusal("NOT_IN_BOOK", lambda: audio_store.keep(cfg, conn, song, up.path, move=True),
+                audio_store.NOT_IN_BOOK.format(song=song.display))
+    with mock.patch.object(audio_store, "disk_usage", lambda p: SimpleNamespace(total=10**15, used=0, free=0)):
+        refusal("NO_ROOM", lambda: audio_store.stage(cfg, audio("MP3"), "a.mp3", named=()))
+    cfg_linked = config(root / "linked")
+    cfg_linked.state_dir.mkdir(parents=True)
+    (cfg_linked.state_dir / audio_store.FOLDER).symlink_to(root)
+    with roomy:
+        store = cfg_linked.state_dir / audio_store.FOLDER
+        refusal("NOT_A_STORE", lambda: audio_store.stage(cfg_linked, audio("MP3"), "a.mp3", named=()),
+                audio_store.NOT_A_STORE.format(path=store))
+    conn.close()
+    assert set(found) == {w.lower() for w in WORDS}
+    return {w.lower(): found[w.lower()] for w in WORDS}
+
+
+def audio_store_json(tmp_path: Path) -> str:
+    words = {name.lower(): getattr(audio_store, name) for name in WORDS}
     data = {
         "folder": audio_store.FOLDER,
         "name_key": audio_store.NAME_KEY,
@@ -83,28 +142,27 @@ def audio_store_json() -> str:
         "patterns": {"id": _pattern(audio_store.ID), "piece": _pattern(audio_store._PIECE),
                      "staged_audio": _pattern(audio_store._STAGED_AUDIO), "marker": _pattern(audio_store._MARKER),
                      "kept": _pattern(audio_store.KEPT), "part": _pattern(audio_store._PART),
-                     "sha256": _pattern(SHA256), "display_split": _pattern(SPLIT)},
-        "names": {"staged": audio_store._STAGED, "record": ".json", "marker": ".kept", "part": ".keep-",
-                  "part_end": ".part"},
-        "display_most": 255,
+                     "sha256": _pattern(audio_store._SHA256), "display_split": _pattern(audio_store._SPLIT)},
+        "names": {"staged": audio_store._STAGED, "record": audio_store._RECORD, "marker": audio_store._MARK,
+                  "part": audio_store._COPY, "part_end": audio_store._COPY_END},
+        "display_most": audio_store.DISPLAY_MOST,
         "record_fields": [f for f in Staged.__dataclass_fields__ if f not in ("id", "path")],
-        "tags": ["artist", "title", "album"],
-        "marker_fields": ["kept", "song", "at"],
+        "tags": list(audio_store.TAGS),
+        "marker_fields": list(audio_store.MARKER_FIELDS),
         "words": words,
-        "statuses": {"not_audio": 415, "too_big": 413, "too_long": 422, "no_room": 507, "empty": 400, "no_name": 400,
-                     "which": 400, "gone": 404, "not_in_book": 404, "not_a_store": 500},
+        "statuses": statuses(tmp_path),
         "removal": {"goes": removal.UPLOADED_GOES, "brief": removal.UPLOADED_BRIEF},
     }
     return json.dumps(data, ensure_ascii=False, indent=1) + "\n"
 
 
-def test_audio_store_json_is_audio_store_pys_rules():
-    check(AUDIO_STORE_JSON, audio_store_json())
+def test_audio_store_json_is_audio_store_pys_rules(tmp_path):
+    check(AUDIO_STORE_JSON, audio_store_json(tmp_path))
 
 
-def test_the_record_fields_are_what_a_record_holds():
+def test_the_record_fields_are_what_a_record_holds(tmp_path):
     up = Staged("0" * 16, Path("x"), "a", 1, "0" * 64, "MP3", 1.0, {"artist": None, "title": None, "album": None}, 2.0)
-    assert list(up.record()) == json.loads(audio_store_json())["record_fields"]
+    assert list(up.record()) == json.loads(audio_store_json(tmp_path))["record_fields"]
 
 
 # --- the heads ------------------------------------------------------------------------------------------------------

@@ -52,8 +52,8 @@ import kotlin.concurrent.withLock
  *   point finishes when asked again ([marked], [adopt]).
  *
  * Where the phone departs from the computer: [stage] spools a stream (Python's takes the bytes a route read whole),
- * its partial file `.upload-<id>.part`, [AUDIO_MAX] counted as the bytes come and the room checked once they are all
- * there; and the store reads no audio itself: the release app ships `:core`, so an [Examiner] the app gives reads the
+ * its partial file `.upload-<id>.part`, refused as soon as it is known (its head no audio, past [AUDIO_MAX], the
+ * room running out), the room checked exactly once the bytes are all there; and the store reads no audio itself: the release app ships `:core`, so an [Examiner] the app gives reads the
  * length and the tags, the store judging what Python judges around mutagen's read ([Examiner]'s contract).
  *
  * The store's lock ([held]) is one for the process, as audio_store's `_lock` is caracole serve's: the phone runs one.
@@ -88,6 +88,10 @@ class AudioStore(
      *   stripped text isn't empty, stripped (music._first).
      * The store judges the rest: a length that isn't over 0 or isn't finite, [NOT_AUDIO]; past [MAX_SECONDS],
      * [TOO_LONG].
+     *
+     * A stage hands it the spool, `.upload-<id>.part`, named with no audio extension: a reader goes by the format it
+     * is given, never the file's name. An IOException reading the spool is [NOT_AUDIO], as Python's read of a stage's
+     * bytes in memory (io.BytesIO) makes any error a refusal; reading a kept file ([keep], [adopt]) it is the disk's.
      */
     fun interface Examiner {
         fun examine(file: File, format: String): Audio
@@ -106,7 +110,9 @@ class AudioStore(
     data class Marked(val upload: String, val file: File, val song: Long, val at: Double, val done: Boolean)
 
     /** The staged uploads' lock, for a caller to hold across a check and what it does after it (audio_store.held):
-     * Make sheet's [staged] and its job queued, a drop's check and its [drop]. Re-entrant. */
+     * Make sheet's [staged] and its job queued, a drop's check and its [drop]. Re-entrant. Its order: never a
+     * database write under it (a `named` callback, a block given here), as a job's write may call into the store; so
+     * nothing the store does inside a write ([keep], [adopt], [tidy]) takes it. */
     fun <T> held(block: () -> T): T = LOCK.withLock(block)
 
     // --- what a file is ---------------------------------------------------------------------------------------------
@@ -114,8 +120,7 @@ class AudioStore(
     /** What the staged or kept file is, as audio_store._examine reads it: [sniff] of its first [HEAD] bytes, then the
      * examiner's read. [onDisk]: an IOException of the examiner's is the disk's, raised as it is (a file of the
      * folder); else, as a stage's bytes, a refusal. */
-    private fun examine(file: File, onDisk: Boolean): Examined {
-        val head = headOf(file)
+    private fun examine(file: File, onDisk: Boolean, head: ByteArray = headOf(file)): Examined {
         val format = sniff(head) ?: throw refusal("not_audio")
         val read = try {
             examiner.examine(file, format)
@@ -139,42 +144,61 @@ class AudioStore(
 
     /**
      * An upload's bytes, read from [input] as they come and sent under [name], staged in the folder until a job keeps
-     * them ([keep]). Spooled into `.upload-<id>.part`: refused [TOO_BIG] (413) at the first byte past [AUDIO_MAX],
-     * [EMPTY] (400) with none, then read as audio_store._examine reads one (415, 422), the partial file deleted each
-     * time. Then, under the store's lock, every other staged upload [named] (called under it) doesn't hold goes, the
-     * room is checked as audio_store._room checks it for the bytes staged (the disk's free bytes now, with the
-     * spooled ones counted free, under twice them and [ROOM]: [NO_ROOM], 507), and the file takes its name, its record
-     * beside it. [NO_NAME] (400) before a byte is read; an IOException of the stream's or the disk's, as it is.
+     * them ([keep]). [NO_NAME] (400) before a byte is read. Spooled into `.upload-<id>.part`, a chunk at a time, and
+     * refused as soon as it is known, the partial file deleted each time: [NOT_AUDIO] (415) once the first [HEAD]
+     * bytes are in and [sniff] names no format; [TOO_BIG] (413) at the first byte past [AUDIO_MAX]; [NO_ROOM] (507),
+     * checked every MiB, as soon as the disk's free bytes and those of every staged upload a stage may let go are
+     * fewer than the bytes spooled and [ROOM] (a condition Python's check needs: free before ≥ 2 × size + ROOM implies
+     * free now ≥ size + ROOM, so it refuses nothing Python accepts); [EMPTY] (400) with none. Then read as
+     * audio_store._examine reads one (415, 422), and under the store's lock every other staged upload [named]
+     * (called under it) doesn't hold goes and the room is checked exactly as audio_store._room checks it (the disk's
+     * free bytes now, the spooled ones counted free, under twice them and [ROOM]); the file takes its name, its record
+     * beside it.
+     *
+     * A refusal before the stream's end leaves the rest of [input] unread, and [stage] never closes it: its caller
+     * (the upload route) drains or closes it. A read that returns 0 bytes into a buffer with room is a broken stream:
+     * an IOException, as is any of the stream's or the disk's, raised as it is.
      */
     fun stage(input: InputStream, name: String, named: () -> Collection<String>): Staged {
         val shown = displayName(name)
         if (shown.isEmpty()) throw refusal("no_name")
         held { store() }
         var id = token()
-        var spool = File(root, "$STAGED$id$SPOOL")
+        var spool = File(root, "$STAGED$id$PART_END")
         while (!createPrivate(spool)) {
             id = token()
-            spool = File(root, "$STAGED$id$SPOOL")
+            spool = File(root, "$STAGED$id$PART_END")
         }
         var moved = false
         try {
             val digest = MessageDigest.getInstance("SHA-256")
+            val head = ByteArray(HEAD)
             var size = 0L
+            var format: String? = null
+            val freeable = held { stagedIds().sumOf { id -> pieces(id).sumOf { attributes(it)?.size() ?: 0L } } }
+            var checked = 0L
             FileChannel.open(spool.toPath(), StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { out ->
                 val buffer = ByteArray(CHUNK)
                 while (true) {
                     val n = input.read(buffer)
                     if (n < 0) break
-                    if (n == 0) continue
+                    if (n == 0) throw IOException("the upload's stream read nothing into a buffer with room: broken")
                     if (size + n > AUDIO_MAX) throw refusal("too_big")
+                    if (size < HEAD) System.arraycopy(buffer, 0, head, size.toInt(), minOf(n.toLong(), HEAD - size).toInt())
                     digest.update(buffer, 0, n)
                     val bytes = ByteBuffer.wrap(buffer, 0, n)
                     while (bytes.hasRemaining()) out.write(bytes)
                     size += n
+                    if (format == null && size >= HEAD) format = sniff(head) ?: throw refusal("not_audio")
+                    if (size - checked >= ROOM_EVERY) {
+                        checked = size
+                        if (freeSpace(root) + freeable < size + ROOM) throw refusal("no_room")
+                    }
                 }
             }
             if (size == 0L) throw refusal("empty")
-            val found = examine(spool, onDisk = false)
+            if (format == null) sniff(head.copyOf(size.toInt())) ?: throw refusal("not_audio")
+            val found = examine(spool, onDisk = false, head = head.copyOf(minOf(size, HEAD.toLong()).toInt()))
             return held {
                 store()
                 val holding = named().toSet()
@@ -266,8 +290,8 @@ class AudioStore(
             unlink(marker)
         }
         for (name in root.list().orEmpty()) {
-            if (!name.startsWith(STAGED) || !name.endsWith(SPOOL)) continue
-            if (!ID.matches(name.substring(STAGED.length, name.length - SPOOL.length))) continue
+            if (!name.startsWith(STAGED) || !name.endsWith(PART_END)) continue
+            if (!ID.matches(name.substring(STAGED.length, name.length - PART_END.length))) continue
             val spool = File(root, name)
             val attrs = attributes(spool) ?: continue
             if (attrs.isRegularFile && now - seconds(attrs.lastModifiedTime()) > EXPIRES) unlink(spool)
@@ -331,9 +355,10 @@ class AudioStore(
      * audio_store.tidy: the kept files no song's `audio_path` names deleted (by name: a kept file's name is unique in
      * the folder), and the copies a stopped write left (`.keep-<16 hex>.part`); how many went. A kept file the marker
      * of a keep not over names stays for that keep's retry. The staged uploads are [sweep]'s; any other file stays.
+     * Called inside a database write, it takes no store lock (audio_store.tidy takes none).
      */
-    fun tidy(db: Db): Int = held {
-        if (!isStore(root)) return@held 0
+    fun tidy(db: Db): Int {
+        if (!isStore(root)) return 0
         val named = db.query("SELECT audio_path FROM songs WHERE audio_path IS NOT NULL") { File(it.text(0)!!).name }
             .toSet()
         val pending = liveKept()
@@ -346,7 +371,7 @@ class AudioStore(
             } catch (_: IOException) {
             }
         }
-        deleted
+        return deleted
     }
 
     /** The song's row naming the kept file and the name it was given under, in one savepoint; then the staged record
@@ -478,6 +503,8 @@ class AudioStore(
         }
         private val MP4_BRANDS: Set<String> by lazy { rule("mp4_brands").jsonArray.map { it.jsonPrimitive.content }.toSet() }
         private val TAGS: List<String> by lazy { rule("tags").jsonArray.map { it.jsonPrimitive.content } }
+        private val RECORD_FIELDS: List<String> by lazy { rule("record_fields").jsonArray.map { it.jsonPrimitive.content } }
+        private val MARKER_FIELDS: List<String> by lazy { rule("marker_fields").jsonArray.map { it.jsonPrimitive.content } }
 
         /** Every refusal's words, by their name in audio_store.json (`not_audio`, `too_big`…), and their statuses. */
         val WORDS: Map<String, String> by lazy { rule("words").jsonObject.mapValues { it.value.jsonPrimitive.content } }
@@ -502,9 +529,10 @@ class AudioStore(
         private val PART_START: String by lazy { NAMES.getValue("part") }
         private val PART_END: String by lazy { NAMES.getValue("part_end") }
 
-        /** The phone's own: what [stage] spools into, `.upload-<id>.part` (no piece, marker or part of Python's). */
-        const val SPOOL = ".part"
         private const val CHUNK = 1 shl 16
+
+        /** How often (in bytes spooled) [stage] checks the room as an upload comes. */
+        private const val ROOM_EVERY = 1L shl 20
 
         private val LOCK = ReentrantLock()
         private val random = SecureRandom()
@@ -592,17 +620,24 @@ class AudioStore(
 
         /** A staged upload's record's text, `json.dumps(record)`: its members in Staged's order, ASCII-escaped. */
         fun recordText(name: String, size: Long, sha256: String, format: String, durationS: Double,
-                       tags: Map<String, String?>, at: Double): String = PyJson.dumps(JsonObject(linkedMapOf(
+                       tags: Map<String, String?>, at: Double): String = written(RECORD_FIELDS, mapOf(
             "name" to JsonPrimitive(name), "size" to JsonPrimitive(size), "sha256" to JsonPrimitive(sha256),
             "format" to JsonPrimitive(format), "duration" to PyJson.float(durationS),
             "tags" to JsonObject(TAGS.associateWithTo(LinkedHashMap()) { tags[it]?.let(::JsonPrimitive) ?: JsonNull }),
             "at" to PyJson.float(at),
-        )), indent = null, ensureAscii = true)
+        ))
 
         /** A marker's text, as _write_marker writes it. */
-        fun markerText(kept: String, songId: Long, at: Double): String = PyJson.dumps(JsonObject(linkedMapOf(
+        fun markerText(kept: String, songId: Long, at: Double): String = written(MARKER_FIELDS, mapOf(
             "kept" to JsonPrimitive(kept), "song" to JsonPrimitive(songId), "at" to PyJson.float(at),
-        )), indent = null, ensureAscii = true)
+        ))
+
+        /** json.dumps of [values] in the data's member order [fields] (each a value here, every value a field). */
+        private fun written(fields: List<String>, values: Map<String, JsonElement>): String {
+            check(fields.toSet() == values.keys) { "the data's members $fields aren't ${values.keys}" }
+            return PyJson.dumps(JsonObject(fields.associateWithTo(LinkedHashMap()) { values.getValue(it) }),
+                                indent = null, ensureAscii = true)
+        }
 
         /** audio_store._read_record of a record's bytes: its fields, or null when they aren't a record's. */
         internal fun recordOf(bytes: ByteArray): Record? {

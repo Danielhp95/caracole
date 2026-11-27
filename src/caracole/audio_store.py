@@ -88,6 +88,9 @@ _MP4_BRANDS = {b"M4A ", b"M4B ", b"mp42", b"isom", b"dash", b"iso2", b"iso5", b"
 _EXT = "|".join(re.escape(ext) for ext in FORMATS.values())
 ID = re.compile(r"[0-9a-f]{16}")  # a staged upload's id
 _STAGED = ".upload-"
+_RECORD = ".json"  # a staged upload's record: .upload-<id>.json
+_MARK = ".kept"  # a moved upload's marker: .upload-<id>.kept
+_COPY, _COPY_END = ".keep-", ".part"  # a copy into the folder, until it is whole: .keep-<16 hex>.part
 _PIECE = re.compile(rf"\.upload-(?P<id>[0-9a-f]{{16}})(?P<ext>{_EXT}|\.json)")  # a staged upload's audio or record
 _STAGED_AUDIO = re.compile(rf"\.upload-(?P<id>[0-9a-f]{{16}})(?:{_EXT})")
 _MARKER = re.compile(r"\.upload-(?P<id>[0-9a-f]{16})\.kept")  # a moved upload's marker: the kept file it became
@@ -95,8 +98,13 @@ _MARKER = re.compile(r"\.upload-(?P<id>[0-9a-f]{16})\.kept")  # a moved upload's
 # come later than that. A few dozen bytes each.
 MARKED = 30 * 86400
 KEPT = re.compile(rf"[0-9]+-[0-9a-f]{{16}}(?:{_EXT})")  # a kept file: <song id>-<sha256 16 hex><ext>
-_PART = re.compile(r"\.keep-[0-9a-f]{16}\.part")  # a copy into the folder, until it is whole
+_PART = re.compile(rf"{re.escape(_COPY)}[0-9a-f]{{16}}{re.escape(_COPY_END)}")  # a copy into the folder, until it is whole
 _RECORD_MAX = 64 * 1024  # a staged upload's record's bytes, at most
+_SHA256 = re.compile(r"[0-9a-f]{64}")  # a record's digest
+_SPLIT = re.compile(r"[/\\]")  # a name's parts, of which the last is the name to show
+DISPLAY_MOST = 255  # a name to show's characters, at most
+TAGS = ("artist", "title", "album")  # the tags an audio file's are read as
+MARKER_FIELDS = ("kept", "song", "at")  # a marker's members, in the order it is written
 
 NOT_AUDIO = "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF)."
 TOO_BIG = "That file is too big: an audio file is 128 MiB at most; `caracole audio FILE` takes any."
@@ -255,7 +263,7 @@ def _read(reader: Any, f: IO[bytes], fmt: str) -> Audio:
         raise AudioError(TOO_LONG, 422)
     tags = read.tags
     named = {key: _first(tags, keys) if tags is not None else None
-             for key, keys in (("artist", _ARTIST_KEYS), ("title", _TITLE_KEYS), ("album", _ALBUM_KEYS))}
+             for key, keys in zip(TAGS, (_ARTIST_KEYS, _TITLE_KEYS, _ALBUM_KEYS), strict=True)}
     return Audio(fmt, float(length), named)
 
 
@@ -276,8 +284,8 @@ def _display_name(name: object) -> str:
     at most; never a path."""
     if not isinstance(name, str):
         return ""
-    last = re.split(r"[/\\]", name)[-1]
-    return "".join(c for c in last if unicodedata.category(c) != "Cc").strip()[:255]
+    last = _SPLIT.split(name)[-1]
+    return "".join(c for c in last if unicodedata.category(c) != "Cc").strip()[:DISPLAY_MOST]
 
 
 # --- the folder -----------------------------------------------------------------------------------------------------
@@ -368,13 +376,13 @@ def _staged_ids(root: Path) -> set[str]:
 
 def _drop_pieces(root: Path, upload_id: str) -> bool:
     """A staged upload's files deleted, whatever they are; whether any was there."""
-    gone = [_unlink(root / f"{_STAGED}{upload_id}{ext}") for ext in (*FORMATS.values(), ".json")]
+    gone = [_unlink(root / f"{_STAGED}{upload_id}{ext}") for ext in (*FORMATS.values(), _RECORD)]
     return any(gone)
 
 
 def _touched(root: Path, upload_id: str) -> float:
     times = []
-    for ext in (*FORMATS.values(), ".json"):
+    for ext in (*FORMATS.values(), _RECORD):
         try:
             times.append(os.lstat(root / f"{_STAGED}{upload_id}{ext}").st_mtime)
         except OSError:
@@ -420,7 +428,7 @@ def stage(cfg: Config, data: bytes, name: str, *,
         try:
             with open(fd, "wb") as f:
                 f.write(data)
-            with open(_create(root / f"{_STAGED}{upload_id}.json"), "wb") as f:
+            with open(_create(root / f"{_STAGED}{upload_id}{_RECORD}"), "wb") as f:
                 f.write(json.dumps(up.record()).encode())
         except BaseException:
             _drop_pieces(root, upload_id)
@@ -464,10 +472,10 @@ def _read_record(path: Path) -> dict[str, Any] | None:
         return None
     tags = record.get("tags")
     ok = (isinstance(record.get("name"), str) and type(record.get("size")) is int
-          and isinstance(record.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", record["sha256"])
+          and isinstance(record.get("sha256"), str) and _SHA256.fullmatch(record["sha256"])
           and record.get("format") in FORMATS and type(record.get("duration")) in (int, float)
           and type(record.get("at")) in (int, float) and isinstance(tags, dict)
-          and set(tags) == {"artist", "title", "album"} and all(v is None or isinstance(v, str) for v in tags.values()))
+          and set(tags) == set(TAGS) and all(v is None or isinstance(v, str) for v in tags.values()))
     return record if ok else None
 
 
@@ -480,7 +488,7 @@ def staged(cfg: Config, upload_id: str) -> Staged:
     if not _is_store(root):
         raise AudioError(GONE, 404)
     there = [ext for ext in FORMATS.values() if os.path.lexists(root / f"{_STAGED}{upload_id}{ext}")]
-    record = _read_record(root / f"{_STAGED}{upload_id}.json")
+    record = _read_record(root / f"{_STAGED}{upload_id}{_RECORD}")
     if len(there) != 1 or record is None or FORMATS[record["format"]] != there[0]:
         raise AudioError(GONE, 404)
     path = root / f"{_STAGED}{upload_id}{there[0]}"
@@ -520,15 +528,15 @@ class Marked:
 
 
 def _marker(root: Path, upload_id: str) -> Path:
-    return root / f"{_STAGED}{upload_id}.kept"
+    return root / f"{_STAGED}{upload_id}{_MARK}"
 
 
 def _write_marker(root: Path, upload_id: str, kept: Path, song_id: int) -> None:
     """The marker written whole (a temporary name, then a rename over any before it), before the data's move."""
-    part = root / f".keep-{secrets.token_hex(8)}.part"
+    part = root / f"{_COPY}{secrets.token_hex(8)}{_COPY_END}"
     try:
         with open(_create(part), "wb") as f:
-            f.write(json.dumps({"kept": kept.name, "song": song_id, "at": time.time()}).encode())
+            f.write(json.dumps(dict(zip(MARKER_FIELDS, (kept.name, song_id, time.time()), strict=True))).encode())
             f.flush()
             os.fsync(f.fileno())
         os.rename(part, _marker(root, upload_id))
@@ -542,7 +550,7 @@ def _read_marker(root: Path, upload_id: str) -> Marked | None:
     if (not isinstance(record, dict) or not isinstance(record.get("kept"), str) or not KEPT.fullmatch(record["kept"])
             or type(record.get("song")) is not int or type(record.get("at")) not in (int, float)):
         return None
-    done = not os.path.lexists(root / f"{_STAGED}{upload_id}.json")
+    done = not os.path.lexists(root / f"{_STAGED}{upload_id}{_RECORD}")
     return Marked(upload_id, root / record["kept"], record["song"], float(record["at"]), done)
 
 
@@ -712,7 +720,7 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
         else:
             root = _store(cfg)
             _room(root, os.fstat(f.fileno()).st_size)
-            part = root / f".keep-{secrets.token_hex(8)}.part"
+            part = root / f"{_COPY}{secrets.token_hex(8)}{_COPY_END}"
             try:
                 with open(_create(part), "wb") as out:
                     digest = _hash(f, out)
@@ -739,7 +747,7 @@ def given_name(conn: sqlite3.Connection, song: Song) -> str | None:
 def _sent_name(root: Path, upload_id: str) -> str:
     """The name a staged upload was sent under, from its record (``_display_name``'s); "" when it can't be read."""
     try:
-        record = json.loads((root / f"{_STAGED}{upload_id}.json").read_bytes())
+        record = json.loads((root / f"{_STAGED}{upload_id}{_RECORD}").read_bytes())
     except (OSError, ValueError):
         return ""
     return _display_name(record.get("name")) if isinstance(record, dict) else ""
@@ -760,7 +768,7 @@ def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, uplo
         else:
             kv_delete(conn, f"{NAME_KEY}{current.id}")
     if upload_id is not None:
-        _unlink(root / f"{_STAGED}{upload_id}.json")  # the row names the kept file now
+        _unlink(root / f"{_STAGED}{upload_id}{_RECORD}")  # the row names the kept file now
     earlier = kept_in(root, current.audio_path)
     if earlier is not None and earlier != kept and not _named_by_another(conn, earlier, current.id):
         _unlink(earlier)

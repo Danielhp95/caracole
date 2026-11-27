@@ -4214,12 +4214,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   data/caracole/library/audio_store.json (tests/test_conformance_audio_store.py): `sniff`, `displayName`, `stage`,
   `staged`, `gone`, `drop`, `sweep`, `marked`, `keep`, `adopt`, `uploaded`, `givenName`, `tidy`, `keptIn`,
   `givenFile`, `namedByAnother`, function for function, the marker written before the data's move and the record
-  let go once the row names the kept file; one in-process lock (`held`), `named` called under it.
+  let go once the row names the kept file; one in-process lock (`held`), `named` called under it, never a database
+  write under it (`keep`, `adopt` and `tidy`, inside a job's write, take none).
 - Where it departs: `stage(input, name, named)` spools a stream into `.upload-<id>.part` (the phone's own name, which
-  `sweep` lets go an hour after its last write), refused at the first byte past `AUDIO_MAX`, its SHA-256 streamed,
-  the room checked once it is whole, under the lock after the others go (the disk's free bytes with the spooled ones
-  counted free, under twice them and `ROOM`: Python's check before its write); `keep(db, song, staged)` moves a staged
-  upload alone (a file of your own's copy is the computer's). `:core` reads no audio: the app's `Examiner` gives a
+  `sweep` lets go an hour after its last write), its SHA-256 streamed, refused as soon as it is known: NOT_AUDIO once
+  its first `HEAD` bytes are in (a non-audio body past `AUDIO_MAX` is NOT_AUDIO here, TOO_BIG on the computer), at
+  the first byte past `AUDIO_MAX`, NO_ROOM every MiB once the free bytes and those of the staged uploads it may let go
+  are under the spooled ones and `ROOM` (needed for Python's check to pass: it refuses nothing Python takes); then
+  exactly, under the lock after the others go (the free bytes with the spooled ones counted free, under twice them and
+  `ROOM`: Python's check before its write). A refusal leaves the stream unread and open (the route drains or closes
+  it); a read of 0 bytes is a broken stream, an IOException. `keep(db, song, staged)` moves a staged upload alone (a
+  file of your own's copy is the computer's). `:core` reads no audio: the app's `Examiner` gives a
   file's length and tags (an MP3's its frames' count, mpeg_frames.py's, wherever not 0; each tag's values in music.py's
   key order; an M4A with no sound track thrown), the store judging the rest (the format the bytes said, a length over
   0 and finite, `MAX_SECONDS`, music._first's stripped tag); whatever it throws a refusal, but an IOException of a

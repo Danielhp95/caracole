@@ -15,7 +15,8 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * What removing a song from the phone takes and leaves, as removal.brief and removal.describe say it on the computer:
  * the files the phone keeps for it and its entry go; nothing stays, since every file in its folder on the phone is
- * one a sync or an add wrote; and the audio file the owner gave it, when it has one. The removal leaves a tombstone, so the song stays removed until it is asked for again.
+ * one a sync or an add wrote; and the audio file the owner gave it, when it has one. The removal leaves a tombstone,
+ * so the song stays removed until it is asked for again.
  */
 internal object RemovalQuestion {
     const val AFTER = "It stays gone from the phone until you ask again (the request form, or Fetch on a search's " +
