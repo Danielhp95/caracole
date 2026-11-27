@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.autochords.frontend
 
+import java.io.EOFException
 import java.io.File
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -17,10 +19,18 @@ import java.nio.ByteOrder
  * - AIFF: FORM `AIFF`, or `AIFC` uncompressed (`NONE`, big-endian; `sowt`, little-endian; `fl32`/`FL32` and
  *   `fl64`/`FL64`, big-endian floats); its `COMM` (channels, frames, bits, the 80-bit rate) and `SSND`.
  *
- * Anything else, [format] gives null: a codec's to read. [read] streams the samples a block at a time, interleaved,
- * so that a long file is never held.
+ * Anything else (RF64 among them, which is no RIFF), [format] gives null: a codec's to read. A WAV or an AIFF whose
+ * header is cut short, or names no channel, more than [MOST_CHANNELS], or a width libsndfile reads none of, is
+ * [Unreadable], never a block sized by what it says. A `data` chunk of no bytes is no frames, as libsndfile reads it.
+ * [read] streams the samples a block at a time, interleaved, so that a long file is never held.
  */
 object Pcm {
+    /** A WAV's or an AIFF's header that can't be read: cut short, or naming what no PCM is. */
+    class Unreadable(message: String) : IOException(message)
+
+    /** The most channels a header may name: past it, no audio caracole reads (a 7.1 file is 8). */
+    const val MOST_CHANNELS = 32
+
     /** What a file's header says: [dataAt] and [frames] are where its samples begin and how many whole frames of
      * [channels] the file holds there. */
     class Format(
@@ -35,7 +45,13 @@ object Pcm {
     const val BLOCK_FRAMES = 4096
 
     /** [file]'s format, or null for a file that is no WAV or AIFF of PCM read here. */
-    fun format(file: File): Format? = RandomAccessFile(file, "r").use { format(it) }
+    fun format(file: File): Format? = RandomAccessFile(file, "r").use {
+        try {
+            format(it)
+        } catch (e: EOFException) {
+            throw Unreadable("its header is cut short")
+        }
+    }
 
     /** Every sample of [file] interleaved, a block of [BLOCK_FRAMES] frames (the last one fewer) at a time to [block]
      * with its count of samples ([FloatArray] reused between calls). */
@@ -126,7 +142,9 @@ object Pcm {
                         3 -> true
                         else -> return null
                     }
-                    if (float && bits != 32 && bits != 64 || !float && bits !in setOf(8, 16, 24, 32)) return null
+                    if (float && bits != 32 && bits != 64 || !float && bits !in setOf(8, 16, 24, 32)) {
+                        throw Unreadable("samples of $bits bits${if (float) ", floating point" else ""}")
+                    }
                     return made(WAV, rate, channels, bits, float, bigEndian = false, body, minOf(size, length - body))
                 }
             }
@@ -154,7 +172,7 @@ object Pcm {
                     val channels = c.getShort(0).toInt() and 0xFFFF
                     val frames = c.getInt(2).toLong() and 0xFFFFFFFFL
                     var bits = c.getShort(6).toInt() and 0xFFFF
-                    val rate = extended(c, 8) ?: return null
+                    val rate = extended(c, 8) ?: throw Unreadable("a rate no 80-bit float of whole hertz")
                     var bigEndian = true
                     var float = false
                     if (compressed) {
@@ -168,11 +186,11 @@ object Pcm {
                             else -> return null
                         }
                     }
-                    if (!float && bits !in 1..32) return null
+                    if (!float && bits !in 1..32) throw Unreadable("samples of $bits bits")
                     val offset = read(f, body, 4, ByteOrder.BIG_ENDIAN).getInt(0).toLong() and 0xFFFFFFFFL
                     val dataAt = body + 8 + offset
                     val bytes = (bits + 7) / 8 * channels.toLong()
-                    if (bytes == 0L) return null
+                    if (bytes == 0L) throw Unreadable("$channels channels")
                     val there = maxOf(0L, minOf(size - 8 - offset, length - dataAt))
                     return made(AIFF, rate, channels, ((bits + 7) / 8) * 8, float, bigEndian, dataAt,
                         minOf(there, frames * bytes))
@@ -185,7 +203,8 @@ object Pcm {
 
     private fun made(container: String, rate: Int, channels: Int, bits: Int, float: Boolean, bigEndian: Boolean,
                      dataAt: Long, bytes: Long): Format? {
-        if (rate <= 0 || channels <= 0) return null
+        if (channels !in 1..MOST_CHANNELS) throw Unreadable("$channels channels")
+        if (rate <= 0) throw Unreadable("a rate of $rate")
         val align = (bits + 7) / 8 * channels
         return Format(container, rate, channels, bits, float, bigEndian, dataAt, bytes / align)
     }

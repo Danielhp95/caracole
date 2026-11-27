@@ -16,6 +16,7 @@ import java.nio.ByteOrder
 import java.security.MessageDigest
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -36,7 +37,7 @@ class PcmTest {
 
     @Test fun theLosslessFilesAreReadSampleForSampleAsSoundfileReadsThem() {
         val lossless = records.filter { it["exact"]!!.jsonPrimitive.boolean }
-        assertEquals(listOf("AIFF", "FLAC", "WAV"), lossless.map { it.str("format") }.sorted())
+        assertEquals(listOf("AIFF", "FLAC", "FLAC", "WAV"), lossless.map { it.str("format") }.sorted())
         for (record in lossless.filter { it.str("format") != "FLAC" }) {
             val name = fixture(record)
             val f = file(name, Corpus.fixture(name))
@@ -88,6 +89,57 @@ class PcmTest {
         assertContentEquals(FloatArray(4) { 1f / 32f }, Pcm.samples(f, format))
     }
 
+    @Test fun wavsOf24And32BitIntegersAndOf64BitFloatsAreReadAsLibsndfileReadsThem() {
+        val i24 = byteArrayOf(0, 0, 0x80.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0x7F)  // -2^23, then 2^23 - 1
+        val w24 = file("i24.wav", wav(tag = 1, channels = 1, bits = 24, data = i24))
+        assertContentEquals(floatArrayOf(-1f, 8388607f / 8388608f), Pcm.samples(w24, Pcm.format(w24)!!))
+        val i32 = le(2) { putInt(Int.MIN_VALUE); putInt(1 shl 30) }
+        val w32 = file("i32.wav", wav(tag = 1, channels = 1, bits = 32, data = i32))
+        assertContentEquals(floatArrayOf(-1f, 0.5f), Pcm.samples(w32, Pcm.format(w32)!!))
+        val f64 = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN).putDouble(0.1).putDouble(-2.0).array()
+        val w64 = file("f64.wav", wav(tag = 3, channels = 1, bits = 64, data = f64))
+        assertContentEquals(floatArrayOf(0.1f, -2f), Pcm.samples(w64, Pcm.format(w64)!!))
+    }
+
+    @Test fun anAifcOfFl32AndAn8BitAiffAreReadAsLibsndfileReadsThem() {
+        val fl = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN).putFloat(0.75f).putFloat(-0.125f).array()
+        val aifc = file("f.aifc", aifc("fl32", channels = 1, bits = 32, frames = 2, data = fl))
+        assertContentEquals(floatArrayOf(0.75f, -0.125f), Pcm.samples(aifc, Pcm.format(aifc)!!))
+        val aiff = file("s8.aiff", aiff(channels = 1, bits = 8, frames = 3, data = byteArrayOf(-128, 64, 127)))
+        assertContentEquals(floatArrayOf(-1f, 0.5f, 127f / 128f), Pcm.samples(aiff, Pcm.format(aiff)!!))
+    }
+
+    @Test fun aChunkOfOddSizeBeforeTheDataIsPassedOverWithItsPadByte() {
+        val f = file("odd.wav", wav(tag = 1, channels = 1, bits = 16, data = le(1) { putShort(16384) },
+            before = byteArrayOf(1, 2, 3)))
+        assertContentEquals(floatArrayOf(0.5f), Pcm.samples(f, Pcm.format(f)!!))
+    }
+
+    @Test fun aDataChunkOfNoBytesIsNoFramesAsLibsndfileReadsIt() {
+        val bytes = wav(tag = 1, channels = 1, bits = 16, data = le(2) { putShort(1); putShort(2) })
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(40, 0)
+        assertEquals(0L, Pcm.format(file("empty.wav", bytes))!!.frames)
+    }
+
+    @Test fun aTruncatedOrAbsurdHeaderIsUnreadableNeverAnOutOfMemory() {
+        val whole = wav(tag = 1, channels = 1, bits = 16, data = ByteArray(4))
+        assertFailsWith<Pcm.Unreadable> { Pcm.format(file("cut.wav", whole.copyOf(30))) }
+        val wide = wav(tag = 1, channels = 1, bits = 16, data = ByteArray(4))
+        ByteBuffer.wrap(wide).order(ByteOrder.LITTLE_ENDIAN).putShort(22, 0xFFFF.toShort())  // 65,535 channels
+        assertFailsWith<Pcm.Unreadable> { Pcm.format(file("wide.wav", wide)) }
+        val cutAiff = aiff(channels = 1, bits = 16, frames = 1, data = ByteArray(2)).copyOf(24)
+        assertFailsWith<Pcm.Unreadable> { Pcm.format(file("cut.aiff", cutAiff)) }
+        val deep = aiff(channels = 1, bits = 16, frames = 1, data = ByteArray(2))
+        ByteBuffer.wrap(deep).putShort(26, 64)  // 64-bit integers
+        assertFailsWith<Pcm.Unreadable> { Pcm.format(file("deep.aiff", deep)) }
+    }
+
+    @Test fun anRf64IsNoneOfPcmsToReadAsItIsNoRiff() {
+        val rf64 = wav(tag = 1, channels = 1, bits = 16, data = ByteArray(4))
+        "RF64".toByteArray().copyInto(rf64)
+        assertNull(Pcm.format(file("big.wav", rf64)))
+    }
+
     @Test fun aWavOfAnotherCodecIsNoneOfPcms() {
         assertNull(Pcm.format(file("adpcm.wav", wav(tag = 2, channels = 1, bits = 4, data = ByteArray(8)))))
     }
@@ -96,16 +148,31 @@ class PcmTest {
         ByteBuffer.allocate(shorts * 4).order(ByteOrder.LITTLE_ENDIAN).apply(fill)
             .let { it.array().copyOf(it.position()) }
 
-    private fun wav(tag: Int, channels: Int, bits: Int, data: ByteArray, subformat: Int = 0): ByteArray {
+    private fun wav(tag: Int, channels: Int, bits: Int, data: ByteArray, subformat: Int = 0,
+                    before: ByteArray? = null): ByteArray {
         val fmt = if (tag == 0xFFFE) 40 else 16
-        val b = ByteBuffer.allocate(12 + 8 + fmt + 8 + data.size).order(ByteOrder.LITTLE_ENDIAN)
+        val extra = before?.let { 8 + it.size + (it.size and 1) } ?: 0
+        val b = ByteBuffer.allocate(12 + 8 + fmt + extra + 8 + data.size).order(ByteOrder.LITTLE_ENDIAN)
         b.put("RIFF".toByteArray()).putInt(b.capacity() - 8).put("WAVE".toByteArray())
         b.put("fmt ".toByteArray()).putInt(fmt).putShort(tag.toShort()).putShort(channels.toShort()).putInt(8000)
             .putInt(8000 * channels * bits / 8).putShort((channels * bits / 8).toShort()).putShort(bits.toShort())
         if (tag == 0xFFFE) {
             b.putShort(22).putShort(bits.toShort()).putInt(0).putShort(subformat.toShort()).put(ByteArray(14))
         }
+        if (before != null) {
+            b.put("LIST".toByteArray()).putInt(before.size).put(before)
+            if (before.size and 1 == 1) b.put(0)
+        }
         b.put("data".toByteArray()).putInt(data.size).put(data)
+        return b.array()
+    }
+
+    private fun aiff(channels: Int, bits: Int, frames: Int, data: ByteArray): ByteArray {
+        val b = ByteBuffer.allocate(12 + 8 + 18 + 8 + 8 + data.size).order(ByteOrder.BIG_ENDIAN)
+        b.put("FORM".toByteArray()).putInt(b.capacity() - 8).put("AIFF".toByteArray())
+        b.put("COMM".toByteArray()).putInt(18).putShort(channels.toShort()).putInt(frames).putShort(bits.toShort())
+        b.putShort((16383 + 12).toShort()).putLong(8000L shl (63 - 12))
+        b.put("SSND".toByteArray()).putInt(8 + data.size).putInt(0).putInt(0).put(data)
         return b.array()
     }
 
