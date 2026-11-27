@@ -93,6 +93,8 @@ CARDS = VECTORS / "web" / "cards.jsonl"
 # (youtube_fetch.route_reason): the request form's line, "No sheets from YouTube here: YouTube isn't on the phone."
 YOUTUBE_PROBLEM = "YouTube isn't on the phone"
 AUDIO_PROBLEM = "auto-chords isn't on the phone"  # LibraryPage.kt AUDIO_PROBLEM: no sheet from an audio file
+# LibraryPage.kt TRANSCRIBE_PROBLEM: the phone hears no words; a chords-only sheet's card says where they are heard.
+TRANSCRIBE_PROBLEM = "No lyrics site has its words. The computer hears them from its own audio of this song."
 LIBRARY_NAME = "Phone"
 # A form token with every character html.escape writes otherwise, so the request form's escape is checked too.
 CSRF = "tok-&\"<'>-0123456789"
@@ -146,14 +148,14 @@ SERVER_CONTROLS = WebControls(CSRF, busy=frozenset({3, 1}), active=2, held=froze
 
 def server_member(controls: WebControls) -> dict[str, Any]:
     """``build_library_page``'s ``server`` for ``controls`` on the phone: no Guitar Pro page, no sheet from YouTube
-    (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (for the same reason: no song offered one, no time
-    said), no sheet from an audio file (``AUDIO_PROBLEM``: no "+"), and no lyrics looked up under another name
+    (``YOUTUBE_PROBLEM``), YouTube off, no lyrics transcribed (``TRANSCRIBE_PROBLEM``, where they are: no song offered
+    one, no time said), no sheet from an audio file (``AUDIO_PROBLEM``: no "+"), and no lyrics looked up under another name
     (``lyricsSearch`` false: computer only) (checked against build_library_page itself:
     ``test_the_server_member_is_build_library_pages``)."""
     return {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
-            "transcribe": {"ok": False, "why": YOUTUBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
+            "transcribe": {"ok": False, "why": TRANSCRIBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
                            "transcribed": [], "time": ""},
             "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""}, "lyricsSearch": False}
 
@@ -475,12 +477,12 @@ def test_the_cases_cover_what_the_page_writes_otherwise():
 
 def test_the_server_member_is_build_library_pages(conn, cfg):
     # The phone's server member is the one build_library_page writes for the same controls, with no Guitar Pro page,
-    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (the same reason).
+    # no sheet from YouTube (the phone's reason), YouTube off and no lyrics transcribed (where they are).
     youtube = cfg.provider("youtube")
     off = mock.patch.object(type(cfg), "provider", lambda self, name: (
         type(youtube)(**{**youtube.__dict__, "enabled": False}) if name == "youtube" else youtube))
     with (off, mock.patch.object(library_page, "route_reason", lambda cfg: YOUTUBE_PROBLEM),
-          mock.patch.object(library_page, "transcribe_reason", lambda cfg: YOUTUBE_PROBLEM),
+          mock.patch.object(library_page, "transcribe_reason", lambda cfg: TRANSCRIBE_PROBLEM),
           mock.patch.object(library_page, "audio_member",
                             lambda cfg: {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""})):
         html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVER_CONTROLS)

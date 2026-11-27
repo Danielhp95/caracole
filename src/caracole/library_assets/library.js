@@ -909,7 +909,16 @@
     }
     return null;
   };
+  // Where this caracole hears no words (``server.transcribe.ok`` false: the phone's page), a song with a chords-only
+  // auto sheet and no lyrics found has one hint line in its place, ``server.transcribe.why`` as it is, no button: the
+  // phone's says where they can be heard (the computer, from its own audio of the song).
+  const heardElsewhere = (s) => {
+    const why = TRANSCRIBE && !TRANSCRIBES && typeof TRANSCRIBE.why === "string" ? TRANSCRIBE.why : "";
+    if (!why || s.auto !== true || s.lyrics !== "missing" || s.status === "ignored") return null;
+    return el("p", "hint transcribe-elsewhere", why);
+  };
   const transcribeOffer = (s) => {
+    if (!TRANSCRIBES) return heardElsewhere(s);
     if (!offersTranscription(s.id)) return null;
     const form = songForm("transcribe", "/transcribe", s);
     const go = el("button", "btn small", "Transcribe the lyrics");

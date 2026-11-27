@@ -2140,6 +2140,10 @@ It is rows.js's, shared by both pages:
     a song offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or
     runs), through `caracoleLibrary`'s `offeredSong`, `transcribeHint` and `transcribing`; asked for, neither offers it
     while its request waits or runs.
+  - Where `ok` is false, `transcribeOffer` is `heardElsewhere`: a song not ignored with an auto sheet (`auto`) and
+    lyrics `missing` has one hint line, `p.hint.transcribe-elsewhere`, `why` as it is, no button; the phone's `why`
+    (LibraryPage.kt `TRANSCRIBE_PROBLEM`) says where its words are heard: "No lyrics site has its words. The computer
+    hears them from its own audio of this song." (test_web_page_transcribe.py, PhonePageDataTest).
   - Read again live, never left to a reload (library.js `readTranscriptions`, one GET at a time): once a song's job the
     page follows is over (`offerAfter`) or a request the Journal saw waiting or running is over
     (`caracoleLibrary.requestOver`), when the song is offered one of the four or may be (`mayBeOffered`: its card's

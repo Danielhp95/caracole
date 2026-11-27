@@ -512,3 +512,58 @@ def test_where_it_cant_run_no_card_offers_one(cfg, tmp_path, browser, monkeypatc
         server.shutdown()
         server.server_close()
         queue.stop()
+
+
+# The phone's ``server.transcribe.why`` (LibraryPage.kt ``TRANSCRIBE_PROBLEM``): it hears no words, the computer does.
+ELSEWHERE = "No lyrics site has its words. The computer hears them from its own audio of this song."
+
+
+def test_where_no_words_can_be_heard_here_a_chords_only_sheet_says_where_they_can(cfg, tmp_path, browser,
+                                                                                  monkeypatch):
+    # Where this caracole hears no words (``server.transcribe.ok`` false, the phone's page as it is), a song with an
+    # auto sheet and no lyrics found has one hint line, ``server.transcribe.why`` as it is, and no button; a song with
+    # no auto sheet has none.
+    from caracole import library_page
+
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    monkeypatch.setattr(library_page, "transcribe_reason", lambda cfg: ELSEWHERE)
+    made = FakeTranscribe()
+    made.cfg, made.song = cfg, offered(cfg, tmp_path)
+    made._sheet()  # its chords-only auto sheet
+    conn = db.connect(cfg.db_path)
+    try:
+        bare = youtube_song(conn, tmp_path, "Calla Lake", "River Road")  # its lyrics missing, no sheet at all
+    finally:
+        conn.close()
+    server, queue, base, posted = serve(cfg, made)
+    try:
+        browser.open(base)
+        card = opened(browser, made.song)
+        hint = json.dumps(card + " .transcribe-elsewhere")
+        assert browser.wait(f"document.querySelector({hint}) !== null")
+        assert browser.js(f"document.querySelector({hint}).textContent") == ELSEWHERE
+        assert browser.js(f"document.querySelector({hint}).tagName") == "P"
+        assert browser.js(f"document.querySelector({json.dumps(card)}).querySelectorAll('.transcribe-elsewhere')"
+                          ".length") == 1
+        assert browser.js(f"document.querySelector({json.dumps(card + ' form.transcribe')})") is None
+        other = opened(browser, bare)
+        assert browser.wait(f"document.querySelector({json.dumps(other)}).querySelector('.card-head') !== null")
+        assert browser.js(f"document.querySelector({json.dumps(other + ' .transcribe-elsewhere')})") is None
+        assert "/transcribe" not in posted.read
+    finally:
+        made.hold.set()
+        server.shutdown()
+        server.server_close()
+        queue.stop()
+
+
+def test_where_words_are_heard_here_a_chords_only_sheet_is_offered_them_with_no_hint_of_elsewhere(able, live,
+                                                                                                  transcriber,
+                                                                                                  browser):
+    base, _, _ = live
+    song = transcriber.song
+    transcriber._sheet()  # its chords-only auto sheet: offered Transcribe the lyrics
+    browser.open(base)
+    card = opened(browser, song)
+    assert browser.wait(f"document.querySelector({json.dumps(card + ' form.transcribe')}) !== null")
+    assert browser.js(f"document.querySelector({json.dumps(card + ' .transcribe-elsewhere')})") is None
