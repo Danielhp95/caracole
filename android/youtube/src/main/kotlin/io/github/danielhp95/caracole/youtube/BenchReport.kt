@@ -143,6 +143,7 @@ object BenchReport {
                                  "running_after" to JsonPrimitive(idle.runningAfter)),
             "budget" to obj("before" to num(budget.first), "after" to num(budget.second), "of" to num(budgetOf),
                             "lifted" to JsonPrimitive(capLifted)),
+            "uid_counts" to str(UID_COUNTS_LOOPBACK),
             "runs" to JsonArray(runs.map(::runJson)),
             "after_block_requests" to num(afterBlockRequests(runs)),
             "kill_check" to killCheck,
@@ -264,6 +265,16 @@ object BenchReport {
     }
 
     const val BLOCKED = "blocked"
+
+    /**
+     * What a run's `uid_bytes` counts, the report's `uid_counts`: TrafficStats' bytes of the app's uid, sent and
+     * received on every interface, loopback too. yt-dlp's process and the gate are the app's uid, so a byte through the
+     * gate is counted three times: yt-dlp's to the gate on 127.0.0.1 (sent and received, twice), and the gate's on the
+     * network (once), each with its packets' headers: about 3.1 x the gate's bytes on the owner's phone and the
+     * emulator. Android gives no per-uid count without loopback in real time (NetworkStatsManager's buckets need a
+     * poll the app can't force), so the checker judges the uid's bytes as explained by the gate's three legs.
+     */
+    const val UID_COUNTS_LOOPBACK = "loopback too"
 
     private fun obj(vararg pairs: Pair<String, JsonElement>) = JsonObject(linkedMapOf(*pairs))
     private fun str(s: String) = JsonPrimitive(s)

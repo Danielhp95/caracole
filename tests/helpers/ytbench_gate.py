@@ -6,15 +6,19 @@
   BenchReportTest asserts that ``BenchReport.of`` writes it for fixed inputs, and test_ytbench_gate.py builds every
   report it checks from it, so the two sides read one shape.
 - ``gate(reports, *, apk_growth_mb=None) -> dict[str, Verdict]``: a verdict for each row of §4.4, by the row's name
-  (``Y0-W`` … ``Y0-C``); ``sessions``, §4.4's "two sessions on two days" (an observed Wi-Fi one and an enforced
-  mobile-data one on two UTC days, else undecided, and Y0-W too, which is over both); and ``terms``, the owner's terms
-  as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, for the runs of a report without
-  ``lifted``: one whose budget says it, the owner's word of 2026-11-27, has its busiest 24 hours said, never failed for
-  them; nothing after a block, the gate
-  mode each day asks for, a kill check that spent none, no host reached outside YouTube's under enforce, no
-  gate-shaped proxy address or bare user:secret pair anywhere). ``Verdict(passed, numbers, why)``: ``passed`` True, False, or
-  None for undecided (another day, or the owner's word), ``numbers`` what it was decided on, ``why`` in words. A
-  handful of runs shows no rate: where §4.4 asks for what they can't show, the verdict is undecided, never a pass.
+  (``Y0-W`` … ``Y0-C``), as the controller ruled on 2026-11-27 (the owner runs by hand, several short sessions a day):
+  ``sessions``, the sessions and days given, reported, one on mobile data with Start (enforce) needed, an observed one
+  wanted but not needed, two days not needed; ``Y0-W`` three songs downloaded on mobile data with Start over any
+  sessions; a session the network lost (every run an error of a timeout's or a transport's) counted for nothing; and
+  ``terms``, the owner's terms as the sessions kept them (the six runs of any 24 hours by the runs' own stamps, for the
+  runs of a report without ``lifted``: one whose budget says it, the owner's word of 2026-11-27, has its busiest 24
+  hours said, never failed for them; nothing after a block, no session observing every host but on Wi-Fi, a kill
+  check that spent none, no host reached outside YouTube's under enforce, no gate-shaped proxy address or bare
+  user:secret pair anywhere). A run's ``uid_bytes`` count loopback too (``uid_counts``; a report without it counted
+  so): Y0-H holds them to what the gate's bytes explain over three legs (``H_UID_LEGS``' comment). ``Verdict(passed,
+  numbers, why)``: ``passed`` True, False, or None for undecided (what is missing and what to run next, or the owner's
+  word), ``numbers`` what it was decided on, ``why`` in words. A handful of runs shows no rate: where §4.4 asks for
+  what they can't show, the verdict is undecided, never a pass.
 - ``youtubei(reports)``: how often an observed session's gate log shows ``youtubei.googleapis.com`` asked for, and
   whether the enforced runs went without it: numbers for the controller, who decides (Y0.4's rule).
 - ``python -m tests.helpers.ytbench_gate REPORT… [--apk-growth-mb N]`` (the option anywhere; a negative or non-finite
@@ -51,9 +55,9 @@ CAP_LIFTED_ON = "2026-11-27"
 DAY = timedelta(hours=24)
 
 # §4.4, row by row.
-W_SONGS = 3  # Y0-W: each of the 3 songs of a Wi-Fi session ends ok, pass_over or unavailable, none blocked
-W_WIFI_DECODED = 2  # Y0-W: at least 2 downloaded and decoded on Wi-Fi
-W_MOBILE_OK = 2  # Y0-W: mobile data, at least 2 of 3 ok (not a stop: the route is Wi-Fi only)
+# Y0-W, the controller's ruling of 2026-11-27 (the owner runs by hand, several short sessions a day): on mobile data
+# with Start (enforce), at least 3 songs downloaded ok over any number of sessions, no song failing, no block.
+W_SONGS = 3
 T_COLD_CHALLENGE_S = 20.0  # Y0-T: the cold download's challenge
 T_COLD_WHOLE_S = 30.0  # Y0-T: cold search + download, yt-dlp's sleeps and caracole's pauses left out
 T_WARM_S = 15.0  # Y0-T: each warm download (a ~4-minute song)
@@ -61,8 +65,18 @@ T_FALLBACK_CHALLENGE_S = 60.0  # Y0-T fail (§3.8): the cold challenge over this
 T_FALLBACK_WHOLE_S = 120.0  # Y0-T fail (§3.8): the cold whole, sleeps included, over this in both Wi-Fi sessions
 S_PASS_MB = 35.0  # Y0-S: release-equivalent arm64 APK growth
 S_FAIL_MB = 45.0  # Y0-S: over this after trimming, §3.8; between the two, the owner is asked
-H_UID_FACTOR = 1.1  # Y0-H: uid_bytes <= 1.1 x the gate's bytes + 64 KB a run, with idle true
+# Y0-H: a run's uid_bytes explained by the gate's bytes. TrafficStats counts the app's uid on every interface,
+# loopback too (``uid_counts`` "loopback too", every report so far): a byte through the gate is yt-dlp's to the gate on
+# 127.0.0.1, sent and received (2 x), and the gate's on the network (1 x), each with its packets' headers. The owner's
+# phone counted 3.07-3.11 x the gate's bytes a run, the emulator 3.2-3.35 x (YouTubeBenchTest measures a loopback byte
+# counted twice). So uid_bytes <= 3 legs x (1 + 8 % for headers and retransmits) of the gate's + 64 KB a run (a
+# handshake's packets: the phone's Wi-Fi run that timed out counted 14 KB for the gate's 3 KB). A bypass, bytes yt-dlp
+# sends the network outside the gate, is counted once: under the bound slips at most about 0.16 x the gate's bytes +
+# 64 KB a run (some 700 KB of a 4.4 MB download, 120 KB of a search), never a song's audio.
+H_UID_LEGS = 3
+H_UID_HEADERS = 0.08
 H_UID_SLACK = 64 * 1024
+UID_COUNTS = ("loopback too",)  # BenchReport.UID_COUNTS_LOOPBACK; a report without the member counted so too
 F_WITHIN_S = 1.0  # Y0-F: decoded frames / rate within 1 s of yt-dlp's duration
 M_PASS_MB = 500.0  # Y0-M: peak PSS of :youtube + qjs
 M_ASK_MB = 800.0  # Y0-M: over this, "the owner is asked" (the row's words: no fail; phones of 6 GB are the floor)
@@ -82,7 +96,7 @@ TOKEN_HEX = 2 * 16
 _SECRET = re.compile(rf"[0-9a-f]{{{TOKEN_HEX}}}:[0-9a-f]{{{TOKEN_HEX}}}|://[^\s/@:'\"]+:[^\s/@'\"]+@127\.0\.0\.1")
 
 GATES = {
-    "sessions": "the two sessions",
+    "sessions": "the sessions",
     "terms": "the owner's terms",
     "Y0-W": "Y0-W works",
     "Y0-T": "Y0-T time",
@@ -122,6 +136,11 @@ IDLE_MEMBERS = {"served_before": ("int",), "served_after": ("int",), "jobs_befor
                 "running_before": ("bool",), "running_after": ("bool",)}
 BUDGET_MEMBERS = {"before": ("int",), "after": ("int",), "of": ("int",)}
 BUDGET_LIFTED = {"lifted": ("bool",)}  # written from 2026-11-27 on; a report of before it has none
+UID_COUNTS_MEMBER = {"uid_counts": ("str",)}  # the same: what a run's uid_bytes counts
+# A run's error the network made (no answer, a connection cut, a handshake that timed out): no block, no song's fault.
+_NETWORK = re.compile(r"timed? ?out|TransportError|Connection (?:reset|aborted|refused|closed)|Network is unreachable|"
+                      r"No route to host|Temporary failure in name resolution|Name or service not known|"
+                      r"EOF occurred in violation of protocol|IncompleteRead|RemoteDisconnected", re.IGNORECASE)
 FIRST_START_MEMBERS = {"first_after_install": ("bool",), "process_start_ms": ("int",), "python_ready_ms": ("int",)}
 CHALLENGE_MEMBERS = {"seconds": _NUM, "runtime": ("str",)}
 FILE_MEMBERS = {"ext": ("str",), "bytes": ("int",), "duration": ("int", "float", "null")}
@@ -182,7 +201,10 @@ def _stamp(text: str, where: str) -> datetime:
 
 def check_shape(report: Any, name: str = "the report") -> None:
     """Raises ReportError unless ``report`` has the bench's shape, every member there with its type and none other."""
-    _check(report, REPORT_MEMBERS, name)
+    _check(report, {**REPORT_MEMBERS, **(UID_COUNTS_MEMBER if isinstance(report, dict) and "uid_counts" in report
+                                          else {})}, name)
+    if "uid_counts" in report and report["uid_counts"] not in UID_COUNTS:
+        raise ReportError(f"{name}'s uid_counts is {report['uid_counts']!r}, not the bench's: {', '.join(UID_COUNTS)}")
     if report["format"] != FORMAT:
         raise ReportError(f"{name} is of format {report['format']}, not the bench's {FORMAT}")
     _stamp(report["started_at"], f"{name}'s started_at")
@@ -265,11 +287,29 @@ def _songs(report: dict[str, Any]) -> list[tuple[str, list[dict[str, Any]]]]:
     return list(order.items())
 
 
+def uid_counts(report: dict[str, Any]) -> str:
+    """What the report's uid_bytes count: its ``uid_counts``, else "loopback too" (TrafficStats' uid counter, which the
+    bench read from the start)."""
+    return report.get("uid_counts", UID_COUNTS[0])
+
+
+def network_error(run: dict[str, Any]) -> bool:
+    """Whether ``run`` failed for the network's sake: an error whose words are a timeout's or a transport's."""
+    return run["outcome"] == "error" and bool(_NETWORK.search(run["reason"] or ""))
+
+
+def lost_to_the_network(report: dict[str, Any]) -> bool:
+    """A session the network lost: runs, every one an error of the network's, none blocked. It counts for nothing."""
+    return bool(report["runs"]) and all(network_error(run) for run in report["runs"])
+
+
 def _song_end(runs: list[dict[str, Any]]) -> str:
-    """What a song came to: blocked if any run was, else its download's outcome, else "no fit" for a search that found
-    nothing to choose, else the search's outcome."""
+    """What a song came to: blocked if any run was, "network" if its last run failed for the network's sake, else its
+    download's outcome, else "no fit" for a search that found nothing to choose, else the search's outcome."""
     if any(r["outcome"] == "blocked" for r in runs):
         return "blocked"
+    if network_error(runs[-1]):
+        return "network"
     downloads = [r for r in runs if r["kind"] == "download"]
     if downloads:
         return downloads[-1]["outcome"]
@@ -312,12 +352,14 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
         most = max(most, sum(1 for later in stamps[i:] if later - at < DAY))
     # The cap binds each run a capped bench sent: with the runs of the 24 hours up to it, every report's, no more than
     # six (the capped bench counted them all before it ran one). A lifted bench's runs are bound by none.
-    for j, (at, its_cap_lifted) in enumerate(runs):
+    # Every run at or before it counts, whatever sorts first at one stamp: a run of the same second is in its window.
+    for at, its_cap_lifted in runs:
         if its_cap_lifted:
             continue
-        within = sum(1 for earlier in stamps[:j + 1] if at - earlier < DAY)
+        window = [earlier for earlier in stamps if earlier <= at and at - earlier < DAY]
+        within = len(window)
         if within > RUNS_A_DAY:
-            first = next(earlier for earlier in stamps[:j + 1] if at - earlier < DAY)
+            first = window[0]
             broken.append(f"{within} runs within 24 hours from {first:%Y-%m-%dT%H:%M:%SZ}: the day's runs are "
                           f"{RUNS_A_DAY}")
             break
@@ -334,11 +376,10 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
             broken.append(f"{label}: the kill check spent {r['kill_check']['spends']} of the day's runs, not 0")
         if not lifted(r) and r["budget"]["after"] > r["budget"]["of"]:
             broken.append(f"{label}: {r['budget']['after']} runs in 24 hours after it, of {r['budget']['of']}")
-        transport = r["network"]["transport"]
-        if transport == "cellular" and r["gate"] != "enforce":
-            broken.append(f"{label}: observed every host on mobile data, where the session enforces")
-        if transport == "wifi" and r["gate"] != "observe":
-            broken.append(f"{label}: enforced on Wi-Fi, where the session observes every host")
+        # Observing every host is Wi-Fi's alone; enforcing, the stricter mode, is never a breach anywhere.
+        if r["network"]["transport"] != "wifi" and r["gate"] == "observe":
+            on = {"cellular": "mobile data"}.get(r["network"]["transport"], r["network"]["transport"] or "no network")
+            broken.append(f"{label}: observed every host on {on}, where only Wi-Fi may observe")
         if r["gate"] not in ("enforce", "observe"):
             broken.append(f"{label}: gate {r['gate']!r}, neither enforce nor observe")
         if r["gate"] == "enforce":
@@ -356,7 +397,8 @@ def _terms(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     count = (f"{most} runs in the busiest 24 hours, the six-run cap lifted at the owner's word ({CAP_LIFTED_ON}) "
              f"for {n_lifted} of {len(reports)} session(s), the capped ones' runs within it" if n_lifted else
              f"at most {most} runs in any 24 hours")
-    return Verdict(True, numbers, f"{count}, nothing after a block, each day's gate mode, kill checks that spent none, "
+    return Verdict(True, numbers, f"{count}, nothing after a block, no observing but on Wi-Fi, "
+                                  "kill checks that spent none, "
                                   "no host reached outside YouTube's under enforce, no proxy secret")
 
 
@@ -371,73 +413,70 @@ def _secrets(value: Any, where: str = "$") -> list[str]:
 
 
 def _works(reports: Sequence[dict[str, Any]]) -> Verdict:
+    """Y0-W, the controller's ruling of 2026-11-27: on mobile data with Start (enforce), at least ``W_SONGS`` songs
+    downloaded ok over any number of sessions; a block or a song failing (not for the network's sake) on one UTC day
+    waits for another day, on two days is §3.8's trigger; a session the network lost counts for nothing."""
     def session(r: dict[str, Any]) -> dict[str, Any]:
         ends = {song: _song_end(runs) for song, runs in _songs(r)}
         decoded = sum(1 for run in _ok_downloads(r) if run["decoded"] is not None)
         errors = [f"{run['kind']} of “{run['song']}”: error: {run['reason'] or 'no reason given'}"
                   for run in r["runs"] if run["outcome"] == "error"]
+        failing = [f"“{song}” {end}" + "".join(f" ({run['reason']})" for run in runs[-1:] if run["reason"])
+                   for (song, runs), end in zip(_songs(r), ends.values())
+                   if end not in SONG_ENDS_WELL and end not in ("no fit", "network", "blocked")]
         return {"session": _label(r), "day": _day(r), "songs": len(ends), "ends": list(ends.values()), "errors": errors,
-                "decoded": decoded, "ok": sum(1 for e in ends.values() if e == "ok"),
+                "failing": failing, "decoded": decoded, "ok": sum(1 for e in ends.values() if e == "ok"),
                 "downloads_ok": len(_ok_downloads(r)),
-                "blocked": sum(1 for run in r["runs"] if run["outcome"] == "blocked"), "stopped": r["stopped"]}
+                "blocked": sum(1 for run in r["runs"] if run["outcome"] == "blocked"), "stopped": r["stopped"],
+                "lost": lost_to_the_network(r)}
 
-    wifi = [session(r) for r in _transport(reports, "wifi")]
-    mobile = [session(r) for r in _transport(reports, "cellular")]
-    days, days_said = _days_said(reports)
-    numbers: dict[str, Any] = {"wifi": wifi, "mobile": mobile, "days": days["days"]}
-    mobile_said = (
-        "no mobile-data session" if not mobile else
-        "; ".join(f"mobile data {m['ok']} of {m['songs']} ok" + ("" if m["ok"] >= W_MOBILE_OK else
-                                                               ": not a stop, the route is Wi-Fi only")
-                  for m in mobile)
-    )
-    if not wifi:
-        return Verdict(None, numbers, f"no Wi-Fi session: Y0-W is Wi-Fi's; {mobile_said}")
-    passed, failed, short = [], [], []
-    fail_days = set()
+    every = [session(r) for r in reports]
+    wifi = [w for w, r in zip(every, reports) if r["network"]["transport"] == "wifi"]
+    mobile = [w for w, r in zip(every, reports) if r["network"]["transport"] == "cellular"]
+    counted = [w for w in every if not w["lost"]]
+    enforced = [w for w, r in zip(every, reports)
+                if r["network"]["transport"] == "cellular" and r["gate"] == "enforce" and not w["lost"]]
+    lost = [w["session"] for w in every if w["lost"]]
+    numbers: dict[str, Any] = {"wifi": wifi, "mobile": mobile, "lost": lost, "days": [w["day"] for w in every],
+                               "mobile_downloads_ok": sum(w["ok"] for w in enforced)}
+    notes = []
+    if lost:
+        notes.append("lost to the network, counted for nothing: " + "; ".join(
+            f"{w['session']} ({'; '.join(w['errors'])})" for w in every if w["lost"]))
+    unfit = [f"{w['session']} {n} song(s)" for w in counted if (n := w["ends"].count("no fit"))]
+    if unfit:
+        notes.append(f"a search no video fitted ({', '.join(unfit)}): type “Artist - Title”, the artist first")
+    other = [f"{w['session']} {w['ends'].count(e)} {e}" for w in counted for e in ("unavailable", "pass_over")
+             if e in w["ends"]]
+    if other:
+        notes.append(f"songs YouTube has no download of, counted as none ({', '.join(other)})")
+    stops = [f"{w['session']} stopped: {w['stopped']}" for w in counted if w["stopped"] and not w["blocked"]]
+    notes += stops
+    note = "".join(f"; {n}" for n in notes)
 
-    def errors(w: dict[str, Any]) -> str:
-        # A run that failed with no block (the network's, a TLS handshake timed out) said as what it was.
-        return f" (its runs' errors, no block: {'; '.join(w['errors'])})" if w["errors"] else ""
-
-    for w in wifi:
-        # A block first: the bench stops a session at its first block, which leaves fewer songs.
-        if w["blocked"]:
-            failed.append(f"{w['session']}: blocked after {w['songs']} song(s) (songs ended {', '.join(w['ends'])})")
-            fail_days.add(w["day"])
-        elif w["stopped"] is not None and w["songs"] < W_SONGS:
-            short.append(f"{w['session']}: stopped after {w['songs']} song(s): {w['stopped']}{errors(w)}")
-        elif w["songs"] < W_SONGS:
-            short.append(f"{w['session']}: {w['songs']} song(s), not {W_SONGS}{errors(w)}")
-        elif all(e in SONG_ENDS_WELL or e == "no fit" for e in w["ends"]) and w["decoded"] >= W_WIFI_DECODED:
-            passed.append(w["session"])
-        else:
-            failed.append(f"{w['session']}: songs ended {', '.join(w['ends'])}, {w['decoded']} decoded{errors(w)}")
-            fail_days.add(w["day"])
-    if passed and not mobile:
-        return Verdict(None, numbers, f"Wi-Fi: {', '.join(passed)} passed, but {mobile_said}: §4.4's row is over both "
-                                      "sessions, Wi-Fi's and mobile data's")
-    if passed:
-        return Verdict(True, numbers, f"Wi-Fi: {', '.join(passed)} each song ended ok, pass_over or unavailable, none "
-                                      f"blocked, at least {W_WIFI_DECODED} decoded ({days_said}); {mobile_said}"
-                                      + (f"; and failed: {'; '.join(failed)}" if failed else ""))
-    if failed:
-        if len(fail_days) >= 2:
-            return Verdict(False, numbers, f"{'; '.join(failed + short)}: blocked or failing on Wi-Fi on two days: "
-                                           "§3.8's trigger (Y0.7) if the computer's yt-dlp worked on the same Wi-Fi "
-                                           f"the same hour, which no report says; {mobile_said}")
-        said = f"{'; '.join(failed + short)}: run again another day after any cooldown; {mobile_said}"
-        if all(w["blocked"] for w in wifi if w["day"] in fail_days):
-            # §4.4: "Not a trigger: … a single session's block (the session is run again another day after the
-            # cooldown, and Gate Y0 waits)".
-            return Verdict(None, numbers, f"Gate Y0 waits: {said}")
-        return Verdict(False, numbers, said)
-    return Verdict(None, numbers, f"{'; '.join(short)}: another day with {W_SONGS} songs; {mobile_said}")
+    bad = [w for w in counted if w["blocked"] or w["failing"]]
+    if bad:
+        said = "; ".join(f"{w['session']}: " + (f"blocked after {w['songs']} song(s)" if w["blocked"] else
+                                                 f"failing: {', '.join(w['failing'])}") for w in bad)
+        if len({w["day"] for w in bad}) >= 2:
+            return Verdict(False, numbers, f"{said}: blocked or failing on two days: §3.8's trigger (Y0.7) if the "
+                                           "computer's yt-dlp worked on the same network the same hour, which no "
+                                           f"report says{note}")
+        return Verdict(None, numbers, f"Gate Y0 waits: {said}: run again another day after any cooldown{note}")
+    ok = numbers["mobile_downloads_ok"]
+    if ok >= W_SONGS:
+        return Verdict(True, numbers, f"{ok} songs downloaded on mobile data with Start over {len(enforced)} "
+                                      f"session(s), none failing, none blocked{note}")
+    more = W_SONGS - ok
+    return Verdict(None, numbers, f"{ok} of {W_SONGS} songs downloaded on mobile data with Start: run {more} more "
+                                  f"on mobile data with Start, two or three songs in one session{note}")
 
 
 def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
     sessions = []
     for r in reports:
+        if lost_to_the_network(r):
+            continue
         downloads = [run for run in r["runs"] if run["kind"] == "download"]
         cold = next((run for run in downloads if run["cache"] == "cold" and run["outcome"] == "ok"), None)
         if cold is None:
@@ -455,7 +494,8 @@ def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
         })
     numbers = {"sessions": sessions}
     if not sessions:
-        return Verdict(None, numbers, "no session has a cold download that ended ok: another day")
+        return Verdict(None, numbers, "no cold download ended ok: run two or three songs in one session on mobile "
+                                      "data with Start")
     unread = [s["session"] for s in sessions if s["cold_challenge_s"] is None]
     if unread:
         return Verdict(None, numbers, f"{', '.join(unread)}: no JS challenge read in the cold download (yt-dlp's "
@@ -471,8 +511,9 @@ def _time(reports: Sequence[dict[str, Any]]) -> Verdict:
             if w > T_WARM_S:
                 over.append(f"{s['session']}: a warm download {w} s less sleeps > {T_WARM_S:g} s")
     if not over and not any(s["warm_s_less_sleeps"] for s in sessions):
-        return Verdict(None, numbers, "no warm download ended ok: each warm download <= "
-                                      f"{T_WARM_S:g} s is unmeasured: another day")
+        return Verdict(None, numbers, f"no warm download ended ok, so each warm download <= {T_WARM_S:g} s is "
+                                      "unmeasured: run two or three songs in one session (the second song's download "
+                                      "is the warm one)")
     if not over:
         warm_said = "each warm download"
         return Verdict(True, numbers, f"over {len(sessions)} session(s), each cold challenge <= "
@@ -540,12 +581,14 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                     outside[host] = outside.get(host, 0) + use["connects"] + use["refused"]
             if run["uid_bytes"] is None:
                 unmeasured.append(f"{_label(r)} run {i + 1}")
-            elif run["uid_bytes"] > H_UID_FACTOR * gate_bytes + H_UID_SLACK:
-                bytes_over.append(f"{_label(r)} run {i + 1}: uid {run['uid_bytes']} B > {H_UID_FACTOR:g} x gate "
-                                  f"{gate_bytes} B + {H_UID_SLACK} B")
+            elif run["uid_bytes"] > _uid_bound(gate_bytes):
+                bytes_over.append(f"{_label(r)} run {i + 1}: uid {run['uid_bytes']} B > {_uid_bound(gate_bytes)} B, "
+                                  f"{H_UID_LEGS} legs x (1 + {H_UID_HEADERS:g}) of the gate's {gate_bytes} B + "
+                                  f"{H_UID_SLACK} B")
     numbers = {"hosts": sorted(hosts), "outside_youtubes": outside, "refused_by_name_asked": sorted(by_name),
                "bytes": per_run, "idle": [r["idle"] for r in reports],
                "uid_over": bytes_over, "uid_unmeasured": unmeasured, "not_idle": not_idle,
+               "uid_counts": sorted({uid_counts(r) for r in reports}),
                "youtubei": youtubei(reports)}
     if not reports or not any(r["runs"] for r in reports):
         return Verdict(None, numbers, "no run")
@@ -562,7 +605,7 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
     if others:
         fails.append(f"hosts outside YouTube's: {', '.join(others)} (a flag or a client to change, or a stop)")
     if bytes_over:
-        fails.append("the uid's bytes past the gate's: " + "; ".join(bytes_over))
+        fails.append("the uid's bytes past the gate's three legs (a bypass of the gate?): " + "; ".join(bytes_over))
     if fails:
         return Verdict(False, numbers, "; ".join(fails))
     if YOUTUBEI in outside:
@@ -573,8 +616,17 @@ def _hosts(reports: Sequence[dict[str, Any]], gate: dict[str, Any]) -> Verdict:
                                       "another session with the app idle")
     if unmeasured:
         return Verdict(None, numbers, f"the uid's bytes unmeasured: {', '.join(unmeasured)}")
-    return Verdict(True, numbers, f"only YouTube's hosts, nothing refused by name asked for, each run's uid bytes <= "
-                                  f"{H_UID_FACTOR:g} x the gate's + {H_UID_SLACK} B, the app idle")
+    observed = sum(1 for r in reports if r["gate"] == "observe")
+    return Verdict(True, numbers, "only YouTube's hosts asked, nothing refused by name asked for, each run's uid bytes "
+                                  f"(loopback too) explained by the gate's: <= {H_UID_LEGS} legs x "
+                                  f"(1 + {H_UID_HEADERS:g}) + {H_UID_SLACK} B, the app idle"
+                                  + ("" if observed else "; no observed session: the enforcing gates' logs of every "
+                                                         "host asked and refused answer it"))
+
+
+def _uid_bound(gate_bytes: int) -> int:
+    """The most uid bytes a run's gate bytes explain (H_UID_LEGS' comment)."""
+    return round(H_UID_LEGS * (1 + H_UID_HEADERS) * gate_bytes) + H_UID_SLACK
 
 
 def _blocks(reports: Sequence[dict[str, Any]]) -> Verdict:
@@ -675,19 +727,25 @@ def _start(reports: Sequence[dict[str, Any]]) -> Verdict:
 
 
 def _sessions(reports: Sequence[dict[str, Any]]) -> Verdict:
-    """§4.4's "two sessions on two days": an observed Wi-Fi session and an enforced mobile-data one, on two UTC days
-    (the six runs of any 24 hours are the terms' own check)."""
-    observed = [r for r in reports if r["network"]["transport"] == "wifi" and r["gate"] == "observe"]
-    enforced = [r for r in reports if r["network"]["transport"] == "cellular" and r["gate"] == "enforce"]
-    numbers = {"observed_wifi": [_label(r) for r in observed], "enforced_mobile": [_label(r) for r in enforced]}
-    apart = any(_day(a) != _day(b) for a in observed for b in enforced)
-    if apart:
-        return Verdict(True, numbers, "an observed Wi-Fi session and an enforced mobile-data one, on two UTC days")
-    said = f"{len(observed)} observed on Wi-Fi, {len(enforced)} enforced on mobile data given"
-    if observed and enforced:
-        said += ", on one UTC day"
-    return Verdict(None, numbers, f"two sessions on two days: one observed on Wi-Fi, one enforced on mobile data: "
-                                  f"{said}")
+    """The sessions given and their days, reported (the controller's ruling of 2026-11-27: neither two days nor an
+    observed session is required); what the gate needs is one session on mobile data with Start the network didn't
+    lose."""
+    observed = [r for r in reports if r["gate"] == "observe"]
+    enforced = [r for r in reports if r["network"]["transport"] == "cellular" and r["gate"] == "enforce"
+                and not lost_to_the_network(r)]
+    lost = [r for r in reports if lost_to_the_network(r)]
+    days = sorted({_day(r) for r in reports})
+    numbers = {"observed": [_label(r) for r in observed], "enforced_mobile": [_label(r) for r in enforced],
+               "lost_to_the_network": [_label(r) for r in lost], "days": days}
+    said = (f"{len(reports)} session(s) on {len(days)} UTC day(s): {len(enforced)} on mobile data with Start, "
+            f"{len(observed)} observed, {len(lost)} lost to the network")
+    said += ("; " + ("no observed session: wanted, not needed (an enforcing gate logs every host asked and refused)"
+                     if not observed else "the observed ones' hosts judged in Y0-H"))
+    if len(days) < 2:
+        said += "; what one day can't show: what YouTube does after days of a phone asking"
+    if not enforced:
+        return Verdict(None, numbers, f"no session on mobile data with Start that reached YouTube: run one; {said}")
+    return Verdict(True, numbers, said)
 
 
 def gate(reports: Sequence[dict[str, Any]], *, apk_growth_mb: float | None = None) -> dict[str, Verdict]:

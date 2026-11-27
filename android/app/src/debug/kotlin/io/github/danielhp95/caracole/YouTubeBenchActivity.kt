@@ -207,7 +207,8 @@ class YouTubeBenchActivity : Activity() {
                 val probe = YouTubeBenchProbe(app)
                 val report = BenchReport.of(probe.device(), probe.network(), session.gate, session.mode.name,
                     utc(session.startedAt), session.idle, session.budgetBefore to session.budgetAfter,
-                    session.budgetOf, session.capLifted, session.runs, session.killCheck, session.firstStart, session.stopped)
+                    session.budgetOf, session.capLifted, session.runs, session.killCheck, session.firstStart,
+                    session.stopped)
                 val name = "caracole-ytbench-${utc(session.startedAt).replace(":", "")}.json"
                 val file = File(app.getExternalFilesDir(FOLDER), name)
                 file.writeText(PRETTY.encodeToString(JsonObject.serializer(), report) + "\n")

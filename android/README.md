@@ -1049,9 +1049,11 @@ bench sent nothing after one, not how YouTube treats the phone afterwards.
    no library page open: the report's `idle` says whether it was).
 2. **Open the bench**: Debug caracole › Settings › YouTube bench. It says how many runs the last 24 hours held (no
    daily limit while the feature is developed).
-3. **Type or paste up to three songs**, a line each: "Artist - Title" (AC/DC's slash is fine) or a YouTube video id.
-   Three songs are six runs. A session lost to the network (an error, no block) may be run again the same day: the
-   cap is lifted; a block still ends the day's sessions until its cooldown ends.
+3. **Type or paste up to three songs**, a line each: "Artist - Title", the artist first (AC/DC's slash is fine;
+   quotes around a line are taken off), or a YouTube video id. Three songs are six runs. A search no video fits says
+   the artist and the title it looked for, and the bench asks nothing more for that song. A session lost to the
+   network (an error, no block) may be run again the same day: the cap is lifted; a block still ends the day's
+   sessions until its cooldown ends.
 4. **Tap Start** on mobile data (enforce), or **Start, observing every host** on Wi-Fi. Keep the screen open until it
    says `report:`; a session started again while one runs is refused.
 5. **Bring the report back**: `caracole-ytbench-<UTC>.json` (§4.3 of the design: the device and the app, the pins as
@@ -1068,30 +1070,42 @@ bench sent nothing after one, not how YouTube treats the phone afterwards.
 
 ### The sessions of Gate Y0
 
-Two sessions, on two days, and only when you say so: no one else starts one, and none starts by adb.
+Sessions by hand, as many as you like, only when you say so: no one else starts one, and none starts by adb. What the
+gate needs now (the controller's ruling of 2026-11-27, after the owner chose several short sessions a day):
 
-- **Day 1, on Wi-Fi**: three songs, **Start, observing every host**.
-- **Day 2, on mobile data**: three songs, **Start** (enforce).
-- Every run counted, any session's (three songs are six), and the optional Termux smoke test's (Y0.0, the design's
-  §4.0) too, which the bench can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27,
-  above); a report written before it, which says no `lifted`, is still held to six in any 24 hours. A block ends the
-  day's session: the next one waits for its cooldown and another day.
+- **On mobile data, Start** (enforce): at least three songs downloaded over any sessions, and at least one warm
+  download, the second song's of a session: so run **two or three songs in one session**.
+- An observed session (**Start, observing every host**, Wi-Fi alone) is wanted, not needed: an enforcing gate logs
+  every host asked and every refusal. Enforcing on Wi-Fi is fine too. Two days aren't needed either: the days are
+  reported, and what one day can't show is what YouTube does after days of a phone asking.
+- A session the network lost (every run an error of a timeout's or a transport's, no block) counts for nothing: run it
+  again. A block, or a song failing for another reason, waits for another day after the cooldown; on two days it is
+  §3.8's trigger.
+- Every run counted, any session's, and the optional Termux smoke test's (Y0.0, the design's §4.0) too, which the bench
+  can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27, above); a report written
+  before it, which says no `lifted`, is still held to six in any 24 hours.
 - Each session by a tap on Start, the app otherwise idle (no sync, no library page open).
 
-Then pull the reports after each day (step 5, the same folder) and, from the repository's root, give the checker
-both:
+Then pull the reports (step 5, the same folder) and, from the repository's root, give the checker all of them:
 
     nix develop -c python -m tests.helpers.ytbench_gate [--apk-growth-mb N] ~/ytbench/caracole-ytbench-*.json
 
-It says whether the two sessions are there (one observed on Wi-Fi, one enforced on mobile data, on two days: without
-both the verdict is UNDECIDED), each row of §4.4 (Y0-W works … Y0-C start; a run's error said with its reason, a
-network's failure apart from a block) and the owner's terms (six runs in any 24 hours by the runs' own stamps for a
-report without `lifted`, the busiest 24 hours said where the cap was lifted, nothing after a block, each day's gate
-mode, a kill check that spent none, no host outside YouTube's reached, no proxy secret in a report): PASS, FAIL or UNDECIDED, the numbers and why, then how often an
+It says the sessions and days given, each row of §4.4 (Y0-W works … Y0-C start; a run's error said with its reason, a
+session lost to the network apart from a block) and the owner's terms (six runs in any 24 hours by the runs' own
+stamps for a report without `lifted`, the busiest 24 hours said where the cap was lifted, nothing after a block, no
+session observing every host but on Wi-Fi, a kill check that spent none, no host outside YouTube's reached, no proxy
+secret in a report): PASS, FAIL or UNDECIDED, the numbers and what is missing or what to run next, then how often an
 observed session asked `youtubei.googleapis.com` (the controller decides it), then the whole verdict. It exits 0 only
 when every gate passed, 1 for a fail, 2 for undecided or a report that won't read. Y0-S is no report's:
-`--apk-growth-mb` gives the release-equivalent arm64 APK's growth. Three songs show no rate: what they can't decide is
-UNDECIDED, and the answer is more days, never more runs a day.
+`--apk-growth-mb` gives the release-equivalent arm64 APK's growth.
+
+A run's `uid_bytes` are TrafficStats' bytes of the app's uid, loopback too (the report's `uid_counts`): yt-dlp's bytes
+to the gate on 127.0.0.1 are counted sent and received, and the gate's on the network once, so a run counts about 3.1
+times the gate's bytes (the phone's numbers; `YouTubeBenchTest` measures a loopback byte counted twice). Y0-H holds
+them to three legs of the gate's bytes, 8 % more for headers and retransmits, and 64 KB a run: a bypass of the gate
+would show as bytes the gate never saw, unless it stayed under about a sixth of the gate's bytes and 64 KB a run.
+
+Three songs show no rate: what they can't decide is UNDECIDED, and the answer is more songs and, in time, more days.
 
 ## YouTube's gate (not in the app yet)
 

@@ -205,7 +205,7 @@ class BenchRun(
 
     /** The songs [queries] stand for under [mode], or [Refused] in words. */
     fun plan(queries: List<String>, observe: Boolean): List<Song> {
-        val lines = queries.map { it.trim() }.filter { it.isNotEmpty() }
+        val lines = queries.map(::unquoted).filter { it.isNotEmpty() }
         if (lines.isEmpty()) throw Refused(NO_QUERY)
         if (lines.size > MOST_QUERIES) throw Refused(TOO_MANY)
         val loopback = gates.mode == HostGate.Mode.LOOPBACK
@@ -272,7 +272,9 @@ class BenchRun(
                     }
                     val video = Choose.choose(song.names!!, videos, null)
                     if (video == null) {
-                        say("no video of the search fits “${song.typed}”")
+                        val words = noFitWords(song.names.artist, song.names.title)
+                        runs[runs.lastIndex] = runs.last().copy(reason = words)
+                        say("no video of the search fits “${song.typed}”: $words")
                         continue@loop
                     }
                     download = video.url
@@ -294,8 +296,9 @@ class BenchRun(
             "python_ready_ms" to JsonPrimitive(first?.pythonReadyMs ?: -1),
         ))
         return Session(start, if (observe) OBSERVE else ENFORCE, gates.mode, runs, before.runs, after.runs,
-                       before.budget, before.capLifted, BenchIdle(before.served, after.served, before.jobs, after.jobs, before.running,
-                                                after.running), kill, firstStart, stopped)
+                       before.budget, before.capLifted,
+                       BenchIdle(before.served, after.served, before.jobs, after.jobs, before.running, after.running),
+                       kill, firstStart, stopped)
     }
 
     /** One run: reserved first (refused: no record, the words its stop), paused, run through a fresh gate, its gate's
@@ -554,6 +557,24 @@ class BenchRun(
         fun notLoopback(q: String) = "“$q” isn't a loopback address: under the tests' network the bench asks " +
             "loopback alone (127.0.0.1, 10.0.2.2), so no run is made."
 
+        /** Why a search's song got no download: the names it was read as, and how the bench reads a line (the owner may
+         * have typed the title first). No second search follows: a run is a run. */
+        fun noFitWords(artist: String, title: String) =
+            "no video of the search fits the artist “$artist” and the title “$title”: the bench reads a line as " +
+                "“Artist - Title” (the artist first), so no download was made"
+
+        private val QUOTES = listOf("\"" to "\"", "'" to "'", "“" to "”", "‘" to "’", "«" to "»")
+
+        /** [line] less its spaces and the quotes around it ("“A - T”", `"A - T"`). */
+        fun unquoted(line: String): String {
+            var q = line.trim()
+            while (true) {
+                val pair = QUOTES.firstOrNull { (open, close) -> q.length >= 2 && q.startsWith(open) && q.endsWith(close) }
+                    ?: return q
+                q = q.substring(pair.first.length, q.length - pair.second.length).trim()
+            }
+        }
+
         fun notAQuery(q: String) = "“$q” isn't a query: “Artist - Title” or a YouTube video id."
 
         /** The day's runs in words, the screen's and a session's first line: those left of the budget, or, the cap
@@ -614,7 +635,8 @@ object DbLedger {
      * is patchy". No count of runs refuses a session or a reservation; every run is still reserved before its gate
      * opens, counted ([runs]) and reported (the report's `budget`: `before`, `after`, `of` and `lifted`). Everything
      * else holds: the pause, one run and one session at a time, a block and its cooldown, no retry, the provider's
-     * switch, the gate's hosts, three songs a session, the kill check. `false` puts the cap back.
+     * switch, the gate's hosts, three songs a session, the kill check. `false` puts the cap back, with two tests that
+     * assert it lifted (BenchReportTest's and YouTubeBenchTest's, which then assert it back).
      */
     const val DAY_CAP_LIFTED = true
     private const val PROVIDER = "youtube"

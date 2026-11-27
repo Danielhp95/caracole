@@ -174,6 +174,32 @@ class YouTubeBenchTest {
         assertFalse("Python is loaded in :ytbench", "libpython" in maps || "libchaquopy" in maps)
     }
 
+    /** What the bench's `uid_bytes` counts (BenchReport.UID_COUNTS_LOOPBACK): TrafficStats' bytes of the app's uid count
+     * a byte sent from this uid to itself on 127.0.0.1 twice, once sent and once received, as yt-dlp's bytes to the
+     * gate are. The numbers are said in `am instrument`'s output. */
+    @Test
+    fun theUidsBytesCountEachLoopbackByteTwice() {
+        val size = 4 * 1024 * 1024
+        val uid = Process.myUid()
+        fun uidBytes(): Long = android.net.TrafficStats.getUidRxBytes(uid) + android.net.TrafficStats.getUidTxBytes(uid)
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1")).use { server ->
+            Thread.sleep(1_500)
+            val before = uidBytes()
+            val reader = Thread {
+                server.accept().use { s -> s.getInputStream().readBytes() }
+            }.apply { start() }
+            java.net.Socket("127.0.0.1", server.localPort).use { c -> c.getOutputStream().write(ByteArray(size)) }
+            reader.join(30_000)
+            Thread.sleep(1_500) // TrafficStats' own cache of a uid's counts
+            val counted = uidBytes() - before
+            val ratio = counted.toDouble() / size
+            instrumentation.sendStatus(0, android.os.Bundle().apply {
+                putString("stream", "loopback: $size B sent to itself, the uid counted $counted B ($ratio x)\n")
+            })
+            assertTrue("the uid counted $counted B for $size B on loopback ($ratio x)", ratio in 1.9..2.3)
+        }
+    }
+
     /** The day's cap lifted (DbLedger.DAY_CAP_LIFTED, the owner's word of 2026-11-27): with seven runs of the phone's
      * already in the last 24 hours, a session still goes, its runs counted and its report saying the cap lifted. */
     @Test

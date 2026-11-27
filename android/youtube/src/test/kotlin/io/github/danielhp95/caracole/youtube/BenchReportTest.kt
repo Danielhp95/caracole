@@ -148,7 +148,7 @@ class BenchReportTest {
         fun search(song: String, at: String, seconds: Double, python: Long) = BenchRunRecord(
             song, "search", null, at, 95, python, seconds, if (python > 2_000) 0.0 else 4.25,
             header + listOf(Stamped(900, "[youtube:search] Extracting URL: ytsearch8:$song")), "ok", null,
-            mapOf("www.youtube.com" to use(2, 4_100, 310_000)), 321_000, mapOf("youtube" to 141.5))
+            mapOf("www.youtube.com" to use(2, 4_100, 310_000)), 976_000, mapOf("youtube" to 141.5))
         fun download(song: String, cache: String, at: String, seconds: Double, challenge: Boolean, frames: Long,
                      duration: Double) = BenchRunRecord(
             song, "download", cache, at, 90, 780, seconds, 5.5,
@@ -162,7 +162,7 @@ class BenchReportTest {
             "ok", null,
             mapOf("www.youtube.com" to use(1, 2_000, 1_350_000),
                   "rr3---sn-5hne6nzk.googlevideo.com" to use(3, 9_800, 3_890_000)),
-            5_400_000, mapOf("youtube" to 236.0, "qjs" to 88.5),
+            16_280_000, mapOf("youtube" to 236.0, "qjs" to 88.5),
             JsonObject(linkedMapOf("ext" to JsonPrimitive("m4a"), "bytes" to JsonPrimitive(3_880_120),
                                    "duration" to JsonPrimitive(duration))),
             JsonObject(linkedMapOf("mime" to JsonPrimitive("audio/mp4a-latm"), "rate" to JsonPrimitive(44_100),
@@ -219,6 +219,8 @@ class BenchReportTest {
                                        Draws { low, _ -> low })
     private val opened = mutableListOf<String>()
     private var stderr: (List<String>) -> String = { "" }
+    /** A search's stdout in place of the fake's own (a video that fits the line's names), a test at a time. */
+    private var searchAnswer: String? = null
     private var exit = 0
     private val ran = mutableListOf<List<String>>()
 
@@ -253,7 +255,7 @@ class BenchReportTest {
 
     private fun events(): Long = db.read { d -> d.one("SELECT COUNT(*) FROM events WHERE provider = 'youtube'") { it.long(0) }!! }
 
-    private fun bench(mode: HostGate.Mode = HostGate.Mode.NETWORK): BenchRun {
+    private fun bench(mode: HostGate.Mode = HostGate.Mode.NETWORK, said: MutableList<String>? = null): BenchRun {
         val runner = object : BenchRun.Runner {
             override fun run(argv: List<String>, folders: RunFolders, timeoutS: Double, verbose: Boolean): BenchRan {
                 ran += argv
@@ -265,7 +267,8 @@ class BenchReportTest {
                 // A search finds the song it asked for: its title and its artist's channel.
                 val parts = argv.last().substringAfter(":").split(" - ")
                 val (artist, title) = parts.first() to parts.last()
-                val out = if (search) """{"entries": [{"id": "aaaaaaaaaaa", "title": "$title", "channel": "$artist", "duration": 200}]}"""
+                val out = if (search) searchAnswer
+                    ?: """{"entries": [{"id": "aaaaaaaaaaa", "title": "$title", "channel": "$artist", "duration": 200}]}"""
                           else ""
                 return BenchRan(Ran(exit, out, stderr(argv), false, false, 100, 900), stderr(argv).lines()
                     .filter { it.isNotEmpty() }.map { Stamped(1, it) })
@@ -314,7 +317,8 @@ class BenchReportTest {
             override fun pythonExtracted() = true
             override fun leftover() = emptyList<String>()
         }
-        return BenchRun(runner, killRunner, gates, ledger, probe, clock, BenchRun.Folders(File(dir, "bench")), "/qjs")
+        return BenchRun(runner, killRunner, gates, ledger, probe, clock, BenchRun.Folders(File(dir, "bench")), "/qjs",
+                        { said?.add(it) })
     }
 
     /** [n] runs of provider youtube in `events`, as a product job would have sent them, [ago] before now. */
@@ -594,5 +598,55 @@ class BenchReportTest {
         assertEquals(JsonObject(mapOf("before" to JsonPrimitive(8), "after" to JsonPrimitive(9),
                                       "of" to JsonPrimitive(6), "lifted" to JsonPrimitive(true))), budget(true))
         assertEquals(JsonPrimitive(false), budget(false)["lifted"])
+    }
+
+    // -- what a report says of its counter, and a line as the owner types it -------------------------------------
+
+    @Test
+    fun `a report says its uid counter counts loopback too`() {
+        val report = report(listOf(run()))
+        assertEquals(JsonPrimitive(BenchReport.UID_COUNTS_LOOPBACK), report["uid_counts"])
+        assertEquals("loopback too", BenchReport.UID_COUNTS_LOOPBACK)
+    }
+
+    @Test
+    fun `a line's surrounding quotes and spaces go before it is read`() {
+        val songs = bench().plan(listOf("  \"blow your trumpet - Ezra collective\" ", "“A - T”", "'aaaaaaaaaaa'"), false)
+        assertEquals(listOf("blow your trumpet - Ezra collective", "A - T", "aaaaaaaaaaa"), songs.map { it.typed })
+        assertEquals("blow your trumpet", songs[0].names!!.artist)
+        assertEquals("Ezra collective", songs[0].names!!.title)
+        assertEquals(null, songs[2].search)
+    }
+
+    private val trumpet = """{"entries": [{"id": "bbbbbbbbbbb", """ +
+        """"title": "Ezra Collective - Blow Your Trumpet (Official Video)", """ +
+        """"channel": "Ezra Collective", "duration": 245}]}"""
+
+    /** The owner's line of 2026-11-27, title first and in double quotes: asked without its quotes (a quoted query is
+     * YouTube's exact phrase), it is read, chosen and downloaded as any line. */
+    @Test
+    fun `a quoted line is searched without its quotes and goes on to its download`() {
+        searchAnswer = trumpet
+        val s = bench().session(listOf("\"blow your trumpet - Ezra collective\""), false)
+        assertEquals(YouTubeData.read().searchTarget("blow your trumpet - Ezra collective"), ran[0].last())
+        assertEquals(listOf("search", "download"), s.runs.map { it.kind })
+        assertEquals(YouTubeData.read().watchUrl("bbbbbbbbbbb"), ran[1].last())
+    }
+
+    @Test
+    fun `a search no video fits says the artist and title it looked for, and asks nothing more`() {
+        searchAnswer = """{"entries": [{"id": "bbbbbbbbbbb", "title": "Someone Else - Another Song", """ +
+            """"channel": "Someone Else", "duration": 245}]}"""
+        val said = mutableListOf<String>()
+        val s = bench(said = said).session(listOf("\"blow your trumpet - Ezra collective\""), false)
+        assertEquals(1, ran.size, "no second search and no download")
+        val search = s.runs.single()
+        assertEquals("ok", search.outcome)
+        val words = BenchRun.noFitWords("blow your trumpet", "Ezra collective")
+        assertEquals(words, search.reason)
+        assertTrue("the artist “blow your trumpet” and the title “Ezra collective”" in words, words)
+        assertTrue("“Artist - Title”" in words, words)
+        assertTrue(said.any { words in it }, said.toString())
+        assertTrue(BenchReport.said(report(s.runs)).any { words in it })
     }
 }

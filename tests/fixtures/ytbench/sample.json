@@ -35,6 +35,7 @@
         "of": 6,
         "lifted": true
     },
+    "uid_counts": "loopback too",
     "runs": [
         {
             "song": "Sample Artist - First Song",
@@ -61,7 +62,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 321000,
+            "uid_bytes": 976000,
             "pss_peak_mb": {
                 "youtube": 141.5
             },
@@ -107,7 +108,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 5400000,
+            "uid_bytes": 16280000,
             "pss_peak_mb": {
                 "youtube": 236.0,
                 "qjs": 88.5
@@ -149,7 +150,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 321000,
+            "uid_bytes": 976000,
             "pss_peak_mb": {
                 "youtube": 141.5
             },
@@ -192,7 +193,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 5400000,
+            "uid_bytes": 16280000,
             "pss_peak_mb": {
                 "youtube": 236.0,
                 "qjs": 88.5
@@ -234,7 +235,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 321000,
+            "uid_bytes": 976000,
             "pss_peak_mb": {
                 "youtube": 141.5
             },
@@ -277,7 +278,7 @@
                     "apart": false
                 }
             },
-            "uid_bytes": 5400000,
+            "uid_bytes": 16280000,
             "pss_peak_mb": {
                 "youtube": 236.0,
                 "qjs": 88.5
@@ -338,27 +339,27 @@
             "refused_by_name_asked": [],
             "bytes": [
                 {
-                    "uid": 321000,
+                    "uid": 976000,
                     "gate": 314100
                 },
                 {
-                    "uid": 5400000,
+                    "uid": 16280000,
                     "gate": 5251800
                 },
                 {
-                    "uid": 321000,
+                    "uid": 976000,
                     "gate": 314100
                 },
                 {
-                    "uid": 5400000,
+                    "uid": 16280000,
                     "gate": 5251800
                 },
                 {
-                    "uid": 321000,
+                    "uid": 976000,
                     "gate": 314100
                 },
                 {
-                    "uid": 5400000,
+                    "uid": 16280000,
                     "gate": 5251800
                 }
             ],

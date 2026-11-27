@@ -2893,10 +2893,15 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
     the gate's `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService
     `OPEN_LOOPBACK`: LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the
-    day's runs spent; its report (its `budget`'s `lifted` the switch's, which ytbench_gate.py reads: a report without
-    it held to six in any 24 hours) `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest), Gate Y0's verdict of the
-    owner's reports `python -m tests.helpers.ytbench_gate` (test_ytbench_gate.py; its one shape
-    tests/fixtures/ytbench/sample.json, which BenchReportTest holds to `BenchReport.of`); an observing gate only for an
+    day's runs spent; a line read less its quotes (`BenchRun.unquoted`), a search no video fits said with the artist
+    and title it looked for (`noFitWords`), no second search; its report `BenchReport.of`/`summary` (BenchReportTest,
+    YouTubeBenchTest: its `budget`'s `lifted` the switch's, a report without it held to six in any 24 hours; its
+    `uid_counts` "loopback too", TrafficStats' uid bytes counting yt-dlp's loopback legs to the gate twice and the
+    gate's network leg once, about 3.1 x the gate's bytes), Gate Y0's verdict of the owner's reports `python -m
+    tests.helpers.ytbench_gate` (test_ytbench_gate.py: the controller's ruling of 2026-11-27, three songs on mobile data
+    with Start and a warm download, no observed session or second day needed, a session lost to the network counted
+    for nothing, the uid's bytes explained by the gate's three legs; its one shape tests/fixtures/ytbench/sample.json,
+    which BenchReportTest holds to `BenchReport.of`); an observing gate only for an
     ask naming `:ytbench` and never under loopback (GateService
     `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
     request's `verbose` leave.
