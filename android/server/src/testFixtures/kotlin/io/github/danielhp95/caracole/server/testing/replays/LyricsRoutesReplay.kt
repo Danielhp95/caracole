@@ -27,7 +27,11 @@ import io.github.danielhp95.caracole.server.testing.bytes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.serialization.json.Json
+import io.github.danielhp95.caracole.server.jobs.JobCommands
+import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -82,8 +86,9 @@ object LyricsRoutesReplay {
         val (method, path) = fn.split(' ', limit = 2)
         val route: Route = routes.routes.firstOrNull { it.method == method && it.path == path }
             ?: return misses.check(false) { "$case: no route of the phone's" }
+        val accept = if (r["json"] == JsonPrimitive(false)) emptyMap() else mapOf("accept" to "application/json")
         fun post(form: JsonObject): Response = route.post!!.answer(
-            TestApp.request("POST", path, mapOf("accept" to "application/json"), ByteArray(0), TestApp.SECRET),
+            TestApp.request("POST", path, accept, ByteArray(0), TestApp.SECRET),
             mapOf("csrf" to "tok") + form.mapValues { it.value.jsonPrimitive.content })
         val out = r.getValue("out").jsonObject
         val answer: Response = try {
@@ -94,6 +99,17 @@ object LyricsRoutesReplay {
                 route.get!!.answer(TestApp.request("GET", "$path?$query", mapOf("accept" to "application/json"),
                                                    ByteArray(0), TestApp.SECRET))
             } else {
+                for (typed in r["raw_queued"]?.jsonArray.orEmpty()) {  // a search queued under a name of none now
+                    val song = database.read { db ->
+                        db.one("SELECT key, artist, title FROM songs WHERE title LIKE 'Vikingos%'") {
+                            Triple(it.text(0)!!, it.text(1)!!, it.text(2)!!)
+                        }!!
+                    }
+                    val display = "${song.second} - ${song.third}"
+                    queue.submit(LookupForms.spec("Lyrics", JobCommands.LYRICS_SEARCH + song.first,
+                                                  JobCommands.lyricsSearchSteps(display, typed.jsonPrimitive.content),
+                                                  display = display))
+                }
                 for (earlier in r["queued"]?.jsonArray.orEmpty()) post(earlier.jsonObject)
                 post(r.getValue("form").jsonObject)
             }
@@ -112,6 +128,11 @@ object LyricsRoutesReplay {
         out["body"]?.let { want ->
             val body = Json.parseToJsonElement(answer.bytes.toString(Charsets.UTF_8))
             WebJson.difference(want, body)?.let { misses.check(false) { "$case: its answer at $it" } }
+            out["order"]?.let { o -> misses.check(order(body) == o) { "$case: its members in the order ${order(body)}" } }
+        }
+        out["data"]?.let { want ->
+            val data = answer.data ?: return@let misses.check(false) { "$case: no answer for the page's script" }
+            WebJson.difference(want, data)?.let { misses.check(false) { "$case: its job's view at $it" } }
         }
         out["location"]?.let { want ->
             val location = answer.headers.firstOrNull { it.first.equals("location", ignoreCase = true) }?.second
@@ -128,6 +149,13 @@ object LyricsRoutesReplay {
             "title" to JsonPrimitive(job.spec.title),
         ))
         WebJson.difference(python, phone)?.let { misses.check(false) { "$case: its job at $it: $phone" } }
+    }
+
+    /** test_conformance_lyrics_routes.order: an object's `[[key, order], …]`, a list's each element's, else null. */
+    private fun order(v: JsonElement): JsonElement = when (v) {
+        is JsonObject -> JsonArray(v.map { (k, e) -> JsonArray(listOf(JsonPrimitive(k), order(e))) })
+        is JsonArray -> JsonArray(v.map(::order))
+        else -> JsonNull
     }
 
     /** The phone's parts over [database]: its settings the database's (kv `phone:settings`), its cards its own. */

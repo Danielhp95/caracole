@@ -36,7 +36,7 @@ import pytest
 from helpers.corpus import VECTORS, check, fixture_ref, jsonl
 from helpers.scenario import LEAVES_OUT, record_lookup
 from test_conformance_lookup_scenarios import NOW, STAMP, Heard, World, clock
-from test_conformance_lyrics_search import NAME, POMME, POMME_PAGE, _cached, answered, lrc, mz, sites
+from test_conformance_lyrics_search import NAME, POMME, POMME_PAGE, SONG, _cached, answered, lrc, mz, sites
 
 MADE_BY = "tests/test_conformance_lyrics_pick.py"
 # What the phone never writes, beside LEAVES_OUT's: the to-do page's record of an auto-chords pass.
@@ -188,6 +188,32 @@ def site_sheet(w: World, song_id: int) -> None:
         w.conn.execute("UPDATE files SET created_at = ?", (STAMP,))
 
 
+def clear(w: World, case: str, display: str) -> dict[str, Any]:
+    """``caracole lyrics --song DISPLAY --clear`` at ``NOW`` (commands/lyrics.py ``_lyrics_clear``), recorded:
+    ``out.result`` ``{"lines", "exit", "error"}``, its line, its exit status and its error's words (``fail``'s)."""
+    import typer
+
+    from caracole.commands import _common
+    from caracole.commands import lyrics as cmd
+
+    def call() -> dict[str, Any]:
+        lines: list[str] = []
+        errors: list[str] = []
+        code = 0
+        with mock.patch.object(cmd, "exclusive", lambda *a, **k: nullcontext()), \
+                mock.patch("typer.echo", lines.append), \
+                mock.patch.object(_common.logs, "say", lambda level, message: errors.append(message)), \
+                mock.patch("caracole.library.write_info", lambda *a, **k: None):
+            try:
+                cmd._lyrics_clear(w.cfg, display)
+            except typer.Exit as e:
+                code = e.exit_code
+        return {"result": {"lines": lines, "exit": code, "error": errors[-1] if errors else None}, "progress": []}
+
+    return record_lookup(w.cfg, fn="caracole.commands.lyrics._lyrics_clear", call=call, answers={}, now=NOW, case=case,
+                         kw={"song": display}, leaves_out=LEAVES, settle=w.settled(NOW))
+
+
 def megalobiz_record() -> dict[str, Any]:
     from helpers.megalobiz_site import record
 
@@ -284,6 +310,55 @@ def records(tmp: Path) -> list[dict[str, Any]]:
     cache = _searched(w, NAME, NAME, listing)
     made.append(pick(w, "a pick over a site's sheet: no auto sheet to make", NAME, "lrclib:77", {}, cache))
 
+    # --clear
+    from caracole.overrides import set_lyrics_record
+
+    video = f"{SONG[0]} - {SONG[1]}"
+    w = World(tmp, "clear-lrclib")
+    w.song(*SONG, duration_ms=200000, lyrics_status="missing")
+    cache = _searched(w, video, NAME, listing)
+    pick(w, "", video, "lrclib:77", {}, cache)
+    made.append(clear(w, "--clear of LRCLIB's record that gave the lyrics: they go, its as kept and said", video))
+
+    w = World(tmp, "clear-megalobiz")
+    song_id = w.song("Nick Cani", "Vikingos veganos", duration_ms=200000, lyrics_status="missing")
+    cache = _searched(w, NAME, NAME, listing)
+    _heard_sheet(w, song_id)
+    raw = json.loads(w.conn.execute("SELECT raw FROM versions WHERE provider = 'auto'").fetchone()[0])
+    w.conn.execute("UPDATE versions SET raw = ? WHERE provider = 'auto'",
+                   (json.dumps({k: v for k, v in raw.items() if k != "heard"}, ensure_ascii=False),))
+    pick(w, "", NAME, "megalobiz:5001", {f"GET {lrc_url}": megalobiz_record()}, cache)
+    w.conn.execute("UPDATE songs SET autochords_mtime = 1.0, audio_mtime = 1.0 WHERE id = ?", (song_id,))
+    made.append(clear(w, "--clear of Megalobiz's record that gave the lyrics over a sheet of no heard: made due", NAME))
+
+    w = World(tmp, "clear-azlyrics")
+    w.song("Pomme", "Mononoké", duration_ms=None, lyrics_status="missing")
+    cache = _searched(w, "Pomme - Mononoké", "Pomme - Mononoke", sites(pages={POMME_PAGE: POMME}))
+    pick(w, "", "Pomme - Mononoké", "azlyrics:pomme/mononoke",
+         {f"GET {POMME_SONG}": {"status": 200, "headers": HTML, "body": fixture_ref("azlyrics/lyrics_mononoke.html")}},
+         cache)
+    made.append(clear(w, "--clear of AZLyrics' page that gave the lyrics", "Pomme - Mononoké"))
+
+    w = World(tmp, "clear-elsewhere")
+    w.song("Nick Cani", "Vikingos veganos", duration_ms=200000, lyrics_status="missing")
+    cache = _searched(w, NAME, NAME, listing)
+    pick(w, "", NAME, "megalobiz:5001", {f"GET {lrc_url}": megalobiz_record()}, cache)
+    w.overrides(lambda path: set_lyrics_record(path, NAME, "lrclib:77"))
+    made.append(clear(w, "--clear of a record whose lyrics came from elsewhere: they stay", NAME))
+
+    w = World(tmp, "clear-none")
+    w.song("Nick Cani", "Vikingos veganos", duration_ms=200000, lyrics_status="missing")
+    made.append(clear(w, "--clear of a song with no record picked: exit 1", NAME))
+
+    w = World(tmp, "clear-stuck")
+    w.song("Nick Cani", "Vikingos veganos", duration_ms=200000, lyrics_status="missing")
+    cache = _searched(w, NAME, NAME, listing)
+    pick(w, "", NAME, "lrclib:77", {}, cache)
+    folder = w.cfg.library_dir / "Nick Cani" / "Vikingos veganos"
+    (folder / "lyrics.lrc").unlink()
+    (folder / "lyrics.lrc").mkdir()
+    (folder / "lyrics.lrc" / "x").write_text("x", encoding="utf-8")
+    made.append(clear(w, "--clear with a lyric file that can't be removed: said, the clear standing", NAME))
     return made
 
 

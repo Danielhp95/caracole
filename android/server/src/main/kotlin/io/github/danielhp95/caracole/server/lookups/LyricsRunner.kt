@@ -82,6 +82,11 @@ class LyricsRunner(
     /** commands/lyrics.py's `_lyrics_clear`: the record picked taken out (LyricsPickCommands.clearPick), with no
      * request; then the song's pages; exit 1 for a song with no record picked. */
     private fun clear(display: String, context: JobContext) {
+        try {
+            OverrideUrls.overrideKey(display)
+        } catch (e: OverridesError) {
+            throw CommandExit(2, e.message.orEmpty())
+        }
         val said = parts.database.writeBlocking { db ->
             val overrides = LookupJobs.overrides(db)
             val song = LookupJobs.songNamed(parts, db, display, overrides)

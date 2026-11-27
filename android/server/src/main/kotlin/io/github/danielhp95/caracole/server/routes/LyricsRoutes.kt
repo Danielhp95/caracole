@@ -22,6 +22,7 @@ import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.Status
@@ -166,8 +167,8 @@ class LyricsRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
         val record = overrides.lyrics[OverrideUrls.overrideKey(song.display)]?.record ?: return null
         if (song.lyricsStatus !in setOf("pending", "missing")) return null
         val said = "${record.site} ${record.id}"
-        return if (song.lyricsStatus == "missing") PICKED_NONE.replace("{record}", said)
-               else PICKED_UNREAD.replace("{record}", said)
+        val words = if (song.lyricsStatus == "missing") "picked_none" else "picked_unread"
+        return AudioRunner.Words.text(words).replace("{record}", said)
     }
 
     /** lyrics_routes._picked_note. */
@@ -251,8 +252,5 @@ class LyricsRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
         const val WHICH_NAME = "Which name? An artist and a title, 1 to $NAME_MOST characters each."
         const val SEARCH_AGAIN = "Search again: that record isn't among its last search's, or the search is over a week old."
 
-        /** transcript.PICKED_NONE and PICKED_UNREAD. */
-        const val PICKED_NONE = "the record you picked ({record}) has given no lyrics: pick another, or clear the pick"
-        const val PICKED_UNREAD = "the record you picked isn't read yet ({record}): tonight's run or a lookup reads it"
     }
 }

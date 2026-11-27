@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -109,6 +110,7 @@ class LyricsRunnerTest {
     private val root: File = File(System.getProperty("caracole.conformance")).parentFile.parentFile.parentFile
 
     private val picking = LookupScenariosReplay.Run { w ->
+        if (w.fn == "caracole.commands.lyrics._lyrics_clear") return@Run clearing(w)
         val display = w.kw.getValue("song").jsonPrimitive.content
         val record = w.kw["record"]?.takeIf { it != JsonNull }?.jsonPrimitive?.content
         val row = w.kw["pick"]?.takeIf { it != JsonNull }?.jsonPrimitive?.content
@@ -153,6 +155,30 @@ class LyricsRunnerTest {
                 "files" to JsonObject(told.files.mapValues { JsonPrimitive(it.value) }),
                 "exit" to JsonPrimitive(exit),
             )))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /** `caracole lyrics --song --clear` as the phone runs it: its line, its exit and its error's words. */
+    private fun clearing(w: LookupScenariosReplay.World): LookupScenariosReplay.Ran {
+        val display = w.kw.getValue("song").jsonPrimitive.content
+        val scope = CoroutineScope(SupervisorJob())
+        try {
+            val state = File(w.cacheDir.parentFile, "state").apply { mkdirs() }
+            val parts = PhoneParts(w.database, w.store, state, { w.config }, JobQueue(scope), MirrorPageData(null),
+                                   { w.clients() }, SongPages.NONE, SongbookPages.NONE, Alerts.NONE, w.pacing,
+                                   searchesLacuerda = false)
+            val told = Told(w.progress)
+            val (exit, error) = try {
+                runBlocking { LyricsRunner(parts).run(listOf("lyrics", "--song=$display", "--clear"), told) }
+                0 to null
+            } catch (e: CommandExit) {
+                e.code to e.message
+            }
+            return LookupScenariosReplay.Ran(JsonObject(mapOf(
+                "lines" to JsonArray(told.said.map(::JsonPrimitive)), "exit" to JsonPrimitive(exit),
+                "error" to (error?.let(::JsonPrimitive) ?: JsonNull))))
         } finally {
             scope.cancel()
         }
@@ -213,6 +239,55 @@ class LyricsRunnerTest {
                        ended!!.detail.endsWith("; nothing kept"), ended!!.detail)
         assertTrue(files.none { it.startsWith("lyrics.") }, "$files")
         assertEquals("missing", status)
+    }
+
+    /** A clear's lyric file that is a dangling link is removed, as `unlink(missing_ok=True)` removes one. */
+    @Test fun aClearRemovesALyricFileThatIsADanglingLink() {
+        val case = records.map { it.getValue("case").jsonPrimitive.content }.first { it.startsWith("--clear of LRCLIB") }
+        var link: java.nio.file.Path? = null
+        var told: JsonObject? = null
+        LookupScenariosReplay.replay(PICKS, Misses("a dangling link"), { w ->
+            val txt = w.store.libraryDir.walkTopDown().first { it.name == "lyrics.txt" }.toPath()
+            java.nio.file.Files.delete(txt)
+            java.nio.file.Files.createSymbolicLink(txt, txt.resolveSibling("nowhere"))
+            link = txt
+            clearing(w).also { told = it.result }
+        }, only = setOf(case))
+        assertEquals(JsonPrimitive(0), told!!["exit"])
+        assertTrue(!java.nio.file.Files.exists(link!!, java.nio.file.LinkOption.NOFOLLOW_LINKS), "$link")
+        assertTrue("couldn't be removed" !in told.toString(), "$told")
+    }
+
+    /** A phone whose chord models aren't downloaded skips a pick's chords in lyrics_pick.py's PHONE_NOT_DOWNLOADED
+     * (audio_sheet.json's words), the "isn't here" record's world with the models' problem the download's. */
+    @Test fun aPhoneWithoutTheChordModelsSaysWhereToDownloadThem() {
+        val case = records.map { it.getValue("case").jsonPrimitive.content }.first { it.startsWith("a song of its own audio and no sheet") }
+        var told: JsonObject? = null
+        LookupScenariosReplay.replay(PICKS, Misses("not downloaded"), { w ->
+            val display = w.kw.getValue("song").jsonPrimitive.content
+            val scope = CoroutineScope(SupervisorJob())
+            val path = w.database.read { db -> db.one("SELECT audio_path FROM songs") { it.text(0) }!! }
+            w.database.writeBlocking { db -> db.execute("UPDATE songs SET audio_path = ?", File(root, path).path) }
+            try {
+                val state = File(w.cacheDir.parentFile, "state").apply { mkdirs() }
+                val parts = PhoneParts(w.database, w.store, state, { w.config }, JobQueue(scope), MirrorPageData(null),
+                                       { w.clients() }, SongPages.NONE, SongbookPages.NONE, Alerts.NONE, w.pacing,
+                                       searchesLacuerda = false)
+                val t = Told(w.progress)
+                runBlocking {
+                    LyricsRunner(parts, chords = noModel, problem = { AudioRunner.NOT_DOWNLOADED })
+                        .run(JobCommands.lyricsPickSteps(display, "lrclib:77").single().args, t)
+                }
+                told = JsonObject(t.details)
+            } finally {
+                scope.cancel()
+            }
+            LookupScenariosReplay.Ran(JsonObject(emptyMap()))
+        }, only = setOf(case))
+        val data = Json.parseToJsonElement(File(System.getProperty("caracole.conformance")).parentFile
+            .resolve("data/caracole/library/audio_sheet.json").readText()).jsonObject.getValue("words").jsonObject
+        assertEquals(data.getValue("phone_not_downloaded"), told!!["chords"])
+        assertEquals(0, heardTimes)
     }
 
     @Test fun aStrayPickIsTold() {

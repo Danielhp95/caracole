@@ -3415,7 +3415,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   run makes it later); the record noted in the lyrics' savepoint, a failure to note it putting the files back; pdf and
   pages PhoneRender's, which write info.json, so a picked record's `lyrics_from` follows at the pdf stage (a song with
   no sheet: at its next render). tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
-  `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request), then the song's pages.
+  `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request; a lyric file that can't be
+  removed said in Python's `strerror`, a dangling link removed), then the song's pages; lyrics_pick.jsonl holds its
+  clears too (each site's record that gave the lyrics, one that didn't, none, a file that won't go).
 - The card's lyrics panel on the phone (E31): server/routes' `LyricsRoutes` (`POST /lyrics/search`, `GET
   /api/lyrics/search`, `POST /lyrics/pick`, `POST /lyrics/clear`, web/lyrics_routes.py's answers and refusals, the
   audio's length by the phone's examiner), `server.lyricsSearch` true (LibraryPage.kt);

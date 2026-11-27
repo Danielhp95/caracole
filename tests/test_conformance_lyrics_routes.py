@@ -63,13 +63,15 @@ def scene(tmp: Path, name: str, *, megalobiz_off: bool = False) -> World:
     w.song("Pomme", "Mononoké", duration_ms=None, lyrics_status="found")
     w.song("Calla Lake", "River Road", duration_ms=213000, lyrics_status="pending")
     w.song("Nobody", "Nothing", duration_ms=None)
+    w.song("Harbour Lights", "Paper Boats", duration_ms=None, lyrics_status="missing")
     listing = sites([lrc(77), lrc(78, artist="Somebody Else")],
                     megalobiz=mz((5001, "Vikingos veganos", "Nick Cani", 201.5), (5002, "Otra cosa", "Nadie", None)))
     _search_at(w, DISPLAY, NAME, NOW - timedelta(hours=1), listing)
     _search_at(w, "Pomme - Mononoké", "Pomme - Mononoke", NOW - timedelta(days=9), sites(pages={POMME_PAGE: POMME}))
     w.overrides(lambda path: (set_lyrics_name(path, "Calla Lake - River Road", "Calla Lake - River Road Live"),
                               set_lyrics_record(path, "Calla Lake - River Road", "lrclib:9"),
-                              add_ignore(path, "Nobody - Nothing")))
+                              add_ignore(path, "Nobody - Nothing"),
+                              set_lyrics_record(path, "Harbour Lights - Paper Boats", "megalobiz:42")))
     w.conn.execute("UPDATE songs SET lyrics_status = 'pending', lyrics_at = NULL WHERE title = 'River Road'")
     if megalobiz_off:  # turned off after the search: the phone's settings as a sync brings them
         import dataclasses
@@ -118,10 +120,21 @@ def asked(w: World, name: str, case: str, query: dict[str, str]) -> dict[str, An
 
     try:
         response = api_search(app(w), {k: [v] for k, v in query.items()}, now=NOW)
-        out: dict[str, Any] = {"status": response.status, "body": json.loads(response.body)}
+        body = json.loads(response.body)
+        out: dict[str, Any] = {"status": response.status, "body": body, "order": order(body)}
     except Refused as e:
         out = _refusal(e)
     return {"fn": "GET /api/lyrics/search", "scene": name, "case": case, "query": query, "out": out}
+
+
+def order(value: Any) -> Any:
+    """The members' order of a JSON value (the vector is written with its keys sorted): an object's ``[[key, order of
+    its value], …]``, a list's each element's, anything else null."""
+    if isinstance(value, dict):
+        return [[k, order(v)] for k, v in value.items()]
+    if isinstance(value, list):
+        return [order(v) for v in value]
+    return None
 
 
 def _job(job) -> dict[str, Any]:
@@ -130,22 +143,33 @@ def _job(job) -> dict[str, Any]:
 
 
 def posted(w: World, name: str, case: str, path: str, form: dict[str, str],
-           before: list[dict[str, str]] = ()) -> dict[str, Any]:
+           before: list[dict[str, str]] = (), *, json_asked: bool = True,
+           raw_before: list[str] = ()) -> dict[str, Any]:
     from caracole.web import lyrics_routes
     from caracole.web.pages import Refused
 
     a = app(w)
     queued = []
+    record: dict[str, Any] = {"fn": f"POST {path}", "scene": name, "case": case, "form": form}
+    if not json_asked:
+        record["json"] = False
+    from caracole.web.jobs import LYRICS_SEARCH, lyrics_search_steps
+
+    for typed in raw_before:  # a search queued under a name read as none now (an older caracole's, by hand)
+        nick = w.conn.execute("SELECT key, artist, title FROM songs WHERE title LIKE 'Vikingos%'").fetchone()
+        a.submit("Lyrics", LYRICS_SEARCH + nick[0], lyrics_search_steps(f"{nick[1]} - {nick[2]}", typed),
+                 display=f"{nick[1]} - {nick[2]}")
+    if raw_before:
+        record["raw_queued"] = list(raw_before)
     for earlier in before:  # a search or a pick on its way, in the same queue
         (lyrics_routes.search(a, {"csrf": CSRF, **earlier}, json=True) if path == "/lyrics/search"
          else lyrics_routes.pick(a, {"csrf": CSRF, **earlier}, now=NOW))
         queued.append(earlier)
-    record: dict[str, Any] = {"fn": f"POST {path}", "scene": name, "case": case, "form": form}
     if queued:
         record["queued"] = queued
     try:
         if path == "/lyrics/search":
-            response = lyrics_routes.search(a, {"csrf": CSRF, **form}, json=True)
+            response = lyrics_routes.search(a, {"csrf": CSRF, **form}, json=json_asked)
         elif path == "/lyrics/clear":
             response = lyrics_routes.clear(a, {"csrf": CSRF, **form})
         else:
@@ -157,6 +181,9 @@ def posted(w: World, name: str, case: str, path: str, form: dict[str, str],
     out: dict[str, Any] = {"status": response.status}
     if response.body and response.status == 202:
         out["body"] = json.loads(response.body)
+        out["order"] = order(out["body"])
+    if response.data is not None:  # the page's script's answer of a job queued in place: its view
+        out["data"] = response.data
     location = next((v for k, v in response.headers if k.lower() == "location"), None)
     if location:
         out["location"] = location
@@ -180,6 +207,8 @@ def records(tmp: Path) -> list[dict[str, Any]]:
     out.append(asked(w, "kept", "asked again under its name, its record of no lyrics yet",
                      {"song": str(calla)}))
     out.append(asked(w, "kept", "no search kept", {"song": str(nobody)}))
+    out.append(asked(w, "kept", "a record picked that gave no lyrics: picked_why",
+                     {"song": str(song_id(w, "Paper Boats"))}))
     out.append(asked(w, "kept", "with its card, as the page draws it now", {"song": str(nick), "card": "1"}))
     out.append(asked(w, "kept", "another song's identity", {"song": str(nick), "identity": "x/y"}))
     out.append(asked(w, "kept", "no such song", {"song": "999"}))
@@ -205,6 +234,14 @@ def records(tmp: Path) -> list[dict[str, Any]]:
                       {"song": str(calla), "identity": key_of(w, "River Road")}))
     out.append(posted(w, "kept", "a song with no record picked: nothing to clear", "/lyrics/clear",
                       {"song": str(nick)}))
+    out.append(posted(w, "kept", "a name typed from a form: to its request's line", "/lyrics/search",
+                      {**names, "artist": "Nick Cani", "title": "Vikingos veganos"}, json_asked=False))
+    out.append(posted(w, "kept", "a search under a name of no song: 404", "/lyrics/search",
+                      {"song": "999", "artist": "A", "title": "B"}))
+    out.append(posted(w, "kept", "a search on its way under a name read as none now: said, its as null",
+                      "/lyrics/search", {**names, "artist": "Nick Cani", "title": "Vikingos"}, raw_before=["Nope"]))
+    out.append(posted(w, "kept", "a pick of an ignored song", "/lyrics/pick", {"song": str(nobody), "record": "lrclib:77"}))
+    out.append(posted(w, "kept", "a clear of an ignored song", "/lyrics/clear", {"song": str(nobody)}))
     out.append(posted(w, "kept", "a search past its week", "/lyrics/pick",
                       {"song": str(pomme), "record": "azlyrics:pomme/mononoke"}))
     w.conn.close()

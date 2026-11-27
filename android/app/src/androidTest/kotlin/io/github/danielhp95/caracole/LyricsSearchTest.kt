@@ -93,13 +93,16 @@ class LyricsSearchTest {
             val stages = pick.stages.associate { it.name to it }
             assertEquals(pick.asJson().toString(), "done", stages.getValue("lyrics").state)
             assertEquals(pick.asJson().toString(), "done", stages.getValue("chords").state)
-            val (lyrics, sheet) = phone.parts.database.read { db ->
+            val (lyrics, raw) = phone.parts.database.read { db ->
                 val s = Songs.byId(db, song.id)!!
                 val auto = Kept.keptFiles(db, s.id).first { it.name == Versions.SHEET_FILE_NAMES[1] }
-                s.lyricsStatus to File(phone.parts.store.libraryDir, auto.path).readText()
+                s.lyricsStatus to Versions.get(db, auto.versionId)!!.raw
             }
             assertEquals("found", lyrics)
-            assertTrue(sheet.take(600), sheet.lines().any { it.isNotBlank() && !it.contains('[') && it.any(Char::isLetter) })
+            // laid out again over the record's words, its heard kept (timed lines past what was heard: plain, as
+            // align.py lays them), the sheet's raw says so: their words' key, and none before the pick
+            assertTrue(raw.toString(), raw["lyrics"]?.toString()?.trim('"') in setOf("synced", "plain"))
+            assertTrue(raw.toString(), "heard" in raw && "lyrics_key" in raw)
         }
     }
 

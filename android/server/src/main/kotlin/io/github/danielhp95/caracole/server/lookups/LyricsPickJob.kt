@@ -35,7 +35,8 @@ import java.util.concurrent.CancellationException
  * - `chords`: where the song's auto sheet keeps what was heard, laid out again over the words with no model
  *   ([Relay.onto], its end youtube_sheet.py's `holds`); one another caracole made whose `heard` this side can't read,
  *   or no audio of its own, a site's sheet: skipped in lyrics_pick.py's words; a phone that hears no chords now skips
- *   it in its own words ([PHONE_NOT_HERE], [PHONE_NOT_DOWNLOADED]: it has no nightly run); a sheet up to date of the
+ *   it in its own words (lyrics_pick.py's PHONE_NOT_HERE and PHONE_NOT_DOWNLOADED, read from audio_sheet.json: it has no nightly
+ *   run); a sheet up to date of the
  *   audio as it is, run.py's UP_TO_DATE with no model; else the phone's own audio heard by [chords] (the lookups
  *   queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]);
  * - `pdf` and `pages`: the song's pages (PhoneParts.pages, PhoneRender), get.py's words for a caracole that makes no
@@ -209,8 +210,8 @@ internal class LyricsPickJob(
         val models = chords
         val problem = problem() ?: if (models == null || store == null) AudioRunner.problemOf(null, null) else null
         if (problem != null) {
-            return "skipped" to if (problem == AudioRunner.NOT_DOWNLOADED) PHONE_NOT_DOWNLOADED
-                                else PHONE_NOT_HERE.replace("{problem}", problem)
+            return "skipped" to if (problem == AudioRunner.NOT_DOWNLOADED) AudioRunner.Words.text("phone_not_downloaded")
+                                else AudioRunner.Words.text("phone_not_here").replace("{problem}", problem)
         }
         context.yieldToQueued()  // the models take a minute: the lookups queued meanwhile go first
         parts.database.writeBlocking { db -> whyNoChords(db.also { again(it) }) }?.let { return "skipped" to it }
@@ -302,11 +303,5 @@ internal class LyricsPickJob(
         const val MAKING = "its lyrics were picked"
         const val MADE_ELSEWHERE = "made by another caracole from your audio there"
 
-        /** lyrics_pick.PHONE_NOT_HERE and PHONE_NOT_DOWNLOADED: the phone's chords stage where it can't make the sheet
-         * now; it has no nightly run to make it later (the computer says "tonight's run makes it again"). */
-        const val PHONE_NOT_HERE = "auto-chords isn't here ({problem}); pick these lyrics again once it is, and the " +
-            "sheet is made over them"
-        const val PHONE_NOT_DOWNLOADED = "the chord models aren't downloaded: Settings › Chords from audio; then pick " +
-            "these lyrics again"
     }
 }

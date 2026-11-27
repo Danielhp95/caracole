@@ -282,8 +282,7 @@ object LyricsPickCommands {
         if (gave) {
             val folder = lib.folderOf(song)
             for (name in listOf("lyrics.txt", "lyrics.lrc")) {
-                val file = File(folder, name)
-                if (file.exists() && !file.delete()) stuck += "; $name couldn't be removed"
+                why(File(folder, name).toPath())?.let { stuck += "; $name couldn't be removed ($it)" }
             }
         }
         val named = Lyrics.askedName(song, Overrides.read(db).lyrics)
@@ -291,6 +290,20 @@ object LyricsPickCommands {
         val dropped = if (gave) "; its lyrics from it dropped" else ""
         return "$CLEARED for ${song.display} (${record.site} ${record.id})$dropped$stuck; every lyrics site is asked " +
             "again $under, tonight or at a lookup."
+    }
+
+    /** `path.unlink(missing_ok=True)`: the file (or a link, dangling or not) gone, none there no failure; else
+     * Python's `e.strerror or e` of why not (a folder: "Is a directory"). */
+    private fun why(path: java.nio.file.Path): String? {
+        if (java.nio.file.Files.isDirectory(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return "Is a directory"
+        return try {
+            java.nio.file.Files.deleteIfExists(path)
+            null
+        } catch (e: java.nio.file.AccessDeniedException) {
+            "Permission denied"
+        } catch (e: java.io.IOException) {
+            e.message ?: e.javaClass.simpleName
+        }
     }
 
     private fun possessive(name: String): String = if (name.endsWith("s")) "$name'" else "$name's"
