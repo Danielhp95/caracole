@@ -295,16 +295,24 @@ def test_an_auto_sheet_says_who_made_it_from_what_and_over_which_words(words):
         (THIRD_ID, "computer", None), (HERE_ID, "phone", None),
         (HERE_ID, "phone", {"here": {"id": HERE_ID, "the": "this computer"}, "there": {"id": THERE_ID, "the": None}}),
         (THERE_ID, "phone", {"here": {"id": HERE_ID, "the": "this computer"}, "there": {"id": THERE_ID, "the": None}}),
-        (THIRD_ID, "tablet", None),
+        (THIRD_ID, "tablet", None),  # a device we don't know: no maker said
         (THIRD_ID, "phone", {"here": {"id": HERE_ID, "the": "the phone"}, "there": {}}),  # the other's id unknown
+        (THERE_ID, "computer", {"here": {"id": HERE_ID, "the": "this computer"},
+                                "there": {"id": THERE_ID, "the": "Studio"}}),  # a file of another computer's, by name
     ]] == ["made on the computer from “song.mp3”, chords over LRCLIB's timed lyrics",
            "made on another caracole from “song.mp3”, chords over LRCLIB's timed lyrics",
            "made on the computer from “song.mp3”, chords over LRCLIB's timed lyrics",
            "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics",
            "made on this computer from “song.mp3”, chords over LRCLIB's timed lyrics",
            "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics",  # a file's caracole: its device
-           "made on another caracole from “song.mp3”, chords over LRCLIB's timed lyrics",
-           "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics"]
+           "made from “song.mp3”, chords over LRCLIB's timed lyrics",
+           "made from “song.mp3”, chords over LRCLIB's timed lyrics",  # never a guess: no maker said
+           "made on Studio from “song.mp3”, chords over LRCLIB's timed lyrics"]
+    # A device the record names with no maker's id: named if it is one we know, else no maker said.
+    assert [auto_of(words, auto_doc({"made_on": on, "audio_name": "song.mp3", "lyrics": "none"}), MAKERS)
+            for on in ("phone", "computer", "tablet", 7)] == [
+        "made on the phone from “song.mp3”, chords only", "made on the computer from “song.mp3”, chords only",
+        "made from “song.mp3”, chords only", "made from “song.mp3”, chords only"]
     # No maker stated (a sheet made before who made it was kept): no maker clause, never a guess.
     old = {"audio": "/home/me/Music/River Road.mp3", "model": "btc_large_voca", "lyrics": "plain"}
     assert auto_of(words, auto_doc(old), MAKERS) == "chords over LRCLIB's plain lyrics"
@@ -324,7 +332,7 @@ def test_an_auto_sheet_says_each_kind_of_words_it_lays_its_chords_over(words):
         return auto_of(words, auto_doc({"made_on": "phone", "made_by": HERE_ID, **raw}, **doc), MAKERS)
 
     def stored(provider, **more):
-        return json.dumps({"plain": "La la", "synced": None, "instrumental": False, "duration": None,
+        return json.dumps({"plain": "La la", "synced": "[00:01.00] La la", "instrumental": False, "duration": None,
                            "lrclib_id": None, "raw": {}, **({} if provider is None else {"provider": provider}),
                            **more})
 
@@ -343,8 +351,19 @@ def test_an_auto_sheet_says_each_kind_of_words_it_lays_its_chords_over(words):
     # The song's lyrics not found now, or unreadable: the words' kind alone, no site guessed.
     assert said({"lyrics": "synced"}, lyrics="missing", lyrics_json=None) == "made on the phone, chords over timed lyrics"
     assert said({"lyrics": "plain"}, lyrics_json="{not json") == "made on the phone, chords over plain lyrics"
-    assert said({"lyrics": "synced"}, lyrics_json=json.dumps({"id": 9, "plainLyrics": "La"})) == (
+    assert said({"lyrics": "synced"}, lyrics_json=json.dumps({"id": 9, "plainLyrics": "La",
+                                                              "syncedLyrics": "[00:01.00] La"})) == (
         "made on the phone, chords over LRCLIB's timed lyrics")  # a bare LRCLIB record, as lyrics.py reads one
+    # The site is named only where the song's lyrics hold the kind the sheet says it was laid over: never an
+    # impossible "AZLyrics' timed lyrics".
+    assert said({"lyrics": "synced"}, lyrics_json=stored("azlyrics", synced=None)) == (
+        "made on the phone, chords over timed lyrics")
+    assert said({"lyrics": "synced"}, lyrics_json=json.dumps({"id": 9, "plainLyrics": "La"})) == (
+        "made on the phone, chords over timed lyrics")
+    assert said({"lyrics": "plain"}, lyrics_json=stored("lrclib", plain="  ")) == (
+        "made on the phone, chords over plain lyrics")
+    assert said({"lyrics": "synced"}, lyrics_json=stored("megalobiz", synced="")) == (
+        "made on the phone, chords over timed lyrics")
     assert said({"lyrics": "synced", "lyrics_source": "transcript"}, lyrics="missing", lyrics_json=None) == (
         "made on the phone, chords over the transcribed lyrics")
     assert said({"lyrics": "none"}, lyrics="missing", lyrics_json=None) == "made on the phone, chords only"
@@ -368,6 +387,13 @@ def test_a_files_name_is_text_cut_short_never_markup(words):
     assert said == "made on the phone from “" + "a" * 59 + "…”, chords over LRCLIB's timed lyrics"
     assert auto_of(words, auto_doc(dict(PHONE, audio_name="  two\nlines\t.mp3 ")), MAKERS).startswith(
         "made on the phone from “two lines .mp3”")
+    # Control and format characters a device wrote (a NUL, a right-to-left override) are taken out, never shown.
+    assert auto_of(words, auto_doc(dict(PHONE, audio_name="evil\u202egnp.mp3\u0000\u200b")), MAKERS) == (
+        "made on the phone from “evilgnp.mp3”, chords over LRCLIB's timed lyrics")
+    assert auto_of(words, auto_doc(dict(PHONE, audio_name="\u202e\u0000")), MAKERS) == (
+        "made on the phone, chords over LRCLIB's timed lyrics")
+    assert auto_of(words, auto_doc(dict(PHONE, audio_name="\u202e" * 30 + "b" * 70)), MAKERS) == (
+        "made on the phone from “" + "b" * 59 + "…”, chords over LRCLIB's timed lyrics")  # cut after
     assert auto_of(words, auto_doc(dict(PHONE, audio_name="🎸" * 70)), MAKERS) == (
         "made on the phone from “" + "🎸" * 59 + "…”, chords over LRCLIB's timed lyrics")  # by characters
 
@@ -385,3 +411,8 @@ def test_two_auto_sheets_that_differ_in_maker_and_words_are_one_line_each_side(w
             "there": "none"} in alone
     # Alike: no line.
     assert differ(words, "song", here, auto_doc(PHONE)) == []
+    # Alike but for who made it: that one line, and no other aspect.
+    other = auto_doc(dict(PHONE, made_by=THERE_ID))
+    assert words(f"W.differ('song', {json.dumps(here)}, {json.dumps(other)}, {json.dumps(MAKERS)})") == [
+        {"what": "Its auto sheet", "here": "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics",
+         "there": "made on the computer from “song.mp3”, chords over LRCLIB's timed lyrics"}]

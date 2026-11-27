@@ -1434,6 +1434,12 @@ def test_import_sends_the_file_in_parts_then_syncs_as_with_a_file_with_no_arrow_
                                 [u for u in TAKEN_GIVEN if u[1] == "taken"] + [("song/eagles/hotel california", "left",
                                                                                 "kept here")], FILE_REPORT))
     fake = FakeSync(views=file_views)
+    # Two auto sheets alike but for who made them, the file's from another computer: named by the file's library's
+    # name, never "the file", and that one line alone.
+    made = {"made_on": "computer", "audio_name": "song.mp3", "lyrics": "none"}
+    fake.units["song/eagles/hotel california"] = {
+        "here": auto_sheet_doc(dict(made, made_by=STATE["server"]), lyrics="missing"),
+        "there": auto_sheet_doc(dict(made, made_by=FILE_COMPARISON["peer"]["server"]), lyrics="missing")}
     picked = tmp_path / "Phone-03-11-26.caracole"
     picked.write_bytes(bytes(range(256)) * (20 * MIB // 256))
     with opened(tmp_path, served(fake) + "#tab=sync") as page:
@@ -1462,6 +1468,9 @@ def test_import_sends_the_file_in_parts_then_syncs_as_with_a_file_with_no_arrow_
         at_card(page)
         assert page.js(CARD)["heads"] == ["On this computer", "In the file"]
         assert page.js(CARD)["keep"] == ["This computer", "File"]
+        assert (page.js(CARD)["here"], page.js(CARD)["there"]) == (
+            ["Its auto sheet", "made on this computer from “song.mp3”, chords only"],
+            ["Its auto sheet", "made on Phone from “song.mp3”, chords only"])
         page.click("#sync-same")
         page.click("#sync-keep-here")
         at_view(page, "done", timeout=15)

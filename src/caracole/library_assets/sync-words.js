@@ -266,11 +266,12 @@
   // ``autoOf(doc, makers)``: "made on the phone from “song.mp3”, chords over LRCLIB's timed lyrics"; "none" for a song
   // with no auto sheet. Its maker (``made_by``, a caracole's sync id) is named as this sync's sides are, by
   // ``makers``' ids (``{here: {id, the}, there: {id, the}}``: GET /api/sync's ``server`` and the comparison's peer's,
-  // each with its side's ``the``; one whose ``the`` is null, a file's caracole, by the device the record names), and
-  // "another caracole" is a third one; with no ids, by the device it names (``made_on``); a record that names neither,
-  // made before who made it was kept, says no maker. A file's name is data a device wrote: text alone, its spaces
-  // folded, cut at ``NAME_MOST`` characters. Timed or plain lyrics name the site of the song's own lyrics, read as
-  // lyrics.py reads them, only while they are found.
+  // each with its side's ``the``; one whose ``the`` is null by the device the record names), and "another caracole"
+  // is a third one, said only once both sides' ids are known; with no ids, by the device it names (``made_on``, one we
+  // know); else, never a guess, no maker said. A file's name is data a device wrote: text alone, its spaces folded,
+  // its control and format characters (a NUL, a right-to-left override) taken out, cut at ``NAME_MOST`` characters.
+  // Timed or plain lyrics name the site of the song's own lyrics, read as lyrics.py reads them, only while they are
+  // found and hold that kind.
   const AUTO = "auto";
   const NAME_MOST = 60;
   const ON = { phone: "the phone", computer: "the computer" };
@@ -284,16 +285,16 @@
     const device = own.call(ON, raw.made_on) ? ON[raw.made_on] : null;
     const given = objOf(makers) || {};
     const ids = ["here", "there"].map((which) => objOf(given[which]) || {});
-    if (by) {
-      const side = ids.find((s) => typeof s.id === "string" && s.id === by);
-      if (side) return text(side.the) || device || "another caracole";
-      if (ids.every((s) => typeof s.id === "string" && s.id)) return "another caracole";
+    const known = ids.filter((s) => typeof s.id === "string" && s.id);
+    if (by && known.length) {  // by this sync's sides; a third caracole only once both sides' ids are known
+      const side = known.find((s) => s.id === by);
+      if (side) return text(side.the) || device;
+      return known.length === 2 ? "another caracole" : null;
     }
-    if (by || (raw.made_on !== undefined && raw.made_on !== null)) return device || "another caracole";
-    return null;
+    return device;  // with no ids to go by, the device the record names, one we know, else no maker said
   };
   const fileName = (value) => {
-    const chars = Array.from(text(value).replace(/\s+/g, " ").trim());
+    const chars = Array.from(text(value).replace(/\s+/g, " ").replace(/[\p{Cc}\p{Cf}]/gu, "").trim());
     return chars.length > NAME_MOST ? chars.slice(0, NAME_MOST - 1).join("") + "…" : chars.join("");
   };
   const sourceOf = (raw) => {
@@ -309,11 +310,14 @@
       return null;
     }
   };
-  const lyricsSite = (song) => {
+  // The site of the song's found lyrics, where they hold the kind (``synced`` or ``plain``) the sheet was laid over.
+  const lyricsSite = (song, kind) => {
     const stored = song.lyrics_status === "found" ? storedLyrics(song) : null;
     if (!stored) return "";
-    const named = own.call(stored, "raw") && own.call(stored, "plain") && typeof stored.provider === "string";
-    const provider = named && stored.provider ? stored.provider : "lrclib";  // stored before lyrics named their site
+    const ours = own.call(stored, "raw") && own.call(stored, "plain");  // else a bare LRCLIB record (lyrics.py)
+    const words = ours ? stored[kind] : stored[kind === "synced" ? "syncedLyrics" : "plainLyrics"];
+    if (typeof words !== "string" || !words.trim()) return "";
+    const provider = ours && typeof stored.provider === "string" && stored.provider ? stored.provider : "lrclib";
     return own.call(LYRICS_SITES, provider) ? LYRICS_SITES[provider] + " " : "";
   };
   const instrumental = (song) => {
@@ -323,8 +327,8 @@
   };
   const wordsOf = (raw, song) => {
     if (raw.lyrics_source === "transcript") return "chords over the transcribed lyrics";
-    if (raw.lyrics === "synced") return "chords over " + lyricsSite(song) + "timed lyrics";
-    if (raw.lyrics === "plain") return "chords over " + lyricsSite(song) + "plain lyrics";
+    if (raw.lyrics === "synced") return "chords over " + lyricsSite(song, "synced") + "timed lyrics";
+    if (raw.lyrics === "plain") return "chords over " + lyricsSite(song, "plain") + "plain lyrics";
     if (raw.lyrics !== "none") return null;
     if (raw.heard_nothing === true && raw.not_sung_by === "you") return "chords only: you said it isn't sung";
     if (raw.heard_nothing === true) return "chords only: nothing sung was heard";
