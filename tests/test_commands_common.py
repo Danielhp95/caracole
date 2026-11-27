@@ -972,4 +972,4 @@ def test_yt_dlp_runs_are_counted_on_a_ticker_with_no_time_left(cfg, conn, tmp_pa
     finally:
         runner.close()
         ticker.close()
-    assert screen.getvalue().split("\r")[1].rstrip() == "YouTube · 1 of up to 6 yt-dlp runs"
+    assert screen.getvalue().split("\r")[1].rstrip() == "YouTube · 1 of up to 50 yt-dlp runs"

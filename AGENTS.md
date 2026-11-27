@@ -17,7 +17,7 @@ library of:
 For a song nobody has charted, `caracole autochords` writes a sheet from audio with local models (torch, optional):
 
 - a purchase;
-- or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), a few songs a night, only
+- or audio the nightly run takes from YouTube with yt-dlp (youtube.py, youtube_fetch.py), up to 25 songs a night, only
   where auto-chords is;
 - or that of a video the owner pastes on the library page, made into the song's sheet at once (youtube_sheet.py);
 - or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
@@ -4175,7 +4175,8 @@ picks one).
   - `ireal` 20 requests (its sitemap index and six children and the curated playlist, once in 30 days, then a song's
     candidates, `ireal_fetch.CANDIDATES` (3) thread pages at most, then, once the library has a song, the jazz forum's
     page and its playlists with what is left, `ireal_index.playlist_pass`);
-  - `youtube` 6 yt-dlp runs;
+  - `youtube` 50 yt-dlp runs (6 until 2026-11-27: the owner's choice that day, "increase youtube's song request maximum to 50
+    (not 6)");
   - `ytimg` 20 requests (YouTube's image host: the thumbnail of a video suggested for a search, one image a video,
     youtube_search.py).
 - `caracole index build`: at least 100 (`BUILD_BUDGET`, commands/index.py); and `caracole harptabs --index` and
@@ -4419,7 +4420,8 @@ picks one).
 
 #### The one exception is YouTube
 
-- The one exception is YouTube, the owner's explicit choice for a handful of their own songs a night: its robots.txt
+- The one exception is YouTube, the owner's explicit choice for their own songs (a handful a night at first; up to 25 since 2026-11-27, the
+  budget's 50 runs): its robots.txt
   closes `/results` and `/youtubei/` to crawlers, and yt-dlp uses both, against its terms too.
 - Provider `youtube` (youtube.py) is the one place caracole runs yt-dlp, and only on these terms, for:
   - a song with no human sheet (`todo.songs_to_buy`);
