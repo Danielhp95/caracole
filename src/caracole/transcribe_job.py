@@ -26,7 +26,8 @@ its own (staged.py; ``--progress`` writes a JSON line per event, which caracole 
   and the song's audio noted not sung by the owner's word (``drop_transcript``), never heard again, at night or by a
   sheet from a video, until they ask for it (``force``) or a new file comes (a new file is a new start).
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), which lays the chords over the
-  transcript now (with ``none``, the chords alone: a sheet over a transcript gone is due, run.py ``_skip_reason``).
+  transcript now (with ``none``, the chords alone: a sheet over a transcript gone is due, run.py ``_skip_reason``); a
+  sheet that keeps what was heard is laid out again over them instead, no model (staged.py ``_relaid``).
 - ``pdf``: the PDF and the viewer, for this song alone (``render_all``'s ``song_ids``).
 - ``pages``: _todo.md and index.html.
 
@@ -253,14 +254,14 @@ class _Transcription(HearsWords, StagedRun):
         """Whether the song, offered no transcription for the one of its own audio kept already, has no auto sheet over
         it yet (auto-chords would make one: run.py ``_skip_reason``), so the job goes straight to its chords. A song
         record that can't be read ends the job, a refusal in its words, as auto-chords counts it an error (``_due``)."""
-        from caracole.autochords.run import _skip_reason
+        from caracole.autochords.run import RELAID, _skip_reason
         from caracole.autochords.transcript import ALREADY_TRANSCRIBED, why_not_offered
 
         if self.request.none or (why_not_offered(self.conn, self.cfg, self.song, self.overrides,
                                                  anyway=self.request.force) != ALREADY_TRANSCRIBED):
             return False
         try:
-            return _skip_reason(self.conn, self.song, self.overrides) is None
+            return _skip_reason(self.conn, self.song, self.overrides) in (None, RELAID)
         except Exception as e:  # noqa: BLE001 - a record another device wrote: the song's, never a bug's traceback
             log.error("%s: its auto sheet's record can't be read: %s: %s", self.song.display, type(e).__name__, e,
                       exc_info=not isinstance(e, (OSError, RuntimeError, ValueError)))

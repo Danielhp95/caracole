@@ -22,7 +22,7 @@ from helpers.locks import waiting_for
 from typer.testing import CliRunner
 
 from caracole.autochords import ChordSegment
-from caracole.autochords.run import AUTO_SHEET, AutoStats, autochords_pending
+from caracole.autochords.run import AUTO_SHEET, AutoStats, _skip_reason, autochords_pending
 from caracole.cli import build_app
 from caracole.config import AutochordsConfig
 from caracole.db import kv_get, kv_get_json
@@ -121,6 +121,25 @@ def run(conn, cfg, recognizer=None, beats=None, **kw) -> AutoStats:
     return autochords_pending(
         conn, cfg, recognizer=recognizer or FakeRecognizer(), beats_fn=beats or FakeBeats(), **kw
     )
+
+
+@pytest.fixture
+def before_heard(monkeypatch):
+    """Every auto sheet the test makes is kept as a caracole of before E12 kept one: its raw with no ``heard`` and no
+    maker. Such a sheet (the owner's, made before what was heard was kept) is the models' to make again for other
+    words, exactly as before (the design's R4); one that keeps ``heard`` is laid out again over them with no model
+    (test_autochords_sheet_lyrics.py)."""
+    import caracole.autochords.run as ac_run
+
+    real = ac_run.raw_of
+
+    def old_raw(song, made, **kw):
+        raw = real(song, made, **kw)
+        for member in ("heard", "made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16"):
+            raw.pop(member, None)
+        return raw
+
+    monkeypatch.setattr(ac_run, "raw_of", old_raw)
 
 
 def auto_sheet(cfg, conn, song) -> str:
@@ -772,6 +791,7 @@ def test_instrumental_gets_a_chord_chart_only(conn, cfg, tmp_path):
     assert "[Chords]" in text and "[Lyrics]" not in text
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_sheet_made_before_the_lyrics_arrived_is_made_again_once(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))  # lyrics still pending
     run(conn, cfg)
@@ -792,6 +812,7 @@ def auto_raw(conn, song) -> dict:
     return get_version(conn, next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)).raw
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_plain_lyrics_is_made_again_once_timed_ones_arrive(conn, cfg, tmp_path):
     # Timed lyrics put each chord over the word it is played on: the plain sheet is made again, once.
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
@@ -808,6 +829,7 @@ def test_a_sheet_over_plain_lyrics_is_made_again_once_timed_ones_arrive(conn, cf
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_timed_lyrics_that_dont_fit_the_audio_make_the_sheet_again_once_never_every_night(conn, cfg, tmp_path):
     # They are for another cut of the song, and no shift fits them: the sheet is made again over the plain lyrics,
     # once, and once more only when the timed lyrics change.
@@ -836,6 +858,7 @@ def test_a_plain_sheet_made_beside_timed_lyrics_that_didnt_fit_stays_as_it_is(co
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_an_older_plain_sheet_beside_timed_lyrics_is_made_again_once(conn, cfg, tmp_path):
     # An older caracole kept no word of the timed lyrics a sheet was made beside: whether they came after it or
     # didn't fit, it is made again once, and then knows.
@@ -849,6 +872,7 @@ def test_an_older_plain_sheet_beside_timed_lyrics_is_made_again_once(conn, cfg, 
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_lyrics_replaced_by_other_words_is_made_again_once(conn, cfg, tmp_path):
     # A pick of other lyrics replaces the words the sheet was made over: once more, over the new words, and then the
     # sheet is up to date again. The same words timed otherwise are no other words.
@@ -891,6 +915,7 @@ def test_a_sheet_made_before_it_kept_a_lyrics_key_is_up_to_date_with_other_words
     assert "lyrics_key" not in auto_raw(conn, s)
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_laid_out_by_characters_over_lyrics_wider_than_them_is_made_again_once(conn, cfg, tmp_path):
     # An older caracole wrote a chord over a Chinese line at its character's index, half its display column, so
     # the converted sheet had it on an earlier character: such a sheet is made again, once. One over lines of
@@ -969,6 +994,7 @@ def test_a_sites_lyrics_win_over_the_transcript(conn, cfg, tmp_path):
     assert raw["lyrics"] == "plain" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_lyrics(conn, cfg, tmp_path):
     from caracole.autochords.transcript import NOTE
 
@@ -989,6 +1015,7 @@ def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_lyrics(conn, cf
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_timed_lyrics(conn, cfg, tmp_path):
     # Both sheets are "synced": the site's timed words win all the same, each chord over its word.
     from caracole.autochords.transcript import NOTE
@@ -1010,6 +1037,7 @@ def test_a_sheet_over_a_transcript_is_made_again_once_a_site_has_timed_lyrics(co
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_a_transcript_goes_back_to_its_chart_once_the_transcript_is_gone(conn, cfg, tmp_path):
     from caracole.autochords.transcript import NOTE, TRANSCRIPT
     from caracole.db import kv_delete
@@ -1029,6 +1057,7 @@ def test_a_sheet_over_a_transcript_goes_back_to_its_chart_once_the_transcript_is
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_none_is_made_again_once_a_transcript_comes(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
     run(conn, cfg)
@@ -1041,6 +1070,7 @@ def test_a_sheet_over_none_is_made_again_once_a_transcript_comes(conn, cfg, tmp_
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_one_transcript_is_made_again_over_a_newer_one(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
     transcribed(conn, s)
@@ -1072,6 +1102,7 @@ def test_a_sites_instrumental_verdict_wins_over_a_transcript(conn, cfg, tmp_path
     assert raw["lyrics"] == "none" and not {"lyrics_source", "transcript", "transcript_made_at"} & raw.keys()
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sheet_over_a_transcript_is_made_again_once_the_song_is_instrumental(conn, cfg, tmp_path):
     from caracole.autochords.transcript import transcript_of
 
@@ -2048,6 +2079,7 @@ def test_a_note_of_other_audio_says_nothing(conn, cfg, tmp_path):
     assert SILENT not in auto_sheet(cfg, conn, s) and "heard_nothing" not in auto_raw(conn, s)
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_chords_only_sheet_is_made_again_once_when_nothing_sung_is_noted(conn, cfg, tmp_path):
     from caracole.autochords.transcript import SILENT
 
@@ -2064,6 +2096,7 @@ def test_a_chords_only_sheet_is_made_again_once_when_nothing_sung_is_noted(conn,
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_transcript_after_a_nothing_sung_sheet_makes_it_due_and_remade_over_its_words(conn, cfg, tmp_path):
     # Transcribe anyway after caracole heard nothing: the transcript comes after a sheet that says nothing sung was
     # heard; the sheet is due, and made again over the words, the note gone.
@@ -2081,6 +2114,7 @@ def test_a_transcript_after_a_nothing_sung_sheet_makes_it_due_and_remade_over_it
     assert "heard_nothing" not in auto_raw(conn, s) and auto_raw(conn, s)["lyrics_source"] == "transcript"
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_sites_lyrics_later_replace_a_nothing_sung_sheet(conn, cfg, tmp_path):
     from caracole.autochords.transcript import SILENT
 
@@ -2187,6 +2221,7 @@ def test_a_song_with_a_picked_record_and_no_lyrics_is_never_heard_and_spends_no_
     assert over_words(conn, older) and not over_words(conn, picked)
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_song_past_the_cap_gets_its_chords_now_and_its_words_a_run_later(conn, cfg, tmp_path, loud):
     older = offered_song(conn, cfg, tmp_path, "Older", added_at="2026-10-01T00:00:00Z")
     newer = offered_song(conn, cfg, tmp_path, "Newer", added_at="2026-10-02T00:00:00Z")
@@ -2227,6 +2262,7 @@ def test_a_setup_failure_stops_hearing_for_the_run_not_the_chords(conn, cfg, tmp
     assert stats.summary().endswith("; words not heard: the separator can't run here (No possible adapter)")
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_an_existing_chords_only_sheet_is_heard_and_made_again(conn, cfg, tmp_path, loud):
     from caracole.autochords.transcript import NOTE
 
@@ -2240,6 +2276,52 @@ def test_an_existing_chords_only_sheet_is_heard_and_made_again(conn, cfg, tmp_pa
         hearing.close()
     assert (stats.generated, stats.heard, rec.calls) == (1, 1, [Path(s.audio_path)])
     assert over_words(conn, s) and NOTE in auto_sheet(cfg, conn, s)
+
+
+def test_words_heard_at_night_re_lay_a_sheet_that_keeps_what_was_heard_with_no_model(conn, cfg, tmp_path, loud):
+    from caracole.autochords.transcript import NOTE
+
+    s = offered_song(conn, cfg, tmp_path, "River Road")
+    run(conn, cfg)  # the chords alone, what was heard kept
+    assert auto_raw(conn, s)["lyrics"] == "none" and "heard" in auto_raw(conn, s)
+    hearing, rec = hearing_of(cfg), FakeRecognizer()
+    try:
+        stats = run(conn, cfg, rec, hearing=hearing, transcriptions=3)
+    finally:
+        hearing.close()
+    assert (stats.generated, stats.relaid, stats.heard, rec.calls) == (0, 1, 1, [])
+    assert over_words(conn, s) and NOTE in auto_sheet(cfg, conn, s)
+    assert stats.summary().startswith("0 generated, 0 skipped, 0 failed, 1 laid out again over new words")
+
+
+# The words' reasons a sheet is made again for, each as a sheet made before what was heard was kept meets it.
+OLD_REASONS = {
+    "lyrics came": lambda conn, s: update_song(conn, s.id, lyrics_status="found",
+                                               lyrics_json=lyrics_json(plain="Finally the words")),
+    "timed lyrics came": lambda conn, s: update_song(conn, s.id, lyrics_status="found",
+                                                     lyrics_json=lyrics_json(synced=SYNCED, duration=10.0)),
+    "a transcript came": lambda conn, s: transcribed(conn, get_song(conn, s.id)),
+}
+
+
+@pytest.mark.parametrize("reason", list(OLD_REASONS))
+def test_a_sheet_made_before_heard_was_kept_is_made_again_by_the_models(conn, cfg, tmp_path, reason):
+    # The owner's sheets made before this lane: exactly as before, their words make them the models' again. A sheet
+    # that keeps what was heard is laid out again over the same words instead, with no model.
+    old = with_audio(conn, tmp_path, add_song(conn, "A", "Old"), name="old.wav")
+    new = with_audio(conn, tmp_path, add_song(conn, "A", "New"), name="new.wav")
+    run(conn, cfg)
+    vid = next(f.version_id for f in kept_files(conn, old.id) if f.name == AUTO_SHEET)
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.heard', '$.made_on', '$.made_by', '$.audio_name', "
+                 "'$.audio_sha16') WHERE id = ?", (vid,))
+    for s in (old, new):
+        OLD_REASONS[reason](conn, s)
+    assert _skip_reason(conn, get_song(conn, old.id), Overrides()) is None
+    rec = FakeRecognizer()
+    stats = run(conn, cfg, rec)
+    assert (stats.generated, stats.relaid, rec.calls) == (1, 1, [Path(old.audio_path)])
+    assert auto_sheet(cfg, conn, old).replace("Old", "New") == auto_sheet(cfg, conn, new)
+    assert "heard" in auto_raw(conn, old)  # made again by the models, it keeps what they heard from now on
 
 
 def test_nothing_sung_is_counted_and_said_on_the_sheet(conn, cfg, tmp_path, loud):
@@ -2450,6 +2532,7 @@ def test_a_lookup_goes_first_between_the_words_and_the_chords(conn, cfg, tmp_pat
     assert transcript_of(conn, get_song(conn, s.id)) is not None
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_a_hearing_that_failed_one_night_is_passed_over_the_next_so_another_song_is_heard(conn, cfg, tmp_path, loud):
     # One song's file failing the separator must not stop every night's hearing: noted for that audio, the next
     # nights pass over it without a slot or a separation, and hear the next song offered; after 30 days, or with a
@@ -2511,6 +2594,7 @@ def test_a_run_for_one_song_leaves_the_nights_hearing_record_alone(conn, cfg, tm
     assert (record["heard"], record["silent"], record["transcribe_problem"]) == (0, 0, gpu)
 
 
+@pytest.mark.usefixtures("before_heard")
 def test_the_count_of_songs_due_counts_those_the_words_make_due(conn, cfg, tmp_path, loud, caplog):
     # Two chords-only sheets up to date, offered their words: the hearing makes both due, and the log says "of 2".
     songs = [offered_song(conn, cfg, tmp_path, t, added_at=f"2026-10-0{n}T00:00:00Z")

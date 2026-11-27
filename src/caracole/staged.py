@@ -181,14 +181,40 @@ class StagedRun:
 
     # --- the stages both jobs end with -------------------------------------------------------------------
 
+    def _relaid(self) -> tuple[str, str] | None:
+        """The song's auto sheet laid out again over its words now, with no model and no audio, where it keeps what
+        was heard and they changed (autochords/sheet_lyrics.py ``relay_reason``, ``relay_onto_sheets``): the chords
+        stage's end, in the words of a sheet made (``holds``), a re-lay that couldn't be written failing it; None
+        where no re-lay is due (a sheet that keeps no ``heard``, a human sheet, words as they were)."""
+        from caracole.autochords.sheet_lyrics import relay_onto_sheets, relay_reason
+        from caracole.library import kept_files
+        from caracole.songs import AUTO_SHEET, HUMAN_SHEET
+        from caracole.versions import get_version
+        from caracole.youtube_sheet import holds
+
+        files = {f.name: f for f in kept_files(self.conn, self.song.id)}
+        if AUTO_SHEET not in files or HUMAN_SHEET in files:
+            return None
+        if relay_reason(self.conn, self.song, get_version(self.conn, files[AUTO_SHEET].version_id).raw) is None:
+            return None
+        if not relay_onto_sheets(self.conn, self.cfg, self.overrides, only={self.song.id}):
+            return self._fail("its auto sheet couldn't be laid out again over its words (see the log)")
+        self._song_again()
+        version_id = next(f.version_id for f in kept_files(self.conn, self.song.id) if f.name == AUTO_SHEET)
+        return "done", holds(get_version(self.conn, version_id).raw)
+
     def _autochords_sheet(self) -> tuple[str, str]:
         """auto-chords for this song alone (``autochords_pending``'s ``only``), and what the sheet holds once kept:
-        the chords stage's end."""
+        the chords stage's end. A sheet that keeps what was heard, whose words alone changed, is re-laid instead, no
+        model (``_relaid``)."""
         from caracole.autochords.run import autochords_pending
         from caracole.songs import AUTO_SHEET
         from caracole.versions import get_version
         from caracole.youtube_sheet import holds
 
+        relaid = self._relaid()
+        if relaid is not None:
+            return relaid
         stats = autochords_pending(self.conn, self.cfg, recognizer=self.recognizer, beats_fn=self.beats_fn,
                                    now=self.now, overrides=self.overrides, only={self.song.id},
                                    on_step=lambda said: self._doing("chords", said))

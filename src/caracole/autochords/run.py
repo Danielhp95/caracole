@@ -25,6 +25,10 @@ with linked audio is due when:
   lyrics that don't fit the audio make a plain sheet again once, never every
   night (plain lyrics that come after a sheet of none rarely get here: they need
   no model, and the next render puts them on it, sheet_lyrics.py, with their key);
+- the words' reasons above are a sheet's that keeps no ``heard`` alone (made before
+  what was heard was kept): one that keeps it is laid out again over new words
+  with no model, in render's first step (sheet_lyrics.py ``relay_onto_sheets``),
+  and is due here only once its audio changes;
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
@@ -104,6 +108,7 @@ from caracole.autochords.sheet import (
     synced_key,
     wider_lines,
 )
+from caracole.autochords.sheet_lyrics import relay_onto_sheets, relay_reason
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
     UNREADABLE,
@@ -132,6 +137,7 @@ log = logging.getLogger(__name__)
 
 PROVIDER = AUTO
 MADE_ON = "computer"  # the side an auto sheet made here was made on (its raw's ``made_on``; the phone's "phone")
+RELAID = "its words are laid out again from what was heard"  # ``_skip_reason``'s, for a re-lay's words
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
 # What ``autochords_pending`` tells its ``on_step`` as each step starts: a song's chords, then, before them, its words
@@ -179,6 +185,8 @@ class AutoStats:
     have nothing sung. ``transcribe_problem``: why words a song waited for weren't heard, the setup's (the separator,
     the GPU, Whisper's model) or this machine's (``youtube_fetch.transcribe_problem``); no exit 1 on its account.
     ``remeasured``: the songs whose MP3's guessed length the run put right, once ever (remeasure.py), by name.
+    ``relaid``: the sheets that keep what was heard laid out again over their song's new words, no model (``_due``);
+    counted apart from the three.
     """
 
     generated: int = 0
@@ -190,11 +198,14 @@ class AutoStats:
     silent: int = 0
     transcribe_problem: str | None = None
     remeasured: list[str] = field(default_factory=list)
+    relaid: int = 0
 
     def summary(self) -> str:
         """One line for the journal or a notification: "1 generated, 4 skipped, 0 failed", then what was heard, or
         why nothing was, where anything was to hear ("; words heard for 1, nothing sung in 1")."""
         said = f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
+        if self.relaid:
+            said += f", {self.relaid} laid out again over new words"
         if self.heard or self.silent:
             said += f"; words heard for {self.heard}, nothing sung in {self.silent}"
         if self.transcribe_problem is not None:
@@ -470,6 +481,7 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
         heard = (hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
                  and hearing_failed(conn, song, now) is None)
         hears -= heard
+        heard = heard and not _keeps_heard(conn, song)  # its words heard re-lay it, no model
         try:
             if _skip_reason(conn, song, overrides) is not None and not heard:
                 continue
@@ -480,15 +492,30 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
     return n
 
 
+def _keeps_heard(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether the song's kept auto sheet keeps what was heard (``raw["heard"]``): its words alone never make it the
+    models' again."""
+    auto = next((f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET), None)
+    return auto is not None and get_version(conn, auto.version_id).raw.get("heard") is not None
+
+
 def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,
          stats: AutoStats) -> bool:
     """Whether a song with linked audio is due for an auto sheet now. One that isn't is counted in ``stats`` here:
     skipped (by ``_skip_reason``, or as another song keeps a sheet where its own would go), failed (its file failed
-    before and hasn't changed: ``failure``), or an error (its data couldn't be read)."""
+    before and hasn't changed: ``failure``), or an error (its data couldn't be read). One whose sheet keeps what was
+    heard and whose words alone changed (``RELAID``: its words heard just before, or lyrics a render hasn't put on it
+    yet) is laid out again here, with no model (sheet_lyrics.py ``relay_onto_sheets``), and counted ``relaid``."""
     try:
         reason = _skip_reason(conn, song, overrides)
     except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
         _error(stats, song, e)
+        return False
+    if reason == RELAID:  # its words alone changed (its words heard just now, say): laid out again, no model
+        if relay_onto_sheets(conn, cfg, overrides, only={song.id}):
+            stats.relaid += 1
+        else:  # logged where it failed: the next render tries again
+            stats.skipped += 1
         return False
     if reason is not None:
         log.debug("%s: skipped (%s)", song.display, reason)
@@ -671,7 +698,10 @@ def _short(e: BaseException, path: str) -> str:
 
 
 def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> str | None:
-    """Why a song with linked audio is not due for an auto sheet, or None when it is."""
+    """Why a song with linked audio is not due for an auto sheet, or None when it is. A sheet that keeps what was heard
+    (``raw["heard"]``) is never due for its words alone: they re-lay it with no model (sheet_lyrics.py
+    ``relay_onto_sheets``, ``RELAID`` the reason while that is due); only its audio's change (or a sheet gone) makes it
+    the models' again. A sheet made before ``heard`` was kept is due for its words as ever."""
     if song.status == "ignored" or song.key in overrides.ignore:
         return "ignored"
     if not Path(song.audio_path or "").is_file():
@@ -686,6 +716,8 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     if auto is None:
         return None
     raw = get_version(conn, auto.version_id).raw
+    if raw.get("heard") is not None:  # what was heard is kept: its words alone re-lay it (sheet_lyrics.py), no model
+        return RELAID if relay_reason(conn, song, raw) is not None else "up to date"
     if raw.get("lyrics") == "none" and sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
     kept_transcript = transcript_of(conn, song)

@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from caracole.autochords.align import lyrics_offset, shifted_lrc
@@ -28,6 +28,7 @@ from caracole.autochords.merge import (
     build_sheet,
     parse_lrc,
     parse_lrc_words,
+    youtube_credit,
 )
 from caracole.autochords.transcript import LYRICS_SOURCE, NOT_SUNG, NOTE, SILENT, Transcript
 from caracole.chordpro import display_columns
@@ -114,7 +115,8 @@ def read_heard(record: object) -> Heard:
 
 def heard_of(raw: Mapping[str, object]) -> Heard | None:
     """The ``Heard`` an auto sheet's raw keeps (``read_heard`` of its ``heard``); None for a raw that keeps none (a
-    sheet made before it was kept), or keeps one of another contract or shape."""
+    sheet made before it was kept), or keeps one of another contract or shape, without a word: where that keeps a
+    sheet from being laid out again over other words, sheet_lyrics.py's ``relay_reason`` says so, once a process."""
     record = raw.get("heard")
     if record is None:
         return None
@@ -176,6 +178,7 @@ class Made:
     silent: bool = False
     said: bool = False  # silent by the owner's word, not by what was heard
     heard: Heard | None = None  # what it was laid out from: ``make_sheet``'s own
+    kept: Mapping[str, object] | None = None  # a re-lay's: the raw's members it keeps as they were (``RELAY_KEEPS``)
 
 
 def instrumental(song: Song) -> bool:
@@ -338,8 +341,12 @@ def raw_of(song: Song, made: Made, *, video: Video | None = None, maker: Maker |
     the viewer's sung line) and ``transcript_made_at`` (``_skip_reason`` compares it with the transcript kept now).
     Audio from YouTube (``video``) keeps the video's fields. Then what was heard (``heard``, ``heard_record``'s, from
     ``made.heard``), and who made it from what (``maker``: ``made_on``, ``made_by``, ``models``, ``runtime``,
-    ``audio_name``, ``audio_sha16``, each where it is known)."""
-    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": made.used, "columns": COLUMNS}
+    ``audio_name``, ``audio_sha16``, each where it is known). A re-lay's ``made.kept`` (``relay``) gives ``audio``,
+    ``youtube`` and who made it as the raw it was re-laid from held them, each in its place, so that the re-lay's raw
+    is the one a fresh hearing would write but for those."""
+    kept = made.kept or {}
+    audio = kept["audio"] if "audio" in kept else song.audio_path
+    raw: dict[str, object] = {"audio": audio, "model": MODEL, "lyrics": made.used, "columns": COLUMNS}
     if made.key is not None:
         raw["key"] = made.key
     if made.shift is not None:
@@ -358,11 +365,16 @@ def raw_of(song: Song, made: Made, *, video: Video | None = None, maker: Maker |
     words = song_lyrics_key(song) if made.used in ("synced", "plain") and made.transcript is None else None
     if words is not None:
         raw["lyrics_key"] = words
-    if video is not None:
-        raw["youtube"] = video.as_json()
+    youtube = video.as_json() if video is not None else kept.get("youtube")
+    if youtube is not None:
+        raw["youtube"] = youtube
     if made.heard is not None:
         raw["heard"] = heard_record(made.heard)
-    if maker is not None:
+    if maker is None:
+        for member in MAKER_MEMBERS:
+            if member in kept:
+                raw[member] = kept[member]
+    else:
         raw["made_on"] = maker.on
         for member, value in (("made_by", maker.by), ("models", dict(maker.models) or None),
                               ("runtime", maker.runtime), ("audio_name", maker.audio_name),
@@ -370,3 +382,100 @@ def raw_of(song: Song, made: Made, *, video: Video | None = None, maker: Maker |
             if value is not None:
                 raw[member] = value
     return raw
+
+
+# What a re-lay keeps of the raw it re-lays, as it was: who heard the song and from what doesn't change because the
+# words did. The version's url and tab id are its row's, which a re-lay never touches.
+MAKER_MEMBERS = ("made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16")
+RELAY_KEEPS = ("audio", "youtube", *MAKER_MEMBERS)
+
+
+@dataclass(frozen=True)
+class Noted:
+    """What a caracole notes of the words of the audio a sheet was heard from, beside the song's lyrics: the
+    transcript of that audio (Whisper's), and whether nothing sung was heard in it (``silent``), by the owner's word
+    (``said``). ``noted_in(raw)`` is what the sheet was laid out with; the computer passes its kv's (sheet_lyrics.py
+    ``noted_of``)."""
+
+    transcript: Transcript | None = None
+    silent: bool = False
+    said: bool = False
+
+
+def noted_in(raw: Mapping[str, object]) -> Noted:
+    """What an auto sheet was laid out with, as its raw keeps it: the transcript it was made over (its LRC and
+    ``transcript_made_at``, all ``make_sheet`` and ``raw_of`` read of one), ``heard_nothing`` and ``not_sung_by``."""
+    lrc, made_at = raw.get("transcript"), raw.get("transcript_made_at")
+    transcript = None
+    if raw.get("lyrics_source") == LYRICS_SOURCE and isinstance(lrc, str):
+        transcript = Transcript(lrc=lrc, audio="", audio_mtime=None, model="", language="", device="",
+                                words_dropped=0, made_at=made_at if isinstance(made_at, str) else "")
+    silent = raw.get("heard_nothing") is True
+    return Noted(transcript, silent, silent and raw.get("not_sung_by") == "you")
+
+
+def relay_due(song: Song, raw: Mapping[str, object], noted: Noted | None = None) -> str | None:
+    """Why an auto sheet is to be laid out again from what was heard (``relay``), its words alone having changed, or
+    None: lyrics that came to a sheet of none, or a site's to a sheet over a transcript (or its word that the song is
+    instrumental); a transcript that came to a sheet of none, or one other than the sheet's, or none any more; nothing
+    sung noted since; other words (``lyrics_key``); timed lyrics that came to a plain sheet (``synced_lyrics``); timed
+    lines with a character not one column wide on a sheet that counted characters (``columns``). These are the words'
+    reasons run.py's ``_skip_reason`` gave before what was heard was kept, moved here as they were: a sheet that keeps
+    ``heard`` is never due for the models for them. One more, which a pick taken back (lyrics_pick.py ``clear_pick``)
+    gave by clearing the song's ``autochords_mtime``: a sheet over a site's words (one that kept their ``lyrics_key``)
+    whose song has none now, or a site's word that it is instrumental. ``noted`` defaults to what the sheet was laid out with
+    (``noted_in``): a caracole that knows of no transcript or verdict of its own. Lyrics stored that can't be read are
+    none. Reads no file."""
+    try:
+        return _relay_due(song, raw, noted if noted is not None else noted_in(raw))
+    except (TypeError, ValueError):  # the song's stored lyrics can't be read: nothing to lay over
+        return None
+
+
+def _relay_due(song: Song, raw: Mapping[str, object], noted: Noted) -> str | None:
+    lyrics = sung_lyrics(song)
+    if raw.get("lyrics") == "none" and lyrics:
+        return "lyrics came to a sheet of none"
+    if raw.get("lyrics_source") == LYRICS_SOURCE:
+        if lyrics:
+            return "a site's lyrics came to a sheet over a transcript"
+        if instrumental(song):
+            return "a site says it is instrumental, over a transcript"
+        if noted.transcript is None or raw.get("transcript_made_at") != noted.transcript.made_at:
+            return "its transcript is gone or made again"
+    elif raw.get("lyrics") == "none" and noted.transcript is not None and not instrumental(song):
+        return "a transcript came to a sheet of none"
+    elif raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not instrumental(song) and noted.silent:
+        return "nothing sung was noted since"
+    words = raw.get("lyrics_key")  # none on a sheet an older caracole made: up to date, as it was
+    if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
+            and song_lyrics_key(song) not in (None, words)):
+        return "its lyrics are other words now"
+    if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
+            and lyrics is None):
+        return "its lyrics are gone, or a site says it is instrumental"
+    if raw.get("lyrics") == "plain" and synced_key(song) not in (None, raw.get("synced_lyrics")):
+        return "timed lyrics came to a plain sheet"
+    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and wider_lines(song):
+        return "its chords at their characters' indexes, before they went at display columns"
+    return None
+
+
+def relay(song: Song, raw: Mapping[str, object], noted: Noted | None = None) -> Made:
+    """The song's auto sheet laid out again from what was heard (``raw["heard"]``, ``read_heard``: ValueError for one
+    that can't be read), over its words now, with no model and no audio: what ``make_sheet`` gives for the same
+    ``heard``, the same source line (the video ``raw["youtube"]`` names) and ``noted`` (by default, what it was laid
+    out with: ``noted_in``), with the members of ``RELAY_KEEPS`` the raw holds kept as they were (``Made.kept``), so
+    that ``raw_of`` writes the raw a fresh hearing would, but for who heard it and from what. A pure function of its
+    arguments: no clock, no machine, no kv; two caracoles that re-lay the same sheet over the same words write the same
+    bytes."""
+    heard = read_heard(raw.get("heard"))
+    noted = noted if noted is not None else noted_in(raw)
+    youtube = raw.get("youtube")
+    source = None
+    if isinstance(youtube, Mapping) and isinstance(youtube.get("id"), str):
+        title, channel = youtube.get("title"), youtube.get("channel")
+        source = youtube_credit(title if isinstance(title, str) else "", channel if isinstance(channel, str) else "",
+                                youtube["id"])
+    made = make_sheet(song, heard, source=source, transcript=noted.transcript, silent=noted.silent, said=noted.said)
+    return replace(made, kept={member: raw[member] for member in RELAY_KEEPS if member in raw})

@@ -156,6 +156,13 @@ def auto_raw(conn, song) -> dict:
     return get_version(conn, auto.version_id).raw
 
 
+def before_heard(conn, song) -> None:
+    """The song's auto sheet as one made before what was heard was kept: the models' to make again for other words."""
+    [auto] = [f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET]
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.heard', '$.made_on', '$.made_by', '$.models', "
+                 "'$.runtime', '$.audio_name', '$.audio_sha16') WHERE id = ?", (auto.version_id,))
+
+
 def sheet_text(cfg, song) -> str:
     return (song_dir(cfg.library_dir, song) / AUTO_SHEET).read_text(encoding="utf-8")
 
@@ -357,15 +364,20 @@ def test_an_error_keeps_nothing_and_writes_no_record(cfg, conn, song, sites):
 # --- the sheet ----------------------------------------------------------------------------------------------------
 
 
-def test_the_auto_sheet_is_made_again_over_the_picked_lyrics(cfg, conn, song, sites, here):
+@pytest.mark.parametrize("kept", [True, False], ids=["heard kept", "made before"])
+def test_the_auto_sheet_is_made_again_over_the_picked_lyrics(cfg, conn, song, sites, here, kept):
+    # Laid out again from what was heard, in seconds, with no model; one made before that was kept, by the models.
     assert auto_sheet_of(cfg, conn, song)["lyrics"] == "none"
+    if not kept:
+        before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     recognizer = Recognizer()
     result, heard = pick(cfg, n=1, recognizer=recognizer)
     assert result.ok, result
     assert heard.ends()["chords"] == ("done", "chords over the lyrics")
-    assert recognizer.calls and auto_raw(conn, song)["lyrics"] == "synced"
+    assert bool(recognizer.calls) is not kept and auto_raw(conn, song)["lyrics"] == "synced"
+    assert ("heard" in auto_raw(conn, song)) and get_song(conn, song.id).autochords_mtime == song.audio_mtime
     assert "Somos vikingos de prueba" in sheet_text(cfg, song)
     assert heard.ends()["pdf"][0] == "done" and result.files
 
@@ -382,6 +394,7 @@ def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, so
     assert raw["lyrics"] == "synced"
     [auto] = [f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET]
     set_raw(conn, auto.version_id, {k: v for k, v in raw.items() if k != "lyrics_key"})
+    before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     result, heard = pick(cfg, n=1)  # auto-chords isn't here: tonight's run makes it again
@@ -449,6 +462,7 @@ def test_without_auto_chords_a_song_with_no_auto_sheet_waits_for_tonights(cfg, c
 
 def test_without_auto_chords_the_chords_wait_for_tonight_and_it_exits_0(cfg, conn, song, sites, monkeypatch):
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords (missing: torch)")
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
@@ -462,8 +476,24 @@ def test_without_auto_chords_the_chords_wait_for_tonight_and_it_exits_0(cfg, con
     assert auto_raw(conn, song)["lyrics"] == "plain" and "Somos vikingos de prueba" in sheet_text(cfg, song)
 
 
+def test_without_auto_chords_a_sheet_that_keeps_what_was_heard_is_laid_out_again_at_once(cfg, conn, song, sites,
+                                                                                         monkeypatch):
+    auto_sheet_of(cfg, conn, song)
+    monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords (missing: torch)")
+    order: list[str] = []
+    monkeypatch.setattr(_common, "hand_over", lambda cfg, conn=None: order.append("lookup") or True)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok and result.failed is None, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert order == []  # seconds, no model: no lookup let go first
+    assert auto_raw(conn, song)["lyrics"] == "synced" and "[Lyrics]" not in sheet_text(cfg, song).splitlines()
+
+
 def test_a_waiting_lookup_goes_first_before_the_chords(cfg, conn, song, sites, here, monkeypatch):
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     order: list[str] = []
@@ -539,6 +569,7 @@ def test_a_clear_drops_the_lyrics_its_record_gave_and_makes_the_sheet_due(cfg, c
     set_lyrics_name(cfg.overrides_file, song.display, None)
     pick(cfg, n=1)
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     folder = song_dir(cfg.library_dir, song)
     assert (folder / "lyrics.lrc").is_file()
     said = clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
@@ -546,6 +577,21 @@ def test_a_clear_drops_the_lyrics_its_record_gave_and_makes_the_sheet_due(cfg, c
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json, after.autochords_mtime) == ("pending", None, None)
     assert not (folder / "lyrics.lrc").exists() and not (folder / "lyrics.txt").exists()
+
+
+def test_a_clear_lays_a_sheet_that_keeps_what_was_heard_out_again_as_its_chords_alone(cfg, conn, song, sites):
+    from caracole.render import render_all
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    set_lyrics_name(cfg.overrides_file, song.display, None)
+    pick(cfg, n=1)
+    assert auto_sheet_of(cfg, conn, song)["lyrics"] == "synced"
+    clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
+    after = get_song(conn, song.id)
+    assert after.autochords_mtime == after.audio_mtime  # never the models' for its words
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro, now=NOW, song_ids={song.id})
+    assert auto_raw(conn, song)["lyrics"] == "none" and "Somos vikingos de prueba" not in sheet_text(cfg, song)
 
 
 def test_a_clear_with_no_record_is_nothing_to_clear(cfg, conn, song, sites):

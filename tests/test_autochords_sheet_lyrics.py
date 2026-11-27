@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+
+import pytest
 
 from conftest import add_song
 from helpers.rendered import fake_chordpro
@@ -10,7 +13,7 @@ from helpers.rendered import fake_chordpro
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.autochords.merge import with_plain_lyrics
 from caracole.autochords.run import _keep, _skip_reason
-from caracole.autochords.sheet_lyrics import lyrics_onto_sheets, sheets_wanting_lyrics
+from caracole.autochords.sheet_lyrics import lyrics_onto_sheets, relay_onto_sheets, sheets_wanting_lyrics
 from caracole.library import keep_file, kept_files, song_dir
 from caracole.lyrics import Lyrics
 from caracole.overrides import Overrides
@@ -222,3 +225,293 @@ def test_a_render_of_one_song_gives_that_song_alone_its_lyrics(conn, cfg):
     other = found(conn, chords_only(conn, cfg, title="Grandiose"))
     render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW, song_ids={other.id})
     assert "[Lyrics]" in sheet(cfg, other) and "[Lyrics]" not in sheet(cfg, song)
+
+
+# --- a sheet that keeps what was heard: re-laid over other words, no model (E13) ------------------------------------
+
+def _heard_sheet(conn, cfg, tmp_path, kind, *, title="River Road"):
+    """A song with the auto sheet the models make of it as the words of ``kind`` (test_autochords_sheet.py's CASES)
+    stand, keeping what was heard (``heard``) and who made it."""
+    from test_autochords_run import with_audio
+    from test_autochords_sheet import CASES, Recognizer, _bulk
+
+    seconds, fields, segments, beats, before = CASES[kind]
+    song = with_audio(conn, tmp_path, add_song(conn, "Nobody", title), seconds=seconds, **fields)
+    if before is not None:
+        before(conn, song)
+    _bulk(conn, cfg, get_song(conn, song.id), Recognizer(segments), beats)
+    return get_song(conn, song.id)
+
+
+def _words(conn, song, kind):
+    """The song's words become those of ``kind``: its lyrics columns, and what its kv notes of its audio."""
+    from test_autochords_sheet import CASES
+
+    fields, before = CASES[kind][1], CASES[kind][4]
+    update_song(conn, song.id, **{"lyrics_status": "missing", "lyrics_json": None, **fields})
+    if before is not None:
+        before(conn, get_song(conn, song.id))
+    return get_song(conn, song.id)
+
+
+def _dropped(conn, song):
+    from caracole.autochords.transcript import drop_transcript
+
+    drop_transcript(conn, song, "2026-11-26T09:00:00Z")
+    return get_song(conn, song.id)
+
+
+class Refusing:
+    """A recognizer, and beats, that fail the test if a model is asked to hear anything."""
+
+    name = "refusing"
+
+    def recognize(self, path):
+        raise AssertionError(f"a model was asked to hear {path}")
+
+    def __call__(self, path):
+        raise AssertionError(f"a model was asked for the beats of {path}")
+
+
+def test_lyrics_that_come_later_re_lay_the_sheet_with_no_model(conn, cfg, tmp_path):
+    from caracole.autochords.run import RELAID, autochords_pending
+
+    song = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    assert "[Lyrics]" not in sheet(cfg, song)
+    song = _words(conn, song, "synced")
+    assert _skip_reason(conn, song, Overrides()) == RELAID  # never the models' for its words
+    stats = render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW)
+    assert stats.given == 1 and stats.rendered >= 1
+    text = sheet(cfg, song)
+    assert "[ch]" in text and "Walking down the river road" in text and "[Lyrics]" not in text  # each chord on its word
+    assert raw(conn, song)["lyrics"] == "synced"
+    assert _skip_reason(conn, get_song(conn, song.id), Overrides()) == "up to date"
+    assert render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW).given == 0  # once
+    stats = autochords_pending(conn, cfg, recognizer=Refusing(), beats_fn=Refusing(), now=NOW)
+    assert (stats.generated, stats.relaid, stats.skipped, stats.failed, stats.errors) == (0, 0, 1, 0, [])
+    # Other words before any render: the nightly pass lays it out again itself, still with no model.
+    _words(conn, song, "word timed")
+    stats = autochords_pending(conn, cfg, recognizer=Refusing(), beats_fn=Refusing(), now=NOW)
+    assert (stats.generated, stats.relaid, stats.failed, stats.errors) == (0, 1, 0, [])
+    assert "Walking" in sheet(cfg, song) and raw(conn, song)["lyrics"] == "synced"
+    assert "Singing" in (song_dir(cfg.library_dir, song) / "sheet (auto).html").read_text(
+        encoding="utf-8")
+
+
+# (the words the sheet was made over, the words now, whether the words alone make it due): every change of words
+# between test_autochords_sheet.py's kinds, over the same audio, chords and beats.
+CHANGES = [
+    ("no lyrics", "plain", True),
+    ("no lyrics", "synced", True),
+    ("no lyrics", "word timed", True),
+    ("plain", "synced", True),
+    ("synced", "word timed", True),
+    ("plain", "chinese", True),
+    ("transcript", "plain", True),
+    ("transcript", "synced", True),
+    ("transcript", "instrumental", True),
+    ("transcript", _dropped, True),
+    ("no lyrics", "transcript", True),
+    ("no lyrics", "nothing sung", True),
+    ("no lyrics", "said not sung", True),
+    ("plain", "instrumental", True),
+    ("synced", "no lyrics", True),  # a pick taken back: the chords alone again
+    ("synced", "plain", False),  # the same words, untimed: up to date, as before
+]
+
+
+def _name(change):
+    return f"{change[0]}->{getattr(change[1], '__name__', change[1]).strip('_')}"
+
+
+@pytest.mark.parametrize("before,after,due", CHANGES, ids=[_name(c) for c in CHANGES])
+def test_a_re_lay_is_the_sheet_the_models_would_have_made(conn, cfg, tmp_path, before, after, due):
+    from caracole.autochords.sheet import raw_of, relay
+    from caracole.autochords.sheet_lyrics import noted_of, relay_reason
+    from test_autochords_sheet import CASES, Recognizer, _bulk
+
+    song = _heard_sheet(conn, cfg, tmp_path, before)
+    laid = raw(conn, song)
+    song = after(conn, song) if callable(after) else _words(conn, song, after)
+    assert (relay_reason(conn, song, laid) is not None) == due
+    made = relay(song, laid, noted_of(conn, song, laid))
+    relaid = json.dumps(raw_of(song, made), ensure_ascii=False)
+    # What the models make of the same audio over the same words, heard afresh.
+    update_song(conn, song.id, autochords_mtime=None)
+    _, _, segments, beats, _ = CASES[before]
+    _bulk(conn, cfg, get_song(conn, song.id), Recognizer(segments), beats)
+    assert made.text == sheet(cfg, song)
+    assert relaid == json.dumps(raw(conn, song), ensure_ascii=False)  # every member, in its place: the same bytes
+
+
+def test_a_re_lay_over_the_shift_lrclibs_timing_needs_is_the_models_sheet_too(conn, cfg, tmp_path):
+    from caracole.autochords.sheet import raw_of, relay
+    from test_autochords_sheet import CASES, Recognizer, _bulk
+
+    seconds, fields, segments, beats, _ = CASES["shifted"]
+    from test_autochords_run import with_audio
+
+    song = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=seconds)
+    _bulk(conn, cfg, song, Recognizer(segments), beats)
+    laid = raw(conn, song)
+    update_song(conn, song.id, **fields)
+    song = get_song(conn, song.id)
+    made = relay(song, laid)
+    assert made.shift is not None
+    relaid = raw_of(song, made)
+    update_song(conn, song.id, autochords_mtime=None)
+    _bulk(conn, cfg, get_song(conn, song.id), Recognizer(segments), beats)
+    assert (made.text, relaid) == (sheet(cfg, song), raw(conn, song))
+
+
+def test_a_re_lay_of_a_sheet_from_youtube_keeps_its_video_and_its_line(conn, cfg, tmp_path):
+    from caracole.autochords.sheet import raw_of, relay
+    from test_autochords_sheet import CASES, VIDEO, Recognizer, _bulk, _youtube
+    from test_autochords_run import with_audio
+
+    seconds, fields, segments, beats, _ = CASES["youtube, shifted"]
+    song = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=seconds)
+    _youtube(conn, song)
+    _bulk(conn, cfg, song, Recognizer(segments), beats)
+    laid = raw(conn, song)
+    assert laid["youtube"]["id"] == VIDEO["id"]
+    update_song(conn, song.id, **fields)
+    song = get_song(conn, song.id)
+    made = relay(song, laid)
+    relaid = raw_of(song, made)
+    update_song(conn, song.id, autochords_mtime=None)
+    _bulk(conn, cfg, get_song(conn, song.id), Recognizer(segments), beats)
+    assert "Audio from YouTube: Longships (Nobody)" in made.text
+    assert (made.text, relaid) == (sheet(cfg, song), raw(conn, song))
+
+
+def test_a_re_lay_of_wider_lines_counts_display_columns(conn, cfg, tmp_path):
+    from caracole.autochords.sheet import raw_of, relay
+    from caracole.versions import set_raw
+
+    song = _heard_sheet(conn, cfg, tmp_path, "chinese")
+    made_now = sheet(cfg, song), raw(conn, song)
+    old = {k: v for k, v in raw(conn, song).items() if k != "columns"}  # as an older layout kept it
+    auto = next(f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, auto.version_id, old)
+    assert relay_onto_sheets(conn, cfg) and (sheet(cfg, song), raw(conn, song)) == made_now
+    assert raw_of(song, relay(song, old))["columns"] == "display"
+
+
+def test_a_re_lay_keeps_who_made_it_and_from_what(conn, cfg, tmp_path):
+    song = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    auto = next(f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    version = get_version(conn, auto.version_id)
+    # As another caracole (the phone) made it, from its own file: a re-lay here never makes this side its maker.
+    theirs = {**version.raw, "audio": "/data/user/0/phone/files/audio/7-0123456789abcdef.mp3", "made_on": "phone",
+              "made_by": "0f1e2d3c4b5a6978", "models": {"chords": "btc_large_voca@aa", "beats": "beat_this final0 fp16@bb"},
+              "runtime": "onnxruntime 1.32.0", "audio_name": "river road.mp3", "audio_sha16": "0123456789abcdef"}
+    from caracole.versions import set_raw
+
+    set_raw(conn, version.id, theirs)
+    conn.execute("UPDATE versions SET tab_id = '42', url = 'file:///data/user/0/phone/x.mp3' WHERE id = ?",
+                 (version.id,))
+    _words(conn, song, "plain")
+    assert [s.id for s in relay_onto_sheets(conn, cfg)] == [song.id]
+    now = get_version(conn, version.id)
+    kept = ("audio", "made_on", "made_by", "models", "runtime", "audio_name", "audio_sha16")
+    assert {m: now.raw[m] for m in kept} == {m: theirs[m] for m in kept}
+    assert (now.tab_id, now.url, now.fetched_at) == ("42", "file:///data/user/0/phone/x.mp3", version.fetched_at)
+    assert now.raw["lyrics"] == "plain" and now.raw["heard"] == theirs["heard"]
+    assert "Walking down the river road" in sheet(cfg, song)
+
+
+def test_two_caracoles_re_lay_the_same_sheet_over_the_same_words_alike(conn, cfg, tmp_path, monkeypatch):
+    # The design's "one unit": a re-lay is a pure function of what was heard, the song's words and the kept members.
+    import time
+
+    from caracole import db
+    from caracole.config import load_config
+    from caracole.db import kv_set
+    from caracole.versions import upsert_version as upsert
+
+    from conftest import migrated_database
+
+    song = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    auto = next(f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    laid, chart = get_version(conn, auto.version_id).raw, sheet(cfg, song)
+
+    def side(name, sync_id, clock):
+        folder = tmp_path / name
+        (folder / "state").mkdir(parents=True)
+        (folder / "state" / "caracole.sqlite").write_bytes(migrated_database())
+        there = db.connect(folder / "state" / "caracole.sqlite")
+        here = load_config(None, env={"HOME": str(folder / "home"), "STATE_DIRECTORY": str(folder / "state"),
+                                      "CACHE_DIRECTORY": str(folder / "cache")})
+        kv_set(there, "sync:id", sync_id)
+        for _ in range(int(clock) % 3):  # another song id here
+            add_song(there, "Someone", f"Else {_}")
+        other = add_song(there, "Nobody", "River Road")
+        update_song(there, other.id, audio_path=f"/{name}/audio.wav", audio_mtime=clock)
+        other = get_song(there, other.id)
+        version = upsert(there, provider="auto", tab_id="17", song_id=other.id, slot="sheet", kind="auto", rating=0,
+                         votes=0, version=1, label=None, url="file:///elsewhere.wav", raw=laid,
+                         now=f"2026-11-2{name[-1]}T00:00:00Z")
+        keep_file(there, here.library_dir, song=other, version_id=version, name=AUTO_SHEET,
+                  data=chart.encode("utf-8"), rank=1)
+        _words(there, other, "word timed")
+        monkeypatch.setattr(time, "time", lambda: clock)
+        relay_onto_sheets(there, here)
+        done = (sheet(here, other), there.execute("SELECT raw FROM versions WHERE id = ?", (version,)).fetchone()[0])
+        there.close()
+        return done
+
+    one = side("side1", "aaaaaaaaaaaaaaaa", 1_800_000_000.0)
+    two = side("side2", "bbbbbbbbbbbbbbbb", 1_900_000_001.0)
+    assert one == two
+    assert '"made_by"' in one[1] and "Walking" in one[0]
+
+
+@pytest.mark.slow
+def test_a_render_s_re_lay_loads_no_model_and_no_audio_reader(tmp_path):
+    # render.py runs in a caracole without auto-chords: its first step lays sheets out again with what it imports.
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from conftest import subprocess_pythonpath
+
+    code = ("import sys\nfrom caracole import db\nfrom caracole.config import load_config\n"
+            "import caracole.render, caracole.lyrics, caracole.autochords.transcript\n"
+            "from caracole.autochords.sheet_lyrics import relay_onto_sheets\n"
+            f"cfg = load_config(None, env={{'HOME': {str(tmp_path / 'home')!r}, 'STATE_DIRECTORY': "
+            f"{str(tmp_path / 'state')!r}, 'CACHE_DIRECTORY': {str(tmp_path / 'cache')!r}}})\n"
+            "cfg.db_path.parent.mkdir(parents=True, exist_ok=True)\n"
+            "relay_onto_sheets(db.connect(cfg.db_path), cfg)\n"
+            "heavy = {'mutagen', 'torch', 'librosa', 'numpy', 'beat_this', 'soundfile', 'whisper', 'httpx',\n"
+            "         'caracole.autochords.btc', 'caracole.autochords.beats', 'caracole.autochords.audio',\n"
+            "         'caracole.autochords.run'}\n"
+            "print(sorted(heavy & set(sys.modules)))\n")
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, check=True)
+    assert out.stdout.strip() == "[]"
+
+
+def test_a_heard_record_that_cant_be_read_is_neither_re_laid_nor_made_due_and_said_once(conn, cfg, tmp_path, caplog):
+    import logging
+
+    from caracole.autochords import sheet_lyrics
+    from caracole.versions import set_raw
+
+    song = _heard_sheet(conn, cfg, tmp_path, "no lyrics")
+    auto = next(f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    newer = {**raw(conn, song), "heard": {**raw(conn, song)["heard"], "contract": 2}}  # a newer caracole's
+    set_raw(conn, auto.version_id, newer)
+    chart = sheet(cfg, song)
+    assert render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW).given == 0  # nothing due: not a word
+    assert "can't be read" not in caplog.text
+    song = _words(conn, song, "plain")
+    sheet_lyrics._TOLD.clear()
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.sheet_lyrics"):
+        for _ in range(3):
+            assert render_all(conn, cfg, Overrides(), runner=fake_chordpro, now=NOW).given == 0
+    said = [r for r in caplog.records if "what was heard can't be read" in r.getMessage()]
+    assert len(said) == 1 and "contract 2" in said[0].getMessage() and song.display in said[0].getMessage()
+    assert _skip_reason(conn, get_song(conn, song.id), Overrides()) == "up to date"  # nor the models'
+    assert (sheet(cfg, song), raw(conn, song)) == (chart, newer)
