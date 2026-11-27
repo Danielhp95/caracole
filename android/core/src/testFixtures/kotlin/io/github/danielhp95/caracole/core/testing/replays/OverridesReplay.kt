@@ -122,6 +122,10 @@ object OverridesReplay : AreaReplay {
             "add_harmonica" -> OverrideWriters.addHarmonica(db, s("display"), s("tab"),
                                                             kw.getValue("reading").takeIf { it !is JsonNull },
                                                             checks.checkSpec)
+            "set_lyrics_name" -> return JsonPrimitive(OverrideWriters.setLyricsName(
+                db, s("display"), (kw.getValue("name") as? JsonPrimitive)?.takeIf { it.isString }?.content))
+            "set_lyrics_record" -> return JsonPrimitive(OverrideWriters.setLyricsRecord(db, s("display"), s("record")))
+            "clear_lyrics_record" -> return JsonPrimitive(OverrideWriters.clearLyricsRecord(db, s("display")))
             else -> throw AssertionError("no writer $fn")
         }
         return JsonNull

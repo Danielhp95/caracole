@@ -184,7 +184,7 @@ sitemaps list by bare ids alone, and the fetch their page.
     a lyric file that can't be removed is said, the clear standing.
   - A search's reset, a pick or a clear changes the song unit's `lyrics_status`, `lyrics_json` and `lyrics_at`
     (peer_sync.py `SONG_COLUMNS`) and its `[lyrics]` entry: a sync carries them; the kv it deletes is no unit's.
-    Nothing of it runs on the phone.
+    On the phone, the search, `--record` and `--clear` run (android/'s "Lookups on the phone").
 
 #### megalobiz
 
@@ -2215,11 +2215,12 @@ It is rows.js's, shared by both pages:
   search within its week, 409 "Search again: …" else; its site on; `caracole lyrics --record --progress` under
   `jobs.LYRICS_PICK`; another record while a pick waits or runs refused 409 in words, never dropped) and `POST
   /lyrics/clear` (`caracole lyrics --clear` under `jobs.LYRICS_CLEAR`; 409 nothing to clear); each 404 no song, 409
-  `same_song`, 409 ignored. The phone has none of them (lyrics are searched on the computer, for now): its page offers
-  no control for them, as for Transcribe (test_web_lyrics_routes.py).
+  `same_song`, 409 ignored (test_web_lyrics_routes.py). The phone answers the four alike (server/routes'
+  `LyricsRoutes`, vectors/web/lyrics_routes.jsonl, WebReplay.lyricsRoutes), its searches, picks and clears run by
+  LyricsRunner.
   - The card's panel (library.js `lyricsPanel`, card.css `details.lyrics-search`) is served where the data's
     `server.lyricsSearch` is true (`WebControls.lyrics_search`, which library_routes.py sets; last in the member, the
-    phone's LibraryPage.kt `false` at the same place; the cards' own data unchanged), for a song not ignored with no
+    phone's LibraryPage.kt `true` at the same place; the cards' own data unchanged), for a song not ignored with no
     request of it waiting or running (`freeToAsk`): open in what needs you, before `transcribeOffer`, for a song with
     lyrics `missing` (the lyrics sites before Whisper), else folded right under the foot, a part of its own. Opened
     it reads the GET once; only its Search (or Enter in its fields) posts `/lyrics/search`, never the card opening,
@@ -3424,6 +3425,35 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl (the pass, an artist's
     page, and get.py's stage over the record's client alone) and commands_lacuerda.jsonl (through InteractiveAsk, as
     LaCuerdaRunner asks): `LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes.
+- A song's lyrics searched under a name typed (lyrics-search, the chords-on-the-phone plan's E29): core.lookup.sites'
+  `LyricsSearchCommands`, lyrics_search.py (`search`, `askAnew`, `notNow`, `stopped`, `lastLine`, `notes`, `rowFacts`,
+  `askedLine`, `lastSearch`, `keptSearch`, `rowOf`; `lines`, commands/lyrics.py `_lyrics_as`'s), through a
+  CommandContext's asking, LRCLIB's get a second ask of its client; its name noted by `OverrideWriters.setLyricsName`,
+  kv `lyrics-search:<id>` as Python writes it; run by server/lookups' `LyricsRunner` (`lyrics --song --as`, a lookup:
+  `JobCommands.isLookup`, `lyricsSearchSteps`). tests/test_conformance_lyrics_search.py writes
+  vectors/lookup/lyrics_search.jsonl, `LyricsSearchReplay` over LookupScenariosReplay's world. A block alerts once, as
+  every lookup's on the phone; the audio's length is the line's, its YouTube video's, else its own file's by the
+  phone's examiner (`AudioStore.formatAndLength`, LyricsRunner's hook). Its read-back (`lastSearch`, `keptSearch`,
+  `rowOf`, `askedLine`) is held by vectors/lookup/lyrics_kept.jsonl.
+- A row of that search made the song's lyrics (lyrics-pick, E30): core.lookup.sites' `LyricsPickCommands`,
+  lyrics_pick.py's song and lyrics stages (`findSong`, `cachedLrclib`: LRCLIB's record from the search's answers in
+  the phone's HTTP cache, no request; `lyrics`: the files, `setLyricsRecord`, then `askAnew` and the song found in one
+  savepoint), and server/lookups' `LyricsPickJob` (`lyrics --song --record --progress`, `lyricsPickSteps`, the
+  queue's): its chords `Relay.onto` where the auto sheet keeps what was heard, up to date (`autochords_mtime` its
+  `audio_mtime`: staged.py's UP_TO_DATE, no model), else the phone's own audio through `ChordModels`
+  (`AudioRunner.keepAutoSheet`, the audio job's keep, at the job's stamp), else skipped in lyrics_pick.py's words, and
+  where the phone hears no chords now in its own (lyrics_pick.py `PHONE_NOT_HERE`, `PHONE_NOT_DOWNLOADED`: no nightly
+  run makes it later); the record noted in the lyrics' savepoint, a failure to note it putting the files back; pdf and
+  pages PhoneRender's, which write info.json, so a picked record's `lyrics_from` follows at the pdf stage (a song with
+  no sheet: at its next render). tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
+  `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request; a lyric file that can't be
+  removed said in Python's `strerror`, a dangling link removed), then the song's pages; lyrics_pick.jsonl holds its
+  clears too (each site's record that gave the lyrics, one that didn't, none, a file that won't go).
+- The card's lyrics panel on the phone (E31): server/routes' `LyricsRoutes` (`POST /lyrics/search`, `GET
+  /api/lyrics/search`, `POST /lyrics/pick`, `POST /lyrics/clear`, web/lyrics_routes.py's answers and refusals, the
+  audio's length by the phone's examiner), `server.lyricsSearch` true (LibraryPage.kt);
+  tests/test_conformance_lyrics_routes.py writes vectors/web/lyrics_routes.jsonl; LyricsSearchTest on the emulator
+  (`device-test.sh --sites lookups LyricsSearchTest`) searches, lists, takes a record and re-lays the auto sheet.
 - harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):

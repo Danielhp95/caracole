@@ -187,7 +187,9 @@ object LookupScenariosReplay : AreaReplay {
                 }
 
                 val want = said.getValue("result").jsonObject
-                check("states" in ran.result && "details" in ran.result) { "the run told no stage's end" }
+                if ("states" in want) {  // a lookup's, or a staged job's; a command of no stages (lyrics --as) tells lines
+                    check("states" in ran.result && "details" in ran.result) { "the run told no stage's end" }
+                }
                 for (k in ran.result.keys) {
                     check(k in want) { "the run tells $k, which Python's result hasn't" }
                 }
@@ -273,7 +275,7 @@ object LookupScenariosReplay : AreaReplay {
     ))
 
     /** The provider fields a record may set, config.py's names. */
-    private val CONFIGURED = setOf("enabled", "lookup_requests", "lookup_per_hour")
+    private val CONFIGURED = setOf("enabled", "lookup_requests", "lookup_per_hour", "per_day")
 
     /** config.DEFAULT_PROVIDERS with a record's fields over theirs; a field the replay doesn't apply fails it. */
     private fun configured(overrides: JsonObject): PhoneConfig {
@@ -286,7 +288,8 @@ object LookupScenariosReplay : AreaReplay {
             overrides[name]?.jsonObject?.let { f ->
                 p.copy(enabled = f["enabled"]?.jsonPrimitive?.boolean ?: p.enabled,
                        lookupRequests = f["lookup_requests"]?.jsonPrimitive?.int ?: p.lookupRequests,
-                       lookupPerHour = f["lookup_per_hour"]?.jsonPrimitive?.int ?: p.lookupPerHour)
+                       lookupPerHour = f["lookup_per_hour"]?.jsonPrimitive?.int ?: p.lookupPerHour,
+                       perDay = f["per_day"]?.jsonPrimitive?.int ?: p.perDay)
             } ?: p
         })
     }

@@ -69,8 +69,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
      * Guitar Pro page, no sheet from YouTube, a sheet from an audio file where [ServerControls.audio] says so
      * (library_page.audio_member's shape: `ok`, `why`, `limit`, `too_big`, the "+" and a card's entry drawn by
-     * library.js where `ok`), no lyrics looked up under another name (`lyricsSearch` false), and the tests' timers
-     * if any; and each song's
+     * library.js where `ok`), lyrics looked up under another name (`lyricsSearch` true: LyricsRoutes), and the
+     * tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
      */
@@ -89,7 +89,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
             put("audio", audioMember(controls.audio))
-            put("lyricsSearch", JsonPrimitive(false))  // lyrics looked up under another name: the computer's alone
+            put("lyricsSearch", JsonPrimitive(true))  // lyrics looked up under another name (LyricsRoutes)
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()

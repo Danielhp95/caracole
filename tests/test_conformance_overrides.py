@@ -22,10 +22,11 @@ blocked tab). A file and its rows go both ways here:
   it. ``checks``: each call the reader made to the viewer's checks, in order, ``{fn: "key_version" | "check_spec",
   arg, error}`` (``error`` the ValueError's words, or null), which the phone takes as parameters (its :core has no
   viewer); ``{fn: "caracole.overrides.artist_url_entry", rows, args: [keys], out: [key, address] | null}``.
-- ``overrides_writes.jsonl``: ``{fn: "caracole.overrides.add_<table>" | "...remove_pin", case, rows, kw, checks,
+- ``overrides_writes.jsonl``: ``{fn: "caracole.overrides.add_<table>" | "...remove_pin" | "...set_lyrics_name" |
+  "...set_lyrics_record" | "...clear_lyrics_record", case, rows, kw, checks,
   out: {returned, rows} | err, message}``: each writer run over ``toml_of(rows)`` with ``kw`` (Python's names; a set
   of tabs a sorted list), ``out.rows`` the file's ``rows_of`` after, whole, and ``returned`` what the writer returned
-  (``remove_pin``'s bool; null for the rest); a refusal's class and words, the file left as it was (asserted).
+  (``remove_pin``'s and the lyrics writers' bool; null for the rest); a refusal's class and words, the file left as it was (asserted).
   Every song's entries after are put back by ``put_song_entries`` (an alias's by ``put_alias``) into an empty file,
   which reads them back as given (asserted): what the phone writes, the computer takes as it is at a sync.
 - ``override_urls.jsonl``: ``{fn, args: [text], out | err, message}``: overrides.py's address readers
@@ -625,6 +626,44 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_harmonica", "a symbol that means nothing", {"display": "Blur - Song 2", "tab": "harmonica-1.txt",
                                                     "reading": {"*": "squeak"}}),
     ("add_harmonica", "no song named", {"display": "Blur", "tab": "harmonica-1.txt", "reading": "letters"}),
+    # set_lyrics_name, set_lyrics_record, clear_lyrics_record: over LYRICS_BASE's rows, but where BASE_CASES says
+    ("set_lyrics_name", "a new song's, its parts stripped", {"display": "Blur - Song 2", "name": "  Blur  -  Song Two "}),
+    ("set_lyrics_name", "a song of no [lyrics] table yet", {"display": "Blur - Song 2", "name": "Blur - Song Two"}),
+    ("set_lyrics_name", "the song written another way: its record and its name kept",
+     {"display": "RADIOHEAD - CREEP", "name": "Radiohead - Creep (Live)"}),
+    ("set_lyrics_name", "the same again", {"display": "Radiohead - Creep", "name": "Radiohead - Creep (Acoustic)"}),
+    ("set_lyrics_name", "taken out, the record kept", {"display": "Radiohead - Creep", "name": None}),
+    ("set_lyrics_name", "a song with a record alone, given a name", {"display": "Pomme - Mononoké",
+                                                                     "name": "Pomme - Mononoke"}),
+    ("set_lyrics_name", "none to take out", {"display": "Pomme - Mononoké", "name": None}),
+    ("set_lyrics_name", "none to take out, of a song with no entry", {"display": "Blur - Song 2", "name": None}),
+    ("set_lyrics_name", "a name with no title", {"display": "Blur - Song 2", "name": "Blur -  "}),
+    ("set_lyrics_name", "a name with no artist", {"display": "Blur - Song 2", "name": " - Song 2"}),
+    ("set_lyrics_name", "a name of one part", {"display": "Blur - Song 2", "name": "Song 2"}),
+    ("set_lyrics_name", "no song named", {"display": "Song 2", "name": "Blur - Song 2"}),
+    ("set_lyrics_name", "non-ASCII spaces around each part", {"display": "Blur - Song 2",
+                                                             "name": "\u00a0Blur\u3000 - \u2003Song Two\u00a0"}),
+    ("set_lyrics_name", "three parts: split at the first", {"display": "Blur - Song 2", "name": "A - B - C"}),
+    ("set_lyrics_name", "a display that keys alike once NFC", {"display": "Pomme - Mononoke\u0301", "name": "Pomme - X"}),
+    ("set_lyrics_name", "a decomposed É in a new song's display", {"display": "E\u0301tienne - Song", "name": "A - B"}),
+    ("set_lyrics_record", "a new song's", {"display": "Blur - Song 2", "record": "lrclib:1"}),
+    ("set_lyrics_record", "a song of no [lyrics] table yet", {"display": "Blur - Song 2", "record": "megalobiz:105007"}),
+    ("set_lyrics_record", "another record, the song written another way: its name and its as kept",
+     {"display": "RADIOHEAD - CREEP", "record": "megalobiz:42"}),
+    ("set_lyrics_record", "the same again", {"display": "radiohead - creep", "record": "lrclib:28399373"}),
+    ("set_lyrics_record", "an AZLyrics page", {"display": "Pomme - Mononoké", "record": "azlyrics:pomme/mononoke-2"}),
+    ("set_lyrics_record", "record 0", {"display": "Blur - Song 2", "record": "lrclib:0"}),
+    ("set_lyrics_record", "another site", {"display": "Blur - Song 2", "record": "genius:1"}),
+    ("set_lyrics_record", "no site", {"display": "Blur - Song 2", "record": "28399373"}),
+    ("set_lyrics_record", "an AZLyrics page in capitals", {"display": "Blur - Song 2", "record": "azlyrics:Blur/x"}),
+    ("set_lyrics_record", "no song named", {"display": "Song 2", "record": "lrclib:1"}),
+    ("set_lyrics_record", "a Megalobiz id of letters", {"display": "Blur - Song 2", "record": "megalobiz:abc"}),
+    ("set_lyrics_record", "an LRCLIB id with a leading zero", {"display": "Blur - Song 2", "record": "lrclib:01"}),
+    ("set_lyrics_record", "a second colon", {"display": "Blur - Song 2", "record": "lrclib:1:2"}),
+    ("clear_lyrics_record", "the record out, its as kept", {"display": "Radiohead - Creep"}),
+    ("clear_lyrics_record", "the record alone: the entry goes", {"display": "POMME - MONONOKÉ"}),
+    ("clear_lyrics_record", "none to clear", {"display": "Blur - Song 2"}),
+    ("clear_lyrics_record", "none to clear, of no [lyrics] table", {"display": "Blur - Song 2"}),
 ]
 
 # The cases that start from rows of their own: none, or BASE's with a [lyrics] entry.
@@ -636,6 +675,11 @@ LYRICS_BASE = BASE + '''
 '''
 LYRICS_CASES = {("add_match", "a song with a [lyrics] entry: it stays as it is"),
                 ("add_ignore", "a song with a [lyrics] entry alone")}
+LYRICS_WRITERS = ("set_lyrics_name", "set_lyrics_record", "clear_lyrics_record")
+# The lyrics writers' cases that start from BASE's rows, of no [lyrics] table.
+BASE_CASES = {("set_lyrics_name", "a song of no [lyrics] table yet"),
+              ("set_lyrics_record", "a song of no [lyrics] table yet"),
+              ("clear_lyrics_record", "none to clear, of no [lyrics] table")}
 
 TWO_PINS = ("remove_pin", "both of two")
 
@@ -684,7 +728,8 @@ def write_records(tmp: Path) -> list[dict[str, Any]]:
     lyrics_rows = rows_of(with_lyrics)
     records = []
     for n, (fn, case, kw) in enumerate(WRITE_CASES):
-        rows = [] if (fn, case) in EMPTY_CASES else lyrics_rows if (fn, case) in LYRICS_CASES else base_rows
+        with_entry = (fn, case) in LYRICS_CASES or (fn in LYRICS_WRITERS and (fn, case) not in BASE_CASES)
+        rows = [] if (fn, case) in EMPTY_CASES else lyrics_rows if with_entry else base_rows
         path = tmp / f"write-{n}.toml"
         path.write_text(toml_of(rows), encoding="utf-8")
         before = path.read_bytes()
@@ -857,7 +902,7 @@ def test_every_writer_and_reader_is_in_the_vectors(made):
     writes = [json.loads(line) for line in made[WRITES].splitlines()[1:]]
     names = {r["fn"].rsplit(".", 1)[1] for r in writes}
     assert names == {"add_match", "add_pin", "remove_pin", "add_lacuerda", "add_harptabs", "add_gametabs",
-                     "add_reject", "add_alias", "add_ignore", "add_version", "add_harmonica"}
+                     "add_reject", "add_alias", "add_ignore", "add_version", "add_harmonica", *LYRICS_WRITERS}
     for name in names:  # each writer writes, refuses or leaves the rows as they were
         mine = [r for r in writes if r["fn"].endswith(name)]
         assert any("out" in r and r["out"]["rows"] != r["rows"] for r in mine), name

@@ -214,7 +214,8 @@ page alone), a song's card, not ignored and with no request of it on its way, ha
 ``lyricsPanel``): above Transcribe the lyrics, open, for a song with no lyrics found, else folded under its foot. Its
 Artist and Title, and Search, which alone sends ``POST /lyrics/search``; the list of what LRCLIB, Megalobiz and
 AZLyrics have under that name, read with no request (``GET /api/lyrics/search``), each row's Use these lyrics posting
-``POST /lyrics/pick`` in place, and Clear the pick ``POST /lyrics/clear``. The file on disk and the phone have none.
+``POST /lyrics/pick`` in place, and Clear the pick ``POST /lyrics/clear``. The file on disk has none; the phone's
+served page has it (its LyricsRoutes).
 
 A sheet from an audio file of yours (web/audio_routes.py): where this caracole makes chords (``audio_member``, the
 data's ``server.audio``), the search bar has a "+" that chooses a file, or takes one dropped on the library, uploads it
@@ -433,7 +434,7 @@ class WebControls:
     the phone's page has it (the app's sync button opens it); None, neither. ``in_app``: the page is the Android
     app's, whose own bar names the library, so the page draws no library-name row (the title still names it).
     ``lyrics_search``: a song's card looks its lyrics up under another name, lists what the lyrics sites have and
-    takes one (web/lyrics_routes.py, library.js ``lyricsPanel``): caracole serve's alone; the phone's page has none.
+    takes one (web/lyrics_routes.py, library.js ``lyricsPanel``): caracole serve's, and the phone's (LyricsRoutes).
     """
 
     csrf: str

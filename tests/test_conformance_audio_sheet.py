@@ -2,12 +2,13 @@
 ``AudioRunner`` (the chords-on-the-phone design's §3.2, the plan's E21) to agree with.
 
 **Data** (``data/caracole/library/audio_sheet.json``, ``audio_sheet_json``): audio_sheet.py's ``STAGES``, run.py's
-``STEPS``, youtube_sheet.py's ``HOLDS`` and ``SITES_ANSWERED``, and every word of the job the phone says as the
-computer does, by its constant: audio_sheet.py's (``SAME_FILE``, ``KEPT_AS``, ``REPLACES``, ``GIVEN_BEFORE``, ``CANT_KEEP``,
-``THE_UPLOAD``), youtube_sheet.py's (``IGNORED``, ``HAS_SHEET``, ``IN_BOOK``, ``NOT_OFFERED``, ``NOT_HERE``,
-``NO_AUDIO``), transcript.py's (``PHONE``, ``LYRICS_ARE``), transcribe_job.py's ``NO_VOCALS``, staged.py's (``LEFT``
-with ``StagedRun.MAKING``, ``BUG``, ``UP_TO_DATE``, ``NO_SHEET``, ``RELAY_FAILED``) and commands/audio.py's
-(``NO_CHORDS``, ``REFUSED``).
+``STEPS``, youtube_sheet.py's ``HOLDS`` and ``SITES_ANSWERED``, and every word of the job the phone says as the computer
+does, by its constant: audio_sheet.py's (``SAME_FILE``, ``KEPT_AS``, ``REPLACES``, ``GIVEN_BEFORE``, ``CANT_KEEP``,
+``THE_UPLOAD``), transcript.py's ``PICKED_NONE`` and ``PICKED_UNREAD`` (the phone's lyrics routes'), lyrics_pick.py's
+``PHONE_NOT_HERE`` and ``PHONE_NOT_DOWNLOADED`` (the phone's pick), youtube_sheet.py's (``IGNORED``, ``HAS_SHEET``,
+``IN_BOOK``, ``NOT_OFFERED``, ``NOT_HERE``, ``NO_AUDIO``), transcript.py's (``PHONE``, ``LYRICS_ARE``),
+transcribe_job.py's ``NO_VOCALS``, staged.py's (``LEFT`` with ``StagedRun.MAKING``, ``BUG``, ``UP_TO_DATE``,
+``NO_SHEET``, ``RELAY_FAILED``) and commands/audio.py's (``NO_CHORDS``, ``REFUSED``).
 
 **Vectors** (``vectors/lookup/audio_sheet.jsonl``), a header, then a record a line, each a scenario record
 (helpers/scenario.py ``record_lookup``) of a world of test_conformance_lookup_scenarios.py's (``World``: Calla Lake's
@@ -97,7 +98,7 @@ OWN = "c0ffee0000000001"  # each world's kv sync:id, the side the job runs on: t
 
 
 def audio_sheet_json() -> str:
-    from caracole import audio_sheet, staged, transcribe_job, youtube_sheet
+    from caracole import audio_sheet, lyrics_pick, staged, transcribe_job, youtube_sheet
     from caracole.autochords import run, transcript
     from caracole.commands import audio as audio_cmd
 
@@ -109,6 +110,8 @@ def audio_sheet_json() -> str:
         "not_offered": youtube_sheet.NOT_OFFERED, "not_here": youtube_sheet.NOT_HERE,
         "no_audio": youtube_sheet.NO_AUDIO,
         "phone": transcript.PHONE, "lyrics_are": transcript.LYRICS_ARE, "no_vocals": transcribe_job.NO_VOCALS,
+        "picked_none": transcript.PICKED_NONE, "picked_unread": transcript.PICKED_UNREAD,
+        "phone_not_here": lyrics_pick.PHONE_NOT_HERE, "phone_not_downloaded": lyrics_pick.PHONE_NOT_DOWNLOADED,
         "left": staged.LEFT, "making": staged.StagedRun.MAKING, "bug": staged.BUG, "up_to_date": staged.UP_TO_DATE,
         "no_sheet": staged.NO_SHEET, "relay_failed": staged.RELAY_FAILED,
         "no_chords": audio_cmd.NO_CHORDS, "refused": audio_cmd.REFUSED,
