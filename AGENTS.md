@@ -23,8 +23,8 @@ For a song nobody has charted, `caracole autochords` writes a sheet from audio w
 - or an audio file the owner gives it, `caracole audio FILE`, kept in `state_dir/audio/` (audio_store.py) and made
   into the song's sheet at once (audio_sheet.py).
 
-The Android app's debug build (the `./android#ml` shell's) makes such a sheet from an audio file too, chords and beats
-heard on the phone with no words (android/: `:autochords`, `:ml`, AudioRunner, ModelsRunner; docs/autochords.md, "On
+The Android app (built in the `./android#ml` shell; the release on arm64 phones) makes such a sheet from an audio file
+too, chords and beats heard on the phone with no words (android/: `:autochords`, `:ml`, AudioRunner, ModelsRunner; docs/autochords.md, "On
 the phone").
 
 The design lives in three files:
@@ -2743,8 +2743,8 @@ It is rows.js's, shared by both pages:
     slaney filterbank (sparse): never recomputed on the phone, `:autochords`' resource;
   - `data/caracole/autochords/btc-graph.onnx` and `models.json` (the pins: each file's bytes and SHA-256, BTC's git
     blob, repository and commit, its mean and std, each model's name for `raw["models"]`), exported in the test from
-    the shell's model files, the same bytes as `.#chord-models`; on the phone `:ml`'s resources, the debug build's
-    alone (`:core` leaves `caracole/autochords/` out of its resources, so the release carries none of it);
+    the shell's model files, the same bytes as `.#chord-models`; on the phone `:ml`'s resources, so a build with `:ml`'s
+    (`:core` leaves `caracole/autochords/` out of its resources, so a build without `:ml` carries none of it);
   - every record checked against `BTCRecognizer.recognize` and `detect_beats` on the clip, exactly;
   - the gates the phone's runtime is held to, in models.jsonl's meta record (`gates`, the test's `GATES`, the
     design's §4.2): BTC's argmax equal on every frame but where the stored top-two margin is under 1e-3, its logits

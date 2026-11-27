@@ -7,8 +7,8 @@ pages change with it, and the app doesn't need an update. With the computer's in
 songs on the sites with the computer off ([below](#search-with-the-computer-off)), and caracole's own rules on the
 phone look them up there, make their pages, songbooks and versions, file what you share to it and back it all up,
 for the next sync to give the computer ([Lookups on the phone](#lookups-on-the-phone) and the sections after it).
-The debug build also makes a song's chord sheet from an audio file, heard on the phone
-([Chords from audio](#chords-from-audio-a-sheet-from-a-file-debug-build)).
+It also makes a song's chord sheet from an audio file, heard on the phone, on an arm64 phone
+([Chords from audio](#chords-from-audio-a-sheet-from-a-file)).
 
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
@@ -968,7 +968,7 @@ phone), plus what grows with the song: BTC's features, 0.37 MB a minute (11 MB f
 690 MB), its mixdown (345 MB) and the 22,050 Hz pcm (159 MB), each gone once the next is made, the pcm once the beats
 are kept.
 
-## Chords from audio: a sheet from a file (debug build)
+## Chords from audio: a sheet from a file
 
 The phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process (src/ml's
 `PhoneChords`, both builds of the `ml` shell; a build without `:ml` has none, and says auto-chords isn't on the phone).

@@ -105,9 +105,9 @@ Details: [Audio from YouTube](usage.md#audio-from-youtube).
 
 ## On the phone
 
-The Android app makes a sheet from an audio file too, on the phone itself, with no computer. For now only the debug
-build has it ([android/README.md](../android/README.md#chords-from-audio-a-sheet-from-a-file-debug-build)); the
-F-Droid release doesn't yet.
+The Android app makes a sheet from an audio file too, on the phone itself, with no computer
+([android/README.md](../android/README.md#chords-from-audio-a-sheet-from-a-file)). It needs Android 13, 6 GB of
+memory and an arm64 phone: on an x86_64 one the app says "no chord models for this phone's processor".
 
 1. In Settings › **Chords from audio**, tap **Download**. The two models, about 56 MB, come once: beat_this's from
    this repository's `models` release on GitHub, BTC's from its authors' own repository. On mobile data it asks

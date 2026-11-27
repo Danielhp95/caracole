@@ -427,7 +427,8 @@ vocals and Whisper stay the computer's.
   `--clear`), the card's panel as the computer's.
 - Held to the computer by the corpus's `autochords`, `autochords-sheet`, `audio-store`, `audio-sheet` and
   `lyrics-search` areas, and on the emulator by the models' and the decoder's gates and `ChordsEndToEndTest`.
-- Only the debug build has the models' runtime for now; the release follows (stage S).
+- The release carries the models' runtime, ONNX Runtime 1.27.1 built from its source, for arm64 phones alone (stage
+  S); a debug build for the emulator's x86_64 too.
 
 ## Changes on the computer's side
 

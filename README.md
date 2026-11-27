@@ -32,7 +32,7 @@ The computer does the nightly work. The phone keeps a copy and syncs with it.
 | Fetch one song now | Yes | Yes |
 | Read sheets, songbooks, Guitar Pro | Yes | Yes |
 | PDFs | Yes | Print only |
-| Chords from audio | Yes | From a file (debug build for now) |
+| Chords from audio | Yes | From a file (an arm64 phone) |
 | YouTube, words heard from the audio | Yes | No |
 | Share a song or file from another app | No | Yes |
 

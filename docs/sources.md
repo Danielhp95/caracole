@@ -45,6 +45,8 @@ For [chords from audio on the phone](autochords.md#on-the-phone), Settings › C
 once, when you tap Download, through GitHub's API with caracole's own user agent. beat_this (MIT), converted for the
 phone, comes from this repository's `models` release. BTC comes from its authors' own repository, the file unchanged:
 caracole never republishes it. Each file is checked against its SHA-256 before it is kept. If GitHub says the hour's
-requests are spent, the app waits until then and asks nothing before.
+requests are spent, the app waits until then and asks nothing before. The owner uploads beat_this's two files to that
+release by hand, with `nix run .#publish-models -- DIR` (nix/publish-models.sh): each is checked against the app's
+pins first and uploaded only once.
 
 The sheets and lyrics are other people's work. Keep your library private.
