@@ -172,6 +172,23 @@ class AudioRunnerTest {
         assertFalse(phone.store.gone(upload))
     }
 
+    /** A phone that can't hear chords whatever the files (an x86_64 release, Android 12, under 6 GB) is told its own
+     * reason before "aren't downloaded": Settings offers it no download to make. */
+    @Test fun thePhonesOwnProblemComesBeforeTheModelsNotDownloaded() {
+        val x86 = object : Models() {
+            override fun ready(): String = "no chord models for this phone's processor"
+            override fun phoneProblem(): String = "no chord models for this phone's processor"
+        }
+        assertEquals("no chord models for this phone's processor",
+                     AudioRunner.problemOf(x86, "The chord models aren't on the phone."))
+        val phone = phone()
+        val job = run(phone, AudioRunner(phone.parts, x86, phone.store,
+                                         problem = { AudioRunner.problemOf(x86, "The chord models aren't on the phone.") }))
+        assertEquals("error: caracole makes no sheet from an audio file here: no chord models for this phone's processor",
+                     job.steps.single().output.single())
+        assertTrue(x86.heardOf.isEmpty())
+    }
+
     /** commands/audio.py's OSError reading the file before any stage: exit 1, "can't read …", never a bug. */
     @Test fun theKeptFileUnreadableBeforeAnyStageExitsOneInWords() {
         val phone = phone()

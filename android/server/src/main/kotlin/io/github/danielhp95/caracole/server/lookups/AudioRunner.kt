@@ -580,11 +580,14 @@ class AudioRunner(
         const val INFO_FAILED = "the sheet was kept ({held}), but its info.json couldn't be written: {why}"
 
         /** Why this phone makes no sheet from an audio file now, or null: the one answer for the job and the audio
-         * routes (server.audio's `why`). No [chords] (the release, nothing wired): [LibraryPage.AUDIO_PROBLEM]; the
-         * models not installed ([modelsReady], ModelsRunner.ready's answer): [NOT_DOWNLOADED], the design's §8.1 words;
-         * else the chords' own reason ([ChordModels.ready]: "chords from audio need Android 13 or later", …). */
+         * routes (server.audio's `why`). No [chords] (nothing wired): [LibraryPage.AUDIO_PROBLEM]; what keeps the phone
+         * itself from hearing chords ([ChordModels.phoneProblem]: its processor, its Android, its memory), before the
+         * files, as Settings offers such a phone no download; the models not installed ([modelsReady],
+         * ModelsRunner.ready's answer): [NOT_DOWNLOADED], the design's §8.1 words; else the chords' own reason
+         * ([ChordModels.ready]). */
         fun problemOf(chords: ChordModels?, modelsReady: String?): String? = when {
             chords == null -> LibraryPage.AUDIO_PROBLEM
+            chords.phoneProblem() != null -> chords.phoneProblem()
             modelsReady != null -> NOT_DOWNLOADED
             else -> chords.ready()
         }
