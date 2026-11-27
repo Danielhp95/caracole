@@ -73,8 +73,10 @@ let
     bash ${script} java --source ${src} --out $out
   '';
 
+  # Each ABI after the one before it (`after`, an input it never reads): so Nix builds them one at a time whatever its
+  # max-jobs, at most 8 compile jobs on the machine (the script's cap), never 16.
   native =
-    abi:
+    abi: after:
     stdenv.mkDerivation {
       pname = "onnxruntime-android-${abi}";
       inherit version;
@@ -85,6 +87,7 @@ let
         python
         jdk17_headless
       ];
+      inherit after;
       dontUseCmakeConfigure = true;
       dontUseNinjaBuild = true;
       dontUseNinjaInstall = true;
@@ -100,7 +103,9 @@ let
       dontFixup = true;
     };
 
-  natives = lib.genAttrs abis native;
+  natives = lib.foldl' (built: abi: built // {
+    ${abi} = native abi (if built == { } then "" else built.${lib.last (lib.attrNames built)});
+  }) { } abis;
 
   group = "io.github.danielhp95.caracole";
   artifact = "onnxruntime-android";

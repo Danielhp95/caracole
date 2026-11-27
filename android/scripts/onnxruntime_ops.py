@@ -16,6 +16,7 @@ phone's (its NCHWc and fused kernels are the CPU's). Standard library and ORT's 
 import pathlib
 import sys
 
+ORT_VERSION = "1.27.1"
 GRAPHS = ("btc-graph.onnx", "beat_this-final0.onnx", "beat_this-final0-fp16.onnx")
 HEADER = """# The ops whose kernels the phone's ONNX Runtime keeps (android/scripts/build-onnxruntime.sh,
 # onnxruntime_REDUCED_OPS_BUILD), made by android/scripts/onnxruntime-ops.sh from `nix build .#chord-models`' three
@@ -29,6 +30,9 @@ HEADER = """# The ops whose kernels the phone's ONNX Runtime keeps (android/scri
 def optimize(models: pathlib.Path, out: pathlib.Path) -> None:
     import onnxruntime as ort
 
+    # The phone's release: another's optimizer may fuse otherwise, and its list would be the wrong one.
+    if ort.__version__ != ORT_VERSION:
+        sys.exit(f"onnxruntime_ops.py: onnxruntime {ort.__version__} here, not {ORT_VERSION}, the phone's")
     out.mkdir(parents=True, exist_ok=True)
     levels = {"all": ort.GraphOptimizationLevel.ORT_ENABLE_ALL, "ext": ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED}
     for name in GRAPHS:
