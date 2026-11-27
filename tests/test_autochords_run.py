@@ -2773,6 +2773,27 @@ def made_there(conn, song, *, by=PHONE, mtime_kept=False):
     return get_song(conn, song.id)
 
 
+def test_an_auto_sheet_whose_raw_cant_be_read_isnt_heard_and_the_pass_goes_on(conn, cfg, tmp_path, loud, caplog):
+    # A raw from a peer, or damaged, that isn't JSON or isn't an object: its song's words aren't heard (as
+    # _count_due assumes), said once, and the songs after it are heard as ever.
+    good = offered_song(conn, cfg, tmp_path, "Good", added_at="2026-10-01T00:00:00Z")
+    not_json = offered_song(conn, cfg, tmp_path, "Not Json", added_at="2026-10-02T00:00:00Z")
+    a_list = offered_song(conn, cfg, tmp_path, "A List", added_at="2026-10-03T00:00:00Z")
+    run(conn, cfg)
+    for song, raw in ((not_json, "not json"), (a_list, "[1, 2]")):
+        conn.execute("UPDATE versions SET raw = ? WHERE song_id = ? AND provider = 'auto'", (raw, song.id))
+    hearing = hearing_of(cfg)
+    try:
+        with caplog.at_level("WARNING", logger="caracole"):
+            stats = run(conn, cfg, hearing=hearing, transcriptions=3)
+    finally:
+        hearing.close()
+    assert heard_names(hearing) == ["Good.wav"]
+    assert stats.heard == 1 and over_words(conn, good)
+    said = [r.getMessage() for r in caplog.records if "can't be read" in r.getMessage()]
+    assert len(said) == 2 and any("Not Json" in s for s in said) and any("A List" in s for s in said)
+
+
 def test_the_nightly_run_never_remakes_a_sheet_another_caracole_made(conn, cfg, tmp_path):
     from caracole.autochords.run import MADE_ELSEWHERE, _count_due
 

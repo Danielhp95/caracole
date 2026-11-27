@@ -401,7 +401,12 @@ class _Listening:
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
-        if not _hears_here(conn, song, self.asked):
+        try:
+            hears = _hears_here(conn, song, self.asked)
+        except ValueError as e:  # its sheet's record, from a peer or damaged: as ``_count_due`` takes it, not heard
+            log.warning("%s: its words aren't heard: its auto sheet's record can't be read (%s)", song.display, e)
+            return song
+        if not hears:
             return song  # another caracole's sheet, which words heard here wouldn't replace: no Whisper, no slot
         failed = hearing_failed(conn, song, parse_stamp(stamp) or datetime.now(UTC))
         if failed is not None:  # its hearing failed lately: passed over, no slot taken, till a new file or 30 days
@@ -537,9 +542,14 @@ def _words_replace(raw: dict) -> bool:
 def _hears_here(conn: sqlite3.Connection, song: Song, asked: bool) -> bool:
     """Whether words heard here may make the song's sheet, so a pass may spend Whisper and a slot on them: always for
     an ask and for a sheet this side made (or none); for one another caracole made, only where they would replace it
-    (``_words_replace``). ``_Listening.first`` and ``_count_due`` decide by it alike."""
-    raw = _auto_raw(conn, song)
-    if asked or raw is None or not made_elsewhere(conn, raw):
+    (``_words_replace``). ``_Listening.first`` and ``_count_due`` decide by it alike. A record that can't be read (not
+    JSON, or not an object: a peer's or a damaged one) is a ValueError, read only where no ask settles it."""
+    if asked:
+        return True
+    raw = _auto_raw(conn, song)  # json.loads: a JSONDecodeError, a ValueError, for a record that isn't JSON
+    if raw is not None and not isinstance(raw, dict):
+        raise ValueError(f"a {type(raw).__name__}, not an object")
+    if raw is None or not made_elsewhere(conn, raw):
         return True
     return _words_replace(raw)
 
