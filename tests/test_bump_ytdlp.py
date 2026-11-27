@@ -402,3 +402,27 @@ def test_arguments_it_cant_take_are_a_usage_error(checkout, pypi, args):
     assert "usage: bump-ytdlp.sh [--older] [VERSION]" in result.stderr
     assert (checkout / "android" / "youtube" / "pins.json").read_bytes() == before
     assert pypi.asked == []
+
+
+@pytest.mark.parametrize("url", [
+    " {good}", "{good} ", "{head}\t{tail}", "{good}?", "{good}#",
+    "https://FILES.pythonhosted.org/packages/{name}", "https://files.pythonhosted.org/packages/\x7f{name}",
+])
+def test_a_wheel_url_not_written_canonically_is_refused(checkout, pypi, url):
+    release(pypi)
+    good = pypi.wheel_url("yt-dlp", NEW)
+    head, tail = good.rsplit("/", 1)
+    name = f"yt_dlp-{NEW}-py3-none-any.whl"
+    pypi.releases["yt-dlp"][NEW]["url"] = url.format(good=good, head=head, tail=tail, name=name)
+    assert "not https://files.pythonhosted.org/" in refused(checkout, pypi)
+    assert prefetched(checkout) == []
+
+
+def test_the_name_localhost_is_no_loopback_pypi(checkout, pypi):
+    # PyPI asked as localhost through the fake as its proxy: no name is looked up.
+    release(pypi)
+    local = pypi.base.replace("127.0.0.1", "localhost")
+    pypi.releases["yt-dlp"][NEW]["url"] = pypi.wheel_url("yt-dlp", NEW).replace("127.0.0.1", "localhost")
+    stderr = refused(checkout, pypi, CARACOLE_PYPI=local, http_proxy=pypi.base)
+    assert f"wheel at {local}/files/yt-dlp/{NEW}/" in stderr
+    assert prefetched(checkout) == []

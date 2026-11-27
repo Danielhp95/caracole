@@ -40,7 +40,7 @@ VERSION = re.compile(r"\d+(\.\d+)*")
 FILES = "files.pythonhosted.org"
 # The tests' fake PyPI, on loopback: its own host may serve the wheels; any other PyPI's must be files.pythonhosted.org.
 PYPI_HOST = urllib.parse.urlsplit(pypi)
-LOOPBACK = PYPI_HOST.hostname in ("127.0.0.1", "::1", "localhost")
+LOOPBACK = PYPI_HOST.hostname in ("127.0.0.1", "::1")  # an address, never a name looked up
 
 
 def refuse(words):
@@ -63,11 +63,14 @@ def key(version):
 
 
 def checked_url(name, version, url, filename):
-    """The wheel's URL, only https://files.pythonhosted.org/…/<filename> (or the loopback fake's own host)."""
+    """The wheel's URL, only https://files.pythonhosted.org/…/<filename> (or the loopback fake's own host), written
+    canonically: no whitespace or control character, and the very text urlsplit and urlunsplit give back (no empty
+    `?` or `#`), its host as written lower-case."""
     parts = urllib.parse.urlsplit(url)
-    pythonhosted = parts.scheme == "https" and parts.hostname == FILES and parts.port is None
+    pythonhosted = parts.scheme == "https" and parts.netloc == FILES
     fake = LOOPBACK and parts.scheme in ("http", "https") and parts.netloc == PYPI_HOST.netloc
-    if (not (pythonhosted or fake) or parts.username is not None or parts.query or parts.fragment
+    if (not (pythonhosted or fake) or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url)
+            or url != urllib.parse.urlunsplit(parts) or parts.query or parts.fragment
             or not parts.path.endswith("/" + filename)):
         refuse(f"PyPI gives {name} {version}'s wheel at {url}, not https://{FILES}/…/{filename}")
     return url
