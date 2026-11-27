@@ -1,5 +1,5 @@
 {
- "vectors_total": 90552000,
+ "vectors_total": 90662000,
  "data_total": 12000000,
  "areas": {
   "autochords": 7300000,
@@ -15,7 +15,7 @@
   "index": 1500000,
   "keys": 4500000,
   "library": 2570000,
-  "lookup": 3632000,
+  "lookup": 3742000,
   "match": 1500000,
   "pace": 300000,
   "pinyin": 6000000,
