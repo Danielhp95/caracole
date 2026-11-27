@@ -42,7 +42,7 @@ class HeatTest {
         assertNull(HeatRules.start(reading(percent = 14, plugged = true)))
         assertNull(HeatRules.start(reading(percent = 15, plugged = false)))
         assertNull(HeatRules.start(reading(percent = null, plugged = false)))
-        assertEquals("Charge the phone first: chords from audio need more than 15 % of the battery.",
+        assertEquals("Charge the phone first: chords from audio need at least 15 % of the battery.",
             HeatRules.CHARGE_FIRST)
     }
 
