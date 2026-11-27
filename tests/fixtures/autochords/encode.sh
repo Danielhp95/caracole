@@ -19,6 +19,10 @@
 # - decode.flac: 16-bit, 44.1 kHz stereo; decode.wav: 16-bit PCM, 48 kHz stereo; the right channel 0.6 of the left,
 #   so a mixdown that isn't the mean shows (the WAV's first 2 s); decode.aiff: 24-bit big-endian PCM, 44.1 kHz mono,
 #   2 s; decode-24.flac: 24-bit, 44.1 kHz mono, 1.5 s.
+# - hearing.mp3 and hearing.m4a, the end-to-end gate's files (heard whole by both models, against the computer's
+#   hearing of the same file: models.jsonl's "hearing" records): long.wav's first 20 s, the right channel 0.6 of the
+#   left, as LAME VBR (-q:a 6) at 44.1 kHz stereo and as AAC-LC at 96 kb/s and 48 kHz stereo, the forms most of the
+#   owner's own files take.
 set -euo pipefail
 cd "$(dirname "$0")"
 plain=(-map_metadata -1 -fflags +bitexact -flags:a +bitexact)
@@ -42,3 +46,5 @@ ff "${clip[@]}" "${plain[@]}" -af "$stereo" -ar 44100 -sample_fmt s16 -c:a flac 
 ff -t 2 -i steady.wav "${plain[@]}" -af "$stereo" -ar 48000 -c:a pcm_s16le decode.wav
 ff -t 2 -i steady.wav "${plain[@]}" -ar 44100 -c:a pcm_s24be decode.aiff
 ff -t 1.5 -i steady.wav "${plain[@]}" -ar 44100 -sample_fmt s32 -c:a flac decode-24.flac
+ff -t 20 -i long.wav "${plain[@]}" -af "$stereo" -ar 44100 -id3v2_version 0 -c:a libmp3lame -q:a 6 hearing.mp3
+ff -t 20 -i long.wav "${plain[@]}" -af "$stereo" -ar 48000 -c:a aac -aac_pns 0 -b:a 96k hearing.m4a

@@ -32,7 +32,12 @@ row-major; every number in a record a float32's value or an int, written as JSON
   - ``beats``: beat_this's ``beat`` and ``downbeat`` logits (float32 ``[T]``) of frontend.jsonl's ``mel`` as it is
     stored (float16, read as float32), in its 1500-frame chunks, and its minimal postprocessor's ``beats`` and
     ``downbeats``, which are the computer's for the clip's audio too;
-  - ``known``: the chords, beats and downbeats as synth_music.py played them.
+  - ``known``: the chords, beats and downbeats as synth_music.py played them;
+  then a ``hearing`` record for each of ``HEARING_FILES`` (encode.sh's: long.wav's first 20 s, 44.1 kHz stereo MP3
+  and 48 kHz stereo M4A), the computer's whole hearing of that file (``reference``), no array: ``btc``'s ``samples``
+  (librosa's 22,050 Hz length, ``ceil(n · ratio)``), ``frames``, its ``argmax`` as runs (``[class, frames]``) and
+  ``segments``; ``beats``' ``frames`` (the mel's, of beat_this's own soxr length), ``beats`` and ``downbeats``; its
+  ``duration``, read_audio's.
 - ``vectors/autochords/soxr.jsonl``: a ``meta`` record (python-soxr's and libsoxr's versions, its engine, the
   tolerance the phone's libsoxr is held to), then a record a conversion: python-soxr's ``resample`` at HQ (libsoxr
   0.1.3, linear phase, nixpkgs' own build, which python-soxr links) of seeded noise (its samples in the record) or of
@@ -180,6 +185,8 @@ GATES = {
 # 3.8e-3 at most, 2026-11-26).
 FRONTEND_GATES = {"frames": "equal", "cosine_median_min": 0.9999, "cosine_min": 0.999, "silent_within": 1e-3,
                   "max_abs": 1e-2}
+# The end-to-end gate's files (tests/fixtures/autochords/encode.sh), heard whole by the phone against the computer.
+HEARING_FILES = ("hearing.mp3", "hearing.m4a")
 # frontend.jsonl's excerpts: long.wav's samples from its second chunk on, this many, each btc.py's whole audio.
 CQT_EXCERPTS = (2048, 2049, 4095)
 
@@ -294,6 +301,20 @@ def _records() -> tuple[list[dict], list[dict]]:
         features = cqt_features(long[start:start + count]).astype(np.float32)
         frontend.append({"kind": "excerpt", "wav": fixture_ref(CLIPS / "long.wav"), "offset": start, "count": count,
                          "cqt": array(features), "cqt_norms": _norms(features)})
+    for name in HEARING_FILES:
+        path = CLIPS / name
+        ref = reference(path, btc=BTC_WEIGHTS, beats=BEAT_CHECKPOINT, threads=THREADS)
+        runs: list[list[int]] = []
+        for k in ref.logits.argmax(axis=-1).tolist():
+            if runs and runs[-1][0] == k:
+                runs[-1][1] += 1
+            else:
+                runs.append([k, 1])
+        models.append({
+            "kind": "hearing", "file": fixture_ref(path), "duration": ref.duration,
+            "btc": {"samples": len(ref.decoded), "frames": len(ref.logits), "argmax": runs, "segments": ref.segments},
+            "beats": {"frames": len(ref.mel), "beats": ref.beats, "downbeats": ref.downbeats},
+        })
     return frontend, models
 
 

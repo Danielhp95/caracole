@@ -23,7 +23,9 @@ the computer's models make of them into tests/conformance/vectors/autochords/.
 
 The decode gate's files, `decode*.*` (CC0 too), are steady.wav's first 6 s encoded by FFmpeg (LAME, libvorbis,
 libopus, its own AAC and FLAC) in each form the computer takes, written once by `encode.sh`, which says what each one
-is; tests/test_conformance_autochords_models.py writes the computer's decode of each into decode.jsonl.
+is; tests/test_conformance_autochords_models.py writes the computer's decode of each into decode.jsonl. The end-to-end
+gate's files, `hearing.mp3` (44.1 kHz stereo MP3) and `hearing.m4a` (48 kHz stereo AAC), are long.wav's first 20 s
+encoded the same way; it writes the computer's whole hearing of each into models.jsonl.
 
 Regenerate them (never by hand) in two halves: the clips and this README in the default shell,
 `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`; then, after any
