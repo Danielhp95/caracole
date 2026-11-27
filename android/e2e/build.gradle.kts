@@ -26,11 +26,13 @@ dependencies {
 
 val e2e: Map<String, String> = providers.gradlePropertiesPrefixedBy("caracole.e2e.").get()
 val conformance: File = file("../../tests/conformance/vectors")
+val fixtures: File = file("../../tests/fixtures")
 tasks.test {
     // A real server's state, never a cached result.
     outputs.upToDateWhen { false }
     e2e.forEach { (name, value) -> systemProperty(name, value) }
     systemProperty("caracole.conformance", conformance.absolutePath)
+    systemProperty("caracole.fixtures", fixtures.absolutePath)
     // What a phase found wrong, whole, in the output tests/test_android_e2e.py shows.
     testLogging {
         events("passed", "skipped", "failed")

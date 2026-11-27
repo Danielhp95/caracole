@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# What the debug APK's own native code must be, for each ABI (arm64-v8a, x86_64): libcaracole_soxr.so
-# (autochords/native/, packaged by :ml) and libqjs.so (QuickJS-NG's qjs, youtube/native/, packaged by :youtube):
+# What an APK's own native code must be, for each ABI (arm64-v8a, x86_64): libcaracole_soxr.so (autochords/native/,
+# packaged by :ml) and libqjs.so (QuickJS-NG's qjs, youtube/native/, packaged by :youtube), run inside
+# `nix develop ./android` after `gradle -p android :app:assembleDebug`:
 #
 #   android/scripts/native-check.sh [--expect extracted|stored] [APK]
 #                                  # default: android/app/build/outputs/apk/debug/app-debug.apk
+#   android/scripts/native-check.sh --release APK      # the release's: none of ours today, which passes, saying so
 #
-# run inside `nix develop ./android` after `gradle -p android :app:assembleDebug`:
+# release-check.sh runs it on both APKs it builds. Each library (in the debug APK, both for arm64-v8a and x86_64, all
+# four required; in the release, any lib/*/libcaracole_*.so or libqjs.so it holds) must be:
 #
 # - either stored uncompressed and 16 KB aligned (zipalign -c -P 16), or compressed in an APK whose manifest says
 #   android:extractNativeLibs="true" (the debug build's useLegacyPackaging, app/build.gradle.kts: the package manager
@@ -23,9 +26,11 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 expect=""
+release=0
 case "${1-}" in
   --expect) expect="${2-}"; shift 2 || true ;;
   --expect=*) expect="${1#--expect=}"; shift ;;
+  --release) release=1; shift ;;
 esac
 case "$expect" in
   ""|extracted|stored) ;;
@@ -41,14 +46,25 @@ failed=0
 fail() { echo "FAIL: $*"; failed=1; }
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
-aligned=$("$zipalign" -c -P 16 -v 4 "$apk")
+# zipalign's own verdict is the whole APK's: each entry's line decides below, saying which and why.
+aligned=$("$zipalign" -c -P 16 -v 4 "$apk" || true)
 manifest=$("$ANDROID_HOME/build-tools/36.0.0/aapt2" dump xmltree --file AndroidManifest.xml "$apk")
 extracted=0
 grep -qF 'android:extractNativeLibs(0x010104ea)=true' <<< "$manifest" && extracted=1
+ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/(libcaracole_[^/]*|libqjs)\.so$' || true)
+if [ "$release" = 1 ]; then
+  entries=$ours
+  if [ -z "$entries" ]; then
+    echo "OK: no libcaracole_* or libqjs in the release"
+    exit 0
+  fi
+else
+  entries=$(echo lib/{arm64-v8a,x86_64}/{libcaracole_soxr,libqjs}.so)
+fi
 
-for entry in lib/{arm64-v8a,x86_64}/{libcaracole_soxr,libqjs}.so; do
+for entry in $entries; do
   so=$work/$(tr / _ <<< "$entry")
-  if ! unzip -p "$apk" "$entry" > "$so" || [ ! -s "$so" ]; then
+  if ! grep -qxF "$entry" <<< "$ours" || ! unzip -p "$apk" "$entry" > "$so" || [ ! -s "$so" ]; then
     fail "$entry: not in the APK"
     continue
   fi
@@ -76,6 +92,6 @@ for entry in lib/{arm64-v8a,x86_64}/{libcaracole_soxr,libqjs}.so; do
   echo "$(sha256sum "$so" | cut -d' ' -f1)  $entry ($(stat -c %s "$so") bytes)"
 done
 
-[ "$failed" = 0 ] && echo "OK: each library packaged as its APK extracts it, aligned, stripped, and naming no path" \
-  "of the build"
+[ "$failed" = 0 ] && echo "OK: $(wc -w <<< "$entries") libraries packaged as its APK extracts them, aligned, stripped," \
+  "naming no path of the build"
 exit "$failed"

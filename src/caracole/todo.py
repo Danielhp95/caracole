@@ -490,9 +490,14 @@ def _youtube_lists(conn: sqlite3.Connection, songs_by_id: dict[int, Song],
             nothing.append(head + text + links)
             continue
         if st.state == CHORDS:
+            from caracole.autochords.sheet_lyrics import auto_made_elsewhere
+
             sheet = conn.execute("SELECT path FROM files WHERE song_id = ? AND name = 'sheet (auto).txt'",
                                  (s.id,)).fetchone()
-            text = f"chords done, from {video_link(st.video) if st.video else 'YouTube'}"
+            if auto_made_elsewhere(conn, s.id):  # its chords are the other caracole's audio's, never this video's
+                text = "chords done on your other caracole, from its audio"
+            else:
+                text = f"chords done, from {video_link(st.video) if st.video else 'YouTube'}"
             if sheet:
                 text += f": {_link('auto sheet', quote(sheet['path']))}"
         elif st.state == DOWNLOADED:

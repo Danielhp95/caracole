@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.library.internal
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.RemovedRow
@@ -36,6 +37,8 @@ internal object Rekey {
 
     private class Kept(val song: SongRow) {
         val ids = SongKv.sourceIds(song.sourceIds)
+        var audioPath = song.audioPath
+        var audioMtime = song.audioMtime
     }
 
     private fun rekey(db: Db, now: String): Int {
@@ -120,10 +123,12 @@ internal object Rekey {
         for ((rowid, _, _) in kept) db.execute("UPDATE phone_overrides SET key = ? WHERE rowid = ?", target.getValue(rowid), rowid)
     }
 
-    /** songs._merge: [other] folded into [keep] and deleted; versions [keep] hasn't seen move over unpicked, kept
-     * files under names it hasn't used with them. */
+    /** songs._merge: [other] folded into [keep] and deleted; a file the owner gave [other] [keep]'s audio
+     * ([givenAudio]); versions [keep] hasn't seen move over unpicked, kept files under names it hasn't used with
+     * them. */
     private fun merge(db: Db, keep: Kept, other: SongRow, now: String) {
         SongKv.addIds(keep.ids, SongKv.sourceIds(other.sourceIds))
+        givenAudio(db, keep, other)
         db.execute(
             "UPDATE songs SET source_ids = ?, added_at = MAX(added_at, ?), album = COALESCE(album, ?), " +
                 "duration_ms = COALESCE(duration_ms, ?), isrc = COALESCE(isrc, ?), " +
@@ -148,6 +153,21 @@ internal object Rekey {
         db.execute("DELETE FROM songs WHERE id = ?", other.id)
         SongKv.deleteSongKv(db, other.id)
         refreshStatus(db, keep.song.id, ignored = keep.song.status == "ignored", now = now)
+    }
+
+    /** songs._given_audio: [other]'s audio taken by [keep] when it is a file the owner gave (AudioStore.givenFile)
+     * and [keep]'s isn't, or is one given before (the later `audio_mtime`: an upload always wins, the latest the
+     * owner's word); the name it was given under (kv `audio:name:`) goes with it. */
+    private fun givenAudio(db: Db, keep: Kept, other: SongRow) {
+        if (!AudioStore.givenFile(other.audioPath)) return
+        if (AudioStore.givenFile(keep.audioPath) && (keep.audioMtime ?: 0.0) >= (other.audioMtime ?: 0.0)) return
+        db.execute("UPDATE songs SET audio_path = ?, audio_mtime = ? WHERE id = ?", other.audioPath, other.audioMtime,
+                   keep.song.id)
+        keep.audioPath = other.audioPath
+        keep.audioMtime = other.audioMtime
+        val name = db.kvGet("${AudioStore.NAME_KEY}${other.id}")
+        if (!name.isNullOrEmpty()) db.kvSet("${AudioStore.NAME_KEY}${keep.song.id}", name)
+        else db.kvDelete("${AudioStore.NAME_KEY}${keep.song.id}")
     }
 
     /** songs.refresh_status: ignored, found (a sheet kept) or wanted. */

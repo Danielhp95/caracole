@@ -1,0 +1,14 @@
+api.github.com publishes no robots.txt: checked by hand on 2026-11-27, one plain GET of
+https://api.github.com/robots.txt, it answered HTTP 404 with GitHub's JSON "Not Found":
+
+{
+  "message": "Not Found",
+  "documentation_url": "https://docs.github.com/rest",
+  "status": "404"
+}
+
+No rules, so nothing there is closed: neither /repos/Danielhp95/caracole/releases/tags/models (the release listed),
+/repos/Danielhp95/caracole/releases/assets/<id> (its asset) nor /repos/jayg996/BTC-ISMIR19/git/blobs/<sha> (BTC's
+authors' file), which the phone's chord models' download asks (core.models.ModelsSource), as the site catalogues'
+asks the release indexes (core.catalogues). github.com's own robots.txt, which closes /*/releases/download/, is for
+github.com alone: the phone never asks that host.

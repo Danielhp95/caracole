@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.render.internal.RenderError
 import io.github.danielhp95.caracole.viewer.render.internal.SongPass
 import kotlinx.serialization.json.Json
@@ -27,7 +28,10 @@ import java.nio.charset.CodingErrorAction
  * for the songs no mirror page serves at their unit's digest, and every song's progressions recorded.
  *
  * A song's pass ([render], [renderStale]) is render_all's for it, after the auto sheets took the lyrics that came after
- * them ([PlainLyrics]) and the own versions are as they play now ([OwnVersions]): the pages of the versions kept beside
+ * them ([PlainLyrics]), those that keep what was heard were laid out again over the words that came since (Relay, in
+ * render_all's order: after PlainLyrics, whoever made them and whether the mirror serves the song, as
+ * tests/helpers/phone_render.py does; a re-lay moves the song's unit, so its pages are then the phone's to make) and the
+ * own versions are as they play now ([OwnVersions]): the pages of the versions kept beside
  * its sheet (`version-<tab>.html`), each sheet's .cho and page (`sheet.cho`, `sheet.html`; an auto sheet's beside it,
  * which offers no export and takes the song's version but its shapes and swaps; or alone), the pages of its harmonica
  * tabs (`harmonica-N.html`), each written only when its bytes change and recorded in kv `render:files:<song id>` with
@@ -64,10 +68,11 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
      * [renderStale] is the render job's, which holds none between two songs. */
     override fun render(db: Db, songIds: Collection<Long>, between: (() -> Unit)?): RenderStats {
         store.ensureCurrentKeys(db)
-        PlainLyrics.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
+        val given = PlainLyrics.onto(db, libraryDir, Overrides.read(db), only = songIds.toSet())
+        val relayed = relayed(db, Overrides.read(db), songIds.toSet())
         var overrides = OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
         val pass = Pass()
-        val tally = Tally()
+        val tally = Tally(given.size + relayed.songs.size, relayed.failed)
         for ((n, listed) in songsOf(db, songIds).withIndex()) {
             var song = listed
             if (n > 0 && between != null) {
@@ -126,14 +131,15 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
      * `phone:render-build`, the build the phone's pages were last made by. A song whose pass fails costs the others
      * nothing (its why in the stats' `failed`). */
     open fun renderStale(between: () -> Unit, progress: (done: Int, total: Int) -> Unit = { _, _ -> }): RenderStats {
-        database.writeBlocking { db ->
+        val tally = database.writeBlocking { db ->
             store.ensureCurrentKeys(db)
-            PlainLyrics.onto(db, libraryDir, Overrides.read(db))
+            val given = PlainLyrics.onto(db, libraryDir, Overrides.read(db))
+            val relayed = relayed(db, Overrides.read(db), null)
             OwnVersions.upgraded(db, libraryDir, Overrides.read(db))
+            Tally(given.size + relayed.songs.size, relayed.failed)
         }
         val owed = database.read { db -> owed(db).map { it.id } }
         val pass = Pass()
-        val tally = Tally()
         progress(0, owed.size)
         for ((n, id) in owed.withIndex()) {
             if (n > 0) between()
@@ -254,10 +260,12 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
     /** What a song's pass came to: whether a page was written, and why it failed. */
     private class Done(val wrote: Boolean, val why: String?)
 
-    private class Tally {
+    /** A pass's counts: [given] auto sheets took lyrics or were re-laid first, and [relayFailed] those whose re-lay
+     * failed, each a failure of the pass as render_all logs it, though its pages are made from the sheet it has. */
+    private class Tally(val given: Int = 0, relayFailed: Map<Long, String> = emptyMap()) {
         var written = 0
         var unchanged = 0
-        val failed = LinkedHashMap<Long, String>()
+        val failed = LinkedHashMap(relayFailed)
 
         fun count(songId: Long, done: Done) {
             when {
@@ -267,8 +275,13 @@ open class PhoneRender(val database: Database, val libraryDir: File, val mirror:
             }
         }
 
-        fun stats() = RenderStats(written, unchanged, failed)
+        fun stats() = RenderStats(written, unchanged, failed, given)
     }
+
+    /** The re-lay of [render] and [renderStale] (Relay.onto, render_all's relay_onto_sheets): open, so a test can put a
+     * failure in it. */
+    internal open fun relayed(db: Db, overrides: Overrides, only: Collection<Long>?): Relay.Relayed =
+        Relay.onto(db, libraryDir, overrides, only)
 
     /** The songs of [ids] the library still has, newest added first as list_songs gives them (render._songs_of). */
     private fun songsOf(db: Db, ids: Collection<Long>): List<SongRow> =

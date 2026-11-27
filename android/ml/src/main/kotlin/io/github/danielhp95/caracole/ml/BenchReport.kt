@@ -37,12 +37,13 @@ data class Sample(val pssKb: Long?, val thermal: String, val headroom: Float?)
  * inputs read before), [duration] the audio's seconds; [samples] the looks taken while it ran, one a second (a run of
  * BTC's lasts a tenth of that: its PSS is a look taken around the call); [rssPeakKb] the process's true peak RSS over
  * it (VmHWM, reset as it began), kept only where [reset] says the reset took (else it may be an earlier run's); the
- * battery's charge counter, µAh, before and after.
+ * battery's charge counter, µAh, before and after; [lengthNote], its input's ([BenchInput.lengthNote]).
  */
 data class Run(
     val file: String, val kind: String, val model: String, val pass: Int, val threads: Int, val arena: Boolean,
     val screen: String, val cold: Boolean, val nanos: Long, val duration: Double, val samples: List<Sample>,
     val reset: Boolean, val rssPeakKb: Long?, val batteryStartUah: Long?, val batteryEndUah: Long?,
+    val lengthNote: String? = null,
 ) {
     val seconds: Double get() = nanos / 1e9
     val rtf: Double get() = seconds / duration
@@ -188,14 +189,23 @@ data class Parity(
 data class Differs(val file: String, val model: String, val threads: Int, val arena: Boolean, val firstSession: Int,
                    val session: Int, val first: Any, val other: Any)
 
+/** One song heard whole by the bench's whole-pipeline mode (Gate B1): its [file], its seconds end to end and each stage
+ * that ran ([Pipeline.STAGES], ns), the `:ml` process's peak RSS while it heard, and its scores against the computer's
+ * hearing ([EndToEnd.Scored]), or why it wasn't heard ([failure]). */
+data class HeardSong(
+    val file: String, val seconds: Double?, val stagesNanos: Map<String, Long>, val peakKb: Long?,
+    val scored: EndToEnd.Scored?, val failure: String? = null,
+)
+
 /**
  * The Chords bench's report, `caracole-bench-<UTC>.json` (the design's §9.1): the phone ([Device]: model, SoC,
  * Android, and the app's version), the runtime, every run ([Run]: seconds, RTF, the process's peak PSS and RSS, the
  * thermal states seen and the highest headroom, the battery's charge-counter change), each [Session] and the whole
  * [Battery], a summary of the warm runs a setting and screen state, the owner's songs ("references": Gate B0's speed,
  * RTF ≤ [RTF_GATE] sustained, and memory, true peak RSS ≤ [MEMORY_GATE_MB]) apart from the committed clips ("clips"),
- * and parity with the computer ([Parity]). Numbers are rounded for reading: seconds to the millisecond, megabytes to
- * a tenth.
+ * and parity with the computer ([Parity]); and of the whole-pipeline mode, `hearings` ([hearings]: Gate B1 a song
+ * and over all, each stage timed; null where it didn't run). Numbers are rounded for reading: seconds to the
+ * millisecond, megabytes to a tenth.
  */
 object BenchReport {
     const val FORMAT = 1
@@ -206,7 +216,7 @@ object BenchReport {
     const val MEMORY_GATE_MB = 1024.0
 
     fun of(runs: List<Run>, parity: Parity, device: Device, made: String, sessions: List<Session> = emptyList(),
-           battery: Battery? = null): JsonObject = buildJsonObject {
+           battery: Battery? = null, hearings: JsonObject? = null): JsonObject = buildJsonObject {
         put("bench", FORMAT)
         put("made", made)
         put("device", device.device)
@@ -225,6 +235,13 @@ object BenchReport {
             }
         } ?: JsonNull)
         put("sessions", JsonArray(sessions.map(::session)))
+        // The references whose duration their mel disagreed with, a file once: timed by the mel's length instead.
+        put("length_flags", JsonArray(runs.filter { it.lengthNote != null }.distinctBy { it.file }.map { r ->
+            buildJsonObject {
+                put("file", r.file)
+                put("note", r.lengthNote)
+            }
+        }))
         put("runs", JsonArray(runs.map(::run)))
         put("summary", buildJsonObject {
             put("gates", buildJsonObject {
@@ -242,12 +259,54 @@ object BenchReport {
             }
         })
         put("parity", parity(parity))
+        put("hearings", hearings ?: JsonNull)
+    }
+
+    /**
+     * The whole-pipeline mode's member, Gate B1's (§4.2): its [gates] (the hearings' meta's), a song a [HeardSong]
+     * (each score against its threshold, the lengths each model read against the computer's, where the frames part,
+     * its seconds and RTF, each stage's seconds, the `:ml` process's peak), those over all ([EndToEnd.overAll], with
+     * the slowest RTF and the highest peak; its `pass` false while a song wasn't heard, `not_heard` how many), the
+     * audio files and records that found no partner ([unmatched]), and whether every song was heard and passed.
+     */
+    fun hearings(heard: List<HeardSong>, gates: EndToEnd.Gates, unmatched: List<String>): JsonObject {
+        val scored = heard.mapNotNull { it.scored }
+        return buildJsonObject {
+            put("gates", EndToEnd.gatesJson(gates))
+            put("files", JsonArray(heard.map { h ->
+                buildJsonObject {
+                    put("file", h.file)
+                    h.scored?.let { for ((k, v) in EndToEnd.json(it, gates)) if (k != "file") put(k, v) }
+                    put("seconds", h.seconds?.let { rounded(it, 1000) })
+                    put("rtf", h.seconds?.let { secs -> h.scored?.let { rounded(secs / it.duration, 10_000) } })
+                    put("stages_seconds", buildJsonObject {
+                        for (stage in Pipeline.STAGES) h.stagesNanos[stage]?.let { put(stage, rounded(it / 1e9, 1000)) }
+                    })
+                    put("ml_peak_mb", mb(h.peakKb))
+                    put("failure", h.failure)
+                    if (h.scored == null) put("pass", false)
+                }
+            }))
+            put("over_all", buildJsonObject {
+                // A song not heard (or not scored) is no pass over all, whatever the others scored.
+                val notHeard = heard.count { it.scored == null }
+                for ((k, v) in EndToEnd.overAll(scored, gates)) {
+                    put(k, if (k == "pass") JsonPrimitive(v.toString() == "true" && notHeard == 0) else v)
+                }
+                put("not_heard", notHeard)
+                put("rtf_max", heard.mapNotNull { h -> h.seconds?.let { s -> h.scored?.let { s / it.duration } } }
+                    .maxOrNull()?.let { JsonPrimitive(rounded(it, 10_000)) } ?: JsonNull)
+                put("ml_peak_mb_max", mb(heard.mapNotNull { it.peakKb }.maxOrNull()))
+            })
+            put("unmatched", JsonArray(unmatched.map(::JsonPrimitive)))
+            put("pass", heard.isNotEmpty() && unmatched.isEmpty() && heard.all { it.scored?.pass(gates) == true })
+        }
     }
 
     /** The report of the sessions measured, in their order: their runs, and each file's parity under each setting
      * once (its first session's; the screen-off round runs the same settings again). */
     fun ofSessions(results: List<SessionResult>, gates: Gates, device: Device, made: String,
-                   battery: Battery? = null): JsonObject {
+                   battery: Battery? = null, hearings: JsonObject? = null): JsonObject {
         val btc = mutableListOf<BtcParity>()
         val beats = mutableListOf<BeatParity>()
         val laterBtc = mutableListOf<BtcParity>()
@@ -281,7 +340,7 @@ object BenchReport {
             }
         }
         return of(results.flatMap { it.runs }, Parity(gates, btc, beats, laterBtc, laterBeats, differs), device,
-            made, results.map { it.session }, battery)
+            made, results.map { it.session }, battery, hearings)
     }
 
     private fun session(s: Session): JsonObject = buildJsonObject {
@@ -321,6 +380,7 @@ object BenchReport {
             ?.let { JsonPrimitive(rounded(it.toDouble(), 1000)) } ?: JsonNull)
         put("battery_uah", if (r.batteryStartUah != null && r.batteryEndUah != null)
             JsonPrimitive(r.batteryEndUah - r.batteryStartUah) else JsonNull)
+        put("length_note", r.lengthNote)
     }
 
     /** The warm runs a setting and screen state; with [gate], Gate B0's flags beside (the references': the clips'

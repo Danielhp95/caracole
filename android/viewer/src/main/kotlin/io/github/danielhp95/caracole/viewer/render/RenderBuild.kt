@@ -45,7 +45,8 @@ object RenderBuild {
         "pinyin/chars.txt", "pinyin/hans.txt", "pinyin/phrases.txt", "pinyin/symbols.txt",
         "unicode/case.txt", "unicode/category.txt", "unicode/combining.txt", "unicode/decomposition.txt",
         "unicode/east_asian_width.txt", "unicode/flags.txt", "unicode/ignorecase.txt", "unicode/title.txt",
-        "viewer/harmonica_page.json", "viewer/harmony.json", "viewer/harp.json", "viewer/harptab.json",
+        "viewer/autochords.json", "viewer/harmonica_page.json", "viewer/harmony.json", "viewer/harp.json",
+        "viewer/harptab.json",
         "viewer/instruments.json", "viewer/page.json", "viewer/pinyin.json", "viewer/sheet.json", "viewer/theory.json",
         "viewer/version.json", "viewer/winds.json",
     )

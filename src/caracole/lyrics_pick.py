@@ -16,11 +16,13 @@ asked for now (as ``versions --keep`` holds it), its client a lookup's, at a loo
   lyric files (``lyrics.txt``, ``lyrics.lrc``) written first; then the record noted under ``[lyrics]`` (its ``as``
   kept); then, in one savepoint, the question asked anew (lyrics_search.py ``ask_anew``), the song's lyrics found and
   its auto sheet made due where the words changed (its ``autochords_mtime`` cleared, as new audio clears it: a sheet
-  made before it kept its words' key is remade too); then info.json. It replaces whatever the song had. Files or
+  made before it kept its words' key is remade too), unless it keeps what was heard, which the chords stage lays out
+  again over them with no model (staged.py ``_relaid``); then info.json. It replaces whatever the song had. Files or
   overrides.toml that can't be written put the lyric files back and keep nothing else, failing the job (its words say
   when the files couldn't be put back and may hold the new words); an info.json that can't be written after the keep
   leaves the lyrics kept, said so, and fails the job.
-- ``chords``: the auto sheet made again over them now, or made for the first time (``_autochords_sheet``, after a
+- ``chords``: the auto sheet laid out again over them from what was heard, in seconds, no model (``_relaid``), where
+  it keeps that; else made again over them now, or made for the first time (``_autochords_sheet``, after a
   waiting lookup went first); otherwise skipped, saying why: no new lyrics, a site's sheet, no audio, or auto-chords
   not here (tonight's run makes it again; a chart takes the words as plain lyrics at the PDF's render meanwhile,
   sheet_lyrics.py, no model).
@@ -59,6 +61,11 @@ STAGES = (
     ("pages", "The logbook page"),
 )
 NO_NEW = "no new lyrics"
+# The chords stage's words for a sheet another caracole made whose ``heard`` this caracole can't read (a newer
+# contract, a damaged record): it keeps its old words under the new lyrics, and only a sheet made here replaces it.
+ELSEWHERE_UNREAD = ("its auto sheet was made on your other caracole and can't be laid out again here over these "
+                    "lyrics (what was heard there can't be read here): ask for a new sheet here, from an audio file "
+                    "or a video")
 NOTHING_KEPT = "; nothing kept"
 NO_LYRICS_NOW = " has no lyrics now"  # a record gone, its lyrics stage's words before NOTHING_KEPT: an answer, no wait
 KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
@@ -95,11 +102,16 @@ def _readable(song: Song) -> Any:
         return None
 
 
-def _has_auto_sheet(conn: sqlite3.Connection, song: Song) -> bool:
+def _models_remake(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether the song's auto sheet is the models' to make again over other words: one kept that keeps no ``heard``
+    (made before what was heard was kept). One that keeps it is laid out again over them with no model (the chords
+    stage's ``_relaid``, else the PDF's render: autochords/sheet_lyrics.py), its audio never made due for them."""
     from caracole.library import kept_files
     from caracole.songs import AUTO_SHEET
+    from caracole.versions import get_version
 
-    return any(f.name == AUTO_SHEET for f in kept_files(conn, song.id))
+    auto = next((f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET), None)
+    return auto is not None and get_version(conn, auto.version_id).raw.get("heard") is None
 
 
 class _Pick(StagedRun):
@@ -258,7 +270,7 @@ class _Pick(StagedRun):
         except OverridesError as e:  # the files written are taken back: the song stays as it was
             return self._fail(f"couldn't note the record in overrides.toml: {e}{self._put_back(folder, before)}")
         other_words = before is None or (before.plain, before.synced) != (lyrics.plain, lyrics.synced)
-        due = {"autochords_mtime": None} if other_words and _has_auto_sheet(self.conn, song) else {}
+        due = {"autochords_mtime": None} if other_words and _models_remake(self.conn, song) else {}
         with savepoint(self.conn, "lyrics_pick"):
             ask_anew(self.conn, song)  # a record picked is a new question: what the sites missed before goes
             update_song(self.conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json(),
@@ -305,6 +317,22 @@ class _Pick(StagedRun):
 
     # --- chords, pdf --------------------------------------------------------------------------------------------
 
+    def _heard_reads(self) -> bool:
+        """Whether the song's auto sheet's ``heard`` reads (autochords/sheet.py ``read_heard``): its words re-lay it."""
+        from caracole.autochords.sheet import read_heard
+        from caracole.library import kept_files
+        from caracole.songs import AUTO_SHEET
+        from caracole.versions import get_version
+
+        auto = next((f for f in kept_files(self.conn, self.song.id) if f.name == AUTO_SHEET), None)
+        if auto is None:
+            return False
+        try:
+            read_heard(get_version(self.conn, auto.version_id).raw.get("heard"))
+        except ValueError:
+            return False
+        return True
+
     def _why_no_chords(self) -> str | None:
         from pathlib import Path
 
@@ -319,9 +347,16 @@ class _Pick(StagedRun):
 
     def chords(self) -> tuple[str, str]:
         from caracole import youtube_fetch
+        from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE, auto_made_elsewhere
 
         if self.result.states.get("lyrics") != "done":
             return "skipped", NO_NEW
+        relaid = self._relaid()  # what was heard is kept: seconds, no model, no audio, no hand-over
+        if relaid is not None:
+            return relaid
+        if auto_made_elsewhere(self.conn, self.song.id):  # words never run a model on another caracole's sheet (R3)
+            return "skipped", (ELSEWHERE_UNREAD if not self._heard_reads()
+                               else f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
         why = self._why_no_chords()
         if why is not None:
             return "skipped", why
@@ -410,7 +445,7 @@ def clear_pick(cfg: Config, conn: sqlite3.Connection, song: Song, overrides: Ove
     gave = _gave(_readable(song), record)
     with savepoint(conn, "lyrics_clear"):
         if gave:
-            due = {"autochords_mtime": None} if _has_auto_sheet(conn, song) else {}
+            due = {"autochords_mtime": None} if _models_remake(conn, song) else {}
             update_song(conn, song.id, lyrics_status="pending", lyrics_json=None, lyrics_at=None, **due)
         ask_anew(conn, get_song(conn, song.id))
     stuck = ""

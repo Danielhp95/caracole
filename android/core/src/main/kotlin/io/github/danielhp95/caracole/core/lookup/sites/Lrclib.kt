@@ -30,7 +30,8 @@ object LrclibStage : SiteStage {
         val record = Lyrics.pickedRecord(song, picks)
         val named = record == null && Lyrics.askedName(song, picks) != null
         val asked = ctx.asking.ask(Lrclib.PROVIDER) { client ->
-            val stats = Lrclib.fetchPendingLyrics(ctx.db, client, ctx.library, ctx.now, setOf(song.id), picks = picks)
+            val stats = Lrclib.fetchPendingLyrics(ctx.db, client, ctx.library, ctx.now, setOf(song.id),
+                                                  durations = ctx.length?.let { mapOf(song.id to it) }, picks = picks)
             if (named && stats.tried > 0) ctx.askedUnderName()
             val s = LyricsStages.ended(Lrclib.PROVIDER, stats)
             // A record you picked: kept, gone, or not asked within its 30 days.

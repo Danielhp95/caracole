@@ -26,6 +26,7 @@ BEATS_PER_BAR = 4
 BARS_PER_LINE = 4
 GAP_BARS = 2  # an instrumental gap at least this long gets chord-only lines
 _EPS = 1e-6
+_NO_CHORD_CELL = "[ch]N.C.[/ch]"  # a chart's bar where nothing sounds
 
 _STAMP_RUN = re.compile(r"(?:\s*\[\d+:\d{1,2}(?:[.:]\d+)?\])+")
 _STAMP = re.compile(r"\[(\d+):(\d{1,2})(?:[.:](\d+))?\]")
@@ -422,8 +423,8 @@ def _chart(segs: Sequence[ChordSegment], bars: Sequence[float], lo: float, hi: f
         for s in segs:
             if start + _EPS < s.start < end - _EPS and (not names or names[-1] != s.label):
                 names.append(s.label)
-        cells.append(" ".join(f"[ch]{n}[/ch]" for n in names) if names else "[ch]N.C.[/ch]")
-    while cells and cells[-1] == "[ch]N.C.[/ch]":
+        cells.append(" ".join(f"[ch]{n}[/ch]" for n in names) if names else _NO_CHORD_CELL)
+    while cells and cells[-1] == _NO_CHORD_CELL:
         cells.pop()
     rows = [
         "| " + " | ".join(cells[i : i + BARS_PER_LINE]) + " |"

@@ -1,8 +1,9 @@
 {
- "vectors_total": 89000000,
+ "vectors_total": 89752000,
  "data_total": 12000000,
  "areas": {
-  "autochords": 6000000,
+  "autochords": 6500000,
+  "autochords-sheet": 900000,
   "canonical": 1000000,
   "catalogues": 50000,
   "corpus": 100000,
@@ -13,8 +14,8 @@
   "inbox": 300000,
   "index": 1500000,
   "keys": 4500000,
-  "library": 2500000,
-  "lookup": 3500000,
+  "library": 2570000,
+  "lookup": 3632000,
   "match": 1500000,
   "pace": 300000,
   "pinyin": 6000000,

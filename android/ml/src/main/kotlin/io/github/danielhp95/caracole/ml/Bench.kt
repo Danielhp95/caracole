@@ -138,6 +138,7 @@ class Bench(
                         say("${source.name}: not read (${e.message ?: e.javaClass.simpleName}), passed over")
                         continue
                     }
+                    input.lengthNote?.let(say)
                     for (pass in 1..passes) {
                         if (stopped()) {
                             cut = STOPPED
@@ -234,7 +235,7 @@ class Bench(
             file = input.name, kind = input.kind, model = model, pass = pass, threads = threads, arena = arena,
             screen = screen, cold = cold, nanos = nanos, duration = input.duration, samples = samples.toList(),
             reset = reset, rssPeakKb = probe.rssPeakKb(), batteryStartUah = start.chargeUah,
-            batteryEndUah = end.chargeUah,
+            batteryEndUah = end.chargeUah, lengthNote = input.lengthNote,
         )
     }
 

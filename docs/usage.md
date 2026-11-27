@@ -869,7 +869,7 @@ Each site gets a fixed number of requests a run, one at a time, with a random pa
 | gametabs.net | 20 | 0.25 s. Its robots.txt asks for 5 s, which caracole doesn't keep. |
 | iReal Pro's forum | 20 | 2.5–5 s |
 | MuseScore | 10 | 2.5–5 s |
-| YouTube | 6 yt-dlp runs | 3.75–7.5 s |
+| YouTube | 50 yt-dlp runs | 3.75–7.5 s |
 
 The lyrics sites and LaCuerda have budgets too. You set them all under `[providers.…]` in
 caracole.toml (see [Configure](#configure)). Here is where the requests go:
@@ -883,7 +883,7 @@ caracole.toml (see [Configure](#configure)). Here is where the requests go:
   left reads about 15 artist pages a night on harptabs.com, about ten game pages on gametabs.net,
   and the forum's other playlists, about six pages.
 - MuseScore: its song sitemaps only, an index and 18 files, read over two nights.
-- YouTube: a search and a download per song, so three songs a night. Inside a run, yt-dlp waits half
+- YouTube: a search and a download per song, so twenty-five songs a night. Inside a run, yt-dlp waits half
   a second between its own requests and 2.5–5 seconds before a download.
 
 A site's sitemaps cost a few requests on the first run, and again every 30 days: seven for
@@ -1735,7 +1735,7 @@ caracole keeps to these terms:
   the auto sheet.
 - It runs yt-dlp only where auto-chords can make chords of the audio. A caracole without
   auto-chords (the default package) or its model files runs none, and the to-do page says why.
-- A night's budget is 6 yt-dlp runs (a search or a download each), one at a time, 3.75–7.5
+- A night's budget is 50 yt-dlp runs (a search or a download each), one at a time, 3.75–7.5
   seconds apart.
 - It takes only the audio, as m4a, never a playlist, 100 MB at most. The file stays in the cache,
   outside the synced library (see [the library folder](#the-library-folder)).

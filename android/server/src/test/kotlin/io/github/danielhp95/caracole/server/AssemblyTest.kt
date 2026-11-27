@@ -171,6 +171,39 @@ class AssemblyTest {
         }
     }
 
+    /** The given audio no song names (a song a take removed or merged, a removal's) is tidied as the phone starts
+     * and after a sync's take; a kept file a song names, a staged upload and anything else stay. */
+    @Test fun theGivenAudioNoSongNamesIsTidiedAtTheStartAndAfterATake() {
+        val folder = File(tmp.root, "state/audio").apply { mkdirs() }
+        val orphan = File(folder, "7-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+        val staged = File(folder, ".upload-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+        phone { phone ->
+            assertTrue(!orphan.exists(), "a kept file no song names is gone at the start")
+            assertTrue(staged.exists(), "a staged upload is the sweep's, never the tidy's")
+            val again = File(folder, "8-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+            phone.afterSync()
+            assertTrue(!again.exists(), "and after a take")
+        }
+    }
+
+    /** `caracole audio` is the phone's command, AudioRunner's; with no chord models wired in (the release, the
+     * assembly's default) its job refuses before anything is kept, in the command's words; the models' remove is
+     * refused while one waits or runs (ModelsRunner.USES). */
+    @Test fun theAudioCommandIsWiredAndWithNoChordsItRefusesBeforeAnythingIsKept() = phone { phone ->
+        val commands = io.github.danielhp95.caracole.server.jobs.JobCommands.audioSheetSteps("Calla Lake - River Road",
+                                                                                           "0123456789abcdef")
+        assertTrue(io.github.danielhp95.caracole.server.jobs.JobCommands.AUDIO_SHEET in
+                       io.github.danielhp95.caracole.server.lookups.ModelsRunner.USES)
+        val job = phone.queue.submit(JobSpec("Sheet from an audio file: Calla Lake - River Road",
+                                             "audio:calla-lake/river-road", "song",
+                                             io.github.danielhp95.caracole.server.jobs.JobCommands.stages(commands.map { it.args }),
+                                             commands = commands)).first
+        val over = runBlocking { phone.queue.await(job.id) }
+        assertEquals(Job.FAILED, over.state)
+        assertEquals(listOf("error: caracole makes no sheet from an audio file here: auto-chords isn't on the phone"),
+                     over.steps.single().output)
+    }
+
     /** A take checks a song's `[version]` and `[harmonica]` entries with the viewer's own checks, as
      * overrides.put_song_entries reads them back: the engine is given Versions.keyVersion and HarpTabs.checkSpec. */
     @Test fun theSyncEngineTakesWithTheViewersChecksOfAnOverridesEntry() = phone<Unit> { phone ->
@@ -262,7 +295,10 @@ class AssemblyTest {
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
         assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
-                           "inbox", "backup", "catalogues"), phone.queue.commands.runners.keys)
+                           "inbox", "backup", "catalogues", "models", "audio"), phone.queue.commands.runners.keys)
+        // The JVM's classpath carries no models.json, as the release's: the models' job is offered and says so.
+        assertEquals(null, phone.models.folder())
+        assertEquals("This build carries no chord models.", phone.models.ready())
         // The site catalogues listed through GitHub's API, the one source.
         assertTrue(phone.catalogues.source(io.github.danielhp95.caracole.mirror.Http()) is
                        io.github.danielhp95.caracole.core.catalogues.CatalogueSource.Api)

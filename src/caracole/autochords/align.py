@@ -74,6 +74,7 @@ STEADY_BARS = 2  # the music starts with the first chord of a stretch this long 
 REPEAT_CHARS = 8  # a line sung again counts when its words are at least this long
 REPEATS_PER_LINE = 6  # occurrences of one line compared, at most
 _EPS = 1e-6
+_WORD = re.compile(r"\w+")  # a line's words, for its key: repeats
 
 
 @dataclass(frozen=True)
@@ -151,20 +152,11 @@ def lyrics_offset(
     """How far to shift the timed ``lines`` (``merge.parse_lrc``'s) to fit the audio the models
     heard as ``segments``, ``beats`` and ``downbeats``, ``audio_s`` long, when LRCLIB timed them
     against a release ``lyrics_s`` long. See the module's docstring."""
-    sung = _sung(lines)
-    if len(sung) < MIN_LINES:
-        return Alignment(None, f"{len(sung)} sung lines, too few to place")
-    audio = _Audio(segments, beats, downbeats, until=max([audio_s] + [s.end for s in segments]))
-    if not audio.segs or audio.beat <= 0 or len(audio.bars) < 2:
-        return Alignment(None, "no chords or no beats to place the lines by")
-    d = audio_s - lyrics_s
-    pairs = _repeated(sung)
-    music = audio.music()
-    least = max(0.0, music[1] - music[0] - lyrics_s)  # the overhang no shift avoids: more music than lyrics
-    fits = [_fit(o, sung, pairs, audio, d=d, music=music, lyrics_s=lyrics_s, least=least)
-            for o in _candidates(d, audio.beat, audio.bar)]
+    early, fits, beat = scored(lines, segments, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s)
+    if early is not None:
+        return early
     best = max(fits, key=lambda f: (f.score, -abs(f.offset)))
-    others = [f.score for f in fits if abs(f.offset - best.offset) > audio.beat + _EPS]
+    others = [f.score for f in fits if abs(f.offset - best.offset) > beat + _EPS]
     runner_up = max(others, default=-math.inf)
     found = {"best": round(best.offset, 3), "score": round(best.score, 3), "runner_up": round(runner_up, 3)}
     if best.onsets < MIN_ONSETS:
@@ -174,9 +166,36 @@ def lyrics_offset(
     if best.score - runner_up < MARGIN:
         return Alignment(None, f"no clear winner ({best.score:.3f} at {best.offset:+.2f} s, "
                                f"{runner_up:.3f} a beat or more away)", **found)
-    offset = 0.0 if abs(best.offset) <= audio.beat + _EPS else round(best.offset, 3)
+    offset = 0.0 if abs(best.offset) <= beat + _EPS else round(best.offset, 3)
     return Alignment(offset, f"{best.score:.3f} at {best.offset:+.2f} s, {runner_up:.3f} a beat or more away",
                      **found)
+
+
+def scored(
+    lines: Sequence[tuple[float, str]],
+    segments: Sequence[ChordSegment],
+    beats: Sequence[float],
+    downbeats: Sequence[float],
+    *,
+    audio_s: float,
+    lyrics_s: float,
+) -> tuple[Alignment | None, list[_Fit], float]:
+    """``lyrics_offset`` up to its candidates scored, the one place its steps are: its answer where it gives one before
+    any (too few lines, no chords or no beats) with no fit, else None, every candidate's ``_Fit`` before any is rounded
+    and the beat's length. The conformance corpus digests these fits (tests/test_conformance_autochords.py)."""
+    sung = _sung(lines)
+    if len(sung) < MIN_LINES:
+        return Alignment(None, f"{len(sung)} sung lines, too few to place"), [], 0.0
+    audio = _Audio(segments, beats, downbeats, until=max([audio_s] + [s.end for s in segments]))
+    if not audio.segs or audio.beat <= 0 or len(audio.bars) < 2:
+        return Alignment(None, "no chords or no beats to place the lines by"), [], 0.0
+    d = audio_s - lyrics_s
+    pairs = _repeated(sung)
+    music = audio.music()
+    least = max(0.0, music[1] - music[0] - lyrics_s)  # the overhang no shift avoids: more music than lyrics
+    fits = [_fit(o, sung, pairs, audio, d=d, music=music, lyrics_s=lyrics_s, least=least)
+            for o in _candidates(d, audio.beat, audio.bar)]
+    return None, fits, audio.beat
 
 
 def shifted_lrc(text: str, offset: float) -> str:
@@ -218,7 +237,7 @@ def _sung(lines: Sequence[tuple[float, str]]) -> list[_Line]:
             continue
         end = min(nexts.get(j, math.inf), t + typical)
         if end > t:
-            out.append(_Line(t, end, " ".join(re.findall(r"\w+", text.casefold()))))
+            out.append(_Line(t, end, " ".join(_WORD.findall(text.casefold()))))
     return out
 
 

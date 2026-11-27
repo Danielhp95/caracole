@@ -18,12 +18,25 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+val modelsTestData = tasks.register<Sync>("modelsTestData") {
+    from("../../tests/conformance/data") {
+        include("caracole/autochords/models.json", "caracole/autochords/btc-graph.onnx")
+    }
+    into(layout.buildDirectory.dir("models-test-data"))
+}
+
 sourceSets {
     main {
         resources.srcDir("../../tests/conformance/data")
         // The chord models' graph and pins are :ml's, the debug build's alone until the stage that ships them: never
         // in the release through :core.
         resources.exclude("caracole/autochords/**")
+    }
+    test {
+        // core.models' tests read the pins and BTC's graph as the debug build's :ml puts them on the classpath: a
+        // folder of their own, so that the filter is theirs alone (a resources.include would filter every test
+        // resource).
+        resources.srcDir(modelsTestData)
     }
 }
 

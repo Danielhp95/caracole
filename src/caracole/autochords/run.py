@@ -19,19 +19,28 @@ with linked audio is due when:
   chords it wrote at their characters' indexes rather than their display
   columns (its version's ``raw`` has no ``columns``), or over the song's lyrics
   before they became other words (its version's ``raw["lyrics_key"]``, the key
-  of the words it was made over, ``_lyrics_key``, isn't the song's now: a pick
+  of the words it was made over, sheet.py's ``song_lyrics_key``, isn't the song's now: a pick
   of other lyrics; a sheet an older caracole made keeps none, and isn't made
   again for it): once more, each, so timed
   lyrics that don't fit the audio make a plain sheet again once, never every
   night (plain lyrics that come after a sheet of none rarely get here: they need
   no model, and the next render puts them on it, sheet_lyrics.py, with their key);
+- the words' reasons above are a sheet's that keeps no ``heard`` alone (made before
+  what was heard was kept): one that keeps it is laid out again over new words
+  with no model, in render's first step (sheet_lyrics.py ``relay_onto_sheets``),
+  and is due here only once its audio changes;
+- its sheet, if any, wasn't made by another caracole (its version's ``raw["made_by"]`` isn't this side's
+  ``sync:id``): such a sheet is never made again here by itself (``MADE_ELSEWHERE``), only when the owner asks for
+  it now (``autochords_pending``'s ``asked``), or, its chords alone, when words of this side's audio are heard here
+  and no lyrics site has the song's (transcript.py ``WORDS_WIN``);
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
   with a warning, before any model runs, and waits.
 
-For each song due, BTC recognizes the chords, beat_this finds the beats, and
-``merge.build_sheet`` lays the chords out over LRCLIB's lyrics: the synced ones
+For each song due, BTC recognizes the chords, beat_this finds the beats (``_hear``, with the
+audio's length as ``music.read_audio`` reads it: a ``sheet.Heard``), and sheet.py's ``make_sheet``, which
+reads no audio, has ``merge.build_sheet`` lay the chords out over LRCLIB's lyrics: the synced ones
 when their duration matches the audio's within 2 s; when it doesn't (LRCLIB timed
 them for another cut of the song: a video with a spoken intro, say), the synced
 ones moved by the shift ``align.lyrics_offset`` finds from the chords and the
@@ -71,7 +80,6 @@ waited for weren't heard (None for none).
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import math
 import sqlite3
@@ -85,25 +93,34 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from caracole.autochords.align import lyrics_offset, shifted_lrc
+from caracole.autochords import beats as beat_this
+from caracole.autochords.audio import sha16
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import (
-    NO_CHORD,
-    ChordSegment,
-    LrcLine,
-    build_sheet,
-    parse_lrc,
-    parse_lrc_words,
-    youtube_credit,
-)
+from caracole.autochords.merge import ChordSegment, youtube_credit
 from caracole.autochords.remeasure import remeasure_once
-from caracole.autochords.sheet_lyrics import lyrics_key
+from caracole.autochords.sheet import (
+    COLUMNS,
+    Heard,
+    Made,
+    Maker,
+    instrumental,
+    make_sheet,
+    raw_of,
+    song_lyrics_key,
+    sung_lyrics,
+    synced_key,
+    wider_lines,
+)
+from caracole.autochords import transcript as words_rule  # its ``WORDS_WIN``, read as each song is weighed
+from caracole.autochords.sheet_lyrics import (
+    MADE_ELSEWHERE,
+    made_elsewhere,
+    relay_onto_sheets,
+    relay_reason,
+)
 from caracole.autochords.transcript import (
     LYRICS_SOURCE,
-    NOT_SUNG,
-    NOTE,
-    SILENT,
     UNREADABLE,
     Transcript,
     hearing_failed,
@@ -112,17 +129,14 @@ from caracole.autochords.transcript import (
     why_not_offered,
 )
 from caracole.autochords.transcript import heard_nothing as _heard_nothing
-from caracole.chordpro import display_columns
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
-from caracole.keys import estimate_key
 from caracole.library import SharedFolder, keep_file, keeper_of, kept_files, write_info
-from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.stamps import parse as parse_stamp
-from caracole.versions import get_version, upsert_version
+from caracole.versions import AUTO, auto_version_of, auto_versions_beside, get_version, upsert_version
 from caracole.youtube import Video
 from caracole.youtube_fetch import transcribe_problem, youtube_audio
 
@@ -131,11 +145,10 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-PROVIDER = "auto"
-MODEL = "btc_large_voca"
-SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
+PROVIDER = AUTO
+MADE_ON = "computer"  # the side an auto sheet made here was made on (its raw's ``made_on``; the phone's "phone")
+RELAID = "its words are laid out again from what was heard"  # ``_skip_reason``'s, for a re-lay's words
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
-COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
 # What ``autochords_pending`` tells its ``on_step`` as each step starts: a song's chords, then, before them, its words
 # where it hears them (``hearing``).
@@ -146,7 +159,8 @@ TONE_HZ = (261.63, 329.63, 392.0)  # C major: C4, E4 and G4
 
 
 class Recognizer(Protocol):
-    """Timed chords from an audio file, like ``btc.BTCRecognizer``."""
+    """Timed chords from an audio file, like ``btc.BTCRecognizer``, which also says its ``name`` and ``runtime``
+    (an auto sheet's raw keeps them where a recognizer says them)."""
 
     def recognize(self, audio_path: Path | str) -> list[ChordSegment]: ...
 
@@ -181,6 +195,8 @@ class AutoStats:
     have nothing sung. ``transcribe_problem``: why words a song waited for weren't heard, the setup's (the separator,
     the GPU, Whisper's model) or this machine's (``youtube_fetch.transcribe_problem``); no exit 1 on its account.
     ``remeasured``: the songs whose MP3's guessed length the run put right, once ever (remeasure.py), by name.
+    ``relaid``: the sheets that keep what was heard laid out again over their song's new words, no model (``_due``);
+    counted apart from the three.
     """
 
     generated: int = 0
@@ -192,11 +208,14 @@ class AutoStats:
     silent: int = 0
     transcribe_problem: str | None = None
     remeasured: list[str] = field(default_factory=list)
+    relaid: int = 0
 
     def summary(self) -> str:
         """One line for the journal or a notification: "1 generated, 4 skipped, 0 failed", then what was heard, or
         why nothing was, where anything was to hear ("; words heard for 1, nothing sung in 1")."""
         said = f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
+        if self.relaid:
+            said += f", {self.relaid} laid out again over new words"
         if self.heard or self.silent:
             said += f"; words heard for {self.heard}, nothing sung in {self.silent}"
         if self.transcribe_problem is not None:
@@ -228,6 +247,7 @@ def autochords_pending(
     overrides: Overrides | None = None,
     between: Callable[[], bool] | None = None,
     only: Collection[int] | None = None,
+    asked: bool | None = None,
     on_step: Callable[[str], None] | None = None,
     hearing: Hearing | None = None,
     transcriptions: int = 0,
@@ -250,6 +270,11 @@ def autochords_pending(
     ``only``: the ids of the songs to work on (``caracole autochords --song``, a sheet
     from a YouTube video); the others count nowhere, and the run's record keeps their
     failures as the last whole run left them.
+
+    ``asked``: whether the songs of ``only`` are the owner's ask now (by default, whenever ``only`` names them):
+    ``caracole autochords --song``, a sheet from a YouTube video, from an audio file, a transcription's chords. An ask
+    makes again a sheet another caracole made, from this side's audio, this side its maker (the design's R3); no pass
+    over the library does (``MADE_ELSEWHERE``), but for words heard here (R5, transcript.py ``WORDS_WIN``).
 
     Before each song it works on, it logs which, and how many of those due it is
     ("Working out the chords of A - T (3 of 12)…"), a song taking minutes: the due
@@ -284,17 +309,18 @@ def autochords_pending(
     if remeasure:  # once ever: an MP3 whose length was guessed (remeasure.py)
         stats.remeasured = remeasure_once(conn, cfg, list_songs(conn), overrides, stamp)
     songs = [s for s in list_songs(conn) if only is None or s.id in only]
+    asked = only is not None if asked is None else asked
     hears = transcriptions if hearing is not None else 0
-    due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp)), 0
+    due, worked = _count_due(conn, cfg, songs, overrides, hears, parse_stamp(stamp), asked=asked), 0
     turns = _Turns(cfg, conn, overrides, between)
-    listening = _Listening(hearing, transcriptions)
+    listening = _Listening(hearing, transcriptions, asked=asked)
     for listed in turns.each(songs):
         song = listening.first(conn, cfg, listed, turns, stats, stamp, told)
         if song is None:  # left the book while its words were heard and a lookup went first
             continue
         overrides = turns.overrides
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
-        if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats):
+        if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats, asked=asked):
             continue
         loaded = models.load(stats, told)
         if loaded is None:  # the models can't run: the song stays due
@@ -354,13 +380,16 @@ class _Turns:
 @dataclass
 class _Listening:
     """A run's hearing of words: ``hearing``, up to ``cap`` songs (``tried`` so far), ``stopped`` once its setup
-    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``asked``)."""
+    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``said``). A song
+    whose auto sheet another caracole made isn't heard by a pass over the library (``asked`` false) unless its words
+    would replace it (``_hears_here``): they would make no sheet here."""
 
     hearing: Hearing | None
     cap: int
+    asked: bool = False
     tried: int = 0
     stopped: bool = False
-    asked: bool = False
+    said: bool = False
 
     def first(self, conn: sqlite3.Connection, cfg: Config, song: Song, turns: _Turns, stats: AutoStats, stamp: str,
               told: Callable[[str], None]) -> Song | None:
@@ -368,16 +397,23 @@ class _Listening:
         song that left the book meanwhile."""
         if not self.cap or self.stopped or self.tried >= self.cap or not song.audio_path:
             return song
-        if self.hearing is None and self.asked:  # said already: nothing more to hear or say this run
+        if self.hearing is None and self.said:  # said already: nothing more to hear or say this run
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
+        try:
+            hears = _hears_here(conn, song, self.asked)
+        except ValueError as e:  # its sheet's record, from a peer or damaged: as ``_count_due`` takes it, not heard
+            log.warning("%s: its words aren't heard: its auto sheet's record can't be read (%s)", song.display, e)
+            return song
+        if not hears:
+            return song  # another caracole's sheet, which words heard here wouldn't replace: no Whisper, no slot
         failed = hearing_failed(conn, song, parse_stamp(stamp) or datetime.now(UTC))
         if failed is not None:  # its hearing failed lately: passed over, no slot taken, till a new file or 30 days
             log.info("%s: its words aren't heard tonight (its hearing failed lately: %s)", song.display, failed)
             return song
         if self.hearing is None:
-            self.asked = True
+            self.said = True
             stats.transcribe_problem = transcribe_problem(cfg)
             return song
         return self._hear_words(conn, cfg, self.hearing, song, turns, stats, stamp, told)
@@ -460,10 +496,11 @@ def _quiet(said: str) -> None:
 
 
 def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
-               hears: int = 0, now: datetime | None = None) -> int:
+               hears: int = 0, now: datetime | None = None, *, asked: bool = False) -> int:
     """How many of ``songs`` are due now, for the "3 of 12" before each, as ``_due`` would find them, counting
     nothing in a run's stats; with the first ``hears`` songs offered their words counted due too, as hearing them
-    makes their sheet due (not one whose hearing failed lately: ``_Listening.first`` passes over it)."""
+    makes their sheet due (not one whose hearing failed lately: ``_Listening.first`` passes over it; nor one whose
+    sheet they would re-lay, no model, or leave as another caracole made it)."""
     now = now or datetime.now(UTC)
     n = 0
     for song in songs:
@@ -471,9 +508,14 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
             continue
         heard = (hears > 0 and why_not_offered(conn, cfg, song, overrides) is None
                  and hearing_failed(conn, song, now) is None)
-        hears -= heard
         try:
-            if _skip_reason(conn, song, overrides) is not None and not heard:
+            raw = _auto_raw(conn, song)
+            elsewhere = raw is not None and made_elsewhere(conn, raw)
+            heard = heard and _hears_here(conn, song, asked)  # as ``_Listening.first`` decides: no slot taken
+            hears -= heard
+            if raw is not None and raw.get("heard") is not None:  # its words heard re-lay it, no model ...
+                heard = heard and elsewhere and _words_replace(raw)  # ... but another caracole's chords alone (R5)
+            if _skip_reason(conn, song, overrides, asked=asked) is not None and not heard:
                 continue
         except Exception:  # noqa: BLE001 - a song's bad data: ``_due`` says so as its turn comes
             continue
@@ -482,15 +524,58 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
     return n
 
 
+def _auto_raw(conn: sqlite3.Connection, song: Song) -> dict | None:
+    """The song's kept auto sheet's version's raw, or None with none kept."""
+    auto = next((f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET), None)
+    return get_version(conn, auto.version_id).raw if auto is not None else None
+
+
+def _words_replace(raw: dict) -> bool:
+    """Whether words heard here would replace this sheet another caracole made (transcript.py ``WORDS_WIN``, the
+    design's R5): its chords alone, over no words and no transcript of its own, and not the owner's word that it isn't
+    sung (``not_sung_by`` "you", the one trace of it that crosses a sync: Whisper can hear words in an instrumental)."""
+    said = raw.get("heard_nothing") is True and raw.get("not_sung_by") == "you"
+    return (words_rule.WORDS_WIN and raw.get("lyrics") == "none" and raw.get("lyrics_source") != LYRICS_SOURCE
+            and not said)
+
+
+def _hears_here(conn: sqlite3.Connection, song: Song, asked: bool) -> bool:
+    """Whether words heard here may make the song's sheet, so a pass may spend Whisper and a slot on them: always for
+    an ask and for a sheet this side made (or none); for one another caracole made, only where they would replace it
+    (``_words_replace``). ``_Listening.first`` and ``_count_due`` decide by it alike. A record that can't be read (not
+    JSON, or not an object: a peer's or a damaged one) is a ValueError, read only where no ask settles it."""
+    if asked:
+        return True
+    raw = _auto_raw(conn, song)  # json.loads: a JSONDecodeError, a ValueError, for a record that isn't JSON
+    if raw is not None and not isinstance(raw, dict):
+        raise ValueError(f"a {type(raw).__name__}, not an object")
+    if raw is None or not made_elsewhere(conn, raw):
+        return True
+    return _words_replace(raw)
+
+
 def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,
-         stats: AutoStats) -> bool:
+         stats: AutoStats, *, asked: bool = False) -> bool:
     """Whether a song with linked audio is due for an auto sheet now. One that isn't is counted in ``stats`` here:
     skipped (by ``_skip_reason``, or as another song keeps a sheet where its own would go), failed (its file failed
-    before and hasn't changed: ``failure``), or an error (its data couldn't be read)."""
+    before and hasn't changed: ``failure``), or an error (its data couldn't be read). One whose sheet keeps what was
+    heard and whose words alone changed (``RELAID``: its words heard just before, or lyrics a render hasn't put on it
+    yet) is laid out again here, with no model (sheet_lyrics.py ``relay_onto_sheets``), and counted ``relaid``."""
     try:
-        reason = _skip_reason(conn, song, overrides)
+        reason = _skip_reason(conn, song, overrides, asked=asked)
     except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
         _error(stats, song, e)
+        return False
+    if reason == RELAID:  # its words alone changed (its words heard just now, say): laid out again, no model
+        bugs: list[str] = []
+        relaid = relay_onto_sheets(conn, cfg, overrides, only={song.id}, errors=bugs)
+        stats.errors.extend(bugs)  # a bug laying it out, or writing its info.json: the run's errors (exit 1)
+        if relaid:
+            stats.relaid += 1
+        elif bugs:  # a bug laying it out, as a hearing's is
+            stats.failed += 1
+        else:  # logged where it failed: the next render tries again
+            stats.skipped += 1
         return False
     if reason is not None:
         log.debug("%s: skipped (%s)", song.display, reason)
@@ -548,22 +633,26 @@ def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[R
     video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
     try:
         heard = _hear(song, *models, told)
+    except _LengthUnread as e:  # the models read the file: its length read after them is caracole's, never the file's
+        _error(stats, song, e.read)
+        return
     except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
         stats.failed += 1
         stats.failures.append(_unreadable(conn, song, e, stamp))
         return
     told(STEPS[3])
     try:
+        maker = _maker(conn, song, *models, video)  # the audio hashed once a hearing, after the models read it
         transcript = transcript_of(conn, song)
         silent = transcript is None and _heard_nothing(conn, song)
-        made = _make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
-                           said=silent and said_not_sung(conn, song))
+        made = make_sheet(song, heard, source=_from_youtube(video), transcript=transcript, silent=silent,
+                          said=silent and said_not_sung(conn, song))
     except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
         _error(stats, song, e)
         return
     try:
         _keep(conn, cfg, song, made.text, made.used, made.key, stamp, video=video, shift=made.shift,
-              transcript=made.transcript, silent=made.silent, said=made.said)
+              transcript=made.transcript, silent=made.silent, said=made.said, heard=made.heard, maker=maker)
     except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
         _error(stats, song, e)
         return
@@ -668,8 +757,17 @@ def _short(e: BaseException, path: str) -> str:
     return text if len(text) <= ERROR_CHARS else text[: ERROR_CHARS - 1] + "…"
 
 
-def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> str | None:
-    """Why a song with linked audio is not due for an auto sheet, or None when it is."""
+def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides, *, asked: bool = False) -> str | None:
+    """Why a song with linked audio is not due for an auto sheet, or None when it is. A sheet that keeps what was heard
+    (``raw["heard"]``) is never due for its words alone: they re-lay it with no model (sheet_lyrics.py
+    ``relay_onto_sheets``, ``RELAID`` the reason while that is due); only its audio's change (or a sheet gone) makes it
+    the models' again. A sheet made before ``heard`` was kept is due for its words as ever.
+
+    A sheet another caracole made (``made_elsewhere``: its raw's ``made_by``, not this side's id) is never due by
+    itself, whatever audio this side holds or got since (``MADE_ELSEWHERE``; its words re-lay it from its own ``heard``,
+    ``RELAID``), unless the owner asks for it now (``asked``: the song named by ``autochords_pending``'s ``only``), or
+    it is chords alone and every lyrics site missed and this side heard words from its own audio (transcript.py
+    ``WORDS_WIN``): then it is made here, from this side's audio, this side its maker."""
     if song.status == "ignored" or song.key in overrides.ignore:
         return "ignored"
     if not Path(song.audio_path or "").is_file():
@@ -677,71 +775,51 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     kept = {f.name: f for f in kept_files(conn, song.id)}
     if HUMAN_SHEET in kept:
         return "has a human sheet"
+    auto = kept.get(AUTO_SHEET)
+    raw = get_version(conn, auto.version_id).raw if auto is not None else None
+    if raw is not None and made_elsewhere(conn, raw):
+        return _elsewhere_reason(conn, song, raw, asked)
     # Not "newer than": Syncthing keeps the sender's mtime, so a replacement can be older.
     if song.autochords_mtime is None or song.audio_mtime != song.autochords_mtime:
         return None
-    auto = kept.get(AUTO_SHEET)
-    if auto is None:
+    if raw is None:
         return None
-    raw = get_version(conn, auto.version_id).raw
-    if raw.get("lyrics") == "none" and _sung_lyrics(song):
+    if raw.get("heard") is not None:  # what was heard is kept: its words alone re-lay it (sheet_lyrics.py), no model
+        return RELAID if relay_reason(conn, song, raw) is not None else "up to date"
+    if raw.get("lyrics") == "none" and sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
     kept_transcript = transcript_of(conn, song)
     if raw.get("lyrics_source") == LYRICS_SOURCE:
-        if _sung_lyrics(song) or _instrumental(song):
+        if sung_lyrics(song) or instrumental(song):
             return None  # a site has lyrics now, or says it is instrumental: they always win, once more over them
         if kept_transcript is None or raw.get("transcript_made_at") != kept_transcript.made_at:
             return None  # over a transcript that is not the one kept now (of other audio, or made again)
-    elif raw.get("lyrics") == "none" and kept_transcript is not None and not _instrumental(song):
+    elif raw.get("lyrics") == "none" and kept_transcript is not None and not instrumental(song):
         return None  # a transcript of this audio came since: once more, over its words
-    elif (raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not _instrumental(song)
+    elif (raw.get("lyrics") == "none" and not raw.get("heard_nothing") and not instrumental(song)
           and _heard_nothing(conn, song)):
         return None  # noted as having nothing sung since: once more, to say so
     words = raw.get("lyrics_key")  # none on a sheet an older caracole made: up to date, as it was
     if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
-            and _lyrics_key(song) not in (None, words)):
+            and song_lyrics_key(song) not in (None, words)):
         return None  # the song's lyrics are other words now (another pick): once more, over them
-    if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
+    if raw.get("lyrics") == "plain" and synced_key(song) not in (None, raw.get("synced_lyrics")):
         return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
-    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
+    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and wider_lines(song):
         return None  # its chords at their characters' indexes, before they went at display columns: once more
     return "up to date"
 
 
-def _synced_key(song: Song) -> str | None:
-    """A short hash of the song's timed lyrics, which its auto sheet's version keeps as ``synced_lyrics``: a sheet
-    over plain lyrics is made again only once other timed lyrics than those come. None when it has none, or its
-    lyrics can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return None
-    if lyrics is None or not lyrics.synced:
-        return None
-    return hashlib.sha256(lyrics.synced.encode("utf-8")).hexdigest()[:16]
-
-
-def _lyrics_key(song: Song) -> str | None:
-    """The key of the song's stored lyrics' words (``sheet_lyrics.lyrics_key`` of their plain text), which an auto
-    sheet made over them keeps as ``lyrics_key``: it is made again once they are other words. None when the song has
-    no words, or its lyrics can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return None
-    return lyrics_key(lyrics.plain) if lyrics is not None else None
-
-
-def _wider_lines(song: Song) -> bool:
-    """Whether the song's timed lyrics have a line whose display columns aren't its characters' indexes: a
-    Chinese character is two columns wide, a combining accent none. False for lyrics that can't be read."""
-    try:
-        lyrics = _sung_lyrics(song)
-    except (TypeError, ValueError):
-        return False
-    if lyrics is None or not lyrics.synced:
-        return False
-    return any(display_columns(text) != list(range(len(text) + 1)) for _, text in parse_lrc(lyrics.synced))
+def _elsewhere_reason(conn: sqlite3.Connection, song: Song, raw: dict, asked: bool) -> str | None:
+    """``_skip_reason``'s for a sheet another caracole made: None (made here) for an ask now, or for its chords alone
+    once words of this side's audio are heard here and no site has the song's (R5); else ``RELAID`` while its words
+    re-lay it, ``MADE_ELSEWHERE`` otherwise."""
+    if asked:
+        return None  # the owner's ask now: made again here from this side's audio, this side its maker (R3)
+    if (_words_replace(raw) and transcript_of(conn, song) is not None and not sung_lyrics(song)
+            and not instrumental(song)):
+        return None  # words heard here from this side's audio win over another caracole's chords alone (R5)
+    return RELAID if relay_reason(conn, song, raw) is not None else MADE_ELSEWHERE
 
 
 def _models(
@@ -830,86 +908,35 @@ def _default_beats(cfg: Config) -> BeatsFn:
     # detect_beats checks as well, but once per song; this reports it once.
     if not checkpoint.is_file():
         raise ModelsUnavailable(f"beat_this checkpoint not found: {checkpoint}")
-    device = cfg.autochords.device
-    return lambda path: detect_beats(path, checkpoint, device=device)
+    return _Beats(checkpoint, cfg.autochords.device)
 
 
-def _instrumental(song: Song) -> bool:
-    """Whether a site says the song is instrumental: its verdict wins over a transcript, which it never gets."""
-    if song.lyrics_status == "instrumental":
-        return True
-    lyrics = song_lyrics(song)
-    return lyrics is not None and lyrics.instrumental and not lyrics.has_lyrics
+class _Beats:
+    """beat_this's beats with the configured checkpoint, and its ``name`` for an auto sheet's raw."""
+
+    def __init__(self, checkpoint: Path, device: str):
+        self.checkpoint, self.device = checkpoint, device
+        self.name = beat_this.model_name(checkpoint)
+
+    def __call__(self, path: Path) -> tuple[Sequence[float], Sequence[float]]:
+        return detect_beats(path, self.checkpoint, device=self.device)
 
 
-def _sung_lyrics(song: Song) -> Lyrics | None:
-    """The song's stored lyrics, when they have words (an instrumental has none)."""
-    lyrics = song_lyrics(song)
-    return lyrics if lyrics is not None and lyrics.has_lyrics else None
+def _maker(conn: sqlite3.Connection, song: Song, recognizer: Recognizer, beats_fn: BeatsFn,
+           video: Video | None) -> Maker:
+    """Who made the song's auto sheet here, from what: this side, this caracole's id (peer_sync.py ``own_id``), the
+    models' names and runtime where they say them, the audio file's name (a purchase's own; for a file you gave, the
+    name it was given under, audio_store.py ``given_name``, none for one kept before that was recorded; none for
+    YouTube's) and its bytes' hash, read once."""
+    from caracole.audio_store import given_file, given_name
+    from caracole.peer_sync import own_id
 
-
-@dataclass(frozen=True)
-class _Timed:
-    """Synced lyrics that fit the audio: their LRC text and, when LRCLIB timed them for audio of
-    another length, the seconds they were shifted by to fit it (``shift``, 0.0 for none) and how
-    much longer the audio is (``longer``, less than 0 for shorter)."""
-
-    text: str
-    shift: float | None = None
-    longer: float = 0.0
-
-    def note(self) -> str | None:
-        """What the sheet says of a shift, so that a wrong one shows; None for lyrics that fit as timed."""
-        if self.shift is None:
-            return None
-        if self.shift:
-            later = "later" if self.shift > 0 else "earlier"
-            return f"Lyrics' timing shifted {abs(self.shift):.1f} s {later} to fit this audio"
-        than = "shorter" if self.longer > 0 else "longer"
-        return f"Lyrics' timing unshifted: LRCLIB's audio is {abs(self.longer):.1f} s {than}"
-
-
-def _synced_for(
-    song: Song,
-    lyrics: Lyrics | None,
-    audio: Path,
-    heard: Sequence[ChordSegment],
-    beats: Sequence[float],
-    downbeats: Sequence[float],
-) -> _Timed | None:
-    """The synced lyrics, if their timings fit this audio file: as they are when the durations agree
-    within 2 s, else moved by the shift ``align.lyrics_offset`` finds clearly from the chords heard
-    and the beats; None when it finds none."""
-    if lyrics is None or not lyrics.synced or lyrics.duration is None:
-        return None
-    duration = read_audio(audio).duration_s
-    if duration is None:
-        return None
-    longer = duration - lyrics.duration
-    if abs(longer) <= SYNC_TOLERANCE_S:
-        return _Timed(lyrics.synced)
-    lines = parse_lrc(lyrics.synced)
-    try:
-        found = lyrics_offset(lines, heard, beats, downbeats, audio_s=duration, lyrics_s=lyrics.duration)
-    except Exception:  # noqa: BLE001 - a bug here must not pass for a purchase auto-chords can't read
-        log.exception("%s: looking for how far to shift LRCLIB's timed lyrics failed; the plain lyrics instead",
-                      song.display)
-        return None
-    than = "longer" if longer > 0 else "shorter"
-    if found.offset is None:
-        log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, and no shift fits them to it clearly "
-                 "(%s): the plain lyrics instead", song.display, abs(longer), than, found.why)
-        return None
-    log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, which fit it shifted by %+.1f s (%s)",
-             song.display, abs(longer), than, found.offset, found.why)
-    text = shifted_lrc(lyrics.synced, found.offset) if found.offset else lyrics.synced
-    return _Timed(text, found.offset, longer)
-
-
-def _word_timed(synced: str | None) -> list[LrcLine] | None:
-    """The synced lyrics read with their word stamps, when they time words (enhanced LRC)."""
-    lines = parse_lrc_words(synced) if synced else []
-    return lines if any(line.words for line in lines) else None
+    audio = Path(song.audio_path or "")
+    models = {part: name for part, name in (("chords", getattr(recognizer, "name", None)),
+                                            ("beats", getattr(beats_fn, "name", None))) if isinstance(name, str)}
+    runtime = getattr(recognizer, "runtime", None)
+    name = None if video is not None else given_name(conn, song) if given_file(song.audio_path) else audio.name
+    return Maker(MADE_ON, own_id(conn), models, runtime if isinstance(runtime, str) else None, name, sha16(audio))
 
 
 def _from_youtube(video: Video | None) -> str | None:
@@ -920,85 +947,30 @@ def _from_youtube(video: Video | None) -> str | None:
     return youtube_credit(video.title, video.channel, video.id)
 
 
-@dataclass(frozen=True)
-class _Heard:
-    """What the models heard in a song's audio file: its chords and its beats."""
+class _LengthUnread(Exception):
+    """``read_audio`` failing on a file the models just read (gone between the two, say): caracole's error, the song
+    still due, never a failure filed against its audio (``read``, what it raised)."""
 
-    audio: Path
-    segments: list[ChordSegment]
-    beats: Sequence[float]
-    downbeats: Sequence[float]
+    def __init__(self, read: Exception):
+        super().__init__(str(read))
+        self.read = read
 
 
-def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> _Heard:
-    """The models over the song's audio file: what fails here is the file's (one that won't decode, say), which
-    ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
+def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn, told: Callable[[str], None]) -> Heard:
+    """The models over the song's audio file, and its length as ``music.read_audio`` reads it, the one the sheet is
+    laid out against (sheet.py, which reads no audio): what the models fail on is the file's (one that won't decode,
+    say), which ``_unreadable`` records; the length's read failing after them is caracole's (``_LengthUnread``), as is
+    what fails after it, laying out the sheet."""
     audio = Path(song.audio_path or "")
     told(STEPS[1])
     segments = recognizer.recognize(audio)
     told(STEPS[2])
     beats, downbeats = beats_fn(audio)
-    return _Heard(audio, list(segments), beats, downbeats)
-
-
-@dataclass(frozen=True)
-class _Made:
-    """One song's auto sheet: its text, which lyrics it used ("synced", "plain" or "none"), the key of the chords
-    heard (None when they fit no key), the seconds its timed lyrics were shifted by to fit the audio (None when
-    LRCLIB timed them for audio of the same length, or they weren't used), and the transcript it was made over
-    (None unless the words are Whisper's)."""
-
-    text: str
-    used: str
-    key: str | None
-    shift: float | None
-    transcript: Transcript | None = None
-    silent: bool = False
-    said: bool = False  # silent by the owner's word, not by what was heard
-
-
-def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None,
-                transcript: Transcript | None = None, silent: bool = False, said: bool = False) -> _Made:
-    """One song's auto sheet, from its audio file. ``source`` says where that came from, when it wasn't a
-    purchase, on the sheet's line after the song's name; the shift has the line after it.
-
-    The song's lyrics from a site, whenever it has any (and a site's word that it is
-    instrumental wins too), else its ``transcript`` (Whisper's words from this
-    very audio: timed lyrics whose duration is the audio's, so they fit as they are and no shift is searched,
-    with NOTE on the line after the shift's), else none. ``silent`` (the audio noted as having nothing sung)
-    puts SILENT there instead, only where no site has lyrics, none says it is instrumental and no transcript is used;
-    NOT_SUNG where it is the owner's word (``said``, ``transcript.said_not_sung``), not what was heard.
-
-    The key is estimated from the chords as recognized, each weighed by how long it sounds,
-    before they are snapped to beats and laid out.
-    """
-    audio, segments, beats, downbeats = heard.audio, heard.segments, heard.beats, heard.downbeats
-    key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
-    lyrics = _sung_lyrics(song)
-    over = transcript if lyrics is None and not _instrumental(song) else None
-    timed = _Timed(over.lrc) if over is not None else _synced_for(song, lyrics, audio, segments, beats, downbeats)
-    synced = timed.text if timed is not None else None
-    plain = lyrics.plain if lyrics is not None else None
-    # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
-    # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
-    silent = silent and lyrics is None and over is None and not _instrumental(song)
-    said = said and silent
-    notes = (source, timed.note() if timed is not None else None, NOTE if over is not None else None,
-             (NOT_SUNG if said else SILENT) if silent else None)
-    note = "\n".join(part for part in notes if part)
-    text = build_sheet(
-        segments,
-        title=song.title,
-        artist=song.artist,
-        synced=synced,
-        synced_words=_word_timed(synced),
-        plain=plain,
-        beats=beats,
-        downbeats=downbeats,
-        source=note or None,
-    )
-    shift = timed.shift if timed is not None else None
-    return _Made(text, "synced" if synced else "plain" if plain else "none", key, shift, over, silent, said)
+    try:
+        duration = read_audio(audio).duration_s
+    except Exception as e:  # noqa: BLE001 - whatever it raises: the song stays due
+        raise _LengthUnread(e) from e
+    return Heard(list(segments), beats, downbeats, duration)
 
 
 def _keep(
@@ -1015,45 +987,24 @@ def _keep(
     transcript: Transcript | None = None,
     silent: bool = False,
     said: bool = False,
+    heard: Heard | None = None,
+    maker: Maker | None = None,
 ) -> None:
-    """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
+    """Keep one song's auto sheet, under a version of provider ``auto`` whose ``raw`` is sheet.py's ``raw_of`` (what
+    was ``heard`` and its ``maker`` with it); the song becomes found. Audio from YouTube (``video``) gives the version
+    the video's address, so info.json names it.
 
-    The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
-    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its
-    chord lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had,
-    used or not (``synced_lyrics``, ``_synced_key``); a sheet over those lyrics, the key of their words
-    (``lyrics_key``, ``_lyrics_key``). A sheet made over a transcript keeps it as
-    ``lyrics_source``, ``transcript`` (its LRC, for the viewer's sung line) and ``transcript_made_at``
-    (``_skip_reason`` compares it with the transcript kept now). Audio from
-    YouTube (``video``) gives the version the video's address, so info.json names it, and its
-    fields.
-    """
+    A song keeps one auto version, whoever made it: the sheet goes into the one it has (versions.py
+    ``auto_version_of``: one another caracole made keeps that caracole's tab id), else one of tab id its song id; a
+    second one a song held from before (a sheet made here beside one taken at a sync) that no kept file names is let
+    go of, logged, so that its unit lists the one."""
     audio = Path(song.audio_path or "")
-    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used, "columns": COLUMNS}
-    if key is not None:
-        raw["key"] = key
-    if shift is not None:
-        raw["lyrics_shift"] = shift
-    if transcript is not None:
-        raw["lyrics_source"] = LYRICS_SOURCE
-        raw["transcript"] = transcript.lrc
-        raw["transcript_made_at"] = transcript.made_at
-    if silent:
-        raw["heard_nothing"] = True
-    if silent and said:
-        raw["not_sung_by"] = "you"  # the owner's word, not what was heard (youtube_sheet.HOLDS["said"])
-    synced = _synced_key(song)
-    if synced is not None:
-        raw["synced_lyrics"] = synced
-    words = _lyrics_key(song) if used in ("synced", "plain") and transcript is None else None
-    if words is not None:
-        raw["lyrics_key"] = words
-    if video is not None:
-        raw["youtube"] = video.as_json()
+    raw = raw_of(song, Made(text, used, key, shift, transcript, silent, said, heard), video=video, maker=maker)
+    current = auto_version_of(conn, song.id)
     version_id = upsert_version(
         conn,
         provider=PROVIDER,
-        tab_id=str(song.id),
+        tab_id=current.tab_id if current is not None else str(song.id),
         song_id=song.id,
         slot="sheet",
         kind="auto",
@@ -1074,6 +1025,10 @@ def _keep(
         data=text.encode("utf-8"),
         rank=1,
     )
+    for other in auto_versions_beside(conn, song.id, version_id):
+        conn.execute("DELETE FROM versions WHERE id = ?", (other.id,))
+        log.warning("%s: a second auto version (tab %s, made %s) let go of: the sheet is kept in tab %s, a song keeps "
+                    "one", song.display, other.tab_id, other.fetched_at, current.tab_id if current else song.id)
     refresh_status(conn, song.id, ignored=False)
     write_info(conn, cfg.library_dir, get_song(conn, song.id))
     # Last, so a run cut short anywhere above just does this song again.

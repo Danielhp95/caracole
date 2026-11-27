@@ -156,6 +156,13 @@ def auto_raw(conn, song) -> dict:
     return get_version(conn, auto.version_id).raw
 
 
+def before_heard(conn, song) -> None:
+    """The song's auto sheet as one made before what was heard was kept: the models' to make again for other words."""
+    [auto] = [f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET]
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.heard', '$.made_on', '$.made_by', '$.models', "
+                 "'$.runtime', '$.audio_name', '$.audio_sha16') WHERE id = ?", (auto.version_id,))
+
+
 def sheet_text(cfg, song) -> str:
     return (song_dir(cfg.library_dir, song) / AUTO_SHEET).read_text(encoding="utf-8")
 
@@ -357,17 +364,36 @@ def test_an_error_keeps_nothing_and_writes_no_record(cfg, conn, song, sites):
 # --- the sheet ----------------------------------------------------------------------------------------------------
 
 
-def test_the_auto_sheet_is_made_again_over_the_picked_lyrics(cfg, conn, song, sites, here):
+@pytest.mark.parametrize("kept", [True, False], ids=["heard kept", "made before"])
+def test_the_auto_sheet_is_made_again_over_the_picked_lyrics(cfg, conn, song, sites, here, kept):
+    # Laid out again from what was heard, in seconds, with no model; one made before that was kept, by the models.
     assert auto_sheet_of(cfg, conn, song)["lyrics"] == "none"
+    if not kept:
+        before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     recognizer = Recognizer()
     result, heard = pick(cfg, n=1, recognizer=recognizer)
     assert result.ok, result
     assert heard.ends()["chords"] == ("done", "chords over the lyrics")
-    assert recognizer.calls and auto_raw(conn, song)["lyrics"] == "synced"
+    assert bool(recognizer.calls) is not kept and auto_raw(conn, song)["lyrics"] == "synced"
+    assert ("heard" in auto_raw(conn, song)) and get_song(conn, song.id).autochords_mtime == song.audio_mtime
     assert "Somos vikingos de prueba" in sheet_text(cfg, song)
     assert heard.ends()["pdf"][0] == "done" and result.files
+
+
+def test_a_pick_after_the_audio_changed_has_the_models_hear_the_new_audio(cfg, conn, song, sites, here):
+    # What was heard is of the audio before: the words picked are no reason to lay it out again.
+    auto_sheet_of(cfg, conn, song)
+    other = wav(cfg.cache_dir / "audio" / "other.wav", 10.0)
+    update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime + 5.0)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    recognizer = Recognizer()
+    result, heard = pick(cfg, n=1, recognizer=recognizer)
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert recognizer.calls == [other] and auto_raw(conn, song)["audio"] == str(other)
 
 
 def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, song, sites, monkeypatch):
@@ -382,6 +408,7 @@ def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, so
     assert raw["lyrics"] == "synced"
     [auto] = [f for f in kept_files(conn, song.id) if f.name == AUTO_SHEET]
     set_raw(conn, auto.version_id, {k: v for k, v in raw.items() if k != "lyrics_key"})
+    before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     result, heard = pick(cfg, n=1)  # auto-chords isn't here: tonight's run makes it again
@@ -449,6 +476,7 @@ def test_without_auto_chords_a_song_with_no_auto_sheet_waits_for_tonights(cfg, c
 
 def test_without_auto_chords_the_chords_wait_for_tonight_and_it_exits_0(cfg, conn, song, sites, monkeypatch):
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords (missing: torch)")
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
@@ -462,8 +490,24 @@ def test_without_auto_chords_the_chords_wait_for_tonight_and_it_exits_0(cfg, con
     assert auto_raw(conn, song)["lyrics"] == "plain" and "Somos vikingos de prueba" in sheet_text(cfg, song)
 
 
+def test_without_auto_chords_a_sheet_that_keeps_what_was_heard_is_laid_out_again_at_once(cfg, conn, song, sites,
+                                                                                         monkeypatch):
+    auto_sheet_of(cfg, conn, song)
+    monkeypatch.setattr(youtube_fetch, "autochords_problem", lambda cfg: "built without auto-chords (missing: torch)")
+    order: list[str] = []
+    monkeypatch.setattr(_common, "hand_over", lambda cfg, conn=None: order.append("lookup") or True)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok and result.failed is None, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert order == []  # seconds, no model: no lookup let go first
+    assert auto_raw(conn, song)["lyrics"] == "synced" and "[Lyrics]" not in sheet_text(cfg, song).splitlines()
+
+
 def test_a_waiting_lookup_goes_first_before_the_chords(cfg, conn, song, sites, here, monkeypatch):
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     sites.lrclib.search = [lrc(77)]
     searched(cfg, conn, song, sites)
     order: list[str] = []
@@ -539,6 +583,7 @@ def test_a_clear_drops_the_lyrics_its_record_gave_and_makes_the_sheet_due(cfg, c
     set_lyrics_name(cfg.overrides_file, song.display, None)
     pick(cfg, n=1)
     auto_sheet_of(cfg, conn, song)
+    before_heard(conn, song)
     folder = song_dir(cfg.library_dir, song)
     assert (folder / "lyrics.lrc").is_file()
     said = clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
@@ -546,6 +591,21 @@ def test_a_clear_drops_the_lyrics_its_record_gave_and_makes_the_sheet_due(cfg, c
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json, after.autochords_mtime) == ("pending", None, None)
     assert not (folder / "lyrics.lrc").exists() and not (folder / "lyrics.txt").exists()
+
+
+def test_a_clear_lays_a_sheet_that_keeps_what_was_heard_out_again_as_its_chords_alone(cfg, conn, song, sites):
+    from caracole.render import render_all
+
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, song, sites)
+    set_lyrics_name(cfg.overrides_file, song.display, None)
+    pick(cfg, n=1)
+    assert auto_sheet_of(cfg, conn, song)["lyrics"] == "synced"
+    clear_pick(cfg, conn, get_song(conn, song.id), load_overrides(cfg.overrides_file))
+    after = get_song(conn, song.id)
+    assert after.autochords_mtime == after.audio_mtime  # never the models' for its words
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro, now=NOW, song_ids={song.id})
+    assert auto_raw(conn, song)["lyrics"] == "none" and "Somos vikingos de prueba" not in sheet_text(cfg, song)
 
 
 def test_a_clear_with_no_record_is_nothing_to_clear(cfg, conn, song, sites):
@@ -773,3 +833,44 @@ def test_a_lyrics_file_that_cant_be_removed_is_said_and_the_clear_stands(cfg, co
     assert "lyrics.lrc couldn't be removed (" in said
     after = get_song(conn, song.id)
     assert (after.lyrics_status, after.lyrics_json) == ("pending", None) and entry(cfg).record is None
+
+
+def test_a_pick_re_lays_a_sheet_another_caracole_made_and_never_runs_a_model_on_it(cfg, conn, song, sites, here):
+    # A pick is no ask for the sheet (the design's R2, R3): another caracole's sheet is re-laid over the words picked
+    # from its own heard, its maker kept, though this side holds audio of its own; with its words as they were, left.
+    from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE
+
+    auto_sheet_of(cfg, conn, song)
+    version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, version_id, {**auto_raw(conn, song), "made_on": "phone", "made_by": "0f1e2d3c4b5a6978"})
+    update_song(conn, song.id, autochords_mtime=None)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    raw = auto_raw(conn, song)
+    assert (raw["lyrics"], raw["made_by"]) == ("synced", "0f1e2d3c4b5a6978")
+    # The same record again: nothing new to lay out, and no model for another caracole's sheet
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
+    assert auto_raw(conn, song)["made_by"] == "0f1e2d3c4b5a6978"
+
+
+def test_a_pick_on_a_sheet_another_caracole_made_whose_heard_cant_be_read_says_so(cfg, conn, song, sites, here):
+    # A newer contract, a damaged record: it can't be laid out again here, and the job says what to do.
+    from caracole.lyrics_pick import ELSEWHERE_UNREAD
+
+    auto_sheet_of(cfg, conn, song)
+    version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, version_id, {**auto_raw(conn, song), "made_on": "phone", "made_by": "0f1e2d3c4b5a6978",
+                               "heard": {"contract": 99}})
+    update_song(conn, song.id, autochords_mtime=None)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("skipped", ELSEWHERE_UNREAD)
+    assert "re-lay" not in ELSEWHERE_UNREAD and "ask for a new sheet here" in ELSEWHERE_UNREAD
+    assert auto_raw(conn, song)["heard"] == {"contract": 99}

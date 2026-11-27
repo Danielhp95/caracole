@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.testing
 
+import io.github.danielhp95.caracole.core.testing.replays.AudioStoreReplay
 import io.github.danielhp95.caracole.core.testing.replays.CanonicalReplay
 import io.github.danielhp95.caracole.core.testing.replays.CataloguesReplay
 import io.github.danielhp95.caracole.core.testing.replays.FuzzReplay
@@ -52,7 +53,7 @@ object Replays {
         PyReplay, HtmlReplay, HttpReplay, HealthReplay, PaceReplay, LibraryWritesReplay, OverridesReplay,
         UgPagesReplay, RankReplay, MatchReplay, UgFetchReplay, LyricsReplay, LaCuerdaReplay, HarpTabsReplay,
         GameTabsReplay, TabFilesReplay, LookupReplay, LookupScenariosReplay, SettingsReplay, IndexExportReplay,
-        SongbookReplay, InboxReplay, CataloguesReplay, YouTubeReplay,
+        SongbookReplay, InboxReplay, CataloguesReplay, YouTubeReplay, AudioStoreReplay,
     )
 
     /** The areas named (every one when [names] is empty), [IllegalArgumentException] for a name no area has. An area

@@ -1,0 +1,95 @@
+{
+ "folder": "audio",
+ "name_key": "audio:name:",
+ "audio_max": 134217728,
+ "max_seconds": 1800,
+ "room": 1073741824,
+ "expires": 3600.0,
+ "marked": 2592000,
+ "head": 64,
+ "record_max": 65536,
+ "formats": {
+  "MP3": ".mp3",
+  "M4A": ".m4a",
+  "FLAC": ".flac",
+  "WAV": ".wav",
+  "Ogg": ".ogg",
+  "AIFF": ".aiff"
+ },
+ "mp4_brands": [
+  "M4A ",
+  "M4B ",
+  "dash",
+  "iso2",
+  "iso5",
+  "iso6",
+  "isom",
+  "mp41",
+  "mp42"
+ ],
+ "patterns": {
+  "id": "[0-9a-f]{16}",
+  "piece": "\\.upload-(?P<id>[0-9a-f]{16})(?P<ext>\\.mp3|\\.m4a|\\.flac|\\.wav|\\.ogg|\\.aiff|\\.json)",
+  "staged_audio": "\\.upload-(?P<id>[0-9a-f]{16})(?:\\.mp3|\\.m4a|\\.flac|\\.wav|\\.ogg|\\.aiff)",
+  "marker": "\\.upload-(?P<id>[0-9a-f]{16})\\.kept",
+  "kept": "[0-9]+-[0-9a-f]{16}(?:\\.mp3|\\.m4a|\\.flac|\\.wav|\\.ogg|\\.aiff)",
+  "part": "\\.keep\\-[0-9a-f]{16}\\.part",
+  "sha256": "[0-9a-f]{64}",
+  "display_split": "[/\\\\]"
+ },
+ "names": {
+  "staged": ".upload-",
+  "record": ".json",
+  "marker": ".kept",
+  "part": ".keep-",
+  "part_end": ".part"
+ },
+ "display_most": 255,
+ "record_fields": [
+  "name",
+  "size",
+  "sha256",
+  "format",
+  "duration",
+  "tags",
+  "at"
+ ],
+ "tags": [
+  "artist",
+  "title",
+  "album"
+ ],
+ "marker_fields": [
+  "kept",
+  "song",
+  "at"
+ ],
+ "words": {
+  "not_audio": "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
+  "too_big": "That file is too big: an audio file is 128 MiB at most; `caracole audio FILE` takes any.",
+  "too_long": "That file is longer than 30 minutes.",
+  "no_room": "No room to keep it here.",
+  "empty": "That file is empty.",
+  "no_name": "What is the file called? Its name is text.",
+  "which": "Which upload? Its id is 16 hex.",
+  "gone": "That upload is gone: it was left over an hour, or another file was chosen since. Choose it again.",
+  "not_in_book": "{song} isn't in the book any more.",
+  "not_a_store": "{path} isn't a folder of caracole's own (a symbolic link, say): no audio file is kept there."
+ },
+ "statuses": {
+  "not_audio": 415,
+  "too_big": 413,
+  "too_long": 422,
+  "no_room": 507,
+  "empty": 400,
+  "no_name": 400,
+  "which": 400,
+  "gone": 404,
+  "not_in_book": 404,
+  "not_a_store": 500
+ },
+ "removal": {
+  "goes": "the audio file you gave it, from caracole's own folder",
+  "brief": "the audio file you gave it"
+ }
+}

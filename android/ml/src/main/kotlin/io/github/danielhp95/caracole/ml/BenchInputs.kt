@@ -17,13 +17,14 @@ import org.json.JSONObject
  * the computer's own features, no decoder and no front end on the phone yet): BTC's raw log-CQT `[btcFrames, BINS]`
  * and the computer's logits of it `[btcFrames, CLASSES]` with each frame's top-two [margins]; beat_this's log-mel
  * `[melFrames, MELS]` and the computer's beat and downbeat logits of it, and its beats and downbeats in seconds; the
- * audio's length in seconds, which a run's RTF divides by.
+ * audio's length in seconds, which a run's RTF divides by; [lengthNote], where the reference's stated duration
+ * disagreed with its mel's frames ([lengthOf]), why [duration] is the mel's.
  */
 class BenchInput(
     val name: String, val kind: String, val duration: Double,
     val cqt: FloatArray, val btcFrames: Int, val btcLogits: FloatArray, val margins: FloatArray,
     val mel: FloatArray, val melFrames: Int, val beat: FloatArray, val downbeat: FloatArray,
-    val beats: List<Double>, val downbeats: List<Double>,
+    val beats: List<Double>, val downbeats: List<Double>, val lengthNote: String? = null,
 ) {
     init {
         require(btcFrames > 0 && cqt.size == btcFrames * OrtModels.BINS) { "$name: ${cqt.size} CQT values" }
@@ -40,6 +41,24 @@ class BenchInput(
 
         /** One of the owner's songs: Gate B0's. */
         const val REFERENCE = "reference"
+
+        /** How far a reference's duration may be from its mel's frames' length (`autochords_reference`'s
+         * `AGREE_WITHIN`: centred frames run 0.02 s past the samples). */
+        const val LENGTH_WITHIN = 0.1
+
+        /** The length a run's speed is measured against, and a note where the reference's [duration] (none: the mel's)
+         * is more than [LENGTH_WITHIN] from its [melFrames] at [fps]: then the mel's, the audio the models ran over, as
+         * a reference written before its helper refused such lengths (mutagen's guess of an MP3 that names none) holds
+         * a wrong one. */
+        fun lengthOf(name: String, duration: Double?, melFrames: Int, fps: Int): Pair<Double, String?> {
+            val heard = melFrames.toDouble() / fps
+            if (duration == null || kotlin.math.abs(duration - heard) <= LENGTH_WITHIN) {
+                return (duration ?: heard) to null
+            }
+            return heard to "$name: its duration, ${"%.3f".format(java.util.Locale.ROOT, duration)} s, disagrees " +
+                "with its mel's frames, ${"%.3f".format(java.util.Locale.ROOT, heard)} s (more than $LENGTH_WITHIN " +
+                "s): its speed is measured against the mel's"
+        }
     }
 }
 
@@ -84,8 +103,8 @@ object BenchInputs {
     /**
      * One reference `autochords_reference` wrote, read as a stream ([JsonReader]), so that its decoded samples (tens
      * of MB, which the bench doesn't need) are read through and dropped, never kept: `features`, `logits`, `mel`,
-     * `beat_logits`, `beats`, `downbeats` and `duration` (mutagen's; none, the mel's frames at [fps]). [name] is the
-     * file's display name, all the report says of it.
+     * `beat_logits`, `beats`, `downbeats` and `duration` (read_audio's; none, or one its mel disagrees with, the mel's
+     * frames at [fps]: [BenchInput.lengthOf]). [name] is the file's display name, all the report says of it.
      */
     fun reference(name: String, input: InputStream, fps: Int): BenchInput {
         var features: Shaped? = null
@@ -132,8 +151,9 @@ object BenchInputs {
             require(it == frames) { "$name: $it frames of logits for $frames of features" }
         }
         val melFrames = m.rows(OrtModels.MELS, "$name's mel")
+        val (length, note) = BenchInput.lengthOf(name, duration, melFrames, fps)
         return BenchInput(
-            name = name, kind = BenchInput.REFERENCE, duration = duration ?: (melFrames.toDouble() / fps),
+            name = name, kind = BenchInput.REFERENCE, duration = length, lengthNote = note,
             cqt = f.values, btcFrames = frames, btcLogits = l.values, margins = BtcParity.margins(l.values, frames),
             mel = m.values, melFrames = melFrames,
             beat = need(beat, "beat logits").values, downbeat = need(downbeat, "downbeat logits").values,

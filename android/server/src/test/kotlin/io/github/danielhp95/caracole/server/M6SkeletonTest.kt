@@ -24,7 +24,7 @@ class M6SkeletonTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test fun thePhonesOwnKindsAreWordedAsThePlanSays() {
-        assertEquals(listOf("render", "inbox", "backup", "restore", "catalogues"), PhoneKinds.ALL.keys.toList())
+        assertEquals(listOf("render", "inbox", "backup", "restore", "catalogues", "models"), PhoneKinds.ALL.keys.toList())
         val render = PhoneKinds.RENDER
         assertEquals("render" to "Making the pages", render.stage)
         assertEquals("Remake the pages" to "The phone's pages", render.title to render.display)
@@ -57,6 +57,6 @@ class M6SkeletonTest {
         assertEquals(areas.distinct(), areas)
         val m6 = listOf("cards", "songbook-tab", "choices", "guitar", "export", "review")
         assertEquals(m6, areas.subList(areas.indexOf("cards"), areas.indexOf("cards") + m6.size))
-        assertEquals("ug-link", areas.last())  // a UG link pasted into the search box, after milestone 6's
+        assertEquals(listOf("ug-link", "audio-sheet"), areas.takeLast(2))  // a UG link pasted, then a sheet from a file
     }
 }

@@ -24,7 +24,8 @@ object MegalobizStage : SiteStage {
         val record = Lyrics.pickedRecord(ctx.song, picks)
         val named = record == null && Lyrics.askedName(ctx.song, picks) != null
         val asked = ctx.asking.ask(Megalobiz.PROVIDER) { client ->
-            val stats = Megalobiz.megalobizLyrics(ctx.db, client, ctx.library, ctx.now, only, picks = picks)
+            val stats = Megalobiz.megalobizLyrics(ctx.db, client, ctx.library, ctx.now, only,
+                                                  durations = ctx.length?.let { mapOf(ctx.song.id to it) }, picks = picks)
             if (named && stats.tried > 0) ctx.askedUnderName()
             val s = LyricsStages.ended(Megalobiz.PROVIDER, stats)
             when {

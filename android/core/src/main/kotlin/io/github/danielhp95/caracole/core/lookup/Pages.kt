@@ -2,8 +2,11 @@ package io.github.danielhp95.caracole.core.lookup
 
 import io.github.danielhp95.caracole.core.db.Db
 
-/** What a render pass did: the songs whose pages it wrote, those it found unchanged, and those it couldn't, why. */
-data class RenderStats(val written: Int = 0, val unchanged: Int = 0, val failed: Map<Long, String> = emptyMap())
+/** What a render pass did: the songs whose pages it wrote, those it found unchanged, and those it couldn't, why (a
+ * song whose auto sheet couldn't be laid out again over its words among them); [given], render.RenderStats', the auto
+ * sheets that took lyrics that came after them or were laid out again over other words. */
+data class RenderStats(val written: Int = 0, val unchanged: Int = 0, val failed: Map<Long, String> = emptyMap(),
+                       val given: Int = 0)
 
 /** The pdf stage's seam: a song's pages made on the phone (milestone 5's PhoneRender, once its `seam` is itself).
  * [NONE] makes none, and the stage says get.py's words for a caracole with no PDFs: a lookup tells the two apart by

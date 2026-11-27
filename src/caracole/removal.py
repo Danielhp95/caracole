@@ -196,7 +196,7 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
     if plan.youtube_audio:
         goes.append("the audio caracole took from YouTube for it, from caracole's cache")
     if plan.uploaded_audio:
-        goes.append("the audio file you gave it, from caracole's own folder")
+        goes.append(UPLOADED_GOES)
     stays = [f"{folder}{name}: {why}" for name, why in plan.keep]
     if plan.folder_problem:
         stays.append(f"{folder}: {plan.folder_problem}, so nothing in it is deleted")
@@ -222,7 +222,7 @@ def brief(plan: RemovalPlan) -> str:
     if plan.youtube_audio:
         goes.append("its YouTube audio")
     if plan.uploaded_audio:
-        goes.append("the audio file you gave it")
+        goes.append(UPLOADED_BRIEF)
     said = "Deletes " + (", ".join(goes[:-1]) + " and " + goes[-1] if len(goes) > 1 else goes[0])
     left = len(plan.keep) + len(plan.elsewhere)
     if plan.folder_problem:
@@ -234,6 +234,9 @@ def brief(plan: RemovalPlan) -> str:
         return f"wanted.txt can't be read ({plan.wanted_problem}): nothing goes until it can. {said}"
     return said
 
+
+UPLOADED_GOES = "the audio file you gave it, from caracole's own folder"  # describe's line of uploaded_audio
+UPLOADED_BRIEF = "the audio file you gave it"  # brief's part of it
 
 AFTER = ("caracole won't bring it back, from wanted.txt or the nightly run, until you ask for it "
          "again: caracole add, the web page's request form, or a line in wanted.txt.")

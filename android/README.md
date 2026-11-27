@@ -413,7 +413,18 @@ app send no request to a site: every test's sites refuse, unless the test names 
 `android/scripts/device-test.sh` does all of it, one caller an emulator at a time (it builds first, then takes the
 first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-5554, -5556 and -5558, holding its lock,
 `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
-port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD) and leaving it up:
+port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD). As it
+ends, on any path, it stops the emulator it started, while it still holds its lock, and leaves one that was up already;
+`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. It stops the adb server it
+started once adb lists no device and no other caller holds an emulator, never one with a phone attached. That is the
+owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them for testing or development.
+same thing for gradle biuld and adb servers." An emulator left by a run that was SIGKILLed, or by a script older than
+this, reads as someone else's to every later caller and stays up until `android/scripts/stop-all.sh` runs, which stops
+what is left at a task's end: every pool emulator no caller holds, and the adb server when no device is listed and no
+caller holds an emulator. A Gradle daemon stops after two idle minutes (gradle.properties), and the Kotlin compile
+daemon with it; `stop-all.sh --gradle` stops them at once, but `gradle --stop` stops every daemon of that version for
+you, another worktree's running build among them, so it refuses while one is busy or `gradle --status` fails; the
+check and the stop are not atomic, so a build that starts elsewhere between them can still be killed.
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
@@ -758,7 +769,8 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 
 `--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
-then the app's `ChordsBenchTest` (the Chords bench, below) over the same files.
+`DecoderTest` and `PipelineTest` (below), then the app's `ChordsBenchTest` (the Chords bench, below) over the same
+files.
 `--tcpdump FILE` gates on what caracole's own uids send. Before the classes, on the rooted emulator (`su 0`), it puts a
 chain of iptables and ip6tables rules at the head of OUTPUT that counts the packets of each of caracole's packages
 installed (the debug app, its test APK, `:ml`'s test APK) by `-m owner --uid-owner`. Packets to 10.0.2.2 and to loopback
@@ -795,6 +807,45 @@ APK by the name its `output-metadata.json` gives, and checks that the release's 
 (which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
 makes, and the runtime's own AAR, whose manifest declares the provider.
 
+## Chords from audio: the decoder
+
+The phone decodes a song's audio as the computer does (autochords/audio.py `load_mono`, at the file's own rate):
+`:ml`'s `Decoder.decode(file, into)` writes interleaved float32 PCM to a file, a buffer at a time. A WAV or an AIFF is
+read by `:autochords`' `Pcm`, with no codec, as libsndfile reads it; anything else goes through MediaExtractor and
+Android's own software decoders (`c2.android.*`, never a vendor's). `Mixdown.mono` means the channels as numpy does.
+`DecoderTest` holds it to the computer's decode of eleven files (`tests/fixtures/autochords/encode.sh`: MP3 from
+FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; Vorbis; Opus; FLAC of 16 and
+24 bits; WAV; AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
+
+    android/scripts/device-test.sh --ml
+
+On the emulator (2026-11-26) the lossless files come out sample for sample, but the 24-bit FLAC, which Android's
+extractor gives as 16-bit (77 dB), the lossy ones at offset 0 and 72 to 83 dB of SNR (the gate is 60, whole and each
+second), every file's frames the computer's to the frame, and the length it states (`durationS`, the one an auto sheet
+is laid over) the computer's `read_audio`'s to the bit. What a plain MediaCodec loop gets wrong, and it doesn't:
+
+- it trims as the computer does, never by the codec: where the format names the encoder's delay and padding, the
+  framework's codecs may trim them themselves (this emulator's do, so they'd go twice), so it takes both keys out of
+  the codec's format and trims itself: an MP4 to its edit list exactly (its last frame's padding is past 0.05 s at
+  11.025 kHz), an Ogg to its last page's granule position (Opus's last packet runs 648 samples past it);
+- it gives Android's MP3 decoder a frame of silence before a file with no LAME header, since that decoder always drops
+  the first 529 samples it makes, where FFmpeg keeps them;
+- it reads the length as mutagen does (an MP4's `mdhd`, a LAME tag's delay and padding taken off only where its
+  version string is LAME's), never the extractor's;
+- it reads the decoder's output in the encoding it names, and refuses one it doesn't read;
+- a decoder that stops, or changes its rate or channels partway, fails the decode in words.
+
+Not covered by these files, and so not shown to match: an MPEG-1 MP3 at 44.1 kHz (the fixtures are MPEG-2, to keep
+the corpus small), Ogg FLAC, HE-AAC (a decoder that doubles the rate, its SBR implicit, gets the edit list's samples
+rescaled to its output's rate, exactly where they can be, else the format's stated delay and padding: shown on the
+JVM through a fake codec alone), an MP4 with no edit list (iTunSMPB alone: trimmed by the extractor's stated delay and
+padding), a non-AAC MP4 such as ALAC (its length the decoded seconds, not its `mdhd`), an AAC with perceptual noise substitution (each decoder fills those bands with noise of its own,
+so no two agree; the fixtures are encoded without it), an AAC with loudness metadata (its normalization is asked off,
+untested), a 24-bit FLAC to the bit (Android gives 16), an MP4 of several edits, a VBRI header mutagen refuses, an Ogg
+stream that begins past granule 0, and any file of several audio tracks (the first is taken, where FFmpeg takes its
+"best"). What only another Android image or a real phone shows: what MP3Extractor reports as `encoder-delay` there,
+and whether taking the keys out of the format stops the platform's own trim on every version from the app's minSdk.
+
 ## Chords from audio: the resampler
 
 The computer resamples audio for its models with python-soxr, librosa's resampler, which runs libsoxr 0.1.3; the phone
@@ -804,8 +855,8 @@ contiguous 1-D float32 array, the path that takes, `csoxr_split_ch`, one channel
 (`soxr_jni.c`) into one shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for
 arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`, so the debug build's alone), and by the host's gcc for the
 JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM,
-holds the front ends of the chords from audio; for now `Soxr.resample(x, from, to)` (rates finite and over 0: libsoxr
-never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
+holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates finite
+and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
 (`tests/conformance/vectors/autochords/soxr.jsonl`, made on x86_64 by libsoxr's SIMD engine, cr32s) within 1e-6:
 
     nix develop ./android -c gradle -p android :autochords:test
@@ -822,12 +873,92 @@ What the APK carries of it is checked by a script, after `gradle -p android :app
 
     nix develop ./android -c android/scripts/native-check.sh
 
-It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is packaged as the APK installs it
-(stored uncompressed and 16 KB aligned, or compressed in a debug APK that extracts its libraries at install), its
-segments 16 KB aligned, stripped (no `.debug_*`, `.symtab`, `.comment` or build-id), and names no path of the build
-(`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and prints its SHA-256: two checkouts at different paths build the same
-bytes (the library carries no debug information, `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but
-the JNI's is hidden.
+`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release holds no
+`libcaracole_*` or `libqjs.so` today, which passes, saying so), and fails with it: run it after any change to the
+native code or the packaging. It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is
+packaged as the APK installs it (stored uncompressed and 16 KB aligned, or compressed in a debug APK that extracts its
+libraries at install: release-check.sh asks the debug APK's extracted, `--expect extracted`), its segments 16 KB
+aligned, stripped (no `.debug_*`, `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`,
+`/nix/store/`, `.cxx/`, `/tmp/`), and prints its SHA-256: two checkouts at different paths build the same bytes (the
+library carries no debug information, `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's
+is hidden.
+
+## Chords from audio: the hearing
+
+The phone hears a song in a process of its own, `:ml` (`MlService`, debug builds alone), so the models' memory, a
+crash or Android's low-memory killer never touch the app's server: `MlChordModels.hear(audio, onStep, waiting)` sends
+the service the file's path and waits, saying run.py's steps ("setting up the models", "hearing the chords", "finding
+the beats", and "waiting for the phone to cool"). The service's `Pipeline` decodes, mixes down and resamples to 22,050
+Hz, runs BTC, then beat_this, one model at a time, and keeps each step's answer in
+`files/state/cache/autochords/<sha16>-c1/`, so a hearing cut off goes on from its chords. A dead `:ml` is
+`ChordsUnavailable`; the process ends after each hearing. The phone's heat and battery decide its threads, a wait or a
+stop (`HeatRules`). `PipelineTest` holds the whole to the computer's hearing of the committed clips and of a 44.1 kHz
+stereo MP3 and a 48 kHz stereo M4A (`models.jsonl`'s `gates.end_to_end`) and kills the process mid-hearing;
+`device-test.sh --ml` runs it. On the emulator (2026-11-26) every file's WCSR and F are 1.0 (to the last bit but one),
+each heard in 2-10 s, `:ml` at 300-410 MB at its peak.
+
+`ParityRunTest` runs the same gate over songs that stay outside the repository (your own): a folder of audio files
+with the computer's hearing of each beside it, made in the model shell from the repository's root,
+
+    nix develop .#autochords -c python -m tests.helpers.autochords_reference --hearings ~/some-songs ~/hearings
+
+(`meta.json`, the gates, and a few KB a song, `<name>.hearing.json`), then, with the songs and their hearings in one
+folder (links will do),
+
+    android/scripts/device-test.sh --data ~/songs-and-hearings
+
+pushes it to the emulator, hears each song whole through `:ml`, prints each one's WCSR, F, the lengths each model read
+against the computer's, where the chords part, its time stage by stage and `:ml`'s peak, then the whole over all, and
+removes the folder from the emulator however the run ends. Without `--data` the class is skipped. On x86_64 the
+emulator runs the phone's software decoders but not its CPU's kernels: only the phone's own bench says those.
+
+What bounds a song's length is the models' own memory, not the song's: every stage reads the samples from files (the
+pcm memory-mapped, the resampler streamed) in fixed blocks, and beat_this runs over 1500-frame chunks whatever the
+length, so a 30-minute song costs its peak what a 3-minute one does (the beat session, about 756 MB on the owner's
+phone), plus what grows with the song: BTC's features, 0.37 MB a minute (11 MB for 30 minutes), and the beat logits,
+24 KB a minute. Its files take room while it is heard: the decode at the file's rate (30 minutes of 48 kHz stereo,
+690 MB), its mixdown (345 MB) and the 22,050 Hz pcm (159 MB), each gone once the next is made, the pcm once the beats
+are kept.
+
+## Chords from audio: a sheet from a file (debug build)
+
+In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
+(src/debug's `PhoneChords`; the release has none, and says auto-chords isn't on the phone). The models are those
+Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
+holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
+removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app
+sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 or x86_64 processor.
+
+`ChordsEndToEndTest` runs it whole on the emulator: the models `device-test.sh` pushes installed by the phone's own
+models' job (nothing asked of GitHub), the committed 20 s clip `tests/fixtures/autochords/hearing.mp3` staged and its
+job queued, LRCLIB the fake sites server's scenario `chords`, which times the clip's song:
+
+    android/scripts/device-test.sh --models --sites chords ChordsEndToEndTest
+
+It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's WCSR against the computer's hearing of
+the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
+the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
+
+### Gate B2 on your phone
+
+Once the library page offers the "+" (the audio routes, a later task): install a debug build
+(`android/scripts/phone-install.sh`), download the chord models in Settings › Chords from audio, charge the phone
+above 15 %, then on the library page tap "+", pick a song of yours whose lyrics LRCLIB has timed, and Make sheet.
+The gate: from the tap to Ready, with "chords over the lyrics", within 90 s. The Journal's entry gives the job's
+times; say the song's length and the phone.
+
+
+`:autochords` makes the models' inputs from 22,050 Hz samples as the computer does: `Cqt.logFeatures(y)`, BTC's
+log-CQT (btc.py's `cqt_features`: librosa 1.0's CQT in 10 s chunks, `[frames, 144]`), and `Mel.logMel(y)`,
+beat_this's log-mel (torchaudio's `MelSpectrogram`, `[frames, 128]`). What they apply comes from Python, never
+recomputed: `tests/conformance/data/caracole/autochords/frontend.json` holds librosa's CQT as it ran over a chunk,
+step by step (its resamples, by `Soxr`, and each octave's STFT and sparse basis) and beat_this's window and
+filterbank. `CqtTest` and `MelTest` hold them to the computer's features of the committed clips
+(`vectors/autochords/frontend.jsonl`) by the design's gate, a cosine per frame (median ≥ 0.9999, least ≥ 0.999), and
+print how close each came; the area runs on the emulator too:
+
+    nix develop ./android -c gradle -p android :autochords:test
+    android/scripts/device-test.sh --area autochords
 
 ## The Chords bench (debug build)
 
@@ -872,7 +1003,9 @@ setting's `memory_ok` is null, or false when it ran out of memory.
 
    The second command writes one `.json` a song: what the computer's models made of it. Five songs are enough for
    B0; a reference keeps the decoded audio too, about 40 MB for four minutes. The model files are 138 MB. A
-   reference is named after its audio, with each character the phone's shared storage refuses (a colon, and
+   reference whose decoded length, mel and duration disagree by more than 0.1 s is not written: the command names
+   it and exits 1; the bench, given an older one whose duration its mel disagrees with, times it by the mel and says
+   so in its log and the report's `length_flags`. A reference is named after its audio, with each character the phone's shared storage refuses (a colon, and
    `*?"<>|\`) made a hyphen: `adb push` can't copy a file whose name holds one ("remote couldn't create file"), so
    a file you rename yourself must keep them out too.
 3. **Copy it to the phone**: `adb push ~/caracole-bench /sdcard/Download/` (add `-s SERIAL` as above).
@@ -922,6 +1055,29 @@ Which beat file, how many threads and which memory setting ship are yours to cho
 free the room afterwards, delete the folder; the app's own copy of the models goes with the debug app's data
 (`adb shell pm clear --user 0 io.github.danielhp95.caracole.debug`, its library too).
 
+### Gate B1: your songs heard whole
+
+Gate B1 asks whether the phone's whole hearing (decode, mixdown, resample, the CQT and BTC, the mel and beat_this)
+gives your songs the computer's chords and beats: WCSR ≥ 0.99 (majmin) and ≥ 0.98 (tetrads), beats and downbeats F ≥
+0.99 within 0.07 s after the first 5 s, every threshold read from the hearings' `meta.json`. The bench's Hear the
+songs (B1) button runs it.
+
+1. **The computer's hearings**, from the repository's root, of the same songs you bring:
+
+       nix develop .#autochords -c python -m tests.helpers.autochords_reference --hearings ~/some-songs \
+           ~/caracole-bench/hearings
+
+   It writes `meta.json` and one `<name>.hearing.json` a song, a few KB each; one whose lengths disagree is not
+   written, and the command says which.
+2. **The folder**: put the songs themselves in `~/caracole-bench` beside the model files (any name: a song is found
+   by its bytes too), the `hearings` folder in it, and `adb push ~/caracole-bench /sdcard/Download/`.
+3. **Run it**: Debug caracole › Settings › Chords bench, the folder as before (Download › caracole-bench), then
+   **Hear the songs (B1)**. Each song is heard whole in a fresh `:ml` process, the screen kept on; a few minutes a
+   song.
+4. **The report**: `caracole-bench-<UTC time>.json` in the folder, its `hearings`: `gates`; `files`, a song each (its
+   WCSR and F against each threshold, `failures`, `pass`, the samples and frames each model read beside the
+   computer's, `frames_differ` and where, `seconds`, `rtf`, `stages_seconds`, `ml_peak_mb`); `over_all` (`pass`,
+   each score's least and its mean by length, `rtf_max`, `ml_peak_mb_max`); `unmatched`; and `pass`.
 ## YouTube on the phone: the engine (debug build)
 
 A song's audio from YouTube on the phone runs yt-dlp itself, in Python, inside the app: `:youtube`, Chaquopy's Python

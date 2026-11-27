@@ -478,6 +478,8 @@ class BackupsTest {
                            // The site catalogues': the file the index tables hold, when GitHub may be asked again, the
                            // download waiting for a go-ahead, the offer made: of the index tables and this phone alone.
                            "catalogues:imported", "catalogues:not-before", "catalogues:asking", "catalogues:offered",
+                           // The chord models': what was installed beside the files no backup holds, GitHub's time.
+                           "models:installed", "models:not-before",
                            // What the whole exports it merged read, which the index tables hold: a sync asks by it.
                            "index:merged")) {
             assertTrue(OwnRecords.isOwn(key), key)

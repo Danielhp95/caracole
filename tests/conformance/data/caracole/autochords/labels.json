@@ -1,0 +1,100 @@
+{
+ "c_major_spelling": {
+  "A#": "Bb",
+  "D#": "Eb",
+  "G#": "Ab"
+ },
+ "common": {
+  "7": "7",
+  "aug": "aug",
+  "dim": "dim",
+  "dim7": "dim7",
+  "hdim7": "m7b5",
+  "maj": "",
+  "maj6": "6",
+  "maj7": "maj7",
+  "min": "m",
+  "min6": "m6",
+  "min7": "m7",
+  "minmaj7": "mMaj7",
+  "sus2": "sus2",
+  "sus4": "sus4"
+ },
+ "flat_keys": [
+  1,
+  3,
+  5,
+  8,
+  10
+ ],
+ "flats": {
+  "A#": "Bb",
+  "C#": "Db",
+  "D#": "Eb",
+  "F#": "Gb",
+  "G#": "Ab"
+ },
+ "frame": {
+  "chunk_seconds": 10.0,
+  "seconds": 0.09259259259259259,
+  "timestep": 108
+ },
+ "major_scale": [
+  0,
+  2,
+  4,
+  5,
+  7,
+  9,
+  11
+ ],
+ "no_chord": "N",
+ "roots": [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B"
+ ],
+ "unknown": "X",
+ "vocabularies": {
+  "qualities": {
+   "170": [
+    "min",
+    "maj",
+    "dim",
+    "aug",
+    "min6",
+    "maj6",
+    "min7",
+    "minmaj7",
+    "maj7",
+    "7",
+    "dim7",
+    "hdim7",
+    "sus2",
+    "sus4"
+   ],
+   "25": [
+    "maj",
+    "min"
+   ]
+  },
+  "tails": {
+   "170": [
+    "X",
+    "N"
+   ],
+   "25": [
+    "N"
+   ]
+  }
+ }
+}

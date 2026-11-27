@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole
 
+import android.app.Application
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.Build
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -9,6 +11,7 @@ import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.server.Phone
@@ -83,6 +86,10 @@ object Caracole {
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
 
+    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none (every
+     * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
+    @Volatile var examinerForTests: AudioStore.Examiner? = null
+
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
     private fun catalogues(http: Http): CatalogueSource =
         cataloguesForTests?.let { CatalogueSource.Api(http, base = it) } ?: CatalogueSource.Api(http)
@@ -113,8 +120,23 @@ object Caracole {
      * the main one: it opens the database, migrating and seeding it on the first start, and binds the port).
      */
     fun phone(context: Context, starting: () -> Unit = {}): Phone = phone ?: synchronized(this) {
+        check(!isModelsProcess(processName(), context.packageName)) {
+            "the phone's caracole doesn't start in the chord models' process"
+        }
         phone ?: start(context.applicationContext, starting).also { phone = it }
     }
+
+    /** The chord models' process's name's end (the debug build's `:ml`, its MlService's): nothing of the phone's
+     * caracole (its database, its queue, its server) starts there, so the models' memory and their end are theirs
+     * alone. Named, never the class, which the release doesn't have. */
+    const val MODELS_PROCESS = ":ml"
+
+    /** Whether the process [name] of [packageName] is the chord models' ([MODELS_PROCESS]). */
+    internal fun isModelsProcess(name: String, packageName: String): Boolean = name == packageName + MODELS_PROCESS
+
+    /** This process's name: Android's, else its command line's first part (before Android 9). */
+    private fun processName(): String = if (Build.VERSION.SDK_INT >= 28) Application.getProcessName()
+        else File("/proc/self/cmdline").readText(Charsets.UTF_8).substringBefore('\u0000')
 
     /** The library's database file, which the opening screen reads the header of (OpeningSteps.updating). */
     fun databaseFile(context: Context): File = File(context.filesDir, DATABASE)
@@ -140,6 +162,10 @@ object Caracole {
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
                 youtube = youtube(context),
+                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
+                // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
+                chords = PhoneChords.of(context, state),
+                examiner = { file, format -> (examinerForTests ?: PhoneDeps.NO_EXAMINER).examine(file, format) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the
@@ -151,6 +177,8 @@ object Caracole {
             this.working = working
             // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
             phone.start()
+            // A hearing's checkpoints a killed app left a day ago; a failure logged, the start going on.
+            guarded("sweeping the chord models' old checkpoints") { PhoneChords.sweep(context, state) }
             return phone
         } catch (e: Throwable) {
             database.close()

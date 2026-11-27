@@ -1,4 +1,4 @@
-package io.github.danielhp95.caracole.autochords.frontend
+package io.github.danielhp95.caracole.autochords.testing
 
 import io.github.danielhp95.caracole.core.testing.Corpus
 import kotlinx.serialization.json.JsonObject

@@ -1,0 +1,456 @@
+{"corpus":"library/audio_store","header":true,"made_by":"tests/test_conformance_audio_store.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["SUQzBAAAAAAAAA=="],"fn":"sniff","out":"MP3"}
+{"args":["SUQzBAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["SUQzBAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["//uQwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//uQwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//uQwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//NIxA=="],"fn":"sniff","out":"MP3"}
+{"args":["//NIxA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//NIxA=="],"fn":"_mp4_audio","out":false}
+{"args":["/+MYxA=="],"fn":"sniff","out":"MP3"}
+{"args":["/+MYxA=="],"fn":"_mpeg_frame","out":true}
+{"args":["/+MYxA=="],"fn":"_mp4_audio","out":false}
+{"args":["//2QwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//2QwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//2QwA=="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAGGZ0eXBNNEEgAAAAAE00QSBpc29t"],"fn":"sniff","out":"M4A"}
+{"args":["AAAAGGZ0eXBNNEEgAAAAAE00QSBpc29t"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBNNEEgAAAAAE00QSBpc29t"],"fn":"_mp4_audio","out":true}
+{"args":["AAAAFGZ0eXBtcDQyAAAAAGlzb20="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAFGZ0eXBtcDQyAAAAAGlzb20="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBtcDQyAAAAAGlzb20="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAFGZ0eXBpc29tAAAAAGlzbzI="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAFGZ0eXBpc29tAAAAAGlzbzI="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBpc29tAAAAAGlzbzI="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAEGZ0eXBNNEIgAAAAAA=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAEGZ0eXBNNEIgAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAEGZ0eXBNNEIgAAAAAA=="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAGGZ0eXBkYXNoAAAAAGlzbzZtcDQx"],"fn":"sniff","out":"M4A"}
+{"args":["AAAAGGZ0eXBkYXNoAAAAAGlzbzZtcDQx"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBkYXNoAAAAAGlzbzZtcDQx"],"fn":"_mp4_audio","out":true}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29taXNvMg=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29taXNvMg=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29taXNvMg=="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAGGZ0eXBpc29tAAAAAGlzbzJtcDQx"],"fn":"sniff","out":"M4A"}
+{"args":["AAAAGGZ0eXBpc29tAAAAAGlzbzJtcDQx"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBpc29tAAAAAGlzbzJtcDQx"],"fn":"_mp4_audio","out":true}
+{"args":["AAAAGGZ0eXBpc281AAAAAGlzbzZtcDQx"],"fn":"sniff","out":"M4A"}
+{"args":["AAAAGGZ0eXBpc281AAAAAGlzbzZtcDQx"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBpc281AAAAAGlzbzZtcDQx"],"fn":"_mp4_audio","out":true}
+{"args":["AAAAEGZ0eXBtcDQxAAAAAA=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAEGZ0eXBtcDQxAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAEGZ0eXBtcDQxAAAAAA=="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAEGZ0eXBpc28yAAAAAA=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAEGZ0eXBpc28yAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAEGZ0eXBpc28yAAAAAA=="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAHGZ0eXBNNFYgAAAAAE00QSBtcDQyaXNvbQ=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAHGZ0eXBNNFYgAAAAAE00QSBtcDQyaXNvbQ=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAHGZ0eXBNNFYgAAAAAE00QSBtcDQyaXNvbQ=="],"fn":"_mp4_audio","out":true}
+{"args":["ZkxhQwAAACI="],"fn":"sniff","out":"FLAC"}
+{"args":["ZkxhQwAAACI="],"fn":"_mpeg_frame","out":false}
+{"args":["ZkxhQwAAACI="],"fn":"_mp4_audio","out":false}
+{"args":["UklGRiQAAABXQVZFZm10IA=="],"fn":"sniff","out":"WAV"}
+{"args":["UklGRiQAAABXQVZFZm10IA=="],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRiQAAABXQVZFZm10IA=="],"fn":"_mp4_audio","out":false}
+{"args":["T2dnUwAC"],"fn":"sniff","out":"Ogg"}
+{"args":["T2dnUwAC"],"fn":"_mpeg_frame","out":false}
+{"args":["T2dnUwAC"],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAAABBSUZG"],"fn":"sniff","out":"AIFF"}
+{"args":["Rk9STQAAAABBSUZG"],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAAABBSUZG"],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAAABBSUZD"],"fn":"sniff","out":"AIFF"}
+{"args":["Rk9STQAAAABBSUZD"],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAAABBSUZD"],"fn":"_mp4_audio","out":false}
+{"args":[""],"fn":"sniff","out":null}
+{"args":[""],"fn":"_mpeg_frame","out":false}
+{"args":[""],"fn":"_mp4_audio","out":false}
+{"args":["bm90IHJlYWxseSBhdWRpbw=="],"fn":"sniff","out":null}
+{"args":["bm90IHJlYWxseSBhdWRpbw=="],"fn":"_mpeg_frame","out":false}
+{"args":["bm90IHJlYWxseSBhdWRpbw=="],"fn":"_mp4_audio","out":false}
+{"args":["//FQgA=="],"fn":"sniff","out":null}
+{"args":["//FQgA=="],"fn":"_mpeg_frame","out":false}
+{"args":["//FQgA=="],"fn":"_mp4_audio","out":false}
+{"args":["//vwwA=="],"fn":"sniff","out":null}
+{"args":["//vwwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["//vwwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//ucwA=="],"fn":"sniff","out":null}
+{"args":["//ucwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["//ucwA=="],"fn":"_mp4_audio","out":false}
+{"args":["/+uQwA=="],"fn":"sniff","out":null}
+{"args":["/+uQwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["/+uQwA=="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAHF0ICA="],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAHF0ICA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAHF0ICA="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBoZWljAAAAAG1pZjE="],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXBoZWljAAAAAG1pZjE="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBoZWljAAAAAG1pZjE="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAGGZ0eXBhdmlmAAAAAG1pZjFtaWFm"],"fn":"sniff","out":null}
+{"args":["AAAAGGZ0eXBhdmlmAAAAAG1pZjFtaWFm"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBhdmlmAAAAAG1pZjFtaWFm"],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBNNFYgAAAAAE00ViA="],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXBNNFYgAAAAAE00ViA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBNNFYgAAAAAE00ViA="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXAzZ3A0AAAAADNncDQ="],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXAzZ3A0AAAAADNncDQ="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXAzZ3A0AAAAADNncDQ="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBjcngg"],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXBjcngg"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBjcngg"],"fn":"_mp4_audio","out":false}
+{"args":["UklGRiQAAABBVkkgTElTVA=="],"fn":"sniff","out":null}
+{"args":["UklGRiQAAABBVkkgTElTVA=="],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRiQAAABBVkkgTElTVA=="],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAAAA4U1ZY"],"fn":"sniff","out":null}
+{"args":["Rk9STQAAAAA4U1ZY"],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAAAA4U1ZY"],"fn":"_mp4_audio","out":false}
+{"args":["iVBORw0KGgo="],"fn":"sniff","out":null}
+{"args":["iVBORw0KGgo="],"fn":"_mpeg_frame","out":false}
+{"args":["iVBORw0KGgo="],"fn":"_mp4_audio","out":false}
+{"args":["JVBERi0xLjc="],"fn":"sniff","out":null}
+{"args":["JVBERi0xLjc="],"fn":"_mpeg_frame","out":false}
+{"args":["JVBERi0xLjc="],"fn":"_mp4_audio","out":false}
+{"args":["//uQwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"MP3"}
+{"args":["//uQwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//uQwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["SUQzBAAAAAAINVRJVDIAAAAHAAADQ3JlZXAAVFBFMQAAAAsAAANSYWRpb2hlYWQAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"MP3"}
+{"args":["SUQzBAAAAAAINVRJVDIAAAAHAAADQ3JlZXAAVFBFMQAAAAsAAANSYWRpb2hlYWQAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["SUQzBAAAAAAINVRJVDIAAAAHAAADQ3JlZXAAVFBFMQAAAAsAAANSYWRpb2hlYWQAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAAAhBtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAB9AAAAfQA=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAAAhBtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAB9AAAAfQA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAAAhBtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAB9AAAAfQA=="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAABpNtb292AAAEg3VkdGEAAAR7bWV0YQAAAAAAAAAhaGRscg=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAABpNtb292AAAEg3VkdGEAAAR7bWV0YQAAAAAAAAAhaGRscg=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAHGZ0eXBNNEEgAAAAAE00QSBpc29tbXA0MgAABpNtb292AAAEg3VkdGEAAAR7bWV0YQAAAAAAAAAhaGRscg=="],"fn":"_mp4_audio","out":true}
+{"args":["ZkxhQ4AAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAA//h0CAAP/6UAAAAv7P/4dAgBDz+AAA=="],"fn":"sniff","out":"FLAC"}
+{"args":["ZkxhQ4AAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAA//h0CAAP/6UAAAAv7P/4dAgBDz+AAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["ZkxhQ4AAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAA//h0CAAP/6UAAAAv7P/4dAgBDz+AAA=="],"fn":"_mp4_audio","out":false}
+{"args":["ZkxhQwAAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAABAAAOQ4AAABNdXRhZ2VuIDEuNDguMQ=="],"fn":"sniff","out":"FLAC"}
+{"args":["ZkxhQwAAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAABAAAOQ4AAABNdXRhZ2VuIDEuNDguMQ=="],"fn":"_mpeg_frame","out":false}
+{"args":["ZkxhQwAAACIQABAAAAAAAAAAAfQA8AAAH0AAAAAAAAAAAAAAAAAAAAAABAAAOQ4AAABNdXRhZ2VuIDEuNDguMQ=="],"fn":"_mp4_audio","out":false}
+{"args":["UklGRqQ+AABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"WAV"}
+{"args":["UklGRqQ+AABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRqQ+AABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["UklGRtxCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"WAV"}
+{"args":["UklGRtxCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRtxCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["T2dnUwACAAAAAAAAAABvcmFjAAAAAJVWYFQBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAAG9yYQ=="],"fn":"sniff","out":"Ogg"}
+{"args":["T2dnUwACAAAAAAAAAABvcmFjAAAAAJVWYFQBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAAG9yYQ=="],"fn":"_mpeg_frame","out":false}
+{"args":["T2dnUwACAAAAAAAAAABvcmFjAAAAAJVWYFQBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAAG9yYQ=="],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAPq5BSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"AIFF"}
+{"args":["Rk9STQAAPq5BSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAPq5BSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAQuZBSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":"AIFF"}
+{"args":["Rk9STQAAQuZBSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAQuZBSUZGQ09NTQAAABIAAQAAH0AAEEAL+gAAAAAAAABTU05EAAA+iAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["SUQzBAAAAAAACgAAAAAAAAAAAAD/+5DA"],"fn":"sniff","out":"MP3"}
+{"args":["SUQzBAAAAAAACgAAAAAAAAAAAAD/+5DA"],"fn":"_mpeg_frame","out":false}
+{"args":["SUQzBAAAAAAACgAAAAAAAAAAAAD/+5DA"],"fn":"_mp4_audio","out":false}
+{"args":["SUQz"],"fn":"sniff","out":"MP3"}
+{"args":["SUQz"],"fn":"_mpeg_frame","out":false}
+{"args":["SUQz"],"fn":"_mp4_audio","out":false}
+{"args":["SUQ="],"fn":"sniff","out":null}
+{"args":["SUQ="],"fn":"_mpeg_frame","out":false}
+{"args":["SUQ="],"fn":"_mp4_audio","out":false}
+{"args":["SQ=="],"fn":"sniff","out":null}
+{"args":["SQ=="],"fn":"_mpeg_frame","out":false}
+{"args":["SQ=="],"fn":"_mp4_audio","out":false}
+{"args":["/w=="],"fn":"sniff","out":null}
+{"args":["/w=="],"fn":"_mpeg_frame","out":false}
+{"args":["/w=="],"fn":"_mp4_audio","out":false}
+{"args":["//s="],"fn":"sniff","out":null}
+{"args":["//s="],"fn":"_mpeg_frame","out":false}
+{"args":["//s="],"fn":"_mp4_audio","out":false}
+{"args":["//uQ"],"fn":"sniff","out":"MP3"}
+{"args":["//uQ"],"fn":"_mpeg_frame","out":true}
+{"args":["//uQ"],"fn":"_mp4_audio","out":false}
+{"args":["//sAwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//sAwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//sAwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//vgwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//vgwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//vgwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//uYwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//uYwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//uYwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//uUwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//uUwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//uUwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//mQwA=="],"fn":"sniff","out":null}
+{"args":["//mQwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["//mQwA=="],"fn":"_mp4_audio","out":false}
+{"args":["//+QwA=="],"fn":"sniff","out":"MP3"}
+{"args":["//+QwA=="],"fn":"_mpeg_frame","out":true}
+{"args":["//+QwA=="],"fn":"_mp4_audio","out":false}
+{"args":["/+CQwA=="],"fn":"sniff","out":null}
+{"args":["/+CQwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["/+CQwA=="],"fn":"_mp4_audio","out":false}
+{"args":["/9+QwA=="],"fn":"sniff","out":null}
+{"args":["/9+QwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["/9+QwA=="],"fn":"_mp4_audio","out":false}
+{"args":["/vuQwA=="],"fn":"sniff","out":null}
+{"args":["/vuQwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["/vuQwA=="],"fn":"_mp4_audio","out":false}
+{"args":["/////////////////////////////////////////////////////////////////////////////////////w=="],"fn":"sniff","out":null}
+{"args":["/////////////////////////////////////////////////////////////////////////////////////w=="],"fn":"_mpeg_frame","out":false}
+{"args":["/////////////////////////////////////////////////////////////////////////////////////w=="],"fn":"_mp4_audio","out":false}
+{"args":["////"],"fn":"sniff","out":null}
+{"args":["////"],"fn":"_mpeg_frame","out":false}
+{"args":["////"],"fn":"_mp4_audio","out":false}
+{"args":["///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":null}
+{"args":["///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["AAAD6GZ0eXBNNEEgAAAAAGlzb20="],"fn":"sniff","out":"M4A"}
+{"args":["AAAD6GZ0eXBNNEEgAAAAAGlzb20="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAD6GZ0eXBNNEEgAAAAAGlzb20="],"fn":"_mp4_audio","out":true}
+{"args":["AAAD6GZ0eXBxdCAgAAAAAE00QSA="],"fn":"sniff","out":"M4A"}
+{"args":["AAAD6GZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAD6GZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mp4_audio","out":true}
+{"args":["AAAADGZ0eXBxdCAgAAAAAE00QSA="],"fn":"sniff","out":null}
+{"args":["AAAADGZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAADGZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAE2Z0eXBxdCAgAAAAAE00QSA="],"fn":"sniff","out":null}
+{"args":["AAAAE2Z0eXBxdCAgAAAAAE00QSA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAE2Z0eXBxdCAgAAAAAE00QSA="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAE00QSA="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBxdCAgAAAAAE00QSA="],"fn":"_mp4_audio","out":true}
+{"args":["AAAAAGZ0eXBxdCAgAAAAAHF0ICBtcDQy"],"fn":"sniff","out":null}
+{"args":["AAAAAGZ0eXBxdCAgAAAAAHF0ICBtcDQy"],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAAGZ0eXBxdCAgAAAAAHF0ICBtcDQy"],"fn":"_mp4_audio","out":false}
+{"args":["AAAAFGZ0eXBtNGEgAAAAAE1QNDI="],"fn":"sniff","out":null}
+{"args":["AAAAFGZ0eXBtNGEgAAAAAE1QNDI="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAFGZ0eXBtNGEgAAAAAE1QNDI="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAEGZ0eXBtcDQ="],"fn":"sniff","out":null}
+{"args":["AAAAEGZ0eXBtcDQ="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAEGZ0eXBtcDQ="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAGGZ0eXA="],"fn":"sniff","out":null}
+{"args":["AAAAGGZ0eXA="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXA="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAGGZ0eXBNNEE="],"fn":"sniff","out":null}
+{"args":["AAAAGGZ0eXBNNEE="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAGGZ0eXBNNEE="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAYGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHRhaWw="],"fn":"sniff","out":null}
+{"args":["AAAAYGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHRhaWw="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAYGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHRhaWw="],"fn":"_mp4_audio","out":false}
+{"args":["AAAAQGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgTTRBIA=="],"fn":"sniff","out":"M4A"}
+{"args":["AAAAQGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgTTRBIA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAQGZ0eXBxdCAgAAAAAHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgcXQgIHF0ICBxdCAgTTRBIA=="],"fn":"_mp4_audio","out":true}
+{"args":["UklGRgAAAABXQVZF"],"fn":"sniff","out":"WAV"}
+{"args":["UklGRgAAAABXQVZF"],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRgAAAABXQVZF"],"fn":"_mp4_audio","out":false}
+{"args":["UklGRgAAAABXQVY="],"fn":"sniff","out":null}
+{"args":["UklGRgAAAABXQVY="],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRgAAAABXQVY="],"fn":"_mp4_audio","out":false}
+{"args":["UklGRgAAAAB3YXZl"],"fn":"sniff","out":null}
+{"args":["UklGRgAAAAB3YXZl"],"fn":"_mpeg_frame","out":false}
+{"args":["UklGRgAAAAB3YXZl"],"fn":"_mp4_audio","out":false}
+{"args":["UklGWAAAAABXQVZF"],"fn":"sniff","out":null}
+{"args":["UklGWAAAAABXQVZF"],"fn":"_mpeg_frame","out":false}
+{"args":["UklGWAAAAABXQVZF"],"fn":"_mp4_audio","out":false}
+{"args":["T2dnUw=="],"fn":"sniff","out":"Ogg"}
+{"args":["T2dnUw=="],"fn":"_mpeg_frame","out":false}
+{"args":["T2dnUw=="],"fn":"_mp4_audio","out":false}
+{"args":["T2dn"],"fn":"sniff","out":null}
+{"args":["T2dn"],"fn":"_mpeg_frame","out":false}
+{"args":["T2dn"],"fn":"_mp4_audio","out":false}
+{"args":["b2dnUwA="],"fn":"sniff","out":null}
+{"args":["b2dnUwA="],"fn":"_mpeg_frame","out":false}
+{"args":["b2dnUwA="],"fn":"_mp4_audio","out":false}
+{"args":["ZkxhQw=="],"fn":"sniff","out":"FLAC"}
+{"args":["ZkxhQw=="],"fn":"_mpeg_frame","out":false}
+{"args":["ZkxhQw=="],"fn":"_mp4_audio","out":false}
+{"args":["Zkxh"],"fn":"sniff","out":null}
+{"args":["Zkxh"],"fn":"_mpeg_frame","out":false}
+{"args":["Zkxh"],"fn":"_mp4_audio","out":false}
+{"args":["RkxBQw=="],"fn":"sniff","out":null}
+{"args":["RkxBQw=="],"fn":"_mpeg_frame","out":false}
+{"args":["RkxBQw=="],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAAABBSUY="],"fn":"sniff","out":null}
+{"args":["Rk9STQAAAABBSUY="],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAAABBSUY="],"fn":"_mp4_audio","out":false}
+{"args":["Rk9STQAAAABhaWZm"],"fn":"sniff","out":null}
+{"args":["Rk9STQAAAABhaWZm"],"fn":"_mpeg_frame","out":false}
+{"args":["Rk9STQAAAABhaWZm"],"fn":"_mp4_audio","out":false}
+{"args":["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"sniff","out":null}
+{"args":["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="],"fn":"_mp4_audio","out":false}
+{"args":["AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw=="],"fn":"sniff","out":null}
+{"args":["AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw=="],"fn":"_mpeg_frame","out":false}
+{"args":["AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+Pw=="],"fn":"_mp4_audio","out":false}
+{"args":["//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQz87NzMvKycjHxsXEw8LBwA=="],"fn":"sniff","out":null}
+{"args":["//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQz87NzMvKycjHxsXEw8LBwA=="],"fn":"_mpeg_frame","out":false}
+{"args":["//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQz87NzMvKycjHxsXEw8LBwA=="],"fn":"_mp4_audio","out":false}
+{"args":["../../Music/01 Creep.mp3"],"fn":"_display_name","out":"01 Creep.mp3"}
+{"args":["C:\\Users\\me\\a\u0000b\u001f\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.wav"],"fn":"_display_name","out":"abxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"args":["\u0000\u001f/"],"fn":"_display_name","out":""}
+{"args":["song.mp3"],"fn":"_display_name","out":"song.mp3"}
+{"args":["C:\\Users\\me\\creep\u0007 take 2.wav"],"fn":"_display_name","out":"creep take 2.wav"}
+{"args":["Creep (Live).flac"],"fn":"_display_name","out":"Creep (Live).flac"}
+{"args":["creep take 3.mp3"],"fn":"_display_name","out":"creep take 3.mp3"}
+{"args":["wonderwall.opus"],"fn":"_display_name","out":"wonderwall.opus"}
+{"args":["yt.webm"],"fn":"_display_name","out":"yt.webm"}
+{"args":["clip.mp4"],"fn":"_display_name","out":"clip.mp4"}
+{"args":[""],"fn":"_display_name","out":""}
+{"args":[" "],"fn":"_display_name","out":""}
+{"args":["\t\n"],"fn":"_display_name","out":""}
+{"args":["a/b/"],"fn":"_display_name","out":""}
+{"args":["a\\"],"fn":"_display_name","out":""}
+{"args":["/"],"fn":"_display_name","out":""}
+{"args":["\\\\server\\share\\song.mp3"],"fn":"_display_name","out":"song.mp3"}
+{"args":["x/../y.mp3"],"fn":"_display_name","out":"y.mp3"}
+{"args":[" song.mp3"],"fn":"_display_name","out":"song.mp3"}
+{"args":["  song 　"],"fn":"_display_name","out":"song"}
+{"args":[" song "],"fn":"_display_name","out":"song"}
+{"args":["​song​"],"fn":"_display_name","out":"​song​"}
+{"args":["﻿song.mp3"],"fn":"_display_name","out":"﻿song.mp3"}
+{"args":["🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸"],"fn":"_display_name","out":"🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸🎸"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🎸b"],"fn":"_display_name","out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🎸"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"_display_name","out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":[" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"_display_name","out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["Ünïcödé – Fïlé.flac"],"fn":"_display_name","out":"Ünïcödé – Fïlé.flac"}
+{"args":["日本語の歌.m4a"],"fn":"_display_name","out":"日本語の歌.m4a"}
+{"args":["song\r\n.mp3"],"fn":"_display_name","out":"song.mp3"}
+{"args":["  \u0000  "],"fn":"_display_name","out":""}
+{"args":["song.mp3\u0000.exe"],"fn":"_display_name","out":"song.mp3.exe"}
+{"args":["Café.wav"],"fn":"_display_name","out":"Café.wav"}
+{"args":["0123456789abcdef"],"fn":"names","out":{"id":true,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["0123456789ABCDEF"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["0123456789abcde"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["0123456789abcdef0"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["0123456789abcdef\n"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["０１２３４５６７８９ａｂｃｄｅｆ"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[""],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".mp3"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.m4a"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".m4a"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.flac"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".flac"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.wav"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".wav"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.ogg"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".ogg"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.aiff"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".aiff"],"staged_audio":"0123456789abcdef"}}
+{"args":[".upload-0123456789abcdef.json"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":["0123456789abcdef",".json"],"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.kept"],"fn":"names","out":{"id":false,"kept":false,"marker":"0123456789abcdef","part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.aif"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.MP3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.mp3.json"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789ABCDEF.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcde.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["x.upload-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.mp3\n"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["upload-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".upload-0123456789abcdef.kept\n"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.m4a"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.flac"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.wav"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.ogg"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.aiff"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.json"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.kept"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["0-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["١٢-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789ABCDEF.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcde.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12a-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.mp3\n"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["999999999999999999999999-0123456789abcdef.flac"],"fn":"names","out":{"id":false,"kept":true,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["12-0123456789abcdef.ogg.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".keep-0123456789abcdef.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":true,"piece":null,"staged_audio":null}}
+{"args":[".keep-0123456789abcdef.part\n"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".keep-0123456789abcde.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".keep-0123456789ABCDEF.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":["keep-0123456789abcdef.part"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"args":[".keep-0123456789abcdef.mp3"],"fn":"names","out":{"id":false,"kept":false,"marker":null,"part":false,"piece":null,"staged_audio":null}}
+{"fn":"kept_name","kw":{"format":"MP3","sha256":"6f57742376211fbc7bdc86670704e9f1d47ee4e96017ccd54d135b6e11952e02","song":1},"out":"1-6f57742376211fbc.mp3"}
+{"fn":"kept_name","kw":{"format":"M4A","sha256":"bf7fa4d33816369960e4c8570a936e82a904f022df4935edcd3981a1a07b9505","song":2},"out":"2-bf7fa4d338163699.m4a"}
+{"fn":"kept_name","kw":{"format":"FLAC","sha256":"6cc8daf326bd17f6f59ae61cbe8f846f84b3c1f8ac540c298c20d76e6d633312","song":3},"out":"3-6cc8daf326bd17f6.flac"}
+{"fn":"kept_name","kw":{"format":"WAV","sha256":"e9a21532f6f9019cb9f59a6933ce83554e128b0f995062054d215b22d7dc93a5","song":4},"out":"4-e9a21532f6f9019c.wav"}
+{"fn":"kept_name","kw":{"format":"Ogg","sha256":"aea3dfcf378fd90d98913c345c7dcbed7a5705762ae7074ac7a5f44aecaa8279","song":5},"out":"5-aea3dfcf378fd90d.ogg"}
+{"fn":"kept_name","kw":{"format":"AIFF","sha256":"b498a421436007087492f64900a530899c74d73f0887a324150300e2f3ac8bfd","song":6},"out":"6-b498a42143600708.aiff"}
+{"fn":"record","kw":{"at":1764245000.0,"duration":1.0,"format":"MP3","name":"01 Creep.mp3","sha256":"b0041c5d76e7a0ab9c95b528d6d63843be07c033f29e39bed14413395c9718b3","size":1234,"tags":{"album":null,"artist":null,"title":null}},"out":"{\"name\": \"01 Creep.mp3\", \"size\": 1234, \"sha256\": \"b0041c5d76e7a0ab9c95b528d6d63843be07c033f29e39bed14413395c9718b3\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1764245000.0}"}
+{"args":["{\"name\": \"01 Creep.mp3\", \"size\": 1234, \"sha256\": \"b0041c5d76e7a0ab9c95b528d6d63843be07c033f29e39bed14413395c9718b3\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1764245000.0}"],"fn":"_read_record","out":true}
+{"fn":"record","kw":{"at":1764245000.123456,"duration":2.0000000001,"format":"FLAC","name":"Créep 🎸.flac","sha256":"9e41c1827a80042470703bc790f82ae16726b5109d949c446d2c6eb0c8c34afb","size":0,"tags":{"album":"Pablo","artist":"Radiohead","title":"Creep"}},"out":"{\"name\": \"Cr\\u00e9ep \\ud83c\\udfb8.flac\", \"size\": 0, \"sha256\": \"9e41c1827a80042470703bc790f82ae16726b5109d949c446d2c6eb0c8c34afb\", \"format\": \"FLAC\", \"duration\": 2.0000000001, \"tags\": {\"artist\": \"Radiohead\", \"title\": \"Creep\", \"album\": \"Pablo\"}, \"at\": 1764245000.123456}"}
+{"args":["{\"name\": \"Cr\\u00e9ep \\ud83c\\udfb8.flac\", \"size\": 0, \"sha256\": \"9e41c1827a80042470703bc790f82ae16726b5109d949c446d2c6eb0c8c34afb\", \"format\": \"FLAC\", \"duration\": 2.0000000001, \"tags\": {\"artist\": \"Radiohead\", \"title\": \"Creep\", \"album\": \"Pablo\"}, \"at\": 1764245000.123456}"],"fn":"_read_record","out":true}
+{"fn":"record","kw":{"at":1e-07,"duration":1799.9999999999998,"format":"WAV","name":"a\"b\\c.wav","sha256":"e142d044566522cafe33ee83d54449359049ba80fa5ee497fd0d5aba5a1bd42b","size":134217728,"tags":{"album":null,"artist":"Ünïcödé 🎸","title":"日本語"}},"out":"{\"name\": \"a\\\"b\\\\c.wav\", \"size\": 134217728, \"sha256\": \"e142d044566522cafe33ee83d54449359049ba80fa5ee497fd0d5aba5a1bd42b\", \"format\": \"WAV\", \"duration\": 1799.9999999999998, \"tags\": {\"artist\": \"\\u00dcn\\u00efc\\u00f6d\\u00e9 \\ud83c\\udfb8\", \"title\": \"\\u65e5\\u672c\\u8a9e\", \"album\": null}, \"at\": 1e-07}"}
+{"args":["{\"name\": \"a\\\"b\\\\c.wav\", \"size\": 134217728, \"sha256\": \"e142d044566522cafe33ee83d54449359049ba80fa5ee497fd0d5aba5a1bd42b\", \"format\": \"WAV\", \"duration\": 1799.9999999999998, \"tags\": {\"artist\": \"\\u00dcn\\u00efc\\u00f6d\\u00e9 \\ud83c\\udfb8\", \"title\": \"\\u65e5\\u672c\\u8a9e\", \"album\": null}, \"at\": 1e-07}"],"fn":"_read_record","out":true}
+{"fn":"record","kw":{"at":1764245012.5,"duration":1800.0,"format":"Ogg","name":"","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","size":1,"tags":{"album":"\u0000","artist":"\"quoted\"\\","title":"a b"}},"out":"{\"name\": \"\", \"size\": 1, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"format\": \"Ogg\", \"duration\": 1800.0, \"tags\": {\"artist\": \"\\\"quoted\\\"\\\\\", \"title\": \"a\\u2028b\", \"album\": \"\\u007f\\u0000\"}, \"at\": 1764245012.5}"}
+{"args":["{\"name\": \"\", \"size\": 1, \"sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\", \"format\": \"Ogg\", \"duration\": 1800.0, \"tags\": {\"artist\": \"\\\"quoted\\\"\\\\\", \"title\": \"a\\u2028b\", \"album\": \"\\u007f\\u0000\"}, \"at\": 1764245012.5}"],"fn":"_read_record","out":true}
+{"fn":"record","kw":{"at":17642450001.25,"duration":0.1,"format":"M4A","name":"日本語の歌.m4a","sha256":"7d1b71a09ac0384e3904a23c61b27f7b456a3a49efae63b2bad8db1f77fbb928","size":99,"tags":{"album":null,"artist":null,"title":null}},"out":"{\"name\": \"\\u65e5\\u672c\\u8a9e\\u306e\\u6b4c.m4a\", \"size\": 99, \"sha256\": \"7d1b71a09ac0384e3904a23c61b27f7b456a3a49efae63b2bad8db1f77fbb928\", \"format\": \"M4A\", \"duration\": 0.1, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 17642450001.25}"}
+{"args":["{\"name\": \"\\u65e5\\u672c\\u8a9e\\u306e\\u6b4c.m4a\", \"size\": 99, \"sha256\": \"7d1b71a09ac0384e3904a23c61b27f7b456a3a49efae63b2bad8db1f77fbb928\", \"format\": \"M4A\", \"duration\": 0.1, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 17642450001.25}"],"fn":"_read_record","out":true}
+{"fn":"record","kw":{"at":1e+16,"duration":3e-05,"format":"AIFF","name":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","sha256":"d22609da3ae3956ca4877056a8e580eed744a6f7d7cfa5b19dd88d52fcc0d435","size":5,"tags":{"album":"Pablo","artist":"Radiohead","title":"Creep"}},"out":"{\"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"size\": 5, \"sha256\": \"d22609da3ae3956ca4877056a8e580eed744a6f7d7cfa5b19dd88d52fcc0d435\", \"format\": \"AIFF\", \"duration\": 3e-05, \"tags\": {\"artist\": \"Radiohead\", \"title\": \"Creep\", \"album\": \"Pablo\"}, \"at\": 1e+16}"}
+{"args":["{\"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\", \"size\": 5, \"sha256\": \"d22609da3ae3956ca4877056a8e580eed744a6f7d7cfa5b19dd88d52fcc0d435\", \"format\": \"AIFF\", \"duration\": 3e-05, \"tags\": {\"artist\": \"Radiohead\", \"title\": \"Creep\", \"album\": \"Pablo\"}, \"at\": 1e+16}"],"fn":"_read_record","out":true}
+{"args":[""],"fn":"_read_record","out":false}
+{"args":["{}"],"fn":"_read_record","out":false}
+{"args":["[]"],"fn":"_read_record","out":false}
+{"args":["null"],"fn":"_read_record","out":false}
+{"args":["1"],"fn":"_read_record","out":false}
+{"args":["{"],"fn":"_read_record","out":false}
+{"args":["not json"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": true, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1.0, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"mp3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": true, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": \"1\", \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 2, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 3}"],"fn":"_read_record","out":true}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": null}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": false}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": 5, \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": [], \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null, \"year\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": 1, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": -1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": -1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": -1.0, \"more\": \"kept\"}"],"fn":"_read_record","out":true}
+{"args":["{\"name\": \"a\", \"size\": 100000000000000000000000000000, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": NaN, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": Infinity}"],"fn":"_read_record","out":true}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1e400, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": -0.0, \"name\": 3}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"a\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\\n\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":false}
+{"args":["{\"name\": \"\\ud800\", \"size\": 1, \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"format\": \"MP3\", \"duration\": 1.0, \"tags\": {\"artist\": null, \"title\": null, \"album\": null}, \"at\": 1.0}"],"fn":"_read_record","out":true}
+{"fn":"marker","kw":{"at":1764245000.123456,"kept":"3-0123456789abcdef.mp3","song":3},"out":"{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": 1764245000.123456}"}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": 1764245000.123456}"],"fn":"_read_marker","out":{"at":1764245000.123456,"kept":"3-0123456789abcdef.mp3","song":3}}
+{"fn":"marker","kw":{"at":1e-07,"kept":"12-ffffffffffffffff.aiff","song":12},"out":"{\"kept\": \"12-ffffffffffffffff.aiff\", \"song\": 12, \"at\": 1e-07}"}
+{"args":["{\"kept\": \"12-ffffffffffffffff.aiff\", \"song\": 12, \"at\": 1e-07}"],"fn":"_read_marker","out":{"at":1e-07,"kept":"12-ffffffffffffffff.aiff","song":12}}
+{"fn":"marker","kw":{"at":17642450001.0,"kept":"7-0123456789abcdef.ogg","song":7},"out":"{\"kept\": \"7-0123456789abcdef.ogg\", \"song\": 7, \"at\": 17642450001.0}"}
+{"args":["{\"kept\": \"7-0123456789abcdef.ogg\", \"song\": 7, \"at\": 17642450001.0}"],"fn":"_read_marker","out":{"at":17642450001.0,"kept":"7-0123456789abcdef.ogg","song":7}}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": 1764245000.5}"],"fn":"_read_marker","out":{"at":1764245000.5,"kept":"3-0123456789abcdef.mp3","song":3}}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": 2}"],"fn":"_read_marker","out":{"at":2.0,"kept":"3-0123456789abcdef.mp3","song":3}}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": true, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3.0, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": \"2\"}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": 3, \"at\": null}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"3-0123456789abcdef.json\", \"song\": 3, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"../3-0123456789abcdef.mp3\", \"song\": 3, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": 3, \"song\": 3, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"song\": 3, \"at\": 2.0}"],"fn":"_read_marker","out":null}
+{"args":["{\"kept\": \"3-0123456789abcdef.mp3\", \"song\": -4, \"at\": -2.0, \"other\": 1}"],"fn":"_read_marker","out":{"at":-2.0,"kept":"3-0123456789abcdef.mp3","song":-4}}
+{"args":["[\"3-0123456789abcdef.mp3\", 3, 2.0]"],"fn":"_read_marker","out":null}
+{"args":[""],"fn":"_read_marker","out":null}
+{"args":["{"],"fn":"_read_marker","out":null}
+{"args":["null"],"fn":"_read_marker","out":null}
+{"fn":"given_file","kw":{"entries":[["state/audio/3-0123456789abcdef.mp3","file"]],"path":"state/audio/3-0123456789abcdef.mp3"},"out":true}
+{"fn":"given_file","kw":{"entries":[["elsewhere/audio/3-0123456789abcdef.mp3","file"]],"path":"elsewhere/audio/3-0123456789abcdef.mp3"},"out":true}
+{"fn":"given_file","kw":{"entries":[["audio/3-0123456789abcdef.mp3","file"]],"path":"audio/3-0123456789abcdef.mp3"},"out":true}
+{"fn":"given_file","kw":{"entries":[["real/x.mp3","file"],["state/audio/3-0123456789abcdef.mp3","link"]],"path":"state/audio/3-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audio/3-0123456789abcdef.mp3","folder"]],"path":"state/audio/3-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audio/other.mp3","file"]],"path":"state/audio/3-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audios/3-0123456789abcdef.mp3","file"]],"path":"state/audios/3-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/Audio/3-0123456789abcdef.mp3","file"]],"path":"state/Audio/3-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audio/notes.mp3","file"]],"path":"state/audio/notes.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audio/.upload-0123456789abcdef.mp3","file"]],"path":"state/audio/.upload-0123456789abcdef.mp3"},"out":false}
+{"fn":"given_file","kw":{"entries":[["state/audio/3-0123456789abcdef.mp3","file"]],"path":"state/audio/../audio/3-0123456789abcdef.mp3"},"out":true}
+{"fn":"given_file","kw":{"entries":[["state/audio/3-0123456789abcdef.mp3","file"]],"path":null},"out":false}
+{"fn":"given_file","kw":{"entries":[],"path":"state/audio/3-0123456789abcdef.mp3"},"out":false}
+{"case":"given on the newer","fn":"merge","kw":{"files":["audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:2":"given to the newer.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":null,"audio_path":null,"created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"given to the newer.mp3"},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","id":1}]}}
+{"case":"given on the older","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3"],"kv":{"audio:name:1":"given to the older.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":null,"audio_path":null,"created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"given to the older.mp3"},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","id":1}]}}
+{"case":"given on the newer over a purchase","fn":"merge","kw":{"files":["Music/older.flac","audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:2":"newer.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":9.0,"audio_path":"{state}/Music/older.flac","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"newer.mp3"},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","id":1}]}}
+{"case":"given on the older, a purchase on the newer","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3","Music/newer.flac"],"kv":{"audio:name:1":"older.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":9.0,"audio_path":"{state}/Music/newer.flac","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"older.mp3"},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","id":1}]}}
+{"case":"two given, the newer's later","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3","audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:1":"first.mp3","audio:name:2":"last.wav"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":7.5,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"last.wav"},"songs":[{"audio_mtime":7.5,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","id":1}]}}
+{"case":"two given, the older's later","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3","audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:1":"last.wav","audio:name:2":"first.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":7.5,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"last.wav"},"songs":[{"audio_mtime":7.5,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","id":1}]}}
+{"case":"two given at once","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3","audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:1":"older.mp3","audio:name:2":"newer.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{"audio:name:1":"older.mp3"},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","id":1}]}}
+{"case":"given on the newer, its name none","fn":"merge","kw":{"files":["audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:1":"an old name.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":null,"audio_path":null,"created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","id":1}]}}
+{"case":"given on the newer, its file gone","fn":"merge","kw":{"files":[],"kv":{"audio:name:2":"gone.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":null,"audio_path":null,"created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{},"songs":[{"audio_mtime":null,"audio_path":null,"id":1}]}}
+{"case":"given on the newer, its mtime none","fn":"merge","kw":{"files":["audio/1-da925a30e31f7fda.mp3","audio/2-804f51f71254c408.mp3"],"kv":{"audio:name:2":"newer.mp3"},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":null,"audio_path":"{state}/audio/2-804f51f71254c408.mp3","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{},"songs":[{"audio_mtime":5.0,"audio_path":"{state}/audio/1-da925a30e31f7fda.mp3","id":1}]}}
+{"case":"a purchase on the newer","fn":"merge","kw":{"files":["Music/newer.flac"],"kv":{},"songs":[{"added_at":"2026-09-01T00:00:00Z","artist":"Los Enanitos Verdes","artists":"[\"Los Enanitos Verdes\"]","audio_mtime":null,"audio_path":null,"created_at":"2026-09-01T00:00:00Z","id":1,"key":"los-enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"los-enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-01T00:00:00Z"},{"added_at":"2026-09-05T00:00:00Z","artist":"Enanitos Verdes","artists":"[\"Enanitos Verdes\"]","audio_mtime":5.0,"audio_path":"{state}/Music/newer.flac","created_at":"2026-09-05T00:00:00Z","id":2,"key":"enanitos-verdes/lamento-boliviano","source_ids":"{\"wanted\": [\"enanitos-verdes/lamento-boliviano\"]}","title":"Lamento Boliviano","updated_at":"2026-09-05T00:00:00Z"}]},"out":{"kv":{},"songs":[{"audio_mtime":null,"audio_path":null,"id":1}]}}

@@ -104,6 +104,29 @@ def get_version(conn: sqlite3.Connection, version_id: int) -> VersionRow:
     return _row(row)
 
 
+AUTO = "auto"  # auto-chords' provider (autochords/run.py PROVIDER)
+
+
+def auto_version_of(conn: sqlite3.Connection, song_id: int) -> VersionRow | None:
+    """The song's one auto sheet version, whoever made it and whatever its tab id (this caracole's song id, or another
+    caracole's, taken with the song at a sync): the one a kept file names, else the first; None for none. A song
+    keeps one: autochords/run.py's ``_keep`` writes into it, and lets go of any other (``auto_versions_beside``)."""
+    row = conn.execute(
+        "SELECT * FROM versions v WHERE song_id = ? AND provider = ? "
+        "ORDER BY EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id) DESC, id LIMIT 1", (song_id, AUTO)
+    ).fetchone()
+    return _row(row) if row is not None else None
+
+
+def auto_versions_beside(conn: sqlite3.Connection, song_id: int, version_id: int) -> list[VersionRow]:
+    """The song's other auto versions than ``version_id`` that no kept file names: a second one a song held before it
+    kept one (a sheet made here beside one taken at a sync), which ``_keep`` lets go of."""
+    rows = conn.execute(
+        "SELECT * FROM versions v WHERE song_id = ? AND provider = ? AND id != ? "
+        "AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id) ORDER BY id", (song_id, AUTO, version_id))
+    return [_row(r) for r in rows]
+
+
 def song_versions(
     conn: sqlite3.Connection,
     song_id: int,

@@ -19,7 +19,20 @@
   of the one file ``IN``), each as ``OUT/<name>.json`` (``reference_name``: the audio's stem, what a phone's shared
   storage refuses in a name, a colon among them, made a hyphen; two files of one name refused before any is read), the
   arrays base64 of little-endian float32, as the corpus writes them (``encoded``), for songs that are never committed:
-  the owner's own, kept outside the repository.
+  the owner's own, kept outside the repository. A reference whose lengths disagree (``lengths_disagree``: the decoded
+  samples', the mel's frames' and the duration, more than ``AGREE_WITHIN`` s apart, as a headerless MP3's did once,
+  mutagen's guess or libsndfile's part of it) is not written, saying which, and the command exits 1: a bench would
+  measure a speed against a wrong length.
+- ``python -m tests.helpers.autochords_reference --hearings IN OUT``: the folder's references, compact: for each audio
+  file of ``IN`` (or the one file ``IN``) the computer's whole hearing of it as the corpus's ``hearing`` records state
+  one (``hearing_record``: BTC's ``samples``, ``frames``, its ``argmax`` as runs, ``[class, frames]``, from which the
+  gate's Harte labels are spelled, and ``segments``; beat_this's mel ``frames``, ``beats`` and ``downbeats``; the
+  ``duration``, read_audio's; ``file`` its name and the SHA-256 of its bytes, by which a phone finds its audio
+  whatever it is called there), a few KB, as ``OUT/<stem>.hearing.json`` (``hearing_name``), and
+  ``OUT/meta.json``, the gates they are held to, models.jsonl's meta's ``gates`` as committed (``hearings_meta``),
+  never typed here; on one thread of torch's, so a second run gives the same. Refused as above: two files of one
+  name, and a reference whose lengths disagree. For the owner's B1 gates over their own songs (android/ml's
+  ParityRunTest, the Chords bench's whole-pipeline mode), outside the repository.
 
 torch, librosa, numpy and beat_this are imported inside the functions: only the auto-chords environment has them.
 """
@@ -28,6 +41,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -164,6 +178,31 @@ def reference(path: Path | str, *, btc: Path | str | None = None, beats: Path | 
                      duration=read_audio(path).duration_s)
 
 
+DECODED_RATE = 22050  # BTC's samples a second (btc.py SAMPLE_RATE)
+MEL_FPS = 50  # beat_this's mel frames a second (22,050 Hz over its hop of 441)
+AGREE_WITHIN = 0.1  # seconds: a mel's centred frames run 0.02 s past the samples they are of
+
+
+def lengths_disagree(ref: Reference) -> str | None:
+    """None where the reference's lengths agree within ``AGREE_WITHIN``: its decoded samples' (at ``DECODED_RATE``),
+    its mel's frames' (at ``MEL_FPS``) and its duration (where it has one); else which of them stands apart, in
+    words."""
+    lengths = {"its decoded samples": len(ref.decoded) / DECODED_RATE, "its mel's frames": len(ref.mel) / MEL_FPS}
+    if ref.duration is not None:
+        lengths["its duration"] = ref.duration
+    if max(lengths.values()) - min(lengths.values()) <= AGREE_WITHIN:
+        return None
+    if len(lengths) == 2:  # two alone: neither is the odd one out
+        (a, x), (b, y) = lengths.items()
+        return f"{a}, {x:.3f} s, and {b}, {y:.3f} s, disagree (more than {AGREE_WITHIN} s); it has no duration to tell " \
+               "which is right"
+    values = sorted(lengths.values())
+    median = values[len(values) // 2]
+    odd = max(lengths, key=lambda k: abs(lengths[k] - median))
+    others = ", ".join(f"{k} {v:.3f} s" for k, v in lengths.items() if k != odd)
+    return f"{odd}, {lengths[odd]:.3f} s, disagrees with {others} (more than {AGREE_WITHIN} s)"
+
+
 def array(a, dtype: str = "float32") -> dict:
     """An array as the corpus writes one: its dtype, its shape, and base64 of its little-endian bytes, row-major."""
     import numpy as np
@@ -182,27 +221,100 @@ def encoded(ref: Reference) -> dict:
     }
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: python -m tests.helpers.autochords_reference IN OUT", file=sys.stderr)
-        return 2
-    given, out = Path(argv[0]), Path(argv[1])
+def argmax_runs(logits) -> list[list[int]]:
+    """Each frame's first highest logit (numpy's and torch's argmax), as runs ``[class, frames]``."""
+    runs: list[list[int]] = []
+    for row in (logits.tolist() if hasattr(logits, "tolist") else logits):
+        k = max(range(len(row)), key=row.__getitem__)
+        if runs and runs[-1][0] == k:
+            runs[-1][1] += 1
+        else:
+            runs.append([k, 1])
+    return runs
+
+
+def hearing_record(ref: Reference, file: dict) -> dict:
+    """The corpus's ``hearing`` record of a reference (vectors/autochords/models.jsonl), ``file`` naming its audio."""
+    return {
+        "kind": "hearing", "file": file, "duration": ref.duration,
+        "btc": {"samples": len(ref.decoded), "frames": len(ref.logits), "argmax": argmax_runs(ref.logits),
+                "segments": ref.segments},
+        "beats": {"frames": len(ref.mel), "beats": ref.beats, "downbeats": ref.downbeats},
+    }
+
+
+def hearing_name(audio: Path | str) -> str:
+    """The name of ``audio``'s hearing record: ``reference_name``'s stem, then ``.hearing.json``."""
+    return reference_name(audio).removesuffix(".json") + ".hearing.json"
+
+
+MODELS_VECTORS = Path(__file__).resolve().parents[1] / "conformance" / "vectors" / "autochords" / "models.jsonl"
+
+
+def hearings_meta() -> dict:
+    """The folder's ``meta.json``: the gates its records are held to, models.jsonl's meta's as committed."""
+    committed = json.loads(MODELS_VECTORS.read_text(encoding="utf-8").splitlines()[1])
+    return {"kind": "meta", "gates": committed["gates"], "threads": 1,
+            "gates_from": "tests/conformance/vectors/autochords/models.jsonl"}
+
+
+def _audio_files(given: Path, name_of) -> list[Path] | int:
+    """The audio files of ``given`` (a folder, or one file), or an exit status: none, or two of one name."""
     files = [given] if given.is_file() else sorted(p for p in given.iterdir() if p.suffix.lower() in AUDIO)
     if not files:
         print(f"no audio file in {given}", file=sys.stderr)
         return 1
     named: dict[str, Path] = {}
     for f in files:
-        if (first := named.setdefault(reference_name(f), f)) != f:
-            print(f"{first.name} and {f.name} would both be written as {reference_name(f)}: rename one, or give "
+        if (first := named.setdefault(name_of(f), f)) != f:
+            print(f"{first.name} and {f.name} would both be written as {name_of(f)}: rename one, or give "
                   "them apart", file=sys.stderr)
             return 2
+    return files
+
+
+def hearings(given: Path, out: Path) -> int:
+    """``--hearings IN OUT``: the folder's references, compact."""
+    files = _audio_files(given, hearing_name)
+    if isinstance(files, int):
+        return files
     out.mkdir(parents=True, exist_ok=True)
+    (out / "meta.json").write_text(json.dumps(hearings_meta(), sort_keys=True) + "\n", encoding="utf-8")
+    refused = 0
     for f in files:
-        doc = {"file": f.name, **encoded(reference(f, threads=os.cpu_count() or 1))}
+        ref = reference(f, threads=1)
+        if (why := lengths_disagree(ref)) is not None:
+            print(f"{f.name}: not written: {why}", file=sys.stderr)
+            refused += 1
+            continue
+        record = hearing_record(ref, {"name": f.name, "sha256": hashlib.sha256(f.read_bytes()).hexdigest()})
+        (out / hearing_name(f)).write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"{f.name}: {record['btc']['frames']} BTC frames, {len(ref.beats)} beats", file=sys.stderr)
+    return 1 if refused else 0
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) == 3 and argv[0] == "--hearings":
+        return hearings(Path(argv[1]), Path(argv[2]))
+    if len(argv) != 2:
+        print("usage: python -m tests.helpers.autochords_reference [--hearings] IN OUT", file=sys.stderr)
+        return 2
+    given, out = Path(argv[0]), Path(argv[1])
+    files = _audio_files(given, reference_name)
+    if isinstance(files, int):
+        return files
+    out.mkdir(parents=True, exist_ok=True)
+    refused = 0
+    for f in files:
+        ref = reference(f, threads=os.cpu_count() or 1)
+        if (why := lengths_disagree(ref)) is not None:
+            print(f"{f.name}: not written: {why}", file=sys.stderr)
+            refused += 1
+            continue
+        doc = {"file": f.name, **encoded(ref)}
         (out / reference_name(f)).write_text(json.dumps(doc, sort_keys=True) + "\n", encoding="utf-8")
         print(f"{f.name}: {len(doc['segments'])} chords, {len(doc['beats'])} beats", file=sys.stderr)
-    return 0
+    return 1 if refused else 0
 
 
 if __name__ == "__main__":

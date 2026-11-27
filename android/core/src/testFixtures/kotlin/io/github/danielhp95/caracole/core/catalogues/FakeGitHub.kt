@@ -17,7 +17,9 @@ import java.util.zip.GZIPOutputStream
  * and [agents] each one's User-Agent.
  */
 class FakeGitHub : AutoCloseable {
-    class Reply(val status: Int, val body: ByteArray = ByteArray(0), val headers: Map<String, String> = emptyMap())
+    /** [chunked]: sent with no Content-Length. */
+    class Reply(val status: Int, val body: ByteArray = ByteArray(0), val headers: Map<String, String> = emptyMap(),
+                val chunked: Boolean = false)
 
     val routes = java.util.concurrent.ConcurrentHashMap<String, () -> Reply>()
     val asked = CopyOnWriteArrayList<String>()
@@ -37,7 +39,11 @@ class FakeGitHub : AutoCloseable {
         agents += exchange.requestHeaders.getFirst("User-Agent").orEmpty()
         val reply = routes[path]?.invoke() ?: Reply(404, """{"message":"Not Found"}""".toByteArray())
         for ((name, value) in reply.headers) exchange.responseHeaders.add(name, value)
-        exchange.sendResponseHeaders(reply.status, if (reply.body.isEmpty()) -1 else reply.body.size.toLong())
+        exchange.sendResponseHeaders(reply.status, when {
+            reply.chunked -> 0
+            reply.body.isEmpty() -> -1
+            else -> reply.body.size.toLong()
+        })
         exchange.responseBody.use { it.write(reply.body) }
     }
 

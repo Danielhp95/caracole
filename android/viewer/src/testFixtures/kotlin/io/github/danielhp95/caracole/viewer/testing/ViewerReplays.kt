@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer.testing
 
 import io.github.danielhp95.caracole.core.testing.AreaReplay
+import io.github.danielhp95.caracole.viewer.testing.replays.AutochordsReplay
 import io.github.danielhp95.caracole.viewer.testing.replays.ChineseReplay
 import io.github.danielhp95.caracole.viewer.testing.replays.HarmonicaPageReplay
 import io.github.danielhp95.caracole.viewer.testing.replays.HarmonyReplay
@@ -17,5 +18,6 @@ import io.github.danielhp95.caracole.viewer.testing.replays.VersionReplay
  * skeletons'. */
 object ViewerReplays {
     val all: List<AreaReplay> = listOf(TheoryReplay, SheetReplay, ShapesReplay, ChineseReplay, HarmonyReplay,
-                                       VersionReplay, HarptabReplay, PagesReplay, HarmonicaPageReplay, RenderReplay)
+                                       VersionReplay, HarptabReplay, PagesReplay, HarmonicaPageReplay, RenderReplay,
+                                       AutochordsReplay)
 }

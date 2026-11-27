@@ -67,7 +67,8 @@ class LibraryRoutesTest {
                         cards: SongCards = NoCards, database: Database): List<RouteModule> {
         val parts = TestParts.of(database, dir, scope, queue)
         commands["get"] = GetRunner(parts)
-        return listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, cards, database), LookupRoutes(parts))
+        return listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library"), java.io.File(dir, "audio")), queue, cards,
+                                    database), LookupRoutes(parts))
     }
 
     @Before fun up() {
@@ -197,6 +198,25 @@ class LibraryRoutesTest {
         val again = app.postScript("/lookup", listOf("song" to song("Radiohead", "Karma Police")!!.id.toString()))
         assertEquals("done", waitFor(again.json.jsonObject.getValue("view").jsonObject).state)
         assertEquals(1, app.database.read { Songs.list(it) }.size)
+    }
+
+    @Test fun `a removal of a song with an audio file the owner gave it deletes the file and says so`() {
+        waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
+        val wonderwall = assertNotNull(song("Oasis", "Wonderwall"))
+        val given = java.io.File(tmp.root, "phone/audio/${wonderwall.id}-0123456789abcdef.mp3")
+        given.parentFile.mkdirs()
+        given.writeBytes(ByteArray(16))
+        app.database.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.library.Versions.updateSong(db, wonderwall.id, mapOf("audio_path" to given.path))
+        }
+        val removal = app.postScript("/remove", listOf("song" to wonderwall.id.toString())).json.jsonObject
+            .getValue("removal").jsonObject
+        assertEquals(JsonPrimitive("Deletes its entry and the audio file you gave it."), removal["brief"])
+        assertEquals(JsonPrimitive("the audio file you gave it, from caracole's own folder"), removal.getValue("goes").jsonArray.last())
+        val confirmed = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1",
+                                                         "key" to wonderwall.key))
+        assertEquals("done", waitFor(confirmed.json.jsonObject.getValue("job").jsonObject).state)
+        assertTrue(!given.exists(), "the file the owner gave it went with it")
     }
 
     @Test fun `add then remove leaves a tombstone, and the song stays removed until asked for again`() {

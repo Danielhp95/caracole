@@ -325,7 +325,7 @@ def test_youtube_is_a_switchable_provider_of_a_few_yt_dlp_runs_a_night(tmp_path)
     # A run is a search or a download: six are three songs. Its pauses are longer than a site's,
     # since each run sends several requests of its own (which yt-dlp's own pauses space out).
     cfg = load_config(None, env={"HOME": str(tmp_path)})
-    assert cfg.provider("youtube") == ProviderPolicy(budget=6, delay=(3.75, 7.5), enabled=True)
+    assert cfg.provider("youtube") == ProviderPolicy(budget=50, delay=(3.75, 7.5), enabled=True)
     p = write(tmp_path, "[providers.youtube]\nenabled = false\nbudget = 2\n")
     assert load_config(p, env={"HOME": str(tmp_path)}).provider("youtube") == ProviderPolicy(
         budget=2, delay=(3.75, 7.5), enabled=False)
@@ -504,7 +504,7 @@ def test_every_wait_between_two_requests_is_a_quarter_of_what_it_was_and_nothing
     }
     assert {name: p.budget for name, p in cfg.providers.items()} == {
         "ug": 60, "lrclib": 200, "megalobiz": 60, "azlyrics": NO_BUDGET, "lacuerda": 30, "gtptabs": 20,
-        "musescore": 10, "harptabs": 20, "gametabs": 20, "ireal": 20, "youtube": 6, "ytimg": 20,
+        "musescore": 10, "harptabs": 20, "gametabs": 20, "ireal": 20, "youtube": 50, "ytimg": 20,
         "itunes": 0, "spotify": 0, "tidal": 0, "youtube-oembed": 0,
     }
     assert {(p.lookup_requests, p.lookup_per_hour) for name, p in cfg.providers.items()

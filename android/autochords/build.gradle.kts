@@ -1,13 +1,16 @@
 // The front ends of the chords from audio (the chords-on-the-phone design's §3.1, §3.6), in plain Kotlin on the JVM:
-// for now libsoxr, the resampler python-soxr runs, over JNI (Soxr). Its C, native/ (libsoxr 0.1.3 vendored, and
-// soxr_jni.c), is built here by the host's CMake and gcc for the JVM's tests (hostSoxr, its library on the tests'
-// java.library.path) and by the NDK as a static arm64 program for SoxrArm64Test (arm64SoxrDriver, run under
-// qemu-aarch64), and by the NDK for the phone's ABIs in :ml (ml/build.gradle.kts's externalNativeBuild).
+// libsoxr, the resampler python-soxr runs, over JNI (Soxr); BTC's log-CQT (Cqt) and beat_this's log-mel (Mel), from
+// what Python exports (tests/conformance/data/caracole/autochords/frontend.json, caracole/autochords/ on the
+// classpath). Its C, native/ (libsoxr 0.1.3 vendored, and soxr_jni.c), is built here by the host's CMake and gcc for
+// the JVM's tests (hostSoxr, its library on the tests' java.library.path) and by the NDK as a static arm64 program for
+// SoxrArm64Test (arm64SoxrDriver, run under qemu-aarch64), and by the NDK for the phone's ABIs in :ml
+// (ml/build.gradle.kts's externalNativeBuild).
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import javax.inject.Inject
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    `java-test-fixtures`
 }
 
 java {
@@ -17,6 +20,15 @@ java {
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+sourceSets {
+    main {
+        // frontend.json, labels.json and scores.json alone: the models' graph and pins beside them are :ml's.
+        resources.srcDir("../../tests/conformance/data")
+        resources.include("caracole/autochords/frontend.json", "caracole/autochords/labels.json",
+                          "caracole/autochords/scores.json")
+    }
 }
 
 /** native/CMakeLists.txt configured with [cmakeArgs] and built, Release as nixpkgs builds the libsoxr python-soxr links,
@@ -79,6 +91,17 @@ val arm64SoxrDriver by tasks.registering(CmakeBuild::class) {
 }
 
 dependencies {
+    // ChordSegment's one home, viewer.autochords (merge.py's port); :viewer depends on no part of this module.
+    api(project(":viewer"))
+
+    // frontend.json read, as :core reads JSON (the same version).
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+
+    // AutochordsReplays (the corpus's autochords area), which CorpusOnDeviceTest runs on the device too.
+    testFixturesApi(testFixtures(project(":core")))
+    testFixturesImplementation("junit:junit:4.13.2")
+    testFixturesImplementation(kotlin("test-junit"))
+
     testImplementation(testFixtures(project(":core")))
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))

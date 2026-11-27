@@ -18,6 +18,19 @@ proper sheet later, caracole uses that one.
 An MP3 that never says its length (a recorder's, with no Xing or VBRI header) is measured by its frames and heard
 whole, and a sheet an older caracole made from only its first part is made again once, by itself.
 
+Each sheet remembers what was heard (the chords with their times, the beats, the song's length), which caracole
+made it, from which file (its name and a hash of its bytes) and with which models. A song has one
+sheet from audio, whichever of your caracoles made it. A sheet made before this remembers none of it, and is left as
+it is.
+
+A sheet made on your other device (taken at a sync) is kept as it is: the nightly run here never makes it again, even
+from audio of the song this computer has or gets later. New words lay it out again, as below. To replace it, ask for a
+sheet here: an audio file, a video, `caracole autochords --song`, or Transcribe the lyrics. The sheet is then this
+computer's. One exception: if every lyrics site missed and this computer hears the words in its own audio, its sheet
+over them replaces a chords-only one from the other device. A copied database given a new id (`caracole peer new-id`)
+counts every sheet made before as the other caracole's. If both devices made one before a sync, the sync asks which
+to keep, and says of each who made it, from what, and over which words.
+
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
 works from your own files only. caracole never tries to get around a block.
@@ -27,9 +40,10 @@ More on this: [the sites caracole reads](sources.md).
 
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
-If the song's lyrics later become other words, the sheet is made again over them, once; the same
-words retimed (other times on a sheet already timed) change nothing. A sheet made before caracole kept track of its
-words isn't made again for this.
+When lyrics arrive after the sheet was made, or become other words, the sheet is laid out again over them in seconds
+from what was heard, without listening to the song again; the same words retimed (other times on a sheet already
+timed) change nothing. A sheet made before caracole kept what was heard is made again by the models instead, as
+before, and one made before caracole kept track of its words isn't made again for other words.
 
 When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
 **Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.

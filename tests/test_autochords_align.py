@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from caracole.autochords.align import lyrics_offset, shifted_lrc
+from caracole.autochords.align import lyrics_offset, scored, shifted_lrc
 from caracole.autochords.merge import ChordSegment, LrcLine, parse_lrc, parse_lrc_words
 
 BEAT = 0.5
@@ -131,6 +131,17 @@ def test_no_chords_or_no_beats_keep_no_offset():
     lines, lyrics_s, segments, beats, downbeats, audio_s = build(song_form(), before=12.0)
     assert lyrics_offset(lines, [], beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s).offset is None
     assert lyrics_offset(lines, segments, [], [], audio_s=audio_s, lyrics_s=lyrics_s).offset is None
+
+
+def test_lyrics_offset_takes_the_best_of_the_candidates_scored_and_its_early_answers():
+    lines, lyrics_s, segments, beats, downbeats, audio_s = build(song_form(), before=12.0)
+    early, fits, beat = scored(lines, segments, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s)
+    found = lyrics_offset(lines, segments, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s)
+    assert early is None and beat > 0
+    assert found.best == round(max(fits, key=lambda f: (f.score, -abs(f.offset))).offset, 3) == found.offset
+    early, fits, _ = scored(lines[:5], segments, beats, downbeats, audio_s=audio_s, lyrics_s=lyrics_s)
+    assert fits == [] and early == lyrics_offset(lines[:5], segments, beats, downbeats, audio_s=audio_s,
+                                                 lyrics_s=lyrics_s)
 
 
 def test_shifted_lrc_moves_every_line_and_drops_those_before_the_start():

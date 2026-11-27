@@ -60,8 +60,19 @@ NOT_SUNG = "Chords only: you said it isn't sung"  # the sheet's note line over t
 # why_not_offered's words for a song whose picked lyrics record (``[lyrics]``) gave none (``picked_without_lyrics``)
 PICKED_NONE = "the record you picked ({record}) has given no lyrics: pick another, or clear the pick"
 PICKED_UNREAD = "the record you picked isn't read yet ({record}): tonight's run or a lookup reads it"
+# The reason the phone hears no song's words ("not transcribed here: …", youtube_sheet.py ``NOT_HERE``): it runs no
+# separator and no Whisper (android/'s chords from audio). Recorded in the conformance corpus, used by nothing here.
+PHONE = "the phone hears no words"
+LYRICS_ARE = "its lyrics are {status}"  # why_not_offered's word for a song whose lyrics aren't missing
 ALREADY_TRANSCRIBED = "already transcribed"  # why_not_offered's word for a song whose own audio has a transcript
 MODEL = "whisper-large-v3"
+# Words win (the phone's chords design, §11.5, its recommendation in force until the owner says otherwise): where every
+# lyrics site missed and this side hears words from its own audio of a song whose auto sheet another caracole made
+# over none (the phone's), the nightly pass hears them as any song's (``why_not_offered`` offers it as ever) and its
+# sheet over them, made here from this side's audio, replaces that one (run.py ``_skip_reason``). False: never by
+# itself; the nightly pass hears no words for such a song, and the card's Transcribe the lyrics, an ask, does it by
+# hand.
+WORDS_WIN = True
 
 # The lyrics sites that are switched on: (provider, the kv prefix of the song's miss).
 _SITES = (("megalobiz", "megalobiz:checked:"), ("azlyrics", "azlyrics:checked:"))
@@ -216,7 +227,7 @@ def why_not_offered(conn: sqlite3.Connection, cfg: Config, song: Song, overrides
     if picked is not None:
         return picked
     if song.lyrics_status != "missing":
-        return f"its lyrics are {song.lyrics_status}"
+        return LYRICS_ARE.format(status=song.lyrics_status)
     if not anyway and whisper_cant_read(conn, song) is not None:
         return WHISPER_UNREADABLE_WHY
     if not song.lyrics_at:
