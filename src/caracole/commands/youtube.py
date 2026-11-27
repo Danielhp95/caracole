@@ -244,6 +244,25 @@ def sent_words(requests: dict[str, int]) -> str:
 
 
 NOT_SEARCHED = "Not searched: "
+# --video's and the thumbnail's words, which the phone says as they are (youtube.json's ``video_cmd``)
+NOT_A_VIDEO = "--video: not a YouTube video's link: {link}"  # ``link`` its repr
+ASKING = "asking YouTube"
+SEARCHED_VIDEO = "Searched: YouTube video {id}: {title} ({channel})."
+WONT_GIVE = "Nothing found: YouTube won't give video {id} ({unavailable})."
+TRY_LATER = "{why}. Try again later."
+TURNED_BACK = "YouTube turned us back ({error}); no yt-dlp runs until {until}."
+NO_RUNS = "no YouTube runs left. Try again later."
+YTDLP_FAILED = "yt-dlp failed ({error}). Try again later."
+VIDEO_DONE = "{title} ({channel})"
+RUNS_ALERT = "{error}\nNo more yt-dlp runs until {until} (block #{strikes})."
+THUMB_OFF = "turned off"
+THUMB_COOLING = "waiting out a block until {until}"
+THUMB_KEPT = "kept"
+THUMB_NONE = "none"
+THUMB_BLOCKED = "YouTube's images turned us back; waiting until {until}"
+THUMB_SPENT = "no asks left"
+THUMB_FAILED = "no thumbnail"
+THUMBS_ALERT = "{error}\nNo more thumbnails until {until} (block #{strikes})."
 
 
 def _search(cfg: Config, query: str, *, progress: bool) -> None:
@@ -349,7 +368,7 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
 
     video_id = link.strip() if VIDEO_ID.fullmatch(link.strip()) else video_id_from_url(link)  # an id, as jobs pass it
     if video_id is None:
-        fail(f"--video: not a YouTube video's link: {link!r}", 2)
+        fail(NOT_A_VIDEO.format(link=repr(link)), 2)
     key = video_key(video_id)
 
     def say(stage: str, state: str, detail: str = "") -> None:
@@ -360,19 +379,19 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
         say("video", state, line)
         typer.echo(line)
 
-    say("video", "running", "asking YouTube")
+    say("video", "running", ASKING)
     with exclusive(cfg, f"youtube --video {video_id}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = video_gate(cfg, conn, video_id, now)
         if said.asked is not None:
             found = said.asked.get("video")
             if isinstance(found, dict):
-                end(f"Searched: YouTube video {video_id}: {found.get('title')} ({found.get('channel')}).", "done")
+                end(SEARCHED_VIDEO.format(id=video_id, title=found.get('title'), channel=found.get('channel')), "done")
             else:
-                end(f"Nothing found: YouTube won't give video {video_id} ({said.asked.get('unavailable')}).", "done")
+                end(WONT_GIVE.format(id=video_id, unavailable=said.asked.get('unavailable')), "done")
             return
         if said.state != "auto":
-            end(f"{NOT_SEARCHED}{said.why}. Try again later.")
+            end(NOT_SEARCHED + TRY_LATER.format(why=said.why))
             return
         run_id = RUN + key + ":" + run_id_for(now)
         runner = make_youtube(cfg, conn, run_id)
@@ -381,18 +400,17 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
             found_video = read_video(conn, runner, video_id, now)
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
-            message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
+            message = RUNS_ALERT.format(error=e, until=shown(state.cooldown_until), strikes=state.strikes)
             _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
-            end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
-                f"{shown(state.cooldown_until)}.")
+            end(NOT_SEARCHED + TURNED_BACK.format(error=e, until=shown(state.cooldown_until)))
             return
         except BudgetExhausted:
-            end(f"{NOT_SEARCHED}no YouTube runs left. Try again later.")
+            end(NOT_SEARCHED + NO_RUNS)
             return
         except ProviderError as e:
             record_error(conn, PROVIDER, now, str(e))
             record_failure(conn, key, now, str(e.message or e))
-            end(f"{NOT_SEARCHED}yt-dlp failed ({e.message or e}). Try again later.")
+            end(NOT_SEARCHED + YTDLP_FAILED.format(error=e.message or e))
             return
         finally:
             runner.close()
@@ -400,11 +418,11 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
             record_ok(conn, PROVIDER, now)
         if found_video is None:
             reason = video_gate(cfg, conn, video_id, now).asked or {}
-            end(f"Nothing found: YouTube won't give video {video_id} ({reason.get('unavailable')}).", "done")
+            end(WONT_GIVE.format(id=video_id, unavailable=reason.get('unavailable')), "done")
             return
-        say("video", "done", f"{found_video.title} ({found_video.channel})")
+        say("video", "done", VIDEO_DONE.format(title=found_video.title, channel=found_video.channel))
         _thumbnail(cfg, conn, video_id, key, run_id, now, say)
-    typer.echo(f"Searched: YouTube video {video_id}: {found_video.title} ({found_video.channel}).")
+    typer.echo(SEARCHED_VIDEO.format(id=video_id, title=found_video.title, channel=found_video.channel))
 
 
 def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, key: str, run_id: str, now: datetime,
@@ -416,28 +434,28 @@ def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, key: str, r
     from caracole.youtube_search import THUMBS_PROVIDER, fetch_thumbnail
 
     if not cfg.provider(THUMBS_PROVIDER).enabled:
-        say("thumbnail", "skipped", "turned off")
+        say("thumbnail", "skipped", THUMB_OFF)
         return
     if is_cooling(conn, THUMBS_PROVIDER, now):
-        say("thumbnail", "skipped", f"waiting out a block until {shown(get_state(conn, THUMBS_PROVIDER).cooldown_until)}")
+        say("thumbnail", "skipped", THUMB_COOLING.format(until=shown(get_state(conn, THUMBS_PROVIDER).cooldown_until)))
         return
     say("thumbnail", "running", "")
     client = make_client(cfg, conn, THUMBS_PROVIDER, run_id)
     try:
         kept = fetch_thumbnail(cfg, conn, client, video_id, key, now)
-        say("thumbnail", "done" if kept else "skipped", "kept" if kept else "none")
+        say("thumbnail", "done" if kept else "skipped", THUMB_KEPT if kept else THUMB_NONE)
     except ProviderBlocked as e:
         state = record_block(conn, THUMBS_PROVIDER, now, str(e))
-        _common.alert_block(cfg, THUMBS_PROVIDER, f"{e}\nNo more thumbnails until {shown(state.cooldown_until)} "
-                                                  f"(block #{state.strikes}).", strikes=state.strikes)
-        say("thumbnail", "skipped", f"YouTube's images turned us back; waiting until {shown(state.cooldown_until)}")
+        _common.alert_block(cfg, THUMBS_PROVIDER, THUMBS_ALERT.format(error=e, until=shown(state.cooldown_until),
+                                                                      strikes=state.strikes), strikes=state.strikes)
+        say("thumbnail", "skipped", THUMB_BLOCKED.format(until=shown(state.cooldown_until)))
         return
     except BudgetExhausted:
-        say("thumbnail", "skipped", "no asks left")
+        say("thumbnail", "skipped", THUMB_SPENT)
         return
     except ProviderError as e:
         record_error(conn, THUMBS_PROVIDER, now, str(e))
-        say("thumbnail", "skipped", "no thumbnail")
+        say("thumbnail", "skipped", THUMB_FAILED)
         return
     finally:
         client.close()

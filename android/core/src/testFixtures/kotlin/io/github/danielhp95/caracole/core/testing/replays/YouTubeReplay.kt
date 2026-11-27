@@ -11,6 +11,7 @@ import io.github.danielhp95.caracole.core.search.SiteArtist
 import io.github.danielhp95.caracole.core.search.SiteHit
 import io.github.danielhp95.caracole.core.youtube.Records
 import io.github.danielhp95.caracole.core.youtube.SearchGate
+import io.github.danielhp95.caracole.core.youtube.Thumbs
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.long
 import io.github.danielhp95.caracole.core.health.Health
@@ -70,14 +71,17 @@ import kotlinx.serialization.json.jsonPrimitive
  * - gate.jsonl: SearchGate.gate (with its suggestion, /api/search's `youtube`) and videoGate over each scene's kv and
  *   events on a fresh database, YouTube on or off in the phone's settings; recordFailure's kv text byte for byte; and
  *   sheetOnScreen of each record's hits;
- * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte.
+ * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte;
+ * - video_cmd.jsonl's `checked_jpeg` records: Thumbs.checkedJpeg of each synthetic head (its command's records are
+ *   :server's YouTubeVideoReplay's).
  */
 object YouTubeReplay : AreaReplay {
     override val area = "youtube"
 
     override fun replay(misses: Misses) {
         val counts = mapOf("argv" to argv(misses), "classify" to classify(misses), "parse" to parse(misses),
-            "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses))
+            "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses),
+            "video_cmd" to jpegs(misses))
         for ((name, n) in counts) misses.check(n > 0) { "youtube/$name.jsonl holds no record" }
     }
 
@@ -421,6 +425,22 @@ object YouTubeReplay : AreaReplay {
                 misses.check(db.kvGet(Records.key(song)) == text(r, "saved")) {
                     "record $song ($stored): saved ${db.kvGet(Records.key(song))}, Python's ${text(r, "saved")}"
                 }
+            }
+        }
+        return n
+    }
+
+    /** video_cmd.jsonl's `checked_jpeg` records (its command's records are :server's, YouTubeVideoReplay): Thumbs'
+     * reading of each head with its trailing zeros, kept or not as Python's. */
+    private fun jpegs(misses: Misses): Int {
+        var n = 0
+        for (r in records("video_cmd").filter { it["fn"]?.jsonPrimitive?.content == "checked_jpeg" }) {
+            n++
+            val data = java.util.Base64.getDecoder().decode(r.getValue("base64").jsonPrimitive.content) +
+                ByteArray(r.getValue("zeros").jsonPrimitive.int)
+            val kept = Thumbs.checkedJpeg(data) != null
+            misses.check(kept == r.getValue("kept").jsonPrimitive.boolean) {
+                "checked_jpeg of ${r["base64"]} and ${r["zeros"]} zeros: kept $kept, Python's ${r["kept"]}"
             }
         }
         return n

@@ -109,4 +109,12 @@ object Videos {
         v is JsonPrimitive && v.isString -> v.content
         else -> PyValues.repr(v)
     }
+
+    /** Python's `str(v)` of a JSON value as an f-string writes a `dict.get` of it: "None" for none (missing or
+     * null), a text as it is, any other value its repr. */
+    fun shown(v: JsonElement?): String = when {
+        v == null || v is kotlinx.serialization.json.JsonNull -> "None"
+        v is JsonPrimitive && v.isString -> v.content
+        else -> PyValues.repr(v)
+    }
 }

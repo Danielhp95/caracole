@@ -80,6 +80,21 @@ object SearchGate {
     /** video_key: a pasted video's key, beside the queries'. */
     fun videoKey(videoId: String): String = text("video_key") + videoId
 
+    /** How a search's run, or a pasted video's read, is named in `events` (youtube_search.RUN), its key and time
+     * after it. */
+    val run: String get() = text("run")
+
+    /** The kv key of [key]'s record (`kv_prefix` + [key]): what its search, or its video's read, found. */
+    fun kvKey(key: String): String = text("kv_prefix") + key
+
+    /** The search of [key] answered: its failure within the hour forgotten (search's and read_video's
+     * `failures.pop(key)`, written back only when it was there). */
+    fun forgetFailure(db: Db, key: String, now: Instant) {
+        val kept = failures(db, now)
+        if (kept.remove(key) == null) return
+        writeFailures(db, kept)
+    }
+
     /** searched: what the search of [key] found when it was made within the 30 days, as json.loads reads it; null
      * when it wasn't (no record, one that is no object, or one older or of no time). */
     fun searched(db: Db, key: String, now: Instant): JsonObject? {
@@ -118,6 +133,10 @@ object SearchGate {
     fun recordFailure(db: Db, key: String, now: Instant, error: String) {
         val kept = failures(db, now)
         kept[key] = Stamps.of(now) to Py.slice(PyBits.collapsed(error), 0, number("error_chars"))
+        writeFailures(db, kept)
+    }
+
+    private fun writeFailures(db: Db, kept: Map<String, Pair<String, String>>) {
         db.kvSetJson(text("failed_key"), JsonObject(kept.mapValuesTo(LinkedHashMap()) { (_, v) ->
             JsonObject(linkedMapOf("at" to JsonPrimitive(v.first), "error" to JsonPrimitive(v.second)))
         }))

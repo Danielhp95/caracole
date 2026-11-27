@@ -68,9 +68,12 @@ FAILED_KEY = "youtube-search:failed"  # {query's key: {"at", "error"}}, those of
 ERROR_CHARS = 200
 STATES = ("found", "none", "auto", "failed", "spent", "off")
 THUMB_URL = "https://i.ytimg.com/vi/{id}/hqdefault.jpg"  # 480 × 360
+THUMB_NAME = "{id}.jpg"  # a kept thumbnail's file in THUMBS
+THUMB_PART = ".part-"  # a thumbnail being written, before its rename into place
 THUMBS = "youtube-thumbs"  # in cache_dir: never cache_dir/youtube/, whose files tidy() lets go of
 MAX_BYTES = 256 * 1024
 MAX_SIDE = 2048
+FRAMES = (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF)  # a JPEG's frame markers
 COOLING_WHY = "YouTube turned us back"  # a Gate's why while YouTube cools down after a block
 SPENT_WHY = "no more YouTube asks this hour ({n} spent)"  # SEARCHES_PER_HOUR spent
 OWN_FAILED_WHY = "it failed within the hour ({error})"  # the query's own search failed within FAILED_FOR
@@ -255,7 +258,7 @@ def song_of_video(conn: sqlite3.Connection, overrides: Overrides, video_id: str)
 
 
 def thumb_path(cfg: Config, video_id: str) -> Path:
-    return cfg.cache_dir / THUMBS / f"{video_id}.jpg"
+    return cfg.cache_dir / THUMBS / THUMB_NAME.format(id=video_id)
 
 
 def checked_jpeg(data: bytes) -> bytes | None:
@@ -276,7 +279,7 @@ def checked_jpeg(data: bytes) -> bytes | None:
         (length,) = struct.unpack(">H", data[i + 2:i + 4])
         if length < 2 or i + 2 + length > len(data):
             return None
-        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+        if marker in FRAMES:
             if length < 7:
                 return None
             height, width = struct.unpack(">HH", data[i + 5:i + 9])
@@ -306,7 +309,7 @@ def fetch_thumbnail(cfg: Config, conn: sqlite3.Connection, client: Client, video
         if image is None:
             return False
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f".part-{os.getpid()}-{path.name}")  # caracole's cache, never the synced library
+        tmp = path.with_name(f"{THUMB_PART}{os.getpid()}-{path.name}")  # caracole's cache, never the synced library
         try:
             tmp.write_bytes(image)
             os.replace(tmp, path)

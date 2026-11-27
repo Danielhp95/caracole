@@ -46,7 +46,9 @@ import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeRunners
 import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeVideoRunner
 import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
@@ -149,7 +151,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
  * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords], `youtube`: YouTubeSheetRunner over
- * [PhoneDeps.youtube] and the same), and
+ * [PhoneDeps.youtube] and the same, and its `--video` YouTubeVideoRunner's), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -228,10 +230,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                                     names = models::names,
                                                     hold = { hearing -> models.holding(hearing) })
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
-        commands[YouTubeSheetRunner.COMMAND] = YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio,
-                                                                  problem = ::youtubeProblem, names = models::names,
-                                                                  hold = { hearing -> models.holding(hearing) },
-                                                                  chordsProblem = ::audioProblem)
+        commands[YouTubeSheetRunner.COMMAND] = YouTubeRunners(
+            YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio, problem = ::youtubeProblem, names = models::names,
+                               hold = { hearing -> models.holding(hearing) }, chordsProblem = ::audioProblem),
+            YouTubeVideoRunner(parts, deps.youtube, routeWhy = ::youtubeProblem),
+        )
         sweepYouTube()  // the YouTube audio past its days, and what a stopped download left, as the phone starts
     }
 

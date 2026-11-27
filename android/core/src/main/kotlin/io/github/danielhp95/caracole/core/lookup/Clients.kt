@@ -42,4 +42,23 @@ class Clients(val cfg: PhoneConfig, val cacheDir: File, val transport: (provider
         return PoliteClient(provider, paced, cacheDir, cfg.userAgent, transport(provider), pacing.sleep, pacing.draws,
                             onEvent = logged, monotonic = pacing.monotonic, wallClock = pacing.clock)
     }
+
+    /** [provider]'s client under the run [runId] as it is, at the provider's own policy (its `budget` and `delay`,
+     * within the day), as `make_client` makes bulk work's: what the owner asked for now that the computer asks so too
+     * (a pasted video's thumbnail, youtube_search.py's, provider `ytimg`). Otherwise [interactive]'s. */
+    fun named(db: Db, provider: String, runId: String, onEvent: ((Event) -> Unit)? = null): PoliteClient {
+        val now = pacing.clock()
+        val paced = Pace.withinTheDay(db, provider, cfg.provider(provider), now)
+        Pace.pauseAfterLastRequest(db, provider, paced.delay, pacing.draws, pacing.sleep, pacing.wallSeconds)
+        val log = EventLog(db, runId, pacing.clock)
+        val logged: (Event) -> Unit = { event ->
+            log(event)
+            if (event.decision in Pace.SENT) {
+                db.kvSet(Pace.LAST_SENT + provider, PyFormat.fixed(pacing.wallSeconds(), 3))
+            }
+            onEvent?.invoke(event)
+        }
+        return PoliteClient(provider, paced, cacheDir, cfg.userAgent, transport(provider), pacing.sleep, pacing.draws,
+                            onEvent = logged, monotonic = pacing.monotonic, wallClock = pacing.clock)
+    }
 }

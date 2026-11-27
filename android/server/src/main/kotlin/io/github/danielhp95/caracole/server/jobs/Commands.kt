@@ -205,6 +205,16 @@ object JobCommands {
     fun audioSheetSteps(display: String, upload: String): List<Command> =
         listOf(Command("Making the sheet", listOf("audio", "--progress", "--upload=$upload", "--song=$display")))
 
+    /** jobs.youtube_video_steps: a video pasted into the library page's search box read now, `caracole youtube
+     * --video --progress`, one yt-dlp run with no download, and its thumbnail. */
+    fun youtubeVideoSteps(videoId: String): List<Command> =
+        listOf(Command("Reading the video", listOf("youtube", "--video=$videoId", "--progress")))
+
+    /** jobs.youtube_sheet_steps: a song's auto sheet from a YouTube video now, `caracole youtube --sheet --progress`,
+     * one process for every stage; [url] the video's plain address. */
+    fun youtubeSheetSteps(display: String, url: String): List<Command> =
+        listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--url=$url", "--song=$display")))
+
     /** Look one song up now: `caracole get --progress`, one process for every stage (get.py). */
     fun lookupSteps(artist: String, title: String, album: String? = null, durationMs: Long? = null,
                     ug: String? = null, tab: String? = null, lacuerda: String? = null, harptabs: String? = null,

@@ -3629,8 +3629,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
     song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
     `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
+  - `Thumbs` (Y2.4): youtube_search.py's thumbnail, youtube.json's `thumb` (provider `ytimg`, its address, folder,
+    names, limits and frame markers): `fetch` one request through the caller's PoliteClient (robots' rules: `/sb/`
+    closed), kept as `<cache>/youtube-thumbs/<id>.jpg` when `checkedJpeg` reads a JPEG, the record of its key said
+    `thumb`; `get` and `read` checked again; `SearchGate.kvKey`, `forgetFailure`, `run`;
   - vectors/youtube/argv, classify, parse, choose, runs, gate and record.jsonl (`YouTubeReplay`, area `youtube`;
-    runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate).
+    runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate),
+    and video_cmd.jsonl's `checked_jpeg` records (synthetic JPEG heads, seeded edits of them).
 
 ##### The Requests tab on the phone
 
@@ -4509,6 +4514,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   to date. Its records hold the error ladder (a network error, a counted one, a third failure pasted and searched) and
   the same job again on the phone's own state after the let-go (`let_go`), Python's second run its answer.
   YouTubeSheetRunnerTest through the real queue; YouTubeAudioTest the sweep and the removal.
+- server/lookups' `YouTubeVideoRunner`, `caracole youtube --video=URL|ID [--progress]` (commands/youtube.py's `_video`
+  and `_thumbnail`; `YouTubeRunners` sends `--video` to it, every other `youtube` line to the sheet's), a job of no
+  song's: a link that names no video exits 2; `SearchGate.videoGate` first (read within 30 days, YouTube off in the
+  computer's settings in the computer's words, `Phone.youtubeProblem()`, cooling, the hour's 10, a failure lately),
+  then one yt-dlp run (budget 1, run `youtube-search:video:<id>:<time>`, `Yielding`, a write a touch), its record
+  kept and its failure forgotten (a block the runner's, its alert the job's; an error `Health.recordError` and
+  `recordFailure`; `NotSent` counted against nothing), then the thumbnail through `Clients.named` (the provider's own
+  policy and the run's name, as `make_client`'s bulk client: `ytimg`'s budget 20, no pause), its own block, cooldown
+  and alert. Its words youtube.json's `video_cmd` (commands/youtube.py's constants). vectors/youtube/video_cmd.jsonl
+  (`YouTubeVideoReplay`, area `youtube-video`): the command over FakeYtDlp and a fake i.ytimg.com, replayed with the
+  record's answers; apart, `http:last_request:`, `songs:key_version` and the events' times.
 
 ##### Alerts and backups on the phone
 

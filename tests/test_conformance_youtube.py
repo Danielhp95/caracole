@@ -111,7 +111,9 @@ returned (a search's ids, a video's or a download's ``[id, title, channel, durat
 
 from __future__ import annotations
 
+import base64
 import dataclasses
+import hashlib
 import json
 import random
 import re
@@ -190,7 +192,14 @@ def _cooling_when() -> str:
     return when
 
 
+VIDEO_CMD_WORDS = ("NOT_A_VIDEO", "ASKING", "SEARCHED_VIDEO", "WONT_GIVE", "NOT_SEARCHED", "TRY_LATER", "TURNED_BACK",
+                   "NO_RUNS", "YTDLP_FAILED", "VIDEO_DONE", "RUNS_ALERT", "THUMB_OFF", "THUMB_COOLING", "THUMB_KEPT",
+                   "THUMB_NONE", "THUMB_BLOCKED", "THUMB_SPENT", "THUMB_FAILED", "THUMBS_ALERT")
+
+
 def youtube_json() -> str:
+    from caracole.commands import youtube as youtube_cmd
+
     data = {
         "args": {"base": list(youtube._BASE_ARGS), "search": list(youtube.SEARCH_ARGS),
                  "video": list(youtube.VIDEO_ARGS), "download": list(youtube._DOWNLOAD_ARGS),
@@ -268,6 +277,11 @@ def youtube_json() -> str:
                    "thumb_route": youtube_search.THUMB_ROUTE, "strong": STRONG, "order": GATE_ORDER,
                    "on_screen": ON_SCREEN},
         "record": {"prefix": youtube_fetch.RECORD_PREFIX, "fields": RECORD_FIELDS, "rule": RECORD_RULE},
+        "thumb": {"provider": youtube_search.THUMBS_PROVIDER, "url": youtube_search.THUMB_URL,
+                  "folder": youtube_search.THUMBS, "name": youtube_search.THUMB_NAME,
+                  "part": youtube_search.THUMB_PART, "max_bytes": youtube_search.MAX_BYTES,
+                  "max_side": youtube_search.MAX_SIDE, "frames": list(youtube_search.FRAMES)},
+        "video_cmd": {name.lower(): getattr(youtube_cmd, name) for name in VIDEO_CMD_WORDS},
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
                  "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal,
@@ -1333,3 +1347,241 @@ def test_the_record_corpus(tmp_path):
         records.append({"song": n, "stored": text, "saved": db.kv_get(conn, key)})
     conn.close()
     check(VECTORS / "youtube" / "record.jsonl", jsonl(records, corpus="youtube/record", made_by=MADE_BY))
+
+
+# --- video_cmd.jsonl ----------------------------------------------------------------------------------------------
+#
+# ``caracole youtube --video=URL|ID --progress`` (commands/youtube.py ``_video`` and ``_thumbnail``) over FakeYtDlp and
+# a fake i.ytimg.com (httpx.MockTransport for provider ``ytimg``), a scene a record: ``kw`` the command's ``link``,
+# whether ``youtube`` and ``ytimg`` are on, the kv texts and ``events`` (``[run, at, provider]``) before, FakeYtDlp's
+# answer for the video (``video_id``; ``video``: its fields, or ``stderr`` and ``exit``; null: never asked), the image host's
+# (``thumb``: ``status``, ``base64``; null: never asked) and a thumbnail kept before (``kept``, its base64); ``out``
+# its ``exit``, its plain ``lines`` and its ``progress`` events (``[stage, state, detail]``), the ``error`` of an exit
+# 2, each yt-dlp run's ``target``, the image host's ``asked`` addresses, the kv texts it changed (null: deleted), its
+# ``events`` (``[provider, run, url, status, decision]``), the thumbnail kept after (its SHA-256, or null) and the
+# ``alerts`` (the providers whose block it told). Apart: kv ``VIDEO_APART`` and the events' times. Then ``checked_jpeg`` records (``fn``): synthetic heads,
+# each its ``base64`` and the ``zeros`` after it, and whether it is ``kept``.
+
+PASTED_ID = "lzN7Thn3FV4"
+TRACKED = f"https://www.youtube.com/watch?v={PASTED_ID}&pp=ygUQdmlraW5nb3MgdmVnYW5vcw%3D%3D"
+VIKINGOS = {"title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu", "duration": 222}
+JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
+JPEG_OK = {"status": 200, "base64": base64.b64encode(JPEG).decode("ascii")}
+VKEY = youtube_search.video_key(PASTED_ID)
+# Compared apart: when a request went (the phone's runner keeps YouTube's there too), and the key rules a database is
+# at, which the computer's first open of it writes (songs.ensure_current_keys).
+VIDEO_APART = ("http:last_request:", "songs:key_version")
+
+
+def _video_kv(**ago) -> dict:
+    return {youtube_search.KV_PREFIX + VKEY: json.dumps(
+        {"at": _at(**ago), "video": {"id": PASTED_ID, "url": watch_url(PASTED_ID), **VIKINGOS}, "thumb": True},
+        ensure_ascii=False)}
+
+
+# (case, link, youtube on, ytimg on, kv, events, the video's answer, the thumbnail's answer, a thumbnail kept, cooling)
+VIDEO_SCENES = [
+    ("a pasted link with tracking: the video read, its thumbnail kept", TRACKED, True, True, {}, [], VIKINGOS,
+     JPEG_OK, None, None),
+    ("youtu.be's link", f"https://youtu.be/{PASTED_ID}?si=abc", True, True, {}, [], VIKINGOS, JPEG_OK, None, None),
+    ("the id alone, a title of other scripts", PASTED_ID, True, True, {}, [],
+     {"title": "宋冬野 - 安和桥 (Live) «Café»", "channel": "宋冬野", "duration": 240.5}, JPEG_OK, None, None),
+    ("read this month: nothing asked", PASTED_ID, True, True, _video_kv(days=3), [], None, None, None, None),
+    ("read this month as none: nothing asked", PASTED_ID, True, True,
+     {youtube_search.KV_PREFIX + VKEY: json.dumps({"at": _at(days=2), "video": None,
+                                                   "unavailable": "[youtube] x: Private video"})}, [], None, None,
+     None, None),
+    ("read 31 days ago: read again", PASTED_ID, True, True, _video_kv(days=31), [], VIKINGOS, JPEG_OK, None, None),
+    ("a private video: kept as none, no thumbnail", PASTED_ID, True, True, {}, [],
+     {"stderr": f"ERROR: [youtube] {PASTED_ID}: Private video. Sign in if you've been granted access", "exit": 1},
+     None, None, None),
+    ("a block: the cooldown recorded, one alert, nothing kept", TRACKED, True, True, {}, [],
+     {"stderr": "ERROR: [youtube] Sign in to confirm you’re not a bot.", "exit": 1}, None, None, None),
+    ("an error: remembered for the hour", PASTED_ID, True, True, {}, [],
+     {"stderr": f"ERROR: [youtube] {PASTED_ID}: fragment 1 not found, unable to continue", "exit": 1}, None, None,
+     None),
+    ("an earlier failure of it forgotten once read", PASTED_ID, True, True,
+     _failed(**{"other": {"at": _at(minutes=5), "error": "x"}, VKEY: {"at": _at(minutes=90), "error": "old"}}), [],
+     VIKINGOS, JPEG_OK, None, None),
+    ("YouTube cooling down: not read", PASTED_ID, True, True, {}, [], None, None, None, {"hours": 1}),
+    ("the hour's 10 spent: not read", PASTED_ID, True, True, {}, _runs(10), None, None, None, None),
+    ("failed within the hour: not read", PASTED_ID, True, True,
+     _failed(**{VKEY: {"at": _at(minutes=10), "error": "boom"}}), [], None, None, None, None),
+    ("YouTube off: not read, in the computer's words", PASTED_ID, False, True, {}, [], None, None, None, None),
+    ("the image host off: no thumbnail asked", PASTED_ID, True, False, {}, [], VIKINGOS, None, None, None),
+    ("the image host cooling: no thumbnail asked", PASTED_ID, True, True, {}, [], VIKINGOS, None, None, "ytimg"),
+    ("no thumbnail there (404)", PASTED_ID, True, True, {}, [], VIKINGOS, {"status": 404, "base64": ""}, None, None),
+    ("a thumbnail that isn't a JPEG", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 200, "base64": base64.b64encode(b"<html>not an image</html>").decode("ascii")}, None, None),
+    ("the image host blocking (403): its own cooldown and alert", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 403, "base64": ""}, None, None),
+    ("the image host failing (500): no thumbnail, an error", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 500, "base64": ""}, None, None),
+    ("a thumbnail kept already: nothing asked of the image host", PASTED_ID, True, True, {}, [], VIKINGOS, None,
+     JPEG_OK["base64"], None),
+    ("not a video's link: exit 2", "https://www.youtube.com/@nickcani", True, True, {}, [], None, None, None, None),
+]
+
+
+def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
+    import httpx
+    from typer.testing import CliRunner
+
+    import caracole.commands.youtube as cmd
+    from caracole.cli import build_app
+    from caracole.commands import _common
+    from caracole.get import read_progress_line
+
+    case, link, yt_on, img_on, kv, events, answer, thumb, kept, cooling = scene
+    root = tmp_path / f"video-{n}"
+    fake = FakeYtDlp(root / "bin")
+    if answer is not None:
+        fake.video(PASTED_ID, **{"title": "", "channel": "", "duration": 0, **answer})
+    models = root / "models"
+    models.mkdir(parents=True)
+    for name in ("btc.pt", "beat.ckpt"):
+        (models / name).write_bytes(b"m")
+    lines = [f'library_dir = "{root / "lib"}"', f'music_dir = "{root / "music"}"', f'state_dir = "{root / "state"}"',
+             f'cache_dir = "{root / "cache"}"', f'ytdlp_bin = "{fake.bin}"', "[providers.youtube]", "delay = [0, 0]",
+             f"enabled = {'true' if yt_on else 'false'}", "[providers.ytimg]", f"enabled = {'true' if img_on else 'false'}",
+             "[autochords]", f'btc_weights = "{models / "btc.pt"}"', f'beat_checkpoint = "{models / "beat.ckpt"}"']
+    config = root / "caracole.toml"
+    config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "state").mkdir()
+    conn = db.connect(root / "state" / "caracole.sqlite")
+    for k, v in kv.items():
+        db.kv_set(conn, k, v)
+    for run, at, provider in events:
+        conn.execute("INSERT INTO events (run, at, provider, url, status, decision, message) "
+                     "VALUES (?, ?, ?, ?, NULL, 'ok', NULL)", (run, at, provider, watch_url(PASTED_ID)))
+    if cooling is not None:
+        provider, ago = ("ytimg", {"hours": 1}) if cooling == "ytimg" else ("youtube", cooling)
+        from datetime import timedelta
+        health.record_block(conn, provider, NOW - timedelta(**ago), "blocked")
+    seeded = dict(conn.execute("SELECT key, value FROM kv").fetchall())
+    before = dict(seeded)
+    last_event = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+    conn.close()
+    if kept is not None:
+        thumbs = root / "cache" / youtube_search.THUMBS
+        thumbs.mkdir(parents=True)
+        (thumbs / f"{PASTED_ID}.jpg").write_bytes(base64.b64decode(kept))
+    asked, alerts = [], []
+
+    def handler(request):
+        asked.append(str(request.url))
+        if thumb is None:
+            pytest.fail(f"the image host was asked {request.url}")
+        return httpx.Response(thumb["status"], content=base64.b64decode(thumb["base64"]),
+                              headers={"content-type": "image/jpeg"})
+
+    def transport(provider):
+        assert provider == "ytimg", provider
+        return httpx.MockTransport(handler)
+
+    monkeypatch.setattr(youtube_fetch, "autochords_missing", lambda: [])
+    monkeypatch.setattr(_common, "transport_for", transport)
+    monkeypatch.setattr(_common, "sleep", lambda s: None)
+    monkeypatch.setattr(_common, "alert_block", lambda cfg, provider, message, **kw: alerts.append(provider))
+    monkeypatch.setattr(cmd, "utcnow", lambda: NOW)
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "youtube", "--video", link, "--progress"])
+    conn = db.connect(root / "state" / "caracole.sqlite")
+    after = dict(conn.execute("SELECT key, value FROM kv").fetchall())
+    new_events = [list(r) for r in conn.execute("SELECT provider, run, url, status, decision FROM events WHERE id > ? "
+                                                "ORDER BY id", (last_event,))]
+    conn.close()
+    plain, progress = [], []
+    for line in result.output.splitlines():
+        event = read_progress_line(line)
+        if event is not None:
+            progress.append([event["stage"], event["state"], event["detail"]])
+        elif result.exit_code == 0:
+            plain.append(line)
+    kept_after = root / "cache" / youtube_search.THUMBS / f"{PASTED_ID}.jpg"
+    changed = {k: after.get(k) for k in sorted(set(before) | set(after))
+               if before.get(k) != after.get(k) and not k.startswith(VIDEO_APART)}
+    out = {"exit": result.exit_code, "lines": plain, "progress": progress,
+           "error": cmd.NOT_A_VIDEO.format(link=repr(link)) if result.exit_code == 2 else None,
+           "runs": [argv[-1] for argv in fake.argvs()], "asked": asked, "kv": changed, "events": new_events,
+           "thumb": hashlib.sha256(kept_after.read_bytes()).hexdigest() if kept_after.is_file() else None,
+           "alerts": alerts}
+    assert result.exit_code in (0, 2), result.output
+    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kw": {"link": link, "video_id": PASTED_ID, "youtube": yt_on, "ytimg": img_on,
+                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
+                   "events": events, "video": answer, "thumb": thumb, "kept": kept},
+            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+
+
+def _jpeg(*segments: bytes, scan: bytes = b"\x12\x34\xff\xd9") -> bytes:
+    return b"\xff\xd8" + b"".join(segments) + b"\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00" + scan
+
+
+def _sof(marker: int = 0xC0, height: int = 360, width: int = 480, length: int = 11) -> bytes:
+    import struct
+    body = struct.pack(">BHHB", 8, height, width, 1) + b"\x01\x11\x00"
+    return bytes([0xFF, marker]) + struct.pack(">H", length) + body[:length - 2].ljust(length - 2, b"\x00")
+
+
+APP0 = b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+JPEG_HEADS = [
+    (JPEG, 0), (JPEG, 64), (JPEG, youtube_search.MAX_BYTES - len(JPEG)), (JPEG, youtube_search.MAX_BYTES - len(JPEG) + 1),
+    (b"", 0), (b"\xff\xd8", 0), (b"\xff\xd8\xff", 0), (b"\xff\xd8\xff\xd9", 0), (b"\x89PNG\r\n\x1a\n", 0),
+    (_jpeg(APP0, _sof()), 0), (_jpeg(_sof(0xC2)), 0), (_jpeg(_sof(0xC4)), 0), (_jpeg(_sof(0xCC)), 0),
+    (_jpeg(_sof(width=0)), 0), (_jpeg(_sof(height=0)), 0), (_jpeg(_sof(width=2048, height=2048)), 0),
+    (_jpeg(_sof(width=2049)), 0), (_jpeg(_sof(height=2049)), 0), (_jpeg(_sof(length=7)), 0),
+    (_jpeg(_sof(length=6)), 0), (_jpeg(_sof(length=2)), 0), (_jpeg(b"\xff\xe1\x00\x01", _sof()), 0),
+    (_jpeg(APP0), 0), (_jpeg(_sof(), scan=b"\x12\x34"), 0), (_jpeg(_sof(), scan=b"\xff\xd9\x00\x00"), 0),
+    (_jpeg(_sof(), scan=b"\xff\xd9\x01"), 0), (_jpeg(b"\xff\xff\xff", _sof()), 0), (_jpeg(b"\x00", _sof()), 0),
+    (_jpeg(b"\xff\xd0", _sof()), 0), (_jpeg(b"\xff\x01", _sof()), 0), (_jpeg(b"\xff\xd8", _sof()), 0),
+    (_jpeg(_sof(), _sof(width=4000)), 0), (_jpeg(_sof(width=4000), _sof()), 0),
+    (b"\xff\xd8" + _sof() + b"\xff\xda\x00\x40", 0), (b"\xff\xd8\xff\xe0\x00\x10JFIF", 0),
+]
+
+
+def _seeded_jpegs() -> list[bytes]:
+    rng = random.Random(20261127)
+    out = []
+    for _ in range(160):
+        data = bytearray(rng.choice([JPEG, _jpeg(APP0, _sof()), _jpeg(_sof(0xC2, 1, 1))]))
+        for _ in range(rng.randint(1, 3)):
+            kind = rng.random()
+            i = rng.randrange(len(data))
+            if kind < 0.5:
+                data[i] = rng.choice([0x00, 0xFF, 0xD8, 0xD9, 0xDA, 0xC0, rng.randrange(256)])
+            elif kind < 0.75:
+                del data[i]
+            else:
+                data.insert(i, rng.randrange(256))
+        out.append(bytes(data))
+    return out
+
+
+def test_the_video_command_corpus(tmp_path, monkeypatch):
+    records = [_video_record(tmp_path, monkeypatch, n, scene) for n, scene in enumerate(VIDEO_SCENES)]
+    heads = [(data, zeros) for data, zeros in JPEG_HEADS] + [(d, 0) for d in _seeded_jpegs()]
+    for data, zeros in heads:
+        whole = data + b"\x00" * zeros
+        records.append({"fn": "checked_jpeg", "base64": base64.b64encode(data).decode("ascii"), "zeros": zeros,
+                        "kept": youtube_search.checked_jpeg(whole) is not None})
+    check(VECTORS / "youtube" / "video_cmd.jsonl", jsonl(records, corpus="youtube/video_cmd", made_by=MADE_BY))
+
+
+def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
+    by = {s[0].split(":")[0]: _video_record(tmp_path, monkeypatch, n, s) for n, s in enumerate(VIDEO_SCENES)}
+    first = by["a pasted link with tracking"]["out"]
+    assert first["runs"] == [watch_url(PASTED_ID)] and first["asked"] == [youtube_search.THUMB_URL.format(id=PASTED_ID)]
+    assert first["lines"] == [f"Searched: YouTube video {PASTED_ID}: {VIKINGOS['title']} ({VIKINGOS['channel']})."]
+    assert [p[:2] for p in first["progress"]] == [["video", "running"], ["video", "done"], ["thumbnail", "running"],
+                                                  ["thumbnail", "done"]]
+    assert first["thumb"] == hashlib.sha256(JPEG).hexdigest() and first["alerts"] == []
+    for case in ("read this month", "read this month as none", "YouTube cooling down", "the hour's 10 spent",
+                 "failed within the hour", "YouTube off"):
+        assert by[case]["out"]["runs"] == [], case
+    assert by["YouTube off"]["out"]["lines"] == ["Not searched: YouTube is off. Try again later."]
+    assert by["a block"]["out"]["alerts"] == ["youtube"] and json.loads(by["a block"]["out"]["kv"]["provider:youtube"])
+    assert by["the image host blocking (403)"]["out"]["alerts"] == ["ytimg"]
+    assert by["a thumbnail kept already"]["out"]["asked"] == []
+    assert by["not a video's link"]["out"]["exit"] == 2 and by["not a video's link"]["out"]["runs"] == []
+    assert VKEY in json.loads(by["an error"]["out"]["kv"][youtube_search.FAILED_KEY])

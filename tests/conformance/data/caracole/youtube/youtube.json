@@ -538,6 +538,51 @@
   ],
   "rule": "kv prefix + song id, json.dumps' text of fields in this order, then missing_at when it is set; read back: a text field a non-empty str or none, skip its str items, failures its int (bool too) values, video as Video.from_json reads it (an id video_id matches whole, str(title or ''), str(channel or ''), a number's float duration)"
  },
+ "thumb": {
+  "provider": "ytimg",
+  "url": "https://i.ytimg.com/vi/{id}/hqdefault.jpg",
+  "folder": "youtube-thumbs",
+  "name": "{id}.jpg",
+  "part": ".part-",
+  "max_bytes": 262144,
+  "max_side": 2048,
+  "frames": [
+   192,
+   193,
+   194,
+   195,
+   197,
+   198,
+   199,
+   201,
+   202,
+   203,
+   205,
+   206,
+   207
+  ]
+ },
+ "video_cmd": {
+  "not_a_video": "--video: not a YouTube video's link: {link}",
+  "asking": "asking YouTube",
+  "searched_video": "Searched: YouTube video {id}: {title} ({channel}).",
+  "wont_give": "Nothing found: YouTube won't give video {id} ({unavailable}).",
+  "not_searched": "Not searched: ",
+  "try_later": "{why}. Try again later.",
+  "turned_back": "YouTube turned us back ({error}); no yt-dlp runs until {until}.",
+  "no_runs": "no YouTube runs left. Try again later.",
+  "ytdlp_failed": "yt-dlp failed ({error}). Try again later.",
+  "video_done": "{title} ({channel})",
+  "runs_alert": "{error}\nNo more yt-dlp runs until {until} (block #{strikes}).",
+  "thumb_off": "turned off",
+  "thumb_cooling": "waiting out a block until {until}",
+  "thumb_kept": "kept",
+  "thumb_none": "none",
+  "thumb_blocked": "YouTube's images turned us back; waiting until {until}",
+  "thumb_spent": "no asks left",
+  "thumb_failed": "no thumbnail",
+  "thumbs_alert": "{error}\nNo more thumbnails until {until} (block #{strikes})."
+ },
  "gate": {
   "names": [
    "youtube.com",
