@@ -22,7 +22,9 @@ import io.github.danielhp95.caracole.core.youtube.Ran as CoreRan
  *   [YtDlpClient.ANOTHER_RUN]'s words: the bench's run is never waited for, nor stopped).
  * - [YtDlpProcess.NotStarted], nothing sent: the service wouldn't bind or Python didn't start ([YtDlpNotStarted]), the
  *   argv refused by the client or the glue ([Refused]: a `--proxy` that is no open gate of the app's among them), a
- *   run stopped before its request was sent ([Ran.sent] false).
+ *   run stopped (a [cancel], a [close], its thread interrupted) before its request was sent: waiting its turn, at the
+ *   lock, while the service binds, or as its client is made ([Ran.sent] false, or the client's own NotStarted), the
+ *   thread's interrupt kept for the caller.
  * - [CoreRan]: yt-dlp's exit status, its stdout and its stderr; [CoreRan.timedOut] once it ran past `timeoutS` and was
  *   killed. Its stderr is every line it wrote up to [HEAD] characters, then, past them, the client's tail (its last
  *   [Ran.STDERR_TAIL]): classify reads a block's or a warning's words anywhere, and the last ERROR line is the tail's.
@@ -33,7 +35,8 @@ import io.github.danielhp95.caracole.core.youtube.Ran as CoreRan
  * - No argv in any message or line: the client redacts every line, and nothing here says the argv.
  *
  * [close] (or [cancel]) stops the run under way, and [close] refuses every later one: nothing is left of it (no
- * process, no thread: each run's client is closed as the run ends).
+ * process, no thread: each run's client is closed as the run ends). A stop closes the run's client, so one landing
+ * as the client is made, before the run is registered with it, is never lost: the client then starts nothing.
  */
 class ProcessYtDlp(context: Context) : YtDlpProcess, Closeable {
     private val context = context.applicationContext
@@ -47,6 +50,7 @@ class ProcessYtDlp(context: Context) : YtDlpProcess, Closeable {
             if (closed) throw YtDlpProcess.NotStarted(CLOSED)
             YtDlpClient(context).also { current = it }
         }
+        beforeRun()
         val stderr = Stderr()
         val folders = folders(argv)
         val ran = try {
@@ -68,9 +72,13 @@ class ProcessYtDlp(context: Context) : YtDlpProcess, Closeable {
         }
     }
 
-    /** Stops the run under way, if any: its process killed. */
+    /** The tests' seam: called once the run's client is made, before the run is asked of it. */
+    internal var beforeRun: () -> Unit = {}
+
+    /** Stops the run under way, if any: its process killed. Its client closed, so a run not yet registered with it
+     * starts nothing (each run has a client of its own). */
     fun cancel() {
-        synchronized(lock) { current }?.cancel()
+        synchronized(lock) { current }?.close()
     }
 
     /** [cancel], and no run after. */
@@ -137,7 +145,7 @@ class ProcessYtDlp(context: Context) : YtDlpProcess, Closeable {
 
         const val CLOSED = "yt-dlp wasn't started: its runner is closed"
         const val STOPPED = "yt-dlp was stopped"
-        const val STOPPED_BEFORE = "yt-dlp wasn't started: it was stopped before its turn"
+        const val STOPPED_BEFORE = YtDlpClient.STOPPED_BEFORE
 
         private fun templates(): JsonObject = YouTubeData.read().json.getValue("phone_argv") as JsonObject
 

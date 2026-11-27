@@ -79,20 +79,26 @@ class Refused(val words: String) : IOException(words)
  *   starts nothing and throws [YtDlpNotStarted] in [ANOTHER_RUN]'s words. The `:youtube` process left from before is
  *   killed only while the lock is held.
  * - Each run has its own stop: [cancel] (any thread) or [close] stops the runs of this client asked so far, a run
- *   still waiting for its turn included, which then starts nothing.
+ *   still waiting for its turn included, which then starts nothing; a [run] asked of a client closed already starts
+ *   nothing either: [YtDlpNotStarted] in [STOPPED_BEFORE]'s words (a close as a run is being asked is never lost: the
+ *   run is either refused so or registered for the close's [cancel]).
  * - A stop: past `timeoutS` from the bind, on [cancel] or on [close], it kills the `:youtube` process
  *   (`Process.killProcess` of its pid). Stopped once the request was sent but before its pid came, it waits for it
- *   ([START_WAIT_MS]), else finds the process by its name, and kills it: no yt-dlp is left to run on.
+ *   ([START_WAIT_MS]), else finds the process by its name, and kills it: no yt-dlp is left to run on. Stopped while
+ *   the service binds, before anything was sent, it waits for the connection first (as long), so that the process
+ *   then starting is found and killed, never left empty.
  * - Android's ActivityManager kills the killed process's cgroup, the children yt-dlp started, qjs among them
  *   (KillTest measured it). NEVER a process-group kill: every process of the app's uid, the main one included,
  *   shares one group (zygote's).
  * - Every answer carries its run's id: an answer of another run is never read as this one's.
  * - An interrupt of the thread in [run] is a stop too: the run under way killed as [cancel] kills it, then
- *   InterruptedException thrown (the flag cleared, as that exception says); one while it waits for its turn starts
- *   nothing: [YtDlpNotStarted] in [INTERRUPTED_WAITING]'s words, the thread's interrupt set again.
+ *   InterruptedException thrown (the flag cleared, as that exception says); one before the request was sent (while it
+ *   waits for its turn, at the file lock, while the service binds) sent nothing: [YtDlpNotStarted] in
+ *   [INTERRUPTED_WAITING]'s words, the thread's interrupt set again for its caller.
  * - A gate-shaped address in the argv ([HostGate.PROXY_PATTERN]) that is no open gate of the app's ([HostGate.isOpen]
- *   in this process, else asked of [GateService], the main process's, where every gate is) is [Refused] in
- *   [NOT_OUR_GATE]'s words before anything is bound: another app's proxy on 127.0.0.1 never takes yt-dlp's traffic.
+ *   in this process, else asked of [GateService], the main process's, where every gate is; in GateService's own
+ *   process, this one's registry is that one, so nothing is asked) is [Refused] in [NOT_OUR_GATE]'s words before
+ *   anything is bound: another app's proxy on 127.0.0.1 never takes yt-dlp's traffic.
  * - The process gone before its answer, unasked: [YtDlpStopped]; none started: [YtDlpNotStarted]; a refusal:
  *   [Refused].
  * - [run] blocks; never on the main thread, whose looper delivers the binding.
@@ -117,6 +123,9 @@ class YtDlpClient(
 
     /** The tests' seam: STARTED held back that long by the service, under LOOPBACK alone. */
     internal var startedDelayMs = 0L
+
+    /** The tests' seam: called once the service's bind was asked, before its connection is waited for. */
+    internal var onBound: () -> Unit = {}
 
     private sealed interface Event {
         data class Connected(val binder: IBinder) : Event
@@ -153,7 +162,7 @@ class YtDlpClient(
         check(Looper.myLooper() != Looper.getMainLooper()) { "YtDlpClient.run blocks: never on the main thread" }
         val run = Run(RANDOM.nextLong())
         synchronized(lock) {
-            check(!closed) { "this YtDlpClient is closed" }
+            if (closed) throw YtDlpNotStarted(STOPPED_BEFORE)
             active++
             runs[run.id] = run
         }
@@ -189,6 +198,7 @@ class YtDlpClient(
         for (arg in argv) for (found in shape.findAll(arg)) {
             val (port, user) = HostGate.portAndUser(found.value) ?: throw Refused(NOT_OUR_GATE)
             if (HostGate.isOpen(port, user)) continue
+            if (inGateServicesProcess()) throw Refused(NOT_OUR_GATE) // its registry is this one: nothing to ask
             val there = try {
                 GateService.Client(context).use { it.isOpen(port, user) }
             } catch (_: IOException) {
@@ -196,6 +206,18 @@ class YtDlpClient(
             }
             if (!there) throw Refused(NOT_OUR_GATE)
         }
+    }
+
+    /** Whether this process is [GateService]'s (the app's main one), whose gates [HostGate.isOpen] knows here. */
+    private fun inGateServicesProcess(): Boolean {
+        val service = try {
+            context.packageManager.getServiceInfo(ComponentName(context, GateService::class.java), 0).processName
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+            return false
+        }
+        val here = context.getSystemService(ActivityManager::class.java)?.runningAppProcesses
+            ?.firstOrNull { it.pid == Process.myPid() }?.processName
+        return here != null && here == service
     }
 
     /** Stops every run of this client asked so far: the one under way killed, one waiting its turn never begun. */
@@ -213,7 +235,10 @@ class YtDlpClient(
     }
 
     /** [block] while this client holds [LOCK]'s file lock, which no other process of the app then holds; none
-     * taken: [YtDlpNotStarted] in [ANOTHER_RUN]'s words, nothing killed or started. */
+     * taken: [YtDlpNotStarted] in [ANOTHER_RUN]'s words, nothing killed or started; the thread interrupted at the
+     * lock (a ClosedByInterruptException, where the platform's channel checks the interrupt there: the emulator's
+     * doesn't, measured, the interrupt then met as the service binds): [YtDlpNotStarted] in [INTERRUPTED_WAITING]'s,
+     * the interrupt kept. */
     private fun <T> acrossProcesses(block: () -> T): T {
         val file = File(context.filesDir, LOCK)
         RandomAccessFile(file, "rw").use { raf ->
@@ -221,6 +246,9 @@ class YtDlpClient(
                 raf.channel.tryLock()
             } catch (_: java.nio.channels.OverlappingFileLockException) {
                 null // this process holds it already: never two runs at once here either
+            } catch (_: java.nio.channels.ClosedByInterruptException) {
+                Thread.currentThread().interrupt() // the channel set it; said again, whatever the platform did
+                throw YtDlpNotStarted(INTERRUPTED_WAITING)
             } ?: throw YtDlpNotStarted(ANOTHER_RUN)
             try {
                 return block()
@@ -265,6 +293,7 @@ class YtDlpClient(
             context.unbindService(connection)
             throw YtDlpNotStarted(NOT_STARTED)
         }
+        onBound()
         val tail = Tail(err, t0, redact, onLine)
         var pid = -1
         var started = -1L
@@ -332,12 +361,20 @@ class YtDlpClient(
                 }
             }
             if (killed) {
+                // Stopped while the service binds: its process may be starting, and one unbound before the service
+                // was bound is left as an empty process; let the bind come (at most START_WAIT_MS), so the process is
+                // there to be killed and the service, unbound, ends it too.
+                if (!sent && binder == null) awaitConnected(events)
                 if (pid <= 0 && sent) pid = awaitPid(events)
                 if (pid <= 0) pid = youtubePid() ?: -1
                 if (pid > 0) Process.killProcess(pid)
             }
             tail.read()
             tail.end()
+            if (interrupted && !sent) {
+                Thread.currentThread().interrupt() // for the caller: the stop is its, and nothing was sent
+                throw YtDlpNotStarted(INTERRUPTED_WAITING)
+            }
             if (interrupted) throw InterruptedException(INTERRUPTED)
             return Ran(
                 exit = if (killed) -1 else exit!!,
@@ -358,6 +395,21 @@ class YtDlpClient(
             gone(pid)
             out.delete()
             err.delete()
+        }
+    }
+
+    /** The service's connection waited for, at most [START_WAIT_MS] (the run's other answers passed over), so that a
+     * stop while it binds leaves no process starting: true once connected. */
+    private fun awaitConnected(events: LinkedBlockingQueue<Event>): Boolean {
+        val until = SystemClock.elapsedRealtime() + START_WAIT_MS
+        while (true) {
+            val left = until - SystemClock.elapsedRealtime()
+            if (left <= 0) return false
+            when (events.poll(left, TimeUnit.MILLISECONDS) ?: return false) {
+                is Event.Connected -> return true
+                Event.Died -> return false
+                else -> Unit
+            }
         }
     }
 
@@ -482,7 +534,8 @@ class YtDlpClient(
         const val ANOTHER_RUN = "another run is going: yt-dlp runs one at a time on the phone"
         const val NOT_OUR_GATE = "yt-dlp is given the app's own gate as its proxy, and no other"
         const val INTERRUPTED = "yt-dlp was stopped: its job was interrupted"
-        const val INTERRUPTED_WAITING = "yt-dlp wasn't started: its job was interrupted while it waited for its turn"
+        const val INTERRUPTED_WAITING = "yt-dlp wasn't started: its job was interrupted before anything was sent"
+        const val STOPPED_BEFORE = "yt-dlp wasn't started: it was stopped before anything was sent"
 
         /** The file in `filesDir` whose lock a client holds for the whole of a run, across the app's processes. */
         const val LOCK = "youtube-run.lock"

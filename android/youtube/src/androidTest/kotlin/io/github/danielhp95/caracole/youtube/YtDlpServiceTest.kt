@@ -124,6 +124,30 @@ class YtDlpServiceTest {
         assertEquals(YtDlpClient.NOT_OUR_GATE, refused(Runs.version(gate.proxyArg.replace(user, "0".repeat(user.length)))))
     }
 
+    /** In GateService's own process (this one) the registry is this one's: a gate-shaped address that isn't open
+     * here is refused at once, with nothing bound or asked, even while the main looper (which would deliver a bind)
+     * is busy. */
+    @Test
+    fun aGateNotOpenHereIsRefusedAtOnceInTheGatesOwnProcess() {
+        val closed = gates.open().also { it.close() }
+        val release = java.util.concurrent.CountDownLatch(1)
+        val busy = java.util.concurrent.CountDownLatch(1)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            busy.countDown()
+            release.await(20, java.util.concurrent.TimeUnit.SECONDS)
+        }
+        try {
+            assertTrue(busy.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            val t0 = SystemClock.elapsedRealtime()
+            assertEquals(YtDlpClient.NOT_OUR_GATE, refused(Runs.version(closed.proxyArg)))
+            val took = SystemClock.elapsedRealtime() - t0
+            Runs.said("a gate not open here refused in $took ms, the main looper busy")
+            assertTrue("refused in $took ms", took < 2_000)
+        } finally {
+            release.countDown()
+        }
+    }
+
     @Test
     fun aSearchUnderLoopbackIsRefused() {
         val why = refused(Runs.search(gate.proxyArg))

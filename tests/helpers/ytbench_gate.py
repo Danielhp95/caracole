@@ -450,15 +450,19 @@ def _bad(r: dict[str, Any]) -> str | None:
 
 
 def _clean(r: dict[str, Any]) -> bool:
-    """A session that clears an earlier bad one: on mobile data with Start, a song downloaded, no block, none failing."""
-    return _mobile_enforced(r) and bool(_ok_downloads(r)) and _bad(r) is None
+    """A session that clears an earlier bad one, the ruling's "its songs": on mobile data with Start, and every one of
+    its songs downloaded ok; a song that didn't (the network lost it, no video fitted, YouTube has no download of it, a
+    block, a failure) leaves the bad one standing, though the session still counts its songs that did."""
+    songs = _songs(r)
+    return _mobile_enforced(r) and bool(songs) and all(_song_end(runs) == "ok" for _, runs in songs)
 
 
 @dataclass(frozen=True)
 class _Standing:
     """The controller's ruling of 2026-11-27 on bad sessions: one holds the gate until a later session, on a later UTC
-    day (so after any cooldown), is clean; then it is cleared, and the songs and the warm download are counted from
-    the sessions after the last bad one (``since``, an index in the sorted reports)."""
+    day, is clean (``_clean``: a later day is all the checker can tell of a cooldown, whose end no report states);
+    then it is cleared, and the songs and the warm download are counted from the sessions after the last bad one
+    (``since``, an index in the sorted reports)."""
     cleared: list[tuple[dict[str, Any], str]]
     uncleared: list[tuple[dict[str, Any], str]]
     since: int

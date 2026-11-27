@@ -23,8 +23,9 @@ import java.util.concurrent.TimeUnit
  * kill or the service's own exit once unbound: those two tests don't tell which); a run cancelled or closed while it
  * waits its turn, which starts nothing; and the `:youtube` process killed by another (a SIGKILL from outside the
  * client, as the low-memory killer sends one: `am kill` leaves a process a foreground one binds) is [YtDlpStopped],
- * this process answering after it. Each time the next run works. Run by `android/scripts/device-test.sh --youtube`, on
- * the emulator alone.
+ * this process answering after it; a ProcessYtDlp stopped as it makes its run's client, and a run asked on an
+ * interrupted thread or interrupted while the service binds, which send nothing. Each time the next run works. Run
+ * by `android/scripts/device-test.sh --youtube`, on the emulator alone.
  */
 @RunWith(AndroidJUnit4::class)
 class KillTest {
@@ -199,6 +200,68 @@ class KillTest {
             }
             nothingLeft(2_000, "a run stopped while it waited its turn")
         }
+        theNextRunWorks()
+    }
+
+    /** A stop landing as ProcessYtDlp makes the run's client, before the run is registered with it, is never lost:
+     * that client starts nothing (no process), and the run is NotStarted, nothing sent. */
+    @Test
+    fun aProcessYtDlpClosedAsItsClientIsMadeStartsNothing() {
+        for (stop in listOf<(ProcessYtDlp) -> Unit>({ it.cancel() }, { it.close() })) {
+            val process = ProcessYtDlp(context)
+            process.beforeRun = { stop(process) }
+            try {
+                process.run(Runs.version(gate.proxyArg), 120.0, {}, {})
+                fail("ran after its stop")
+            } catch (e: io.github.danielhp95.caracole.core.youtube.YtDlpProcess.NotStarted) {
+                assertEquals(ProcessYtDlp.STOPPED_BEFORE, e.message)
+            } finally {
+                process.close()
+            }
+            nothingLeft(1_000, "a ProcessYtDlp stopped as its client was made")
+        }
+        theNextRunWorks()
+    }
+
+    /** A run asked on a thread interrupted already sent nothing: YtDlpNotStarted, its interrupt kept for the caller,
+     * nothing left. (Measured here: the emulator's FileChannel.tryLock doesn't check a pending interrupt, so it is
+     * met as the service binds; where a channel throws ClosedByInterruptException at the lock, the client says the
+     * same.) */
+    @Test
+    fun aRunAskedOnAnInterruptedThreadSentNothingAndKeepsItsInterrupt() {
+        var interrupted = false
+        val thrown = runCatching {
+            Thread.currentThread().interrupt()
+            try {
+                client.run(Runs.version(gate.proxyArg), 120.0, { _, _ -> }, {})
+            } finally {
+                interrupted = Thread.interrupted()
+            }
+        }.exceptionOrNull()
+        assertTrue("$thrown", thrown is YtDlpNotStarted)
+        assertEquals(YtDlpClient.INTERRUPTED_WAITING, (thrown as YtDlpNotStarted).words)
+        assertTrue("the interrupt kept", interrupted)
+        nothingLeft(2_000, "a run asked on an interrupted thread")
+        theNextRunWorks()
+    }
+
+    /** A thread interrupted while the service binds, before the request is sent: YtDlpNotStarted, its interrupt
+     * kept, no process left. */
+    @Test
+    fun aRunInterruptedWhileItBindsSentNothingAndKeepsItsInterrupt() {
+        client.onBound = { Thread.currentThread().interrupt() }
+        var interrupted = false
+        val thrown = runCatching {
+            try {
+                client.run(Runs.version(gate.proxyArg), 120.0, { _, _ -> }, {})
+            } finally {
+                interrupted = Thread.interrupted()
+            }
+        }.exceptionOrNull()
+        assertTrue("$thrown", thrown is YtDlpNotStarted)
+        assertEquals(YtDlpClient.INTERRUPTED_WAITING, (thrown as YtDlpNotStarted).words)
+        assertTrue("the interrupt kept", interrupted)
+        nothingLeft(2_000, "a run interrupted while it binds")
         theNextRunWorks()
     }
 

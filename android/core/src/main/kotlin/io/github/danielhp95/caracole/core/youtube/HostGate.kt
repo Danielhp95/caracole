@@ -43,7 +43,9 @@ import java.util.concurrent.atomic.AtomicLong
  * - The gate never takes its mode from a property: the main process passes it ([Mode.of] `caracole.network`'s value).
  *   The property is a guard alone: while it is `loopback` (every test, JVM or device), a [Mode.NETWORK] gate, of any
  *   rule, OBSERVE's too, is refused ([NETWORK_UNDER_LOOPBACK]) unless it names a resolver and a connector of its own
- *   (a test's, which reach loopback or nothing), never [Resolver.SYSTEM] or [Connector.DIRECT].
+ *   (a test's, which reach loopback or nothing), never [Resolver.SYSTEM] or [Connector.DIRECT]. Those two are
+ *   compared by identity: a guard against accidents, never against a caller that means to pass it (a lambda that
+ *   wraps [Resolver.SYSTEM] passes).
  * - The gates this process has open, by port and user ([isOpen]): a client hands yt-dlp no `--proxy` of a gate-shaped
  *   address that isn't one of them (another app's proxy on 127.0.0.1 never takes yt-dlp's traffic).
  * - The secret is kept as a digest; only [Opened.proxyArg] holds it, and no `toString`, log or message here names it.

@@ -847,6 +847,26 @@ def test_a_bad_day_then_a_clean_session_the_same_day_still_waits():
     assert v.passed is None and "Gate Y0 waits" in v.why and "on a later day" in v.why
 
 
+@pytest.mark.parametrize("end", ["network", "no fit", "unavailable"])
+def test_a_later_days_session_with_a_song_that_did_not_download_clears_nothing_but_counts_its_ok_songs(end):
+    bad = _blocked_at(session("2026-11-28", "cellular", "enforce"), 1)
+    later = session("2026-11-30", "cellular", "enforce")
+    download = run_of(later, 2, "download")
+    if end == "network":
+        download.update(outcome="error", file=None, decoded=None,
+                        reason="ERROR: unable to download video data: Read timed out")
+    elif end == "no fit":
+        later["runs"].remove(download)
+    else:
+        download.update(outcome="unavailable", file=None, decoded=None, reason="Video unavailable")
+    assert yg._song_end(yg._songs(later)[2][1]) == end
+    v = gate([bad, later])["Y0-W"]
+    assert v.passed is None and "Gate Y0 waits" in v.why, v.why
+    assert v.numbers["uncleared"] == [yg._label(bad)] and v.numbers["cleared"] == []
+    # With no bad session before it, the same session counts its two songs downloaded ok.
+    assert gate([later])["Y0-W"].numbers["mobile_downloads_ok"] == 2
+
+
 def test_the_songs_before_a_cleared_bad_session_are_not_counted():
     early = session("2026-11-27", "cellular", "enforce")
     bad = _blocked_at(session("2026-11-28", "cellular", "enforce"), 0)
