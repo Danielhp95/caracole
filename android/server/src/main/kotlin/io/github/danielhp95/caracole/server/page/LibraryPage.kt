@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.server.http.PageIcon
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -16,12 +17,16 @@ import kotlinx.serialization.json.longOrNull
 
 /** library_page.WebControls on the phone: what its server adds to the page; its badge the one every page the phone
  * writes itself shows (MessagePage.PHONE_BADGE). [sync] true is WebControls.sync's "sheet": the sync's sheet alone
- * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab"). */
+ * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab").
+ * [youtube]: why the phone makes no sheet from a YouTube video (Phone.youtubeProblem, the design's §5.6), null where it
+ * does: `server.youtube` and the request form's YouTube field; [youtubeOff]: YouTube turned off in the computer's
+ * settings (`server.youtube.off`). */
 data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
     val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
-    val guitar: Boolean = false, val inApp: Boolean = false,
+    val guitar: Boolean = false, val inApp: Boolean = false, val youtube: String? = LibraryPage.YOUTUBE_PROBLEM,
+    val youtubeOff: Boolean = true,
 )
 
 /**
@@ -64,7 +69,7 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /**
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
-     * Guitar Pro page, no sheet from YouTube and none from an audio file on the phone, no lyrics looked up under another
+     * Guitar Pro page, a sheet from YouTube where [ServerControls.youtube] says so, none from an audio file on the phone, no lyrics looked up under another
      * name (`lyricsSearch` false), and the tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
@@ -77,8 +82,11 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("removing", JsonArray(controls.removing.sorted().map { JsonPrimitive(it) }))
             put("jobs", JsonArray(controls.jobs))
             put("guitar", JsonPrimitive(controls.guitar))
-            put("youtube", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
-                                            "off" to JsonPrimitive(true))))
+            // A sheet from a YouTube video (YouTubeRoutes): whether this phone makes one, why not, and whether the
+            // computer's settings turned YouTube off (library_page.py's member).
+            put("youtube", JsonObject(linkedMapOf("ok" to JsonPrimitive(controls.youtube == null),
+                                                  "why" to (controls.youtube?.let(::JsonPrimitive) ?: JsonNull),
+                                                  "off" to JsonPrimitive(controls.youtubeOff))))
             put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
@@ -107,15 +115,27 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         return JsonObject(LinkedHashMap(song).apply { put("fetchable", JsonPrimitive(id != null && id > 0 && id !in controls.held)) })
     }
 
-    /** request.html, with the form's token, and no YouTube video field: the line that says why there is none. */
-    private fun requestForm(controls: ServerControls): String =
-        assets.template("request.html").replace("__CSRF__", PyText.escape(controls.csrf)).replace("__YOUTUBE__", "")
-            .replace("__YOUTUBEHINT__", "<p class=\"hint\">No sheets from YouTube here: ${PyText.escape(YOUTUBE_PROBLEM)}.</p>")
+    /** library_page._request_form: request.html with the form's token and its YouTube video field where the phone
+     * makes a sheet from one ([ServerControls.youtube] null), else the line that says why not. */
+    private fun requestForm(controls: ServerControls): String {
+        val why = controls.youtube
+        val field = if (why == null) YOUTUBE_FIELD else ""
+        val hint = if (why == null) YOUTUBE_HINT else "<p class=\"hint\">No sheets from YouTube here: ${PyText.escape(why)}.</p>"
+        return assets.template("request.html").replace("__CSRF__", PyText.escape(controls.csrf))
+            .replace("__YOUTUBE__", field).replace("__YOUTUBEHINT__", hint)
+    }
 
     companion object {
         /** Why the phone makes no sheet from a YouTube video, as youtube_fetch.route_reason says why a caracole makes
          * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
+
+        /** library_page._YOUTUBE_FIELD and _YOUTUBE_HINT: the request form's YouTube video field and its line, where
+         * the phone makes a sheet from a video (vectors/web/library_page.json's cases hold the page byte for byte). */
+        const val YOUTUBE_FIELD = "<label class=\"f youtube-field\"><span>YouTube video <em>(optional)</em></span>" +
+            "<input name=\"youtube\" maxlength=\"600\" autocomplete=\"off\" inputmode=\"url\" spellcheck=\"false\" " +
+            "placeholder=\"youtube.com/watch?v=…\"></label>"
+        const val YOUTUBE_HINT = "<p class=\"hint\">Sheet made from the video, its lyrics heard from it when no site has them</p>"
 
         /** Why the phone makes no sheet from an audio file (the server member's `audio.why`): its page has no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"

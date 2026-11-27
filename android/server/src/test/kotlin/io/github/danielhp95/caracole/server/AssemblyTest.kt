@@ -79,15 +79,15 @@ class AssemblyTest {
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
                             "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "SongbookRoutes", "VersionsRoutes",
                             "HarmonicaRoutes",
-                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
+                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "YouTubeRoutes", "ShareRoutes"),
                      phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
         assertEquals(emptyMap(), twice)
-        // A stub stands only for a route no module answers yet: YouTube's, and the computer's lookup page, for good.
+        // A stub stands only for a route no module answers yet: a search's suggested video (until Y4.1), and the
+        // computer's lookup page, for good; a sheet from a video and its panel are YouTubeRoutes'.
         val stubbed = Stubs().routes.map { "${it.method} ${it.path}" }.toSet()
-        assertEquals(setOf("GET /lookup", "POST /youtube", "POST /youtube/search", "POST /youtube/video",
-                           "GET /api/youtube/video"), stubbed)
+        assertEquals(setOf("GET /lookup", "POST /youtube/search"), stubbed)
         assertEquals(emptySet(), stubbed intersect owners.map { it.first }.toSet())
         val moved = mapOf(
             "LookupRoutes" to listOf("POST /lookup", "POST /fetch", "POST /lacuerda/artist", "POST /lacuerda/search",
@@ -103,6 +103,8 @@ class AssemblyTest {
             "ReviewRoutes" to listOf("GET /review", "POST /review"),
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
+            "YouTubeRoutes" to listOf("POST /youtube", "GET /api/youtube/video", "POST /youtube/video",
+                                      "GET /youtube/thumb/"),
             "SyncRoutes" to listOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
                                    "GET /api/sync/indexes", "POST /sync/apply"),
             "SyncFileRoutes" to listOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",

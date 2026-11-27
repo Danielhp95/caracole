@@ -68,6 +68,7 @@ import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.page.ServerControls
 import io.github.danielhp95.caracole.server.page.SongbookSection
 import io.github.danielhp95.caracole.server.routes.ExportRoutes
+import io.github.danielhp95.caracole.server.routes.YouTubeRoutes
 import io.github.danielhp95.caracole.server.routes.GuitarRoutes
 import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
@@ -145,7 +146,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
  * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
- * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
+ * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then YouTubeRoutes ([youtubeRoutes]: a sheet from a
+ * YouTube video, a pasted video's panel), then the phone's own ShareRoutes (a song shared to
  * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
@@ -242,6 +244,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * settings, [PhoneDeps.chords], [ModelsRunner.ready] and [PhoneDeps.youtube]): the job's refusal. */
     fun youtubeProblem(): String? = YouTubeSheetRunner.problemOf(config(), deps.youtube, deps.chords, models.ready())
 
+    /** Why the library page offers no sheet from a YouTube video now (`server.youtube.why`, the design's §5.6), null
+     * where it does: [youtubeProblem]'s reasons, then YouTube cooling down after a block, "YouTube refused caracole;
+     * asked again after …" ("Out of date" offers it all the same: its audio stage says so). */
+    fun youtubeOffered(): String? = deps.database.read { db -> YouTubeRoutes.offered(youtubeProblem(), db, Instant.now()) }
+
     /** YouTubeAudio.sweep of the phone's YouTube audio, in a write of its own. */
     private fun sweepYouTube() {
         deps.database.writeBlocking { db ->
@@ -299,6 +306,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         afterSync = ::afterSync, version = deps.version,
     ).also { sync.files = it }
 
+    /** A sheet from a YouTube video and a pasted video's panel (POST /youtube, GET /api/youtube/video, POST
+     * /youtube/video, GET /youtube/thumb/), refused where [youtubeProblem] says why; POST /request with `youtube` is
+     * handed to it by LibraryRoutes. */
+    val youtubeRoutes: YouTubeRoutes = YouTubeRoutes(parts, audio, ::youtubeProblem)
+
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(
         PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls,
@@ -308,7 +320,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         RequestsRoutes(parts),
         sync,
         files,
-        LibraryRoutes(store, queue, cards, deps.database),
+        LibraryRoutes(store, queue, cards, deps.database, youtube = youtubeRoutes::sheetFromYoutube),
         LookupRoutes(parts),
         UgLinkRoutes(parts),
         SongbookRoutes(parts),
@@ -317,6 +329,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
+        youtubeRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
                     links = ShareReader(parts)),
     )
@@ -445,7 +458,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
-            inApp = true,
+            inApp = true, youtube = youtubeOffered(), youtubeOff = !config().provider("youtube").enabled,
         )
     }
 

@@ -36,6 +36,8 @@ class LibraryPageTest {
         sync = sheet(of) ?: throw AssertionError("the phone never serves the Sync tab"),
         active = of.getValue("active").jsonPrimitive.int,
         inApp = of.getValue("in_app").jsonPrimitive.boolean,
+        youtube = if ("youtube" in of) of.getValue("youtube").let { if (it is JsonNull) null else it.jsonPrimitive.content }
+                  else LibraryPage.YOUTUBE_PROBLEM,
     )
 
     private fun sha256(text: String) =
@@ -50,6 +52,28 @@ class LibraryPageTest {
         val made = page.served(mirroredData(emptyList()), ServerControls("tok", inApp = true), "Tabs")
         assertFalse("class=\"libname\"" in made)
         assertTrue("<title>Phone · caracole · Tabs</title>" in made)
+    }
+
+    /** The design's §5.6: `server.youtube` says whether the phone makes a sheet from a YouTube video, why not (each
+     * reason [ServerControls.youtube] gives) and whether the computer's settings turned YouTube off; where it does,
+     * the request form draws its YouTube video field (the vector's page holds it byte for byte), else a line of why. */
+    @Test
+    fun `server youtube says ok or why, and the form draws its YouTube field where it is ok`() {
+        val data = mirroredData(emptyList())
+        fun member(c: ServerControls) = page.withServer(data, c).getValue("server").jsonObject.getValue("youtube")
+        assertEquals(obj("ok" to true, "why" to null, "off" to false),
+                     member(ServerControls("tok", youtube = null, youtubeOff = false)))
+        for (why in listOf("YouTube is off (the computer's settings)", "the chord models aren't downloaded yet",
+                           "this phone's caracole has no yt-dlp", "YouTube refused caracole; asked again after later")) {
+            assertEquals(obj("ok" to false, "why" to why, "off" to why.startsWith("YouTube is off")),
+                         member(ServerControls("tok", youtube = why, youtubeOff = why.startsWith("YouTube is off"))))
+            val served = page.served(page.withServer(data, ServerControls("tok", youtube = why)), ServerControls("tok", youtube = why), "")
+            assertFalse(LibraryPage.YOUTUBE_FIELD in served)
+            assertTrue("No sheets from YouTube here: ${why.replace("'", "&#x27;")}." in served, why)
+        }
+        val ok = ServerControls("tok", youtube = null, youtubeOff = false)
+        val served = page.served(page.withServer(data, ok), ok, "")
+        assertTrue(LibraryPage.YOUTUBE_FIELD in served && LibraryPage.YOUTUBE_HINT in served)
     }
 
     @Test

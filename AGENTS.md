@@ -3167,10 +3167,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     nowhere.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
-  - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."
-    (409): YouTube's until the phone-youtube plan's later tasks give the phone its own (a debug build carries yt-dlp
-    for the spike, `:youtube`, which no route runs), `GET /lookup` for good, as the library page's search does the
-    lookup page's work;
+  - `server/routes/Stubs.kt` keeps `GET /lookup` and `POST /youtube/search` alone, answering "…: not on the phone
+    yet." (409): `GET /lookup` for good, as the library page's search does the lookup page's work, the search's
+    suggested video until the phone-youtube plan's Y4.1; a sheet from a pasted video and its panel are
+    `YouTubeRoutes`';
   - no declaration is left a lane's stub (`TODO("lane <id>")`); a later round that adds one names its lane so, in a
     file that lane owns;
   - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, the real ones in `Phone`;
@@ -4525,6 +4525,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   and alert. Its words youtube.json's `video_cmd` (commands/youtube.py's constants). vectors/youtube/video_cmd.jsonl
   (`YouTubeVideoReplay`, area `youtube-video`): the command over FakeYtDlp and a fake i.ytimg.com, replayed with the
   record's answers; apart, `http:last_request:`, `songs:key_version` and the events' times.
+- server/routes' `YouTubeRoutes`, web/youtube_routes.py on the phone: `POST /youtube` (`youtube --sheet --progress
+  --url=… --song=…` queued under `youtube:<key>`, a song by its id and `identity` or by name, the job adding one the
+  library hasn't: no wanted.txt, so no note), `POST /request` with `youtube` handed to it by LibraryRoutes,
+  `GET /api/youtube/video` (no request: the gate, the video read, the name guessed by `SongNames.readNames`, the
+  library's song by its record, its `[youtube]` or the name), `POST /youtube/video` (`youtube --video` queued under
+  `youtube-search:video:<id>` when `auto`), `GET /youtube/thumb/<id>.jpg` (`Thumbs.read`, a policy that runs
+  nothing); refused as caracole serve refuses, `Phone.youtubeProblem()` its reason ("No sheets from YouTube here:
+  …"); form routes, so App's cross-origin check and token hold. `server.youtube` `{ok, why, off}` and the request
+  form's YouTube field where ok (`ServerControls.youtube`: `Phone.youtubeOffered()`, the design's §5.6, YouTube
+  cooling down after the problem's reasons, `YouTubeRoutes.COOLING`). vectors/web/youtube_routes.jsonl
+  (`WebReplay.youtubeRoutes`, YouTubeRoutesReplay), library_page.json's cases with `youtube` (the field drawn, a why).
 
 ##### Alerts and backups on the phone
 

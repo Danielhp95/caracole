@@ -87,7 +87,9 @@ import kotlin.concurrent.thread
  *   file corpus's files (SyncFileRoutes, and SyncRoutes' Sync on a file's comparison);
  * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names;
  * - [security]: security.jsonl, security.py's host, origin, own-page and token checks, and Python's `str.isdigit` and
- *   `str.isspace` over every code point (SecurityTest's).
+ *   `str.isspace` over every code point (SecurityTest's);
+ * - [youtubeRoutes]: youtube_routes.jsonl, a sheet from a YouTube video, a pasted video's panel and its thumbnail
+ *   (YouTubeRoutes, and LibraryRoutes' `POST /request` with `youtube`).
  *
  * Each phone is a database of its own in a temporary folder. (job_views.jsonl and library_page.json are lanes
  * job-views' and requests-feed's.)
@@ -104,7 +106,11 @@ object WebReplay : AreaReplay {
         syncFileRoutes(misses)
         downloads(misses)
         security(misses)
+        youtubeRoutes(misses)
     }
+
+    /** youtube_routes.jsonl: a sheet from a YouTube video and a pasted video's panel (YouTubeRoutesReplay). */
+    fun youtubeRoutes(misses: Misses) = YouTubeRoutesReplay.replay(misses)
 
     // --- api_search.jsonl -------------------------------------------------------------------------------------------
 

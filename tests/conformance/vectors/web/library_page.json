@@ -1170,6 +1170,218 @@
    },
    "name": "chinese, sync tab, badge None, app False",
    "sha256": "66ea90afde03d537bdf86bcc405608e4e35c6d5db4c358628762c3fafcd778f7"
+  },
+  {
+   "controls": {
+    "active": 0,
+    "badge": "Phone",
+    "csrf": "tok-&\"<'>-0123456789",
+    "in_app": true,
+    "sync": "sheet",
+    "youtube": null
+   },
+   "data": {
+    "catalogue": {
+     "I-V-vi-IV": {
+      "name": "the pop progression",
+      "source": "Wikipedia"
+     }
+    },
+    "fold": {
+     "Æ": "ae",
+     "Ð": "d",
+     "Ø": "o",
+     "Þ": "th",
+     "ß": "ss",
+     "æ": "ae",
+     "ð": "d",
+     "ø": "o",
+     "þ": "th",
+     "Đ": "d",
+     "đ": "d",
+     "Ħ": "h",
+     "ħ": "h",
+     "ı": "i",
+     "Ł": "l",
+     "ł": "l",
+     "Œ": "oe",
+     "œ": "oe",
+     "ẞ": "ss"
+    },
+    "generated": "2026-11-03T12:00:00Z",
+    "icons": {
+     "ug": {
+      "badge": "UG",
+      "name": "Ultimate Guitar",
+      "src": "data:image/png;base64,iVBORw0KGgo="
+     }
+    },
+    "server": {
+     "active": 0,
+     "audio": {
+      "limit": 0,
+      "ok": false,
+      "too_big": "",
+      "why": "auto-chords isn't on the phone"
+     },
+     "busy": [],
+     "csrf": "tok-&\"<'>-0123456789",
+     "guitar": false,
+     "jobs": [],
+     "lyricsSearch": false,
+     "removing": [],
+     "transcribe": {
+      "nothing": [],
+      "ok": false,
+      "songs": [],
+      "time": "",
+      "transcribed": [],
+      "unsung": [],
+      "why": "YouTube isn't on the phone"
+     },
+     "youtube": {
+      "off": true,
+      "ok": false,
+      "why": "YouTube isn't on the phone"
+     }
+    },
+    "sites": [],
+    "songbooks": {
+     "books": [],
+     "capoMax": 11,
+     "error": null,
+     "fileLabels": [
+      "PDF"
+     ],
+     "instruments": [
+      [
+       "guitar",
+       "Guitar",
+       true
+      ]
+     ],
+     "keys": [
+      "C",
+      "C♯",
+      "D"
+     ],
+     "modes": [
+      [
+       "major",
+       "major"
+      ]
+     ]
+    },
+    "songs": []
+   },
+   "name": "empty, sync sheet, badge Phone, app True, youtube None",
+   "sha256": "cc5ce41c6896d3a956603dd7fcd06e08ec7f75cec131c1a0fe93b77cf91468e4"
+  },
+  {
+   "controls": {
+    "active": 0,
+    "badge": "Phone",
+    "csrf": "tok-&\"<'>-0123456789",
+    "in_app": true,
+    "sync": "sheet",
+    "youtube": "this phone's caracole has no yt-dlp"
+   },
+   "data": {
+    "catalogue": {
+     "I-V-vi-IV": {
+      "name": "the pop progression",
+      "source": "Wikipedia"
+     }
+    },
+    "fold": {
+     "Æ": "ae",
+     "Ð": "d",
+     "Ø": "o",
+     "Þ": "th",
+     "ß": "ss",
+     "æ": "ae",
+     "ð": "d",
+     "ø": "o",
+     "þ": "th",
+     "Đ": "d",
+     "đ": "d",
+     "Ħ": "h",
+     "ħ": "h",
+     "ı": "i",
+     "Ł": "l",
+     "ł": "l",
+     "Œ": "oe",
+     "œ": "oe",
+     "ẞ": "ss"
+    },
+    "generated": "2026-11-03T12:00:00Z",
+    "icons": {
+     "ug": {
+      "badge": "UG",
+      "name": "Ultimate Guitar",
+      "src": "data:image/png;base64,iVBORw0KGgo="
+     }
+    },
+    "server": {
+     "active": 0,
+     "audio": {
+      "limit": 0,
+      "ok": false,
+      "too_big": "",
+      "why": "auto-chords isn't on the phone"
+     },
+     "busy": [],
+     "csrf": "tok-&\"<'>-0123456789",
+     "guitar": false,
+     "jobs": [],
+     "lyricsSearch": false,
+     "removing": [],
+     "transcribe": {
+      "nothing": [],
+      "ok": false,
+      "songs": [],
+      "time": "",
+      "transcribed": [],
+      "unsung": [],
+      "why": "YouTube isn't on the phone"
+     },
+     "youtube": {
+      "off": true,
+      "ok": false,
+      "why": "YouTube isn't on the phone"
+     }
+    },
+    "sites": [],
+    "songbooks": {
+     "books": [],
+     "capoMax": 11,
+     "error": null,
+     "fileLabels": [
+      "PDF"
+     ],
+     "instruments": [
+      [
+       "guitar",
+       "Guitar",
+       true
+      ]
+     ],
+     "keys": [
+      "C",
+      "C♯",
+      "D"
+     ],
+     "modes": [
+      [
+       "major",
+       "major"
+      ]
+     ]
+    },
+    "songs": []
+   },
+   "name": "empty, sync sheet, badge Phone, app True, youtube this phone's caracole has no yt-dlp",
+   "sha256": "8cbc276fb75a25c912d741929553a2318c41d16f8382072ed3748a662d4abee7"
   }
  ],
  "csp": "default-src 'none'; script-src 'sha256-jMkPnXy3mo791vOPKYXV2G3cGI+DLYtZ6wT6egzp/fE='; style-src 'sha256-Xva6jONCXSsJrlMQkdep3boz5+PA1iaUm2cJu3XlaNA='; img-src data: 'self'; base-uri 'none'; form-action 'self'; connect-src 'self'",
