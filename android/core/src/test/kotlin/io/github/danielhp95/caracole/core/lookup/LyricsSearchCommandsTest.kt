@@ -11,7 +11,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.testing.TestDb
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import org.junit.Test
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -20,6 +24,10 @@ import kotlin.test.assertTrue
  * vectors/lookup/lyrics_search.jsonl): every search's lines, requests, events, rows and kv; 2 to 4 requests a search. */
 class LyricsSearchCommandsTest {
     private val records = Corpus.lines(LyricsSearchReplay.SEARCHES).filter { it["header"] != JsonPrimitive(true) }
+
+    private companion object {
+        const val KEPT = "lookup/lyrics_kept.jsonl"
+    }
 
     @Test fun everySearchDoesWhatCaracoleLyricsAsDid() {
         val misses = Misses("lyrics-search")
@@ -54,6 +62,45 @@ class LyricsSearchCommandsTest {
         }
         assertTrue(sent.values.all { it in 0..4 }, "$sent")
         assertTrue(sent.values.any { it == 4 } && sent.values.any { it == 2 } && sent.values.any { it == 0 }, "$sent")
+    }
+
+    /** lyrics_search.last_search and what reads it (kept_search, pickable, asked_line, row_of) over kv texts kept and
+     * edited (vectors/lookup/lyrics_kept.jsonl), within the week and past it, a text that isn't JSON raising. */
+    @Test fun aKeptSearchIsReadBackAsPythonReadsIt() {
+        val misses = Misses("lyrics-kept")
+        val dir = kotlin.io.path.createTempDirectory("caracole-kept").toFile()
+        try {
+            TestDb.fresh(dir).use { database ->
+                for (r in Corpus.lines(KEPT).filter { it["header"] != JsonPrimitive(true) }) {
+                    val case = "${r.getValue("case").jsonPrimitive.content} at ${r.getValue("now").jsonPrimitive.content}"
+                    val kept = r.getValue("kept")
+                    val text = (kept as? JsonObject)?.get("open")?.jsonPrimitive?.content?.toInt()
+                        ?.let { "[".repeat(it) + "]".repeat(it) } ?: kept.jsonPrimitive.content
+                    val now = Instant.parse(r.getValue("now").jsonPrimitive.content)
+                    val got: JsonElement = try {
+                        database.writeBlocking { db ->
+                            db.kvSet("${LyricsSearchCommands.KV}1", text)
+                            val found = LyricsSearchCommands.lastSearch(db, 1, now) ?: return@writeBlocking JsonNull
+                            JsonObject(linkedMapOf(
+                                "search" to found.json(),
+                                "pickable" to JsonPrimitive(LyricsSearchCommands.pickable(found, now)),
+                                "asked_line" to JsonPrimitive(LyricsSearchCommands.askedLine(found, now)),
+                                "kept" to JsonPrimitive(LyricsSearchCommands.keptSearch(db, 1, now) != null),
+                                "row_of" to JsonObject(listOf("lrclib:77", "lrclib:5", "lrclib:0", "megalobiz:5001")
+                                                           .associateWith { LyricsSearchCommands.rowOf(found, it)?.json() ?: JsonNull }),
+                            ))
+                        }
+                    } catch (e: IllegalArgumentException) {
+                        JsonObject(mapOf("err" to JsonPrimitive("ValueError")))
+                    }
+                    val want = r["out"] ?: JsonObject(mapOf("err" to r.getValue("err")))
+                    misses.check(got == want) { "$case: $got,\n  Python's $want" }
+                }
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
+        misses.assertNone()
     }
 
     @Test fun aNameIsQuotedForTheShellAsShlexQuotesIt() {

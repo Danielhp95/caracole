@@ -195,7 +195,6 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         parts = PhoneParts(deps.database, store, deps.stateDir, ::config, queue, cards, ::clients, this.render.seam,
                            songbookPages.seam, deps.alerts, deps.pacing, deps.searchesLacuerda)
         commands["get"] = GetRunner(parts)
-        commands["lyrics"] = LyricsRunner(parts)
         commands["versions"] = VersionsRunner(parts)
         commands["lacuerda"] = LaCuerdaRunner(parts)
         commands["harptabs"] = HarpTabsRunner(parts)
@@ -217,6 +216,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio, problem = ::audioProblem,
                                                     names = models::names,
                                                     hold = { hearing -> models.holding(hearing) })
+        commands["lyrics"] = LyricsRunner(parts, store = audio)
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
     }
 

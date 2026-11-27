@@ -7,7 +7,9 @@ lyrics sites by address: LRCLIB's ``/api/search`` and ``/api/get``, Megalobiz's 
 with:
 
 - ``fn``: ``caracole.commands.lyrics._lyrics_as``, as caracole serve queues it (``kw``: ``song``, the song's
-  "Artist - Title"; ``as``, the name typed; ``providers``, the caracole.toml fields of the world's providers);
+  "Artist - Title"; ``as``, the name typed; ``providers``, the caracole.toml fields of the world's providers;
+  ``audio_length``, for a song whose length is its own audio file's, the length music.py reads of it, which the
+  phone's examiner answers);
 - ``out.result``: ``{result: {lines}, progress: []}``, every line the command prints, its last ``last_line``'s, the one
   the Journal reads;
 - the requests in order (2 to 4: LRCLIB's search, its get only where no record of the search fits, Megalobiz's search,
@@ -42,6 +44,9 @@ from test_conformance_lookup_scenarios import AZLYRICS, JSON, NOW, STAMP, Sites,
 
 MADE_BY = "tests/test_conformance_lyrics_search.py"
 VECTOR = VECTORS / "lookup" / "lyrics_search.jsonl"
+# lyrics_search.last_search's reading of what kv holds, the routes' and the pick's: {fn, case, kept: the kv text (or
+# {"open": N}, a text of N "[" then N "]"), now, out: {search, pickable, asked_line, kept, row_of} | null} | err.
+KEPT = VECTORS / "lookup" / "lyrics_kept.jsonl"
 HTML = [["content-type", "text/html; charset=utf-8"]]
 
 SONG = ("Nick Cani", "Vikingos veganos (Video Oficial)")
@@ -99,7 +104,7 @@ def missing_song(w: World, artist: str = SONG[0], title: str = SONG[1], **fields
 
 
 def search(w: World, case: str, display: str, typed: str, answers: Sites, *, cache: dict[str, Any] | None = None,
-           now=NOW) -> dict[str, Any]:
+           now=NOW, kw: dict[str, Any] | None = None) -> dict[str, Any]:
     """``caracole lyrics --song DISPLAY --as TYPED`` at ``now``, recorded."""
     from caracole.commands import lyrics as cmd
 
@@ -111,7 +116,8 @@ def search(w: World, case: str, display: str, typed: str, answers: Sites, *, cac
         return {"result": {"lines": lines}, "progress": []}
 
     return record_lookup(w.cfg, fn="caracole.commands.lyrics._lyrics_as", call=call, answers=answers, now=now,
-                         case=case, kw={"song": display, "as": typed, "providers": w.providers}, cache=cache,
+                         case=case, kw={"song": display, "as": typed, "providers": w.providers, **(kw or {})},
+                         cache=cache,
                          settle=w.settled(now))
 
 
@@ -202,12 +208,138 @@ def records(tmp: Path) -> list[dict[str, Any]]:
     w.overrides(lambda path: (set_lyrics_name(path, NAME, "Nick Cani - Vikingos"),
                               set_lyrics_record(path, NAME, "lrclib:77")))
     made.append(search(w, "back to the song's own name: its as taken out, its record kept", NAME, NAME, listing))
+
+    w = world(tmp, "failing")
+    missing_song(w)
+    made.append(search(w, "a whole site failing: Megalobiz answers 502", display, NAME,
+                       sites([lrc(77)], megalobiz={"status": 502, "headers": HTML, "body": "Bad Gateway"})))
+
+    w = world(tmp, "get-blocked")
+    missing_song(w)
+    made.append(search(w, "LRCLIB's get blocked after its search answered: its rows stay, no good run", display, NAME,
+                       sites([lrc(78, artist="Somebody Else")], got={"status": 429, "headers": JSON, "body": "{}"})))
+
+    w = world(tmp, "one-ask", providers={"lrclib": {"lookup_requests": 1}})
+    missing_song(w)
+    made.append(search(w, "this search's one ask of LRCLIB spent on its search: its get not made", display, NAME,
+                       sites([lrc(78, artist="Somebody Else")])))
+
+    w = world(tmp, "day", providers={"megalobiz": {"per_day": 2}})
+    missing_song(w)
+    w.lookups("megalobiz", 2)
+    made.append(search(w, "Megalobiz's asks of the day spent", display, NAME, sites([lrc(77)])))
+
+    w = world(tmp, "many")
+    missing_song(w)
+    made.append(search(w, "more records than a search keeps: the first 40", display, NAME,
+                       sites([lrc(100 + n, duration=200.0 + n) for n in range(45)])))
+
+    w = world(tmp, "no-title")
+    w.song("Pomme", "Mononoké", duration_ms=None)
+    made.append(search(w, "AZLyrics' page of the typed artist lists no song of the title", "Pomme - Mononoké",
+                       "Pomme - Les cours d'eau", sites(pages={POMME_PAGE: POMME})))
+
+    w = world(tmp, "astral")
+    w.song("𝄞 Band", "𝄞 Song", duration_ms=None)
+    made.append(search(w, "a name of the astral plane", "𝄞 Band - 𝄞 Song", "𝄞 Band - 𝄞 Song 2",
+                       sites([lrc(82, track="𝄞 Song 2", artist="𝄞 Band")],
+                             pages={f"{AZLYRICS}b/band.html": NOT_FOUND})))
+
+    w = world(tmp, "file")
+    song_id = w.song(*SONG, duration_ms=None, lyrics_status="missing")
+    w.conn.execute("UPDATE songs SET audio_path = ? WHERE id = ?", (AUDIO, song_id))
+    made.append(search(w, "the song's own audio file gives the length its rows are asked and scored with", display,
+                       NAME, listing, kw={"audio_length": audio_length_of(AUDIO)}))
     return made
+
+
+AUDIO = "tests/fixtures/audio/tone.m4a"  # relative to the repository's root, where the generator runs
+
+
+def audio_length_of(path: str) -> float:
+    from caracole.music import read_audio
+
+    return read_audio(Path(path)).duration_s
+
+
+def kept_records(searched: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``last_search``, ``kept_search``, ``pickable``, ``asked_line`` and ``row_of`` over kv ``lyrics-search:<id>``
+    texts: the listing case's search, as it is and edited, read at ``NOW`` and nine days on (``KEPT``'s docstring)."""
+    import sqlite3
+
+    from caracole import db, lyrics_search, stamps
+
+    first = next(v for k, v in searched[0]["out"]["kv"].items() if k.startswith(lyrics_search.KV))
+    kept = json.loads(first)
+
+    def edited(**fields: Any) -> str:
+        return json.dumps({**kept, **fields}, ensure_ascii=False)
+
+    def rows(*extra: dict[str, Any]) -> list[dict[str, Any]]:
+        return [*kept["rows"][:1], *extra]
+
+    texts = {
+        "a search within its week": first,
+        "a row whose id isn't of its site's shape, or of another site, dropped as it is read": edited(rows=rows(
+            {**kept["rows"][0], "record": "lrclib:0"}, {**kept["rows"][0], "record": "megalobiz:abc", "site": "megalobiz"},
+            {**kept["rows"][0], "record": "azlyrics:Pomme/x", "site": "azlyrics"},
+            {**kept["rows"][0], "record": "megalobiz:1"}, {**kept["rows"][0], "site": "genius"}, "a row", None)),
+        "a row's values of other types read as none": edited(rows=rows(
+            {**kept["rows"][0], "record": "lrclib:5", "duration": True, "timed": 1, "best": "yes", "artist": 7,
+             "album": None},
+            {**kept["rows"][0], "record": "lrclib:6", "duration": "200"},
+            {**kept["rows"][0], "record": "lrclib:7", "duration": 12})),
+        "a stamp that isn't one": edited(at="soon"),
+        "no stamp": json.dumps({k: v for k, v in kept.items() if k != "at"}),
+        "a name of three parts": edited(**{"as": ["a", "b", "c"]}),
+        "a name of a number": edited(**{"as": ["a", 1]}),
+        "an instrumental count of a text": edited(instrumental="3"),
+        "an instrumental count of a float": edited(instrumental=2.5),
+        "an instrumental count of a bool": edited(instrumental=True),
+        "an instrumental count past a Long": edited(instrumental=10 ** 30),
+        "a state missing a site": edited(state={"lrclib": "rows", "megalobiz": "none"}),
+        "a state of another word": edited(state={**kept["state"], "azlyrics": "maybe"}),
+        "no state at all (kept before each site's was)": json.dumps({k: v for k, v in kept.items() if k != "state"}),
+        "rows of no list": edited(rows={"a": 1}),
+        "a length of a text, its query and words of other types": edited(length="200", lrclib={"track_name": 3},
+                                                                          said={"lrclib": None}),
+        "a record of no object": "[1, 2]",
+        "a text of JSON null": "null",
+        "a text that isn't JSON": "{",
+        "a text nested past what json reads": "[" * 5000 + "]" * 5000,
+    }
+    out = []
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT)")
+    for case, text in texts.items():
+        for at in (NOW, NOW + timedelta(days=9)):
+            conn.execute("DELETE FROM kv")
+            db.kv_set(conn, f"{lyrics_search.KV}1", text)
+            record: dict[str, Any] = {"fn": "caracole.lyrics_search.last_search", "case": case,
+                                      "kept": text if len(text) < 2000 else {"open": 5000}, "now": stamps.stamp(at)}
+            try:
+                found = lyrics_search.last_search(conn, 1, at)
+            except (ValueError, RecursionError) as e:
+                record["err"] = "ValueError" if isinstance(e, ValueError) else "RecursionError"
+                out.append(record)
+                continue
+            record["out"] = None if found is None else {
+                "search": found.as_json(), "pickable": lyrics_search.pickable(found, at),
+                "asked_line": lyrics_search.asked_line(found, at),
+                "kept": lyrics_search.kept_search(conn, 1, at) is not None,
+                "row_of": {r: (lambda row: row.as_json() if row else None)(lyrics_search.row_of(found, r))
+                           for r in ("lrclib:77", "lrclib:5", "lrclib:0", "megalobiz:5001")}}
+            out.append(record)
+    return out
 
 
 @pytest.fixture(scope="module")
 def made(tmp_path_factory) -> list[dict[str, Any]]:
     return records(tmp_path_factory.mktemp("lyrics-search"))
+
+
+def test_the_kept_vector_is_what_last_search_reads(made):
+    check(KEPT, jsonl(kept_records(made), corpus="lookup", made_by=MADE_BY))
 
 
 def test_the_vector_is_what_caracole_lyrics_as_does(made):

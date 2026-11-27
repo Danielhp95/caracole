@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.OverrideWriters
 import io.github.danielhp95.caracole.core.library.SongRow
-import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.lookup.Asked
 import io.github.danielhp95.caracole.core.lookup.CommandContext
@@ -19,9 +18,9 @@ import io.github.danielhp95.caracole.core.lookup.Pace
 import io.github.danielhp95.caracole.core.lyrics.AzLyrics
 import io.github.danielhp95.caracole.core.http.AzLyricsParseError
 import io.github.danielhp95.caracole.core.lyrics.Lrclib
-import io.github.danielhp95.caracole.core.http.LrclibParseError
 import io.github.danielhp95.caracole.core.lyrics.Lyrics
 import io.github.danielhp95.caracole.core.lyrics.Megalobiz
+import io.github.danielhp95.caracole.core.lyrics.internal.PyValues
 import io.github.danielhp95.caracole.core.http.MegalobizParseError
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.py.Py
@@ -35,7 +34,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import java.math.BigInteger
 import java.time.Duration
 import java.time.Instant
@@ -93,8 +91,7 @@ object LyricsSearchCommands {
         mapOf("lrclib" to number, "megalobiz" to number, "azlyrics" to PyRegex.compile("[a-z0-9-]+/[a-z0-9-]+"))
     }
     private val SHOWN = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC)
-    private val GET_ACCEPT = setOf(200, 404)
-    private val PAGE_ACCEPT = setOf(200, 404)
+    private val PAGE_ACCEPT = setOf(200, 404)  // an artist's page AZLyrics hasn't: no artist page
 
     /** lyrics_search.Row: a record a site listed, `record` as `[lyrics]` writes it. */
     data class Row(val record: String, val site: String, val artist: String, val title: String, val album: String,
@@ -110,7 +107,7 @@ object LyricsSearchCommands {
      * rows, each site's words and state, and the instrumental records not listed. */
     data class Search(val at: String, val asked: Pair<String, String>, val length: Double?,
                       val lrclib: List<Pair<String, String>>, val rows: List<Row>, val said: Map<String, String>,
-                      val state: Map<String, String>, val instrumental: Int = 0) {
+                      val state: Map<String, String>, val instrumental: BigInteger = BigInteger.ZERO) {
         val name: String get() = "${asked.first} - ${asked.second}"
 
         fun json(): JsonObject = JsonObject(linkedMapOf(
@@ -175,7 +172,7 @@ object LyricsSearchCommands {
             askAnew(db, song, now, renamed = true)
         }
         val length = audioLength(db, song, fileLength)
-        val query = listOf("track_name" to Lrclib.searchTitle(Normalize.cleanTitle(name.second)), "artist_name" to name.first)
+        val query = Lrclib.searchQuery(name.first, name.second)
         val finds = LinkedHashMap<String, Found>()
         for (site in SITES) {
             if (site == "azlyrics" && AzLyrics.artistUrl(name.first) == null) {
@@ -187,7 +184,7 @@ object LyricsSearchCommands {
         val search = Search(at = Stamps.of(now), asked = name, length = length, lrclib = query, rows = ordered(finds),
                             said = SITES.associateWith { said(finds.getValue(it)) },
                             state = SITES.associateWith { finds.getValue(it).state ?: NONE },
-                            instrumental = finds.values.sumOf { it.instrumental })
+                            instrumental = BigInteger.valueOf(finds.values.sumOf { it.instrumental }.toLong()))
         if (db.one("SELECT 1 FROM songs WHERE id = ? AND key = ?", song.id, song.key) { true } == true) {
             db.kvSetJson("$KV${song.id}", search.json())
         }
@@ -240,10 +237,9 @@ object LyricsSearchCommands {
         return found
     }
 
-    /** The run the command's requests are logged under: InteractiveAsk's, the lookup's at [CommandContext.now]. */
-    internal fun runOf(c: CommandContext): String =
-        (c.asking as? io.github.danielhp95.caracole.core.lookup.InteractiveAsk)?.runId
-            ?.let { if (it.startsWith(Pace.LOOKUP_RUN)) it else Pace.LOOKUP_RUN + it } ?: Pace.lookupRunId(c.now)
+    /** The run the command's requests are logged under: the lookup's at [CommandContext.now] (`lookup_run_id`), as
+     * its runner's asking logs them (LookupJobs.context). */
+    internal fun runOf(c: CommandContext): String = LookupWords.lookupRunOf(c.now)
 
     /** What a site's first ask came to: its rows so far, and LRCLIB's search's records to rank. */
     private class First(val found: Found, val listed: LinkedHashMap<String, JsonObject> = LinkedHashMap(),
@@ -252,10 +248,7 @@ object LyricsSearchCommands {
     /** lyrics_search._lrclib's search: each record with lyrics listed, an instrumental or empty one counted. */
     private fun lrclibSearch(client: Client, name: Pair<String, String>, length: Double?,
                              query: List<Pair<String, String>>): First {
-        val url = "${Lrclib.API}/search"
-        val resp = client.get(url, params = query, accept = setOf(200), maxAge = PICKABLE_FOR)
-        val answered = HttpRules.readOnceMore(client, resp, url, { it is LrclibParseError }, accept = setOf(200),
-                                              params = query) { Lrclib.searchRecords(it) }
+        val answered = Lrclib.searchRecords(client, query, maxAge = PICKABLE_FOR)
         val first = First(Found())
         for (cand in answered) take(first, cand)
         val best = Lrclib.pickCandidate(first.listed.values.toList(), name.first, name.second, length)
@@ -267,7 +260,7 @@ object LyricsSearchCommands {
      * shape, else (no lyrics) counted. */
     private fun take(first: First, cand: JsonElement) {
         if (cand !is JsonObject) return
-        val id = reprOf(cand["id"])
+        val id = PyValues.repr(cand["id"])
         if (id in first.seen) return
         first.seen += id
         if (!Lyrics.fromRecord(cand).hasLyrics) {
@@ -287,14 +280,8 @@ object LyricsSearchCommands {
         val found = first.found
         var got: Asked<*>? = null
         if (found.best == null) {
-            val params = mutableListOf("artist_name" to name.first, "track_name" to Normalize.cleanTitle(name.second))
-            if (length != null) params += "duration" to PyFormat.roundHalfEven(length).toString()
-            val asked = c.asking.ask("lrclib") { client ->
-                val url = "${Lrclib.API}/get"
-                val resp = client.get(url, params = params, accept = GET_ACCEPT, maxAge = PICKABLE_FOR)
-                HttpRules.readOnceMore(client, resp, url, { it is LrclibParseError }, accept = GET_ACCEPT,
-                                       params = params) { Lrclib.getRecord(it) }
-            }
+            val params = Lrclib.getParams(name.first, name.second, album = null, durationS = length)
+            val asked = c.asking.ask("lrclib") { client -> Lrclib.getMatch(client, params, maxAge = PICKABLE_FOR) }
             if (asked is Asked.Done) {
                 asked.value?.let { record ->
                     take(first, record)
@@ -308,7 +295,7 @@ object LyricsSearchCommands {
         for ((record, cand) in first.listed) {
             val lyrics = Lyrics.fromRecord(cand)
             val gotArtist = str(cand["artistName"])
-            val gotTitle = str(cand["trackName"]?.takeIf(::truthy) ?: cand["name"])
+            val gotTitle = str(cand["trackName"]?.takeIf(PyValues::truthy) ?: cand["name"])
             val fit = Lrclib.fits(name.first, name.second, length, gotArtist, gotTitle, lyrics.duration)
             val album = (cand["albumName"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
             found.rows += Row(record, "lrclib", gotArtist, gotTitle, album, lyrics.duration,
@@ -446,9 +433,11 @@ object LyricsSearchCommands {
             val line = if (who in words) PyUnicode.upper(Py.slice(words, 0, 1)) + Py.slice(words, 1, null) else "$who: $words"
             out += Note(site, search.state[site] ?: NONE, if (line.endsWith(".")) line else "$line.")
         }
-        if (search.instrumental != 0) {
+        if (search.instrumental.signum() != 0) {
             val n = search.instrumental
-            out += Note("", "instrumental", "${plural(n, "record")} marked instrumental ${if (n == 1) "isn't" else "aren't"} listed.")
+            val one = n == BigInteger.ONE
+            out += Note("", "instrumental", "$n ${if (one) "record" else "records"} marked instrumental " +
+                "${if (one) "isn't" else "aren't"} listed.")
         }
         return out
     }
@@ -511,66 +500,57 @@ object LyricsSearchCommands {
         return Stamps.micros(now) - whenMade <= PICKABLE_FOR.toMillis() * 1000
     }
 
-    private fun parse(at: String): Long? = try {
-        Stamps.parse(at)
-    } catch (e: ArithmeticException) {
-        null
-    }
+    /** stamps.parse: null for no time; a time out of range raises, as Python's OverflowError does. */
+    private fun parse(at: String): Long? = Stamps.parse(at)
 
     /** lyrics_search.row_of: the row of [search] that names [record]. */
     fun rowOf(search: Search, record: String): Row? = search.rows.firstOrNull { it.record == record }
 
     /**
      * lyrics_search.last_search: the song's last search as kept; past [PICKABLE_FOR] only the name it asked under and
-     * when; null for none, or one that won't read (a record kept before each site's state was among them).
+     * when; null for none, or one that won't read (a record kept before each site's state was among them). A kv text
+     * that isn't JSON is IllegalArgumentException, as `kv_get_json` raises Python's ValueError; one nested past
+     * PyJson.MAX_DEPTH is none here (Python reads it, and it is no record of a search either).
      */
     fun lastSearch(db: Db, songId: Long, now: Instant): Search? {
-        val kept = db.kvGet("$KV$songId")?.let {
-            try {
-                PyJson.loads(it)
-            } catch (e: IllegalArgumentException) {
-                null
-            }
+        val text = db.kvGet("$KV$songId") ?: return null
+        val kept = try {
+            PyJson.loads(text)
+        } catch (e: PyJson.RecursionError) {
+            return null
         } as? JsonObject ?: return null
         val (at, asked) = asked(kept) ?: return null
         if (!inItsWeek(at, now)) return Search(at, asked, null, emptyList(), emptyList(), emptyMap(), emptyMap())
         val state = kept["state"] as? JsonObject ?: return null
-        if (SITES.any { site -> (state[site] as? JsonPrimitive)?.takeIf { it.isString }?.content !in STATES }) return null
+        if (SITES.any { site -> PyValues.string(state[site]) !in STATES }) return null
         val rows = (kept["rows"] as? JsonArray)?.mapNotNull(::row).orEmpty()
         val query = (kept["lrclib"] as? JsonObject)?.entries
-            ?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it.isString }?.let { k to it.content } }.orEmpty()
+            ?.mapNotNull { (k, v) -> PyValues.string(v)?.let { k to it } }.orEmpty()
         val said = (kept["said"] as? JsonObject)?.entries
-            ?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeIf { it.isString }?.let { k to it.content } }?.toMap().orEmpty()
-        val count = kept["instrumental"].let { v ->
-            if (v is JsonPrimitive && !v.isString && v.booleanOrNull == null && v !is JsonNull && isInt(v.content)) {
-                v.content.toBigInteger().toInt()
-            } else {
-                0
-            }
-        }
-        return Search(at, asked, number(kept["length"]), query, rows, said,
-                      SITES.associateWith { (state.getValue(it) as JsonPrimitive).content }, count)
+            ?.mapNotNull { (k, v) -> PyValues.string(v)?.let { k to it } }?.toMap().orEmpty()
+        return Search(at, asked, PyValues.number(kept["length"]), query, rows, said,
+                      SITES.associateWith { PyValues.string(state[it])!! }, PyValues.bigInt(kept["instrumental"]) ?: BigInteger.ZERO)
     }
 
     private fun asked(kept: JsonObject): Pair<String, Pair<String, String>>? {
-        val at = (kept["at"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+        val at = PyValues.string(kept["at"]) ?: return null
         if (parse(at) == null) return null
         val parts = kept["as"] as? JsonArray ?: return null
-        if (parts.size != 2 || parts.any { !(it is JsonPrimitive && it.isString) }) return null
-        return at to ((parts[0] as JsonPrimitive).content to (parts[1] as JsonPrimitive).content)
+        if (parts.size != 2 || parts.any { PyValues.string(it) == null }) return null
+        return at to (PyValues.string(parts[0])!! to PyValues.string(parts[1])!!)
     }
 
     /** lyrics_search._row: a kept row, read as strictly as a site's answer. */
     private fun row(value: JsonElement): Row? {
         val o = value as? JsonObject ?: return null
-        val site = (o["site"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
-        val record = (o["record"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+        val site = PyValues.string(o["site"]) ?: return null
+        val record = PyValues.string(o["record"]) ?: return null
         if (site !in SITES || !record.startsWith("$site:")) return null
         if (PyRe.fullmatch(RECORD_IDS.getValue(site), record.removePrefix("$site:")) == null) return null
-        fun text(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
-        fun yes(k: String) = (o[k] as? JsonPrimitive)?.booleanOrNull == true && !(o[k] as JsonPrimitive).isString
-        return Row(record, site, text("artist"), text("title"), text("album"), number(o["duration"]), yes("timed"),
-                   yes("best"), yes("fits"))
+        fun text(k: String) = PyValues.string(o[k]) ?: ""
+        fun yes(k: String) = o[k] == JsonPrimitive(true)
+        return Row(record, site, text("artist"), text("title"), text("album"), PyValues.number(o["duration"]),
+                   yes("timed"), yes("best"), yes("fits"))
     }
 
     // --- Python's values ------------------------------------------------------------------------------------------
@@ -578,52 +558,17 @@ object LyricsSearchCommands {
     /** lyrics_search._record: `site:id` for an id of the shape `[lyrics]` takes: an int (never a bool), AZLyrics' a
      * text as written. */
     private fun record(site: String, id: JsonElement?): String? {
-        if (id !is JsonPrimitive || id is JsonNull) return null
-        val text = when {
-            id.isString -> if (site == "azlyrics") id.content else return null
-            id.booleanOrNull != null -> return null
-            isInt(id.content) -> id.content.toBigInteger().toString()
-            else -> return null
-        }
+        val text = (if (site == "azlyrics") PyValues.string(id) else null) ?: PyValues.bigInt(id)?.toString() ?: return null
         return if (PyRe.fullmatch(RECORD_IDS.getValue(site), text) != null) "$site:$text" else null
     }
 
     private fun record(site: String, id: BigInteger): String? = record(site, JsonPrimitive(id))
 
-    private fun isInt(literal: String): Boolean =
-        literal.isNotEmpty() && literal.removePrefix("-").let { it.isNotEmpty() && it.all { c -> c in '0'..'9' } }
-
-    /** A float of a JSON number (never a bool), else null: `float(x) if isinstance(x, (int, float))`. */
-    private fun number(v: JsonElement?): Double? {
-        if (v !is JsonPrimitive || v is JsonNull || v.isString || v.booleanOrNull != null) return null
-        return if (isInt(v.content)) v.content.toBigInteger().toDouble() else v.content.toDoubleOrNull()
-    }
-
-    /** `repr(cand.get("id"))`, as the search keeps a record once: a missing id and null alike. */
-    private fun reprOf(v: JsonElement?): String = when {
-        v == null || v is JsonNull -> "None"
-        v is JsonPrimitive && !v.isString && !isInt(v.content) && v.booleanOrNull == null ->
-            PyJson.floatText(v.content.toDouble())
-        else -> v.toString()
-    }
-
-    /** Python's truth of a JSON value. */
-    private fun truthy(v: JsonElement?): Boolean = when {
-        v == null || v is JsonNull -> false
-        v is JsonPrimitive && v.isString -> v.content.isNotEmpty()
-        v is JsonPrimitive -> v.content != "false" && v.content.toDoubleOrNull() != 0.0
-        v is JsonArray -> v.isNotEmpty()
-        v is JsonObject -> v.isNotEmpty()
-        else -> true
-    }
-
-    /** `str(v or "")` of a record's name: a text as it is, a falsy value "", a number as Python writes it. */
+    /** `str(v or "")` of a record's name: a text as it is, a falsy value "", anything else as Python's str writes it
+     * (its repr). */
     private fun str(v: JsonElement?): String = when {
-        !truthy(v) -> ""
-        v is JsonPrimitive && v.isString -> v.content
-        v is JsonPrimitive && v.content == "true" -> "True"
-        v is JsonPrimitive && !isInt(v.content) -> PyJson.floatText(v.content.toDouble())
-        else -> v.toString()
+        !PyValues.truthy(v) -> ""
+        else -> PyValues.string(v) ?: PyValues.repr(v)
     }
 
     /** stamps.shown: "2026-11-03 12:30 UTC"; "?" for none. */
@@ -645,6 +590,4 @@ object LyricsSearchCommands {
         return if (safe) s else "'" + s.replace("'", "'\"'\"'") + "'"
     }
 
-    /** The songs SongNames reads a typed name against. */
-    fun songs(db: Db): List<SongRow> = Songs.list(db)
 }

@@ -45,7 +45,9 @@ object LyricsSearchReplay : AreaReplay {
             val song = Songs.byKey(db, OverrideUrls.overrideKey(display)) ?: throw AssertionError("no song $display")
             val ask = InteractiveAsk(w.clients(), db, Pace.lookupRunId(w.now), w.now, Alerts.NONE, w.config)
             try {
-                val found = LyricsSearchCommands.search(context(db, ask, w.now, lines), song, name, w.config)
+                // The phone's examiner of the song's own audio file: the length music.py read of it, the record's.
+                val length = w.kw["audio_length"]?.jsonPrimitive?.content?.toDouble()
+                val found = LyricsSearchCommands.search(context(db, ask, w.now, lines), song, name, w.config) { length }
                 lines += LyricsSearchCommands.lines(song, name, found)
             } finally {
                 ask.close()

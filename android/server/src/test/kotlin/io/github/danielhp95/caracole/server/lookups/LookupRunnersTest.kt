@@ -337,6 +337,10 @@ class LookupRunnersTest {
         for ((args, said) in listOf(
             listOf("lyrics", "--as=A - B") to Pair(2, "error: --song goes with one of --as, --pick, --record and " +
                 "--clear: caracole lyrics --song \"Artist - Title\" --as \"Artist - Title\"."),
+            listOf("lyrics", "--song=Radiohead - Creep", "--as=A - B", "--pick=1") to
+                Pair(2, "error: --as and --pick don't go together: give one."),
+            listOf("lyrics", "--song=Radiohead - Creep", "--as=A - B", "--progress") to
+                Pair(2, "error: --progress goes with --pick or --record"),
             listOf("lyrics", "--song=Radiohead - Creep", "--as=Creep") to
                 Pair(2, "error: --as: expected \"Artist - Title\", got 'Creep'"),
             steps.single().args to Pair(1, "error: No song \"Radiohead - Creep\" in the library. Add it with " +
@@ -349,6 +353,39 @@ class LookupRunnersTest {
                 assertEquals(said.second, job.steps.single().output.last())
             }
         }
+    }
+
+    @Test fun aLyricsSearchAsksWithTheLengthTheSongsOwnAudioFileGives() = TestDb.fresh(tmp.newFolder()).use { database ->
+        val scope = CoroutineScope(SupervisorJob())
+        val sent = ArrayList<String>()
+        val refusing = object : io.github.danielhp95.caracole.core.http.Transport {
+            override fun send(request: io.github.danielhp95.caracole.core.http.HttpRequest):
+                io.github.danielhp95.caracole.core.http.HttpAnswer {
+                sent += request.url
+                throw io.github.danielhp95.caracole.core.http.TransportError("refused", "no site from a test")
+            }
+        }
+        val state = File(tmp.root, "state-length").apply { mkdirs() }
+        val file = File(state, "audio/1-0123456789abcdef.mp3").apply { parentFile.mkdirs(); writeBytes("ID3".toByteArray() + ByteArray(64)) }
+        val store = LibraryStore(File(tmp.root, "library-length"))
+        val parts = PhoneParts(database, store, state, { PhoneConfig.DEFAULTS }, JobQueue(scope), MirrorPageData(null),
+                               { Clients(PhoneConfig.DEFAULTS, File(state, "cache"), { refusing }, pacing) },
+                               SongPages.NONE, SongbookPages.NONE, Alerts.NONE, pacing, searchesLacuerda = false)
+        database.writeBlocking { db ->
+            store.add(db, "Nick Cani", "Vikingos", null, null, now = "2026-11-01T00:00:00Z")
+            db.execute("UPDATE songs SET audio_path = ?", file.path)
+        }
+        val audio = io.github.danielhp95.caracole.core.library.AudioStore(state, { _, format ->
+            io.github.danielhp95.caracole.core.library.AudioStore.Audio(format, 123.4, emptyMap())
+        })
+        val heard = Heard()
+        runBlocking {
+            LyricsRunner(parts, store = audio).run(JobCommands.lyricsSearchSteps("Nick Cani - Vikingos", "Nick Cani - Vikingos")
+                                                       .single().args, heard)
+        }
+        scope.cancel()
+        assertTrue(sent.any { it.startsWith("https://api.megalobiz.com/") && "duration=123" in it }, "$sent")
+        assertTrue(heard.said.first().contains("(its audio is 2:03)"), "${heard.said}")
     }
 
     @Test fun aLaCuerdaSearchCountsInTheHoursSearches() = TestDb.fresh(tmp.newFolder()).use { database ->

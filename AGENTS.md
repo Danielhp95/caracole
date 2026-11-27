@@ -3400,7 +3400,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   kv `lyrics-search:<id>` as Python writes it; run by server/lookups' `LyricsRunner` (`lyrics --song --as`, a lookup:
   `JobCommands.isLookup`, `lyricsSearchSteps`). tests/test_conformance_lyrics_search.py writes
   vectors/lookup/lyrics_search.jsonl, `LyricsSearchReplay` over LookupScenariosReplay's world. A block alerts once, as
-  every lookup's on the phone; the audio's length is the line's or its YouTube video's (no tag reader in :core).
+  every lookup's on the phone; the audio's length is the line's, its YouTube video's, else its own file's by the
+  phone's examiner (`AudioStore.formatAndLength`, LyricsRunner's hook). Its read-back (`lastSearch`, `keptSearch`,
+  `rowOf`, `askedLine`) is held by vectors/lookup/lyrics_kept.jsonl.
 - harptabs.com (harptabs): core.sites' `HarpTabsFetch` and `HarpTabsPages`, harptabs.py, harptabs_fetch.py for a
   lookup's song and harptabs_index.py's `read_artist`, over the index the computer's sync brings (the phone reads no
   sitemap and makes no artist pass):
