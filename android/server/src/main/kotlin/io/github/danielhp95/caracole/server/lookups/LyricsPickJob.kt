@@ -263,7 +263,8 @@ internal class LyricsPickJob(
         return "done" to AudioRunner.holds(Versions.get(db, auto.versionId)!!.raw)
     }
 
-    /** lyrics_pick's words for an auto sheet another caracole made: its `heard` unread, or its words re-lay it. */
+    /** lyrics_pick's words for an auto sheet another caracole made and no re-lay due: its `heard` unread, or its words
+     * as they were (ELSEWHERE_SAME). */
     private fun elsewhere(db: Db): String? {
         val s = again(db)
         val auto = Kept.keptFiles(db, s.id).firstOrNull { it.name == Versions.SHEET_FILE_NAMES[1] } ?: return null
@@ -275,7 +276,7 @@ internal class LyricsPickJob(
         } catch (e: Exception) {
             false
         }
-        return if (reads) "its auto sheet is $MADE_ELSEWHERE: its words re-lay it, no model" else LyricsPickCommands.ELSEWHERE_UNREAD
+        return if (reads) "its auto sheet is $MADE_ELSEWHERE: $ELSEWHERE_SAME" else LyricsPickCommands.ELSEWHERE_UNREAD
     }
 
     /** lyrics_pick._Pick._why_no_chords. */
@@ -302,6 +303,7 @@ internal class LyricsPickJob(
     private companion object {
         const val MAKING = "its lyrics were picked"
         const val MADE_ELSEWHERE = "made by another caracole from your audio there"
+        const val ELSEWHERE_SAME = "its words are as they were, so nothing was laid out again, and no model runs on it"
 
     }
 }

@@ -301,7 +301,7 @@ def records(tmp: Path) -> list[dict[str, Any]]:
     raw = json.loads(w.conn.execute("SELECT raw FROM versions WHERE provider = 'auto'").fetchone()[0])
     w.conn.execute("UPDATE versions SET raw = ? WHERE provider = 'auto'",
                    (json.dumps({**raw, "made_by": "another-caracole"}, ensure_ascii=False),))
-    made.append(pick(w, "the same record again over a sheet another caracole made: its words re-lay it, no model", NAME,
+    made.append(pick(w, "the same record again over a sheet another caracole made: nothing laid out again, no model", NAME,
                      "lrclib:77", {}, cache))
 
     w = World(tmp, "site-sheet")

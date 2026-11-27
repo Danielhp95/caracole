@@ -854,7 +854,8 @@ def test_a_pick_re_lays_a_sheet_another_caracole_made_and_never_runs_a_model_on_
     # The same record again: nothing new to lay out, and no model for another caracole's sheet
     result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
     assert result.ok, result
-    assert heard.ends()["chords"] == ("skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
+    assert heard.ends()["chords"] == ("skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words are as they were, so "
+                                                 "nothing was laid out again, and no model runs on it")
     assert auto_raw(conn, song)["made_by"] == "0f1e2d3c4b5a6978"
 
 
