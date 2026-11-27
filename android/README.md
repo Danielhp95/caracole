@@ -800,21 +800,37 @@ makes, and the runtime's own AAR, whose manifest declares the provider.
 The phone decodes a song's audio as the computer does (autochords/audio.py `load_mono`, at the file's own rate):
 `:ml`'s `Decoder.decode(file, into)` writes interleaved float32 PCM to a file, a buffer at a time. A WAV or an AIFF is
 read by `:autochords`' `Pcm`, with no codec, as libsndfile reads it; anything else goes through MediaExtractor and
-Android's own software decoders (`c2.android.*`, never a vendor's), the encoder's delay and padding trimmed as the
-container states them. `Mixdown.mono` means the channels as numpy does. `DecoderTest` holds it to the computer's
-decode of eight files (`tests/fixtures/autochords/encode.sh`: MP3 with LAME's header and without one, AAC, Vorbis,
-Opus, FLAC, WAV, AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
+Android's own software decoders (`c2.android.*`, never a vendor's). `Mixdown.mono` means the channels as numpy does.
+`DecoderTest` holds it to the computer's decode of eleven files (`tests/fixtures/autochords/encode.sh`: MP3 from
+FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; Vorbis; Opus; FLAC of 16 and
+24 bits; WAV; AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
 
     android/scripts/device-test.sh --ml
 
-On the emulator (2026-11-26) the lossless three come out sample for sample, the lossy five at offset 0 and 72 to 83
-dB of SNR (the gate is 60). Three things it does that a plain MediaCodec loop doesn't: it takes the delay and padding
-out of the codec's format (this emulator's codecs trim them themselves, so they'd go twice); it feeds Android's MP3
-decoder a frame of silence before a file with no LAME header, since that decoder always drops the first 529 samples
-it makes, where FFmpeg keeps them; and it turns the AAC decoder's loudness normalization and DRC off. An AAC that uses
-perceptual noise substitution can't be matched by any decoder (each fills those bands with noise of its own): the
-fixture is encoded without it. What a real phone's decoders do is unmeasured here: they are the same `c2.android.*`
-sources, but the platform's handling of the format's delay may differ by version, which is why it is trimmed here.
+On the emulator (2026-11-26) the lossless files come out sample for sample, but the 24-bit FLAC, which Android's
+extractor gives as 16-bit (77 dB), the lossy ones at offset 0 and 72 to 83 dB of SNR (the gate is 60, whole and each
+second), every file's frames the computer's to the frame, and the length it states (`durationS`, the one an auto sheet
+is laid over) the computer's `read_audio`'s to the bit. What a plain MediaCodec loop gets wrong, and it doesn't:
+
+- it trims as the computer does, never by the codec: where the format names the encoder's delay and padding, the
+  framework's codecs may trim them themselves (this emulator's do, so they'd go twice), so it takes both keys out of
+  the codec's format and trims itself: an MP4 to its edit list exactly (its last frame's padding is past 0.05 s at
+  11.025 kHz), an Ogg to its last page's granule position (Opus's last packet runs 648 samples past it);
+- it gives Android's MP3 decoder a frame of silence before a file with no LAME header, since that decoder always drops
+  the first 529 samples it makes, where FFmpeg keeps them;
+- it reads the length as mutagen does (an MP4's `mdhd`, a LAME tag's delay and padding taken off only where its
+  version string is LAME's), never the extractor's;
+- it reads the decoder's output in the encoding it names, and refuses one it doesn't read;
+- a decoder that stops, or changes its rate or channels partway, fails the decode in words.
+
+Not covered by these files, and so not shown to match: an MPEG-1 MP3 at 44.1 kHz (the fixtures are MPEG-2, to keep
+the corpus small), Ogg FLAC, HE-AAC (whose `mdhd` timescale isn't its output rate: it is trimmed by the format's
+stated delay alone), an AAC with perceptual noise substitution (each decoder fills those bands with noise of its own,
+so no two agree; the fixtures are encoded without it), an AAC with loudness metadata (its normalization is asked off,
+untested), a 24-bit FLAC to the bit (Android gives 16), an MP4 of several edits, a VBRI header mutagen refuses, an Ogg
+stream that begins past granule 0, and any file of several audio tracks (the first is taken, where FFmpeg takes its
+"best"). What only another Android image or a real phone shows: what MP3Extractor reports as `encoder-delay` there,
+and whether taking the keys out of the format stops the platform's own trim on every version from the app's minSdk.
 
 ## Chords from audio: the resampler
 

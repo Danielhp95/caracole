@@ -181,6 +181,10 @@ def lengths_disagree(ref: Reference) -> str | None:
         lengths["its duration"] = ref.duration
     if max(lengths.values()) - min(lengths.values()) <= AGREE_WITHIN:
         return None
+    if len(lengths) == 2:  # two alone: neither is the odd one out
+        (a, x), (b, y) = lengths.items()
+        return f"{a}, {x:.3f} s, and {b}, {y:.3f} s, disagree (more than {AGREE_WITHIN} s); it has no duration to tell " \
+               "which is right"
     values = sorted(lengths.values())
     median = values[len(values) // 2]
     odd = max(lengths, key=lambda k: abs(lengths[k] - median))

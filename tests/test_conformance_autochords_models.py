@@ -46,8 +46,9 @@ row-major; every number in a record a float32's value or an int, written as JSON
   (``libsndfile``, or ``ffmpeg`` for an M4A and for an MP3 libsndfile reads only in part), its decode as
   autochords/audio.py ``load_mono`` gives it at the file's own rate (its frames, the SHA-256 of its float32 samples,
   and, of a lossy file, those samples as 16-bit, ``pcm16``; of a lossless one, the SHA-256 of soundfile's float32
-  channels interleaved, ``interleaved_sha256``, which the phone's must equal), and its length by music.py
-  ``read_audio`` (its frames counted for an MP3 that names none). Needs no model and no CPU's kernels.
+  channels interleaved, ``interleaved_sha256``, which the phone's must equal, and soundfile's ``subtype``, a FLAC
+  deeper than 16 bits its ``pcm16`` too), and its length by music.py ``read_audio`` (its frames counted for an MP3
+  that names none). Needs no model and no CPU's kernels.
 - ``data/caracole/autochords/btc-graph.onnx``: export.py's BTC graph, the APK's.
 - ``data/caracole/autochords/frontend.json``: what the phone's front ends apply (``frontend_json``): librosa's CQT as it
   ran over a chunk, step by step, its sparse bases and lengths, and beat_this's mel window, norm and filterbank.
@@ -163,8 +164,12 @@ GATES = {
 # carries and AutochordsReplays reads back: the same frames, and each frame's cosine with the stored one at a median of
 # ``cosine_median_min`` and a least of ``cosine_min``, over the frames that aren't silent. A frame is silent when every
 # stored value lies within ``silent_within`` of its feature's floor (``floors``, which _records adds: the log-CQT's
-# log(btc.LOG_FLOOR) as float32 makes it, the log-mel's log1p(0)); there the phone's frame must be silent too.
-FRONTEND_GATES = {"frames": "equal", "cosine_median_min": 0.9999, "cosine_min": 0.999, "silent_within": 1e-3}
+# log(btc.LOG_FLOOR) as float32 makes it, the log-mel's log1p(0)); there the phone's frame must be silent too. Beside
+# it a tripwire of ours, not the design's: no value of a frame that isn't silent further than ``max_abs`` from the
+# stored one (a √2 slip over one octave of 24 bins moves 1 - cosine by about 1e-4 alone; the port's are 4.5e-4 and
+# 3.8e-3 at most, 2026-11-26).
+FRONTEND_GATES = {"frames": "equal", "cosine_median_min": 0.9999, "cosine_min": 0.999, "silent_within": 1e-3,
+                  "max_abs": 1e-2}
 # frontend.jsonl's excerpts: long.wav's samples from its second chunk on, this many, each btc.py's whole audio.
 CQT_EXCERPTS = (2048, 2049, 4095)
 
@@ -648,17 +653,19 @@ def test_soxr_vectors():
 
 
 # The decode gate's files (tests/fixtures/autochords/encode.sh), each the format audio_store.py ``sniff`` names it.
-DECODE_FILES = (("decode.mp3", "MP3"), ("decode-headerless.mp3", "MP3"), ("decode.m4a", "M4A"),
-                ("decode.ogg", "Ogg"), ("decode-opus.ogg", "Ogg"), ("decode.flac", "FLAC"), ("decode.wav", "WAV"),
-                ("decode.aiff", "AIFF"))
-# The design's B1 decode gate: no sample offset (by cross-correlation within ``offset_search`` samples either way),
-# an SNR of ``snr_db_min`` or more against the computer's decode at the file's rate, and the length the phone states
-# within ``length_within`` s of music.py read_audio's (its frames counted for an MP3 that names no length). Its
-# decoded samples' count is held within ``decoded_within`` s of the computer's apart: read_audio's length is the
-# container's, a LAME MP3's or an M4A's with the encoder's delay and padding that the decoders trim (0.06 s and 0.05 s
-# here), so the computer's own decode is no nearer to it than that. The lossless forms are held closer: sample for
-# sample (``exact``).
-DECODE_GATES = {"offset": 0, "offset_search": 2048, "snr_db_min": 60.0, "length_within": 0.05, "decoded_within": 0.05}
+DECODE_FILES = (("decode.mp3", "MP3"), ("decode-lame.mp3", "MP3"), ("decode-headerless.mp3", "MP3"),
+                ("decode.m4a", "M4A"), ("decode-11k.m4a", "M4A"), ("decode.ogg", "Ogg"), ("decode-opus.ogg", "Ogg"),
+                ("decode.flac", "FLAC"), ("decode-24.flac", "FLAC"), ("decode.wav", "WAV"), ("decode.aiff", "AIFF"))
+# The design's B1 decode gate: no sample offset (by cross-correlation within ``offset_search`` samples either way,
+# over ``offset_window`` samples), an SNR of ``snr_db_min`` or more against the computer's decode at the file's rate,
+# and of ``snr_second_db_min`` over each whole second of it. The length the phone states held to music.py
+# read_audio's, the computer's rule for each container (an MP4's mdhd, an MP3's Xing frames less a LAME tag's delay
+# and padding, an MP3 that names none its frames counted, the rest their samples over the rate), within
+# ``length_within_samples`` samples at the file's rate; its decoded samples' count the computer's within
+# ``decoded_within_samples``. The lossless forms are held closer: sample for sample (``exact``), but a lossless file
+# deeper than 16 bits, whose 16-bit decode the platform may give (a FLAC's ``pcm16`` kept for it too).
+DECODE_GATES = {"offset": 0, "offset_search": 2048, "offset_window": 22050, "snr_db_min": 60.0,
+                "snr_second_db_min": 60.0, "length_within_samples": 2, "decoded_within_samples": 0}
 _LOSSLESS = ("FLAC", "WAV", "AIFF")
 
 
@@ -723,13 +730,19 @@ def decode_records() -> list[dict]:
         record = {"kind": "file", "file": fixture_ref(path), "format": form, "rate": rate, "channels": channels,
                   "reader": read[-1] if read else "libsndfile", "frames": len(y),
                   "duration": read_audio(path).duration_s, "mono_sha256": _sha256(y)}
+        # Clipped to int16's range: the headerless MP3's burst of noise decodes past full scale in FFmpeg's floats,
+        # and a 16-bit decoder clips it there too.
+        pcm16 = _deltas(np.clip(np.round(y * 32768.0), -32768, 32767).astype(np.int16))
         if form in _LOSSLESS:
             samples, _ = soundfile.read(path, dtype="float32", always_2d=True)
             record["exact"] = True
             record["interleaved_sha256"] = _sha256(samples)
+            record["subtype"] = soundfile.info(path).subtype
+            if form == "FLAC" and record["subtype"] not in ("PCM_16", "PCM_U8", "PCM_S8"):
+                record["pcm16"] = pcm16  # a codec's: the platform may give it as 16-bit
         else:
             record["exact"] = False
-            record["pcm16"] = _deltas(np.clip(np.round(y * 32768.0), -32768, 32767).astype(np.int16))
+            record["pcm16"] = pcm16
         records.append(record)
     return records
 

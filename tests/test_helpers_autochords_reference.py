@@ -51,6 +51,12 @@ def test_a_reference_whose_lengths_disagree_says_which(lengths, said):
     assert found is None if said is None else said in found
 
 
+def test_two_lengths_that_disagree_with_no_duration_name_neither_as_the_odd_one_out():
+    said = lengths_disagree(_ref(70.0, 240.02, None))
+    assert said == ("its decoded samples, 70.000 s, and its mel's frames, 240.020 s, disagree (more than 0.1 s); "
+                    "it has no duration to tell which is right")
+
+
 def test_a_reference_whose_lengths_disagree_is_never_written(tmp_path, monkeypatch, capsys):
     import helpers.autochords_reference as module
 

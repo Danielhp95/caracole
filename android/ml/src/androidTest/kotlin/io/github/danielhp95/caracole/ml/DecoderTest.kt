@@ -26,12 +26,14 @@ import org.junit.runner.RunWith
  * gate's files (tests/conformance/vectors/autochords/decode.jsonl, its files tests/fixtures/autochords/decode*.*, this
  * test APK's assets), every threshold read from the records' meta (`gates`), none typed here:
  *
- * - a lossless file (FLAC, WAV, AIFF): its channels, rate and frames the computer's, its mono ([Mixdown]) the
- *   computer's sample for sample (by SHA-256), a FLAC's channels too;
+ * - a lossless file (FLAC, WAV, AIFF): its channels and rate the computer's, its mono ([Mixdown]) the computer's
+ *   sample for sample (by SHA-256), a FLAC's channels too; a FLAC deeper than 16 bits that the platform gives as
+ *   16-bit is held as a lossy one, and one it gives in an encoding caracole refuses must be refused in words;
  * - a lossy one: its rate the computer's, no sample offset (the cross-correlation's peak at lag 0, within
- *   `offset_search`), an SNR of `snr_db_min` or more against the computer's 16-bit decode over the samples both
- *   decoded, its decoded length within `decoded_within` of the computer's;
- * - every one: the length it states ([Decoded.durationS]) within `length_within` of music.py read_audio's.
+ *   `offset_search`, over `offset_window` samples), an SNR of `snr_db_min` or more against the computer's 16-bit
+ *   decode over the samples both decoded, and of `snr_second_db_min` over each whole second;
+ * - every one: its frames within `decoded_within_samples` of the computer's, and the length it states
+ *   ([Decoded.durationS]) within `length_within_samples` samples of music.py read_audio's.
  *
  * It says, a file a line on the instrumentation's stream, which decoder ran, what it trimmed, and what it measured:
  * the offset, the SNR (and each second's), the lengths, the time, and the process's peak RSS while it decoded.
@@ -61,6 +63,7 @@ class DecoderTest {
     @Test fun theStreamedMixdownIsTheArraysAndFormsAreCovered() {
         val forms = files.map { it.getString("format") }.toSet()
         assertEquals(setOf("MP3", "M4A", "Ogg", "FLAC", "WAV", "AIFF"), forms)
+        assertEquals(11, files.size)
         val wav = files.first { it.getString("format") == "WAV" }
         val source = asset(wav.getJSONObject("file").getString("fixture").substringAfterLast('/'))
         val pcm = File(work, "wav.f32")
@@ -77,7 +80,18 @@ class DecoderTest {
         val before = status("VmRSS")
         val reset = runCatching { File("/proc/self/clear_refs").writeText("5") }.isSuccess
         val began = System.nanoTime()
-        val decoded = Decoder.decode(source, pcm)
+        val decoded = try {
+            Decoder.decode(source, pcm)
+        } catch (e: UndecodableAudio) {
+            // A lossless file deeper than 16 bits whose decoder's encoding caracole refuses: refused in words, and
+            // its partial output gone.
+            if (deep(record) && e.message.orEmpty().contains("encoding caracole doesn't read")) {
+                assertTrue("its partial output deleted", !pcm.exists())
+                report("$name ${record.getString("format")}: refused, ${e.message}")
+                return
+            }
+            throw e
+        }
         val took = (System.nanoTime() - began) / 1e6
         val peak = if (reset) status("VmHWM") else null
         val samples = floats(pcm)
@@ -89,45 +103,49 @@ class DecoderTest {
         val duration = record.getDouble("duration")
         val stated = decoded.durationS
         assertNotNull("a stated length", stated)
-        val lengthOff = abs(stated!! - duration)
-        val decodedOff = abs(decoded.frames.toDouble() / decoded.rate - record.getLong("frames").toDouble() / rate)
+        val lengthOff = abs(stated!! - duration) * rate
+        val framesOff = abs(decoded.frames - record.getLong("frames"))
         val line = StringBuilder("$name ${record.getString("format")}: ${decoded.codec ?: "no codec (Pcm)"}, " +
-            "${decoded.encoding}, delay ${decoded.delay}, padding ${decoded.padding}, " +
+            "${decoded.encoding}, trimmed ${decoded.delay} first, ${decoded.padding} last, " +
             "${decoded.channels} ch, ${decoded.frames} frames (the computer's ${record.getLong("frames")}), " +
-            "stated ${fixed(stated, 4)} s against read_audio's ${fixed(duration, 4)}, " +
+            "stated ${fixed(stated, 6)} s against read_audio's ${fixed(duration, 6)}, " +
             "decoded in ${fixed(took, 0)} ms, peak RSS " +
             (if (peak != null && before != null) "${peak / 1024} MB (${(peak - before) / 1024} MB over the process's " +
                 "${before / 1024} MB before)" else "unread"))
-        if (record.getBoolean("exact")) {
-            line.append(if (sha256(mono) == record.getString("mono_sha256")) ", sample for sample" else ", NOT exact")
+        val exact = record.getBoolean("exact") && sha256(mono) == record.getString("mono_sha256")
+        if (record.getBoolean("exact") && (exact || !deep(record) || decoded.encoding != PcmEncoding.PCM_16.words)) {
+            line.append(if (exact) ", sample for sample" else ", NOT exact")
             report(line.toString())
             assertEquals("channels", record.getInt("channels"), decoded.channels)
-            assertEquals("frames", record.getLong("frames"), decoded.frames)
             if (record.getString("format") == "FLAC") {
                 assertEquals("its channels", record.getString("interleaved_sha256"), sha256(samples))
             }
             assertEquals("its mono", record.getString("mono_sha256"), sha256(mono))
         } else {
+            // A lossy file, or a deep lossless one the platform gives as 16-bit: the 16-bit gate.
             val want = pcm16(record.getJSONObject("pcm16"))
-            val offset = offset(want, mono, gates.getInt("offset_search"))
+            val offset = offset(want, mono, gates.getInt("offset_search"), gates.getInt("offset_window"))
             val snr = snr(want, mono)
             line.append(", offset $offset, SNR ${fixed(snr, 1)} dB")
-            val second = rate
-            line.append(" (each second's: " + (0 until minOf(want.size, mono.size) / second).joinToString(" ") {
-                fixed(snr(want.copyOfRange(it * second, (it + 1) * second),
-                    mono.copyOfRange(it * second, (it + 1) * second)), 1)
-            } + ")")
+            val seconds = (0 until minOf(want.size, mono.size) / rate).map {
+                snr(want.copyOfRange(it * rate, (it + 1) * rate), mono.copyOfRange(it * rate, (it + 1) * rate))
+            }
+            line.append(" (each second's: " + seconds.joinToString(" ") { fixed(it, 1) } + ")")
             report(line.toString())
             assertEquals("the offset", gates.getInt("offset"), offset)
             assertTrue("SNR $snr dB", snr >= gates.getDouble("snr_db_min"))
-            assertTrue("decoded ${decodedOff}s off the computer's", decodedOff <= gates.getDouble("decoded_within"))
+            assertTrue("each second's SNR $seconds", seconds.all { it >= gates.getDouble("snr_second_db_min") })
         }
-        assertTrue("its stated length ${lengthOff}s off", lengthOff <= gates.getDouble("length_within"))
+        assertTrue("decoded $framesOff frames off the computer's", framesOff <= gates.getLong("decoded_within_samples"))
+        assertTrue("its stated length $lengthOff samples off", lengthOff <= gates.getDouble("length_within_samples"))
     }
 
-    /** The lag in [-search, search] at which [got] correlates best with [want], over [WINDOW] samples they share. */
-    private fun offset(want: FloatArray, got: FloatArray, search: Int): Int {
-        val n = minOf(minOf(want.size, got.size) - 2 * search, WINDOW)
+    /** A lossless file deeper than 16 bits: the computer's 16-bit decode kept beside its digest. */
+    private fun deep(record: JSONObject) = record.getBoolean("exact") && record.has("pcm16")
+
+    /** The lag in [-search, search] at which [got] correlates best with [want], over [window] samples they share. */
+    private fun offset(want: FloatArray, got: FloatArray, search: Int, window: Int): Int {
+        val n = minOf(minOf(want.size, got.size) - 2 * search, window)
         var best = 0
         var bestScore = Double.NEGATIVE_INFINITY
         for (lag in -search..search) {
@@ -165,9 +183,6 @@ class DecoderTest {
     companion object {
         /** A status code no runner uses (AndroidJUnitRunner's are 0 to 2 and negative ones): a line, no test's end. */
         const val STATUS = 2026
-
-        /** The samples the cross-correlation runs over: a second at 44.1 kHz, its first chords and beats. */
-        const val WINDOW = 44_100
 
         private val records by lazy {
             InstrumentationRegistry.getInstrumentation().context.assets.open("autochords/decode.jsonl")

@@ -1,76 +1,92 @@
 package io.github.danielhp95.caracole.ml
 
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Build
+import io.github.danielhp95.caracole.autochords.frontend.Mp4
+import io.github.danielhp95.caracole.autochords.frontend.MpegHeader
+import io.github.danielhp95.caracole.autochords.frontend.Ogg
 import io.github.danielhp95.caracole.autochords.frontend.Pcm
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.channels.FileChannel
-import java.nio.file.StandardOpenOption
 
-/** What [Decoder.decode] wrote: [frames] frames of [channels] at [rate] Hz; [durationS], the length the file states
- * (its container's, else the frames'), the one the sheet is laid over; [codec], the decoder that ran (null: PCM, read
- * with no codec, [Pcm]); [delay] and [padding], the encoder's frames the container stated and were trimmed; the
- * decoder's output, [encoding] ("float" or "16-bit"). */
+/**
+ * What [Decoder.decode] wrote: [frames] frames of [channels] at [rate] Hz; [codec], the decoder that ran (null: PCM,
+ * read with no codec, [Pcm]); the frames trimmed off its start ([delay]) and its end ([padding]); the decoder's output,
+ * [encoding] ([PcmEncoding.words], "float" for PCM read with no codec).
+ *
+ * [durationS] is the length music.py `read_audio` states for the same file, by the computer's own rule for its
+ * container, the one an auto sheet is laid over:
+ * - an MP4 (M4A): its sound track's `mdhd` duration over its timescale, read from its boxes ([Mp4]), as mutagen reads
+ *   it: the encoder's priming and padding counted in, so a little longer than what is decoded;
+ * - an MP3 whose first frame has a Xing header with a frame count, or a VBRI header: what [MpegHeader] reads of it as
+ *   mutagen does (a LAME tag's delay and padding taken off where mutagen reads the tag);
+ * - an MP3 whose first frame names no length: the frames decoded over the rate, which is mpeg_frames.py's count of
+ *   its frames, every frame being decoded (none trimmed) and Android's MP3 decoder giving each frame's samples;
+ * - an Ogg (Vorbis, Opus), a FLAC, a WAV, an AIFF: the frames decoded over the rate, which is mutagen's (the last
+ *   granule's less Opus's pre-skip, the STREAMINFO's, the header's), the decode being trimmed to it.
+ */
 data class Decoded(
     val rate: Int, val frames: Long, val channels: Int, val durationS: Double?, val codec: String? = null,
-    val delay: Int = 0, val padding: Int = 0, val encoding: String = "float",
+    val delay: Long = 0, val padding: Long = 0, val encoding: String = PcmEncoding.FLOAT.words,
 )
-
-/** An audio file the phone can't decode: its words say why. */
-class UndecodableAudio(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /**
  * An audio file decoded as the computer decodes it (autochords/audio.py `load_mono` at the file's own rate: the
  * chords-on-the-phone design's §3.6 and its B1 decode gate, DecoderTest), into interleaved little-endian float32 PCM
  * written to a file, a buffer at a time, so that no song is held whole (its memory is its buffers', whatever the
- * song's length):
+ * song's length). On any failure the partial [decode]'s `into` is deleted, and the failure is [UndecodableAudio] in
+ * words (a codec that can't be made or configured, a header cut short among them).
  *
- * - a WAV or an AIFF of PCM is read by [Pcm], with no codec, sample for sample libsndfile's;
- * - anything else through [MediaExtractor] and a software decoder ([softwareDecoder]: Android's own `c2.android.*`,
- *   never a vendor's, so two phones decode alike), asked for float PCM (16-bit where it gives only that, each sample
- *   over 32,768 as libsndfile's); a FLAC Android's extractor decodes itself (`audio/raw`), its PCM passed through as
- *   it gives it;
- * - the encoder's delay and padding the container states ([MediaFormat]'s `encoder-delay` and `encoder-padding`: an
- *   MP4's edit list, LAME's Xing header) trimmed here, as FFmpeg and libsndfile trim them, and taken out of the
- *   codec's format, which some versions' codecs trim by themselves;
- * - an MP3 whose first frame states none (no Xing or VBRI header) kept whole, as FFmpeg keeps it: Android's MP3
- *   decoder always drops its own delay, the first [MP3_DECODER_DELAY] samples it decodes, so it is given a frame of
- *   silence first ([silentFrame]), whose samples it drops, and the silence it pads at the end is cut;
- * - an AAC with no loudness normalization or dynamic range control, which Android's AAC decoder applies by default;
- * - what the decoder gives past the container's stated length cut there, within [TAIL_WITHIN] (the last Ogg page's
- *   samples past its granule position, which libsndfile cuts).
- *
- * [Decoded.durationS] is the container's length; where it is more than [GUESS_OFF] seconds from the frames decoded
- * (an MP3 with no Xing or VBRI header, whose length an extractor may guess from its first frame, as mutagen did before
- * mpeg_frames.py), the frames' length, as music.py `read_audio` counts its frames.
+ * - A WAV or an AIFF of PCM is read by [Pcm], with no codec, sample for sample libsndfile's.
+ * - Anything else through [MediaExtractor], its first audio track (where FFmpeg takes its "best" one: a file of one
+ *   audio track, as every file caracole keeps, reads the same), and Android's own software decoder
+ *   ([softwareDecoder]: `c2.android.*`, never a vendor's), asked for float PCM, its output read in the encoding it
+ *   names ([PcmEncoding]: an encoding caracole doesn't read refused, never read as 16-bit); a FLAC Android's
+ *   extractor decodes itself (`audio/raw`) is passed through in the extractor's encoding.
+ * - Trimmed as the computer trims ([Trim]), never by the codec: where the format names the encoder's delay and
+ *   padding (`encoder-delay`, `encoder-padding`), the framework's codecs may trim them themselves (this emulator's
+ *   do), so caracole takes both keys out of the codec's format and trims here:
+ *   - an MP4 with one media edit: from the edit's media time, exactly as many samples as its length, as FFmpeg
+ *     trims it, whatever the last frame's padding ([Mp4]);
+ *   - an MP3: Android's MP3 decoder ([DROPS_MP3_DELAY], the decoders measured; any other refused) always drops its
+ *     own delay, the first [MP3_DECODER_DELAY] samples it decodes, and pads as many silent ones at the end. A LAME tag's
+ *     delay and padding are trimmed after it (libsndfile's trim with those 529 already gone); a file whose first frame
+ *     states none FFmpeg keeps whole, those 529 first, so the decoder is given a frame of digital silence first
+ *     ([silentFrame]), whose samples it drops, and the silence it pads is cut;
+ *   - an Ogg (Vorbis, Opus): to its last page's granule position, less Opus's pre-skip ([Ogg]), as libsndfile ends
+ *     it: the decoder gives its last packet whole (Opus: 648 samples past it here); Opus's pre-skip the decoder drops
+ *     itself;
+ *   - anything else (a FLAC) by the delay and padding its format names, none.
+ * - An AAC asked for no loudness normalization and no dynamic range control, which Android's AAC decoder applies by
+ *   default ([aacAsDecoded]): untested here, the fixtures carrying no loudness metadata.
  */
 object Decoder {
-    /** How far the container's length may be from the decoded frames' before it is a guess: audio.py's
-     * `DISAGREES_S`. */
-    const val GUESS_OFF = 0.5
-
-    /** The most a decoder may give past the stated length and be cut back to it: an Ogg page's last packet. */
-    const val TAIL_WITHIN = 0.05
-
-    private const val TIMEOUT_US = 10_000L
-
     /** Android's software MP3 decoder's delay (PV MP3's `kPVMP3DecoderDelay`), which it drops itself. */
     const val MP3_DECODER_DELAY = 529
 
-    /** The decoders that drop it: Android's own, Codec2's and OMX's. */
-    private val DROPS_MP3_DELAY = setOf("c2.android.mp3.decoder", "OMX.google.mp3.decoder")
+    /** The MP3 decoders whose dropping of [MP3_DECODER_DELAY] and padding of as many silent samples DecoderTest
+     * measured: Android's own, Codec2's and OMX's. */
+    val DROPS_MP3_DELAY = setOf("c2.android.mp3.decoder", "OMX.google.mp3.decoder")
 
     fun decode(file: File, into: File): Decoded {
         if (!file.isFile) throw UndecodableAudio("no audio file: $file")
-        Pcm.format(file)?.let { return pcm(file, it, into) }
-        return coded(file, into)
+        try {
+            val format = try {
+                Pcm.format(file)
+            } catch (e: Pcm.Unreadable) {
+                throw UndecodableAudio("a WAV or AIFF caracole can't read: ${e.message}", e)
+            }
+            return if (format != null) pcm(file, format, into) else coded(file, into)
+        } catch (e: Throwable) {
+            into.delete()
+            throw e
+        }
     }
 
     private fun pcm(file: File, format: Pcm.Format, into: File): Decoded {
@@ -93,48 +109,59 @@ object Decoder {
             val format = extractor.getTrackFormat(track)
             val mime = format.getString(MediaFormat.KEY_MIME)!!
             val name = softwareDecoder(mime) ?: throw UndecodableAudio("no software decoder of $mime here")
-            val stated = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION)
-            else null
             val delay = intOf(format, "encoder-delay")
             val padding = intOf(format, "encoder-padding")
-            // Trimmed here, never by the codec: the platform's codecs of some versions trim what the format names
-            // themselves (Android 15's emulator does), others not; each would be trimmed twice.
+            val rate = intOf(format, MediaFormat.KEY_SAMPLE_RATE)
             format.removeKey("encoder-delay")
             format.removeKey("encoder-padding")
-            // A codec asked for float PCM where it gives it; never audio/raw's (a FLAC, which Android's extractor
-            // decodes itself), whose encoding is the extractor's, passed through.
             if (mime != MediaFormat.MIMETYPE_AUDIO_RAW) {
-                format.setInteger(MediaFormat.KEY_PCM_ENCODING, android.media.AudioFormat.ENCODING_PCM_FLOAT)
+                format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_FLOAT)
             }
             if (mime == MediaFormat.MIMETYPE_AUDIO_AAC) aacAsDecoded(format)
-            val codec = MediaCodec.createByCodecName(name)
+            val mp4 = if (mime == MediaFormat.MIMETYPE_AUDIO_AAC) Mp4.audioTrack(file) else null
+            val mp3 = mime == MediaFormat.MIMETYPE_AUDIO_MPEG
+            if (mp3 && name !in DROPS_MP3_DELAY) {
+                throw UndecodableAudio("$name is an MP3 decoder caracole hasn't measured")
+            }
+            val silence = if (mp3 && delay == 0 && padding == 0) silentFrame(extractor) else null
+            val edit = mp4?.edit()?.takeIf { mp4.timescale == rate.toLong() }
+            val ogg = if (mime == MediaFormat.MIMETYPE_AUDIO_OPUS || mime == MediaFormat.MIMETYPE_AUDIO_VORBIS) {
+                Ogg.stream(file)?.takeIf { it.rate == rate }
+            } else null
+            val trim = when {
+                edit != null -> Trim.edit(edit.mediaTime, mp4.keptFrames(edit))
+                ogg != null -> Trim(skip = delay.toLong(), keep = ogg.frames)
+                silence != null -> Trim(skip = (silence.second - MP3_DECODER_DELAY).toLong(),
+                    cutEnd = MP3_DECODER_DELAY.toLong())
+                else -> Trim.stated(delay, padding)
+            }
+            val codec = try {
+                MediaCodec.createByCodecName(name)
+            } catch (e: IOException) {
+                throw UndecodableAudio("$name can't be made here: ${e.message}", e)
+            } catch (e: IllegalArgumentException) {
+                throw UndecodableAudio("$name can't be made here: ${e.message}", e)
+            }
             try {
-                codec.configure(format, null, null, 0)
+                try {
+                    codec.configure(format, null, null, 0)
+                } catch (e: IllegalArgumentException) {
+                    throw UndecodableAudio("$name refused the track's format: ${e.message}", e)
+                }
                 codec.start()
                 return FloatWriter(into).use { out ->
-                    // Android's software MP3 decoder drops its own delay, the first 529 samples it decodes, and pads
-                    // as many silent ones at the end. A file whose header states the encoder's delay is trimmed by
-                    // it with those 529 already gone, as libsndfile trims it. One that states none FFmpeg keeps
-                    // whole, those 529 first (a loud first frame's pre-echo, never silence): so the decoder is given
-                    // a frame of digital silence first (silentFrame), whose samples are the ones it drops and the
-                    // rest of them skipped, and the 529 silent ones it pads cut.
-                    val silence = if (mime == MediaFormat.MIMETYPE_AUDIO_MPEG && delay == 0 && padding == 0 &&
-                        name in DROPS_MP3_DELAY) silentFrame(extractor) else null
-                    val skip = if (silence != null) silence.second - MP3_DECODER_DELAY else delay
-                    val cut = if (silence != null) MP3_DECODER_DELAY else padding
-                    val (rate, channels, encoding) = drain(extractor, codec, out, skip, silence?.first)
-                    var frames = out.samples / channels - cut
-                    if (frames < 0) frames = 0
-                    val statedFrames = stated?.let { Math.round(it * rate / 1e6) }
-                    if (statedFrames != null && frames > statedFrames && frames - statedFrames <= TAIL_WITHIN * rate) {
-                        frames = statedFrames
+                    val result = CodecLoop().run(Port(codec), Source(extractor), out, trim.skip, silence?.first)
+                    val given = out.samples / result.channels
+                    val frames = trim.frames(given)
+                    out.cut(frames * result.channels)
+                    val seconds = frames.toDouble() / result.rate
+                    val stated = when {
+                        mp4 != null -> mp4.seconds
+                        mp3 -> MpegHeader.statedLength(file) ?: seconds
+                        else -> seconds
                     }
-                    out.cut(frames * channels)
-                    val seconds = frames.toDouble() / rate
-                    val container = stated?.let { it / 1e6 }
-                    val duration = if (container != null && kotlin.math.abs(container - seconds) <= GUESS_OFF) container
-                    else seconds
-                    Decoded(rate, frames, channels, duration, name, delay, padding, encoding)
+                    Decoded(result.rate, frames, result.channels, stated, name, trim.skip, given - frames,
+                        result.encoding.words)
                 }
             } catch (e: MediaCodec.CodecException) {
                 throw UndecodableAudio("$name couldn't decode it: ${e.diagnosticInfo}", e)
@@ -148,62 +175,44 @@ object Decoder {
         }
     }
 
-    /** Feeds [first] (where given), then every sample of the track, through [codec], skipping the first [delay]
-     * frames it gives; the output's rate, channels and encoding. */
-    private fun drain(extractor: MediaExtractor, codec: MediaCodec, out: FloatWriter, delay: Int,
-                      first: ByteArray?): Triple<Int, Int, String> {
-        val info = MediaCodec.BufferInfo()
-        var inputDone = false
-        var rate = 0
-        var channels = 0
-        var float = false
-        var skip = delay.toLong()
-        var primed = first == null
-        while (true) {
-            if (!inputDone) {
-                val i = codec.dequeueInputBuffer(TIMEOUT_US)
-                if (i >= 0 && !primed) {
-                    codec.getInputBuffer(i)!!.put(first!!)
-                    codec.queueInputBuffer(i, 0, first.size, 0, 0)
-                    primed = true
-                } else if (i >= 0) {
-                    val buffer = codec.getInputBuffer(i)!!
-                    val n = extractor.readSampleData(buffer, 0)
-                    if (n < 0) {
-                        codec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        inputDone = true
-                    } else {
-                        codec.queueInputBuffer(i, 0, n, extractor.sampleTime, 0)
-                        extractor.advance()
-                    }
-                }
+    /** [MediaCodec] as [CodecLoop] asks it. */
+    private class Port(private val codec: MediaCodec) : CodecPort {
+        private val info = MediaCodec.BufferInfo()
+        override fun dequeueInput(timeoutUs: Long) = codec.dequeueInputBuffer(timeoutUs)
+        override fun inputBuffer(index: Int): ByteBuffer = codec.getInputBuffer(index)!!
+        override fun queueInput(index: Int, size: Int, timeUs: Long, endOfStream: Boolean) =
+            codec.queueInputBuffer(index, 0, size, timeUs, if (endOfStream) MediaCodec.BUFFER_FLAG_END_OF_STREAM else 0)
+        override fun dequeueOutput(timeoutUs: Long, into: OutBuffer): Int {
+            val o = codec.dequeueOutputBuffer(info, timeoutUs)
+            if (o >= 0) {
+                into.offset = info.offset
+                into.size = info.size
+                into.endOfStream = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
             }
-            val o = codec.dequeueOutputBuffer(info, TIMEOUT_US)
-            if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                val f = codec.outputFormat
-                rate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                channels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                float = intOf(f, MediaFormat.KEY_PCM_ENCODING) == android.media.AudioFormat.ENCODING_PCM_FLOAT
-            } else if (o >= 0) {
-                if (channels == 0) {
-                    val f = codec.getOutputFormat(o)
-                    rate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                    channels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                    float = intOf(f, MediaFormat.KEY_PCM_ENCODING) == android.media.AudioFormat.ENCODING_PCM_FLOAT
-                }
-                val buffer = codec.getOutputBuffer(o)!!.order(ByteOrder.nativeOrder())
-                buffer.position(info.offset).limit(info.offset + info.size)
-                val bytesPerFrame = (if (float) 4 else 2) * channels
-                val skipped = minOf(skip, (info.size / bytesPerFrame).toLong()).toInt()
-                skip -= skipped
-                buffer.position(info.offset + skipped * bytesPerFrame)
-                out.write(buffer, float)
-                codec.releaseOutputBuffer(o, false)
-                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
+            return when (o) {
+                MediaCodec.INFO_TRY_AGAIN_LATER -> CodecPort.TRY_AGAIN
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> CodecPort.FORMAT_CHANGED
+                @Suppress("DEPRECATION") MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED -> CodecPort.BUFFERS_CHANGED
+                else -> o
             }
         }
-        if (channels == 0 || rate == 0) throw UndecodableAudio("the decoder gave no audio")
-        return Triple(rate, channels, if (float) "float" else "16-bit")
+        override fun outputFormat() = of(codec.outputFormat)
+        override fun outputFormat(index: Int) = of(codec.getOutputFormat(index))
+        override fun outputBuffer(index: Int): ByteBuffer = codec.getOutputBuffer(index)!!
+        override fun releaseOutput(index: Int) = codec.releaseOutputBuffer(index, false)
+
+        private fun of(f: MediaFormat) = OutFormat(intOf(f, MediaFormat.KEY_SAMPLE_RATE),
+            intOf(f, MediaFormat.KEY_CHANNEL_COUNT),
+            if (f.containsKey(MediaFormat.KEY_PCM_ENCODING)) f.getInteger(MediaFormat.KEY_PCM_ENCODING) else null)
+    }
+
+    /** [MediaExtractor] as [CodecLoop] asks it. */
+    private class Source(private val extractor: MediaExtractor) : SamplePort {
+        override fun read(into: ByteBuffer) = extractor.readSampleData(into, 0)
+        override fun timeUs() = extractor.sampleTime
+        override fun advance() {
+            extractor.advance()
+        }
     }
 
     /**
@@ -230,11 +239,13 @@ object Decoder {
         if (layer != 1 || version == 1 || index == 0 || index == 15 || rateBits == 3) return null  // 1: Layer III
         val mpeg1 = version == 3
         val kbps = (if (mpeg1) MPEG1_L3_KBPS else MPEG2_L3_KBPS)[index - 1]
-        val rates = when (version) { 3 -> intArrayOf(44100, 48000, 32000); 2 -> intArrayOf(22050, 24000, 16000)
-            else -> intArrayOf(11025, 12000, 8000) }
-        val hz = rates[rateBits]
+        val rates = when (version) {
+            3 -> intArrayOf(44100, 48000, 32000)
+            2 -> intArrayOf(22050, 24000, 16000)
+            else -> intArrayOf(11025, 12000, 8000)
+        }
         val pad = (b2 shr 1) and 1
-        val size = (if (mpeg1) 144 else 72) * kbps * 1000 / hz + pad
+        val size = (if (mpeg1) 144 else 72) * kbps * 1000 / rates[rateBits] + pad
         val frame = ByteArray(size)
         frame[0] = 0xFF.toByte()
         frame[1] = (b1 or 1).toByte()  // no CRC
@@ -246,8 +257,9 @@ object Decoder {
     private val MPEG1_L3_KBPS = intArrayOf(32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320)
     private val MPEG2_L3_KBPS = intArrayOf(8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160)
 
-    /** An AAC decoded as it is coded, as FFmpeg decodes it: no loudness normalization, no dynamic range control
-     * (Android's AAC decoder applies both by default, toward a phone speaker's level). */
+    /** An AAC decoded as it is coded, as FFmpeg decodes it: no loudness normalization, no dynamic range control,
+     * which Android's AAC decoder applies by default toward a phone speaker's level. Untested here: no fixture carries
+     * loudness metadata. */
     private fun aacAsDecoded(format: MediaFormat) {
         format.setInteger(MediaFormat.KEY_AAC_DRC_TARGET_REFERENCE_LEVEL, -1)
         format.setInteger(MediaFormat.KEY_AAC_DRC_HEAVY_COMPRESSION, 0)
@@ -270,47 +282,4 @@ object Decoder {
 
     private fun intOf(format: MediaFormat, key: String): Int =
         if (format.containsKey(key)) format.getInteger(key) else 0
-
-    /** Interleaved little-endian float32 into a file, a buffer at a time. */
-    private class FloatWriter(file: File) : AutoCloseable {
-        private val channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING)
-        private val bytes = ByteBuffer.allocate(1 shl 16).order(ByteOrder.LITTLE_ENDIAN)
-        var samples = 0L
-            private set
-
-        fun write(block: FloatArray, n: Int) {
-            for (i in 0 until n) put(block[i])
-        }
-
-        /** A decoder's output buffer of float or 16-bit samples, in the platform's order. */
-        fun write(buffer: ByteBuffer, float: Boolean) {
-            if (float) while (buffer.remaining() >= 4) put(buffer.float)
-            else while (buffer.remaining() >= 2) put(buffer.short * (1f / 32768f))
-        }
-
-        private fun put(x: Float) {
-            if (!bytes.hasRemaining()) flush()
-            bytes.putFloat(x)
-            samples += 1
-        }
-
-        private fun flush() {
-            bytes.flip()
-            while (bytes.hasRemaining()) channel.write(bytes)
-            bytes.clear()
-        }
-
-        /** The file cut to its first [samples]. */
-        fun cut(samples: Long) {
-            flush()
-            channel.truncate(4 * samples)
-            this.samples = minOf(this.samples, samples)
-        }
-
-        override fun close() {
-            flush()
-            channel.close()
-        }
-    }
 }

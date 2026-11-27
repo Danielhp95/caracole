@@ -2816,20 +2816,30 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
     `android/scripts/native-check.sh` checks the debug APK's (aligned, stripped, no build path, its SHA-256).
   - **The decoder** (stage B1, E7): `Decoder.decode(file, into)`, audio.py `load_mono` at the file's own rate, into
-    interleaved little-endian float32 written a buffer at a time (`Decoded`: rate, frames, channels, the length the
-    container states, else the frames', where it is within `GUESS_OFF` of them; the codec; what was trimmed): a WAV
-    or an AIFF by `autochords.frontend.Pcm`, no codec; else MediaExtractor and Android's own software decoder
-    (`c2.android.*`, `softwareDecoder`), float PCM asked for (but `audio/raw`, a FLAC the extractor decodes itself);
-    `encoder-delay` and `encoder-padding` trimmed here and taken out of the codec's format (Android 15's codecs trim
-    them themselves); an MP3 stating none kept whole as FFmpeg keeps it, the MP3 decoder's own 529 samples, which it
-    always drops, made a `silentFrame`'s; an AAC with no loudness normalization or DRC. `Mixdown.mono`, numpy's
-    float32 mean of the channels, an array's or a file's. `DecoderTest` (`device-test.sh --ml`) holds it to
-    vectors/autochords/decode.jsonl, every threshold its meta's `gates`: the lossless files sample for sample, the
-    lossy ones at offset 0 and SNR ≥ 60 dB, every stated length within 0.05 s of read_audio's; `MixdownTest` on the
-    JVM.
+    interleaved little-endian float32 written a buffer at a time, `into` deleted on any failure, every failure
+    `UndecodableAudio` in words. `Decoded`: rate, frames, channels, the codec, what was trimmed, and `durationS`, the
+    length music.py `read_audio` states by the computer's rule for the container (an MP4's `mdhd`, `Mp4`; an MP3's
+    Xing frames less a LAME tag's delay and padding where mutagen reads the tag, `MpegHeader`; else the frames
+    decoded, an MP3 that names no length's counted so). A WAV or an AIFF by `autochords.frontend.Pcm`, no codec; else
+    MediaExtractor's first audio track and Android's own software decoder (`c2.android.*`, `softwareDecoder`), float
+    PCM asked for (but `audio/raw`, a FLAC the extractor decodes itself), its output read in the encoding it names
+    (`PcmEncoding`; one caracole doesn't read refused). Trimmed here, never by the codec: where the format names
+    `encoder-delay` and `encoder-padding` the framework's codecs may trim them themselves (this emulator's do), so
+    caracole takes both keys out of the codec's format and trims (`Trim`): an MP4 to its one media edit exactly, an
+    Ogg to its last page's granule less Opus's pre-skip (`Ogg`), an MP3 by the decoder's own 529 samples
+    (`DROPS_MP3_DELAY`, the decoders measured, any other refused: a LAME tag's delay after them, a headerless file's
+    whole by a `silentFrame` first), else the delay and padding stated. Its loop is `CodecLoop` (plain code behind
+    `CodecPort` and `SamplePort`: a decoder that stops is given up, a rate or a channel count that changes partway
+    refused; `CodecLoopTest` on the JVM). `Mixdown.mono`, numpy's float32 mean of the channels, an array's or a
+    file's. `DecoderTest` (`device-test.sh --ml`) holds it to vectors/autochords/decode.jsonl, every threshold its
+    meta's `gates`: the lossless files sample for sample (a 24-bit FLAC, which Android gives as 16-bit, by the 16-bit
+    gate), the lossy ones at offset 0 and SNR ≥ 60 dB whole and each second, every file's frames the computer's and
+    its stated length within 2 samples; android/README.md says what it doesn't cover.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
-  `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time),
-  `PcmTest` holding it to decode.jsonl's lossless files sample for sample.
+  `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
+  header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
+  sample; `Mp4`, `MpegHeader` and `Ogg`, what a container's boxes, first frame and last page say of its length as
+  mutagen and FFmpeg read them (`ContainerLengthTest`, to the bit against decode.jsonl).
   `Cqt.logFeatures(y)` is btc.py's `cqt_features` (`[frames, 144]`, its 10 s chunks and tail rule), each chunk
   frontend.json's steps replayed: a resample by `Soxr` (librosa's length fix to `ceil(n · ratio)` and its √ratio
   scale on top, the samples kept float32), an octave's STFT in librosa 1.0's centred framing (`Stft.librosa`: only

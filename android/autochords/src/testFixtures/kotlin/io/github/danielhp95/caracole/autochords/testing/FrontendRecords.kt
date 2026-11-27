@@ -26,7 +26,7 @@ import kotlin.math.sqrt
  */
 object FrontendRecords {
     class Gate(val cosineMedianMin: Double, val cosineMin: Double, val silentWithin: Double, val cqtFloor: Double,
-               val melFloor: Double)
+               val melFloor: Double, val maxAbs: Double)
 
     /** One record's samples (a whole clip, or an excerpt of one) and the stored features of them: [mel] is null for
      * an excerpt, which has none. */
@@ -41,7 +41,7 @@ object FrontendRecords {
         val floors = g["floors"]!!.jsonObject
         Gate(g["cosine_median_min"]!!.jsonPrimitive.double, g["cosine_min"]!!.jsonPrimitive.double,
              g["silent_within"]!!.jsonPrimitive.double, floors["cqt"]!!.jsonPrimitive.double,
-             floors["mel"]!!.jsonPrimitive.double)
+             floors["mel"]!!.jsonPrimitive.double, g["max_abs"]!!.jsonPrimitive.double)
     }
 
     /** The clips, then the excerpts. */
@@ -99,26 +99,20 @@ object FrontendRecords {
         }
     }
 
-    /** Ours, beside the design's gate (the gate of record): no value of a frame that isn't silent further than this
-     * from the stored one. A per-frame cosine can't see a small error over a whole octave of log features (a √2
-     * scale slip in one octave of 24 bins moves 1 − cosine by about 1e-4); the port's are 4.5e-4 (log-CQT) and
-     * 3.8e-3 (log-mel) at most (2026-11-26). */
-    const val MAX_ABS_TRIPWIRE = 1e-2
-
     /** What the gate makes of [got] against [want], both `[frames, width]`: [maxAbs] over every frame, [loudMaxAbs]
-     * over those that aren't silent, which [MAX_ABS_TRIPWIRE] bounds. */
+     * over those that aren't silent, which the meta's `max_abs` bounds: a tripwire of ours beside the design's gate
+     * (the gate of record), which a per-frame cosine can't see a slip over a whole octave of log features under. */
     class Score(val what: String, val frames: Int, val wanted: Int, val silent: Int, val loudWhereSilent: Int,
                 val median: Double, val least: Double, val leastAt: Int, val maxAbs: Double, val millis: Long,
                 val loudMaxAbs: Double = maxAbs) {
         fun passes(gate: Gate): Boolean = frames == wanted && loudWhereSilent == 0 &&
-            median >= gate.cosineMedianMin && least >= gate.cosineMin && loudMaxAbs <= MAX_ABS_TRIPWIRE
+            median >= gate.cosineMedianMin && least >= gate.cosineMin && loudMaxAbs <= gate.maxAbs
 
         override fun toString(): String =
             "$what: $frames frames of $wanted ($silent silent" +
                 (if (loudWhereSilent > 0) ", $loudWhereSilent of them not silent here" else "") +
                 "), cosine median 1 - ${e(1 - median, 2)}, least 1 - ${e(1 - least, 2)} " +
-                "(frame $leastAt), max abs ${e(maxAbs, 2)} (${e(loudMaxAbs, 2)} where not silent, at most " +
-                "$MAX_ABS_TRIPWIRE), $millis ms"
+                "(frame $leastAt), max abs ${e(maxAbs, 2)} (${e(loudMaxAbs, 2)} where not silent), $millis ms"
     }
 
     /** [x] in scientific notation of [digits] decimals, the same on every device's locale. */
