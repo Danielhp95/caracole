@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.ml
 
+import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -31,9 +32,12 @@ import java.util.concurrent.TimeUnit
  * `:ml` (`BIND_AUTO_CREATE | BIND_IMPORTANT`, so it takes the job's foreground importance), sends it the paths
  * ([MlProtocol]: the audio, [models], the checkpoints' folder [work] (`stateDir/cache/autochords/`), [threads]) and
  * blocks the job's thread on its replies, a poll a second, calling `waiting` at each; a partial wake lock
- * (`caracole:chords`, [WAKE_MS] at most) held meanwhile. The process dead before it answered (the low-memory killer's
- * doing, on a phone) is [ChordsUnavailable] in [DIED]'s words, the main process untouched, and the next [hear] goes on
- * from the last checkpoint whole.
+ * (`caracole:chords`) held meanwhile, its [WAKE_MS] begun again at each step and each minute (a hearing whose client
+ * stops answering loses it 10 minutes on). The process dead before it answered (the low-memory killer's doing, on a
+ * phone) is [ChordsUnavailable] in [DIED]'s words, the main process untouched, and the next [hear] goes on from the
+ * last checkpoint whole; its planned end after an answer (one hearing a process, MlService) is never read so. A
+ * [hear] stopped before its answer (`waiting` throwing, its thread interrupted) sends [MlProtocol.CANCEL] and lets
+ * go. A bug of caracole's in the process is an IllegalStateException in its words.
  *
  * [ready]: the three files the hearing runs on ([OrtModels.BTC_GRAPH], [OrtModels.BTC_WEIGHTS] beside it,
  * [OrtModels.BEATS_FP16]) in [models], each of the size and SHA-256 models.json pins (`:ml`'s resource), each file's
@@ -49,10 +53,7 @@ class MlChordModels(
     @Volatile var lastPeakKb: Long? = null
         private set
 
-    private data class Checked(val length: Long, val modified: Long, val sha256: String)
-    private val checked = HashMap<String, Checked>()
-
-    @Synchronized override fun ready(): String? {
+    override fun ready(): String? = synchronized(checked) {
         val doc = Json.parseToJsonElement(pins()).jsonObject
         val btc = doc["btc"]!!.jsonObject
         val pins = listOf(btc["graph"]!!, btc["weights"]!!, doc["beats"]!!.jsonObject["fp16"]!!).map { it.jsonObject }
@@ -71,11 +72,18 @@ class MlChordModels(
                 return "$name in $models isn't the file caracole's chords are made with (its SHA-256 differs)"
             }
         }
-        return null
+        null
     }
 
     override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard {
         ready()?.let { throw ChordsUnavailable(it) }
+        // The process of an earlier hearing ends once its client let go of it: a bind meanwhile could reach it as
+        // it goes, so it is let finish first.
+        val gone = System.currentTimeMillis() + PROCESS_GONE_MS
+        while (mlPid() != null && System.currentTimeMillis() < gone) {
+            waiting()
+            Thread.sleep(100)
+        }
         val replies = LinkedBlockingQueue<Message>()
         val looper = HandlerThread("caracole-chords-replies").apply { start() }
         val inbox = Messenger(Handler(looper.looper) { m -> replies.put(Message.obtain(m)); true })
@@ -92,6 +100,8 @@ class MlChordModels(
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG).apply { setReferenceCounted(false) }
         lock.acquire(WAKE_MS)
         var bound = false
+        var service: Messenger? = null
+        var answered = false
         try {
             bound = app.bindService(Intent(app, MlService::class.java), connection,
                 Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
@@ -106,7 +116,8 @@ class MlChordModels(
             binder ?: throw ChordsUnavailable("the chord models' process didn't answer")
             try {
                 binder.linkToDeath({ died(replies) }, 0)
-                Messenger(binder).send(Message.obtain(null, MlProtocol.HEAR).apply {
+                service = Messenger(binder)
+                service.send(Message.obtain(null, MlProtocol.HEAR).apply {
                     data = Bundle().apply {
                         putString(MlProtocol.AUDIO, audio.path)
                         putString(MlProtocol.MODELS, models.path)
@@ -118,34 +129,55 @@ class MlChordModels(
             } catch (e: RemoteException) {
                 throw ChordsUnavailable(DIED, e)
             }
+            var quiet = 0
             while (true) {
                 val m = replies.poll(1, TimeUnit.SECONDS)
                 if (m == null) {
+                    // The wake lock's 10 minutes begin again each minute the models work, and at each step.
+                    if (++quiet % 60 == 0) lock.acquire(WAKE_MS)
                     waiting()
                     continue
                 }
                 when (m.what) {
-                    MlProtocol.STEP -> onStep(m.data.getString(MlProtocol.WORDS)!!)
+                    MlProtocol.STEP -> {
+                        lock.acquire(WAKE_MS)
+                        onStep(m.data.getString(MlProtocol.WORDS)!!)
+                    }
                     MlProtocol.DONE -> {
+                        answered = true
                         lastPeakKb = m.data.getLong(MlProtocol.PEAK_KB).takeIf { it >= 0 }
                         return Heard.read(File(m.data.getString(MlProtocol.HEARD)!!).readText(Charsets.UTF_8))
                     }
                     MlProtocol.FAILED -> {
+                        answered = true
                         val words = m.data.getString(MlProtocol.WORDS)!!
-                        if (m.data.getString(MlProtocol.KIND) == MlProtocol.AUDIO_KIND) throw AudioUnreadable(words)
-                        throw ChordsUnavailable(words)
+                        when (m.data.getString(MlProtocol.KIND)) {
+                            MlProtocol.AUDIO_KIND -> throw AudioUnreadable(words)
+                            MlProtocol.BUG_KIND -> throw IllegalStateException(words)
+                            else -> throw ChordsUnavailable(words)
+                        }
                     }
-                    GONE -> throw ChordsUnavailable(DIED)
+                    GONE -> {
+                        answered = true
+                        throw ChordsUnavailable(DIED)
+                    }
                 }
             }
         } finally {
+            // Stopped before its answer (the job cancelled, its thread interrupted, waiting throwing): the hearing
+            // stopped there too, at its next chunk (and by the unbind below, which ends the process once it stops).
+            if (!answered) try {
+                service?.send(Message.obtain(null, MlProtocol.CANCEL))
+            } catch (e: RemoteException) {
+                // Gone already.
+            }
             if (bound) app.unbindService(connection)
             looper.quitSafely()
             if (lock.isHeld) lock.release()
         }
     }
 
-    /** Where a hearing of [audio] keeps its checkpoints. */
+    /** Where a hearing of [audio] keeps its checkpoints (its audio hashed: the tests'). */
     fun checkpoints(audio: File): Checkpoints = Checkpoints.of(work, audio)
 
     private fun died(replies: LinkedBlockingQueue<Message>) = replies.put(Message.obtain(null, GONE))
@@ -153,8 +185,21 @@ class MlChordModels(
     private fun pins(): String = MlChordModels::class.java.classLoader!!
         .getResourceAsStream("caracole/autochords/models.json")!!.use { it.readBytes().toString(Charsets.UTF_8) }
 
+    /** The `:ml` process's pid, while one runs. */
+    private fun mlPid(): Int? = app.getSystemService(ActivityManager::class.java).runningAppProcesses.orEmpty()
+        .firstOrNull { it.processName == app.packageName + MlProtocol.PROCESS_SUFFIX }?.pid
+
     companion object {
         const val DIED = "the chord models stopped (the phone may have run out of memory); try again"
+
+        /** How long a hearing waits for the process of the one before it to end. */
+        private const val PROCESS_GONE_MS = 10_000L
+
+        private data class Checked(val length: Long, val modified: Long, val sha256: String)
+
+        /** Each model file's SHA-256 by its path, kept while its size and time stay: every client of the process
+         * shares it, so a file is hashed once a process. */
+        private val checked = HashMap<String, Checked>()
         const val WAKE_TAG = "caracole:chords"
         const val WAKE_MS = 10 * 60_000L
 

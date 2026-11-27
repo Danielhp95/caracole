@@ -877,10 +877,19 @@ the service the file's path and waits, saying run.py's steps ("setting up the mo
 the beats", and "waiting for the phone to cool"). The service's `Pipeline` decodes, mixes down and resamples to 22,050
 Hz, runs BTC, then beat_this, one model at a time, and keeps each step's answer in
 `files/state/cache/autochords/<sha16>-c1/`, so a hearing cut off goes on from its chords. A dead `:ml` is
-`ChordsUnavailable`. The phone's heat and battery decide its threads, a wait or a stop (`HeatRules`). `PipelineTest`
-holds the whole to the computer's hearing of the committed clips (`gates.end_to_end` of `models.jsonl`) and kills the
-process mid-hearing; `device-test.sh --ml` runs it. On the emulator (2026-11-26) every clip's WCSR and F are 1.0
-(to the last bit but one), each heard in 2-9 s, `:ml` at 300-350 MB at its peak.
+`ChordsUnavailable`; the process ends after each hearing. The phone's heat and battery decide its threads, a wait or a
+stop (`HeatRules`). `PipelineTest` holds the whole to the computer's hearing of the committed clips and of a 44.1 kHz
+stereo MP3 and a 48 kHz stereo M4A (`models.jsonl`'s `gates.end_to_end`) and kills the process mid-hearing;
+`device-test.sh --ml` runs it. On the emulator (2026-11-26) every file's WCSR and F are 1.0 (to the last bit but one),
+each heard in 2-10 s, `:ml` at 300-410 MB at its peak.
+
+What bounds a song's length is the models' own memory, not the song's: every stage reads the samples from files (the
+pcm memory-mapped, the resampler streamed) in fixed blocks, and beat_this runs over 1500-frame chunks whatever the
+length, so a 30-minute song costs its peak what a 3-minute one does (the beat session, about 756 MB on the owner's
+phone), plus what grows with the song: BTC's features, 0.37 MB a minute (11 MB for 30 minutes), and the beat logits,
+24 KB a minute. Its files take room while it is heard: the decode at the file's rate (30 minutes of 48 kHz stereo,
+690 MB), its mixdown (345 MB) and the 22,050 Hz pcm (159 MB), each gone once the next is made, the pcm once the beats
+are kept.
 
 ## Chords from audio: the front ends
 

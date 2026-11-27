@@ -18,8 +18,8 @@
 #   --ml            :ml's ModelParityTest, DecoderTest and PipelineTest (its own test APK,
 #                   io.github.danielhp95.caracole.ml.test; DecoderTest, the decode gate, needs no model; PipelineTest,
 #                   the whole hearing in the :ml process, says each clip's scores, time and that process's peak RSS),
-#                   then the app's
-#                   ChordsBenchTest (the debug build's Chords bench), over the chord and beat models in
+#                   then the app's ChordsBenchTest (the debug build's Chords bench) and MlProcessTest (MlService's
+#                   process name, as Caracole.kt's guard names it), over the chord and beat models in
 #                   $CARACOLE_CHORD_MODELS (`nix build .#chord-models`; unset, the ./android#ml shell's), pushed into
 #                   /data/local/tmp/caracole-models, a cache left there for the next run (a file pushed again only
 #                   when its SHA-256 differs)
@@ -366,6 +366,8 @@ if [ "$want_ml" = 1 ]; then
     done
     # The debug build's Chords bench over the committed clips, on the same pushed models.
     run_class ChordsBenchTest -e models "$ml_models"
+    # The models' process as the installed app declares it, and the guard in Caracole.kt that keeps the phone out.
+    run_class MlProcessTest
 fi
 
 if [ "$want_app" = 1 ]; then

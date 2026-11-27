@@ -8,6 +8,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
+import android.os.Process
 import android.os.RemoteException
 import io.github.danielhp95.caracole.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.autochords.Checkpoints
@@ -19,16 +20,17 @@ import kotlin.concurrent.thread
 /**
  * What [MlService] and [MlChordModels] say to each other (the design's §3.3), over a [Messenger]: a request
  * [HEAR] (`replyTo` its client's messenger) of paths in the app's own storage, which both processes read ([AUDIO],
- * [MODELS], [WORK], and [THREADS], at most so many, 0 for the heat's choice); then the replies [STEP] (a step's or
- * a wait's words, [WORDS]), and one of [DONE] (the heard file's path, [HEARD], and the process's peak RSS while it
- * heard, [PEAK_KB]) or [FAILED] ([KIND], [AUDIO_KIND] or [SETUP_KIND], and [WORDS]). The binder never carries the
- * audio, nor what was heard.
+ * [MODELS], [WORK], and [THREADS], at most so many, 0 for the heat's choice), or [CANCEL] of the hearing under way;
+ * then the replies [STEP] (a step's or a wait's words, [WORDS]), and one of [DONE] (the heard file's path, [HEARD],
+ * and the process's peak RSS while it heard, [PEAK_KB]) or [FAILED] ([KIND]: [AUDIO_KIND], [SETUP_KIND] or
+ * [BUG_KIND]; and [WORDS]). The binder never carries the audio, nor what was heard.
  */
 object MlProtocol {
     const val HEAR = 1
     const val STEP = 2
     const val DONE = 3
     const val FAILED = 4
+    const val CANCEL = 5
 
     const val AUDIO = "audio"
     const val MODELS = "models"
@@ -40,21 +42,40 @@ object MlProtocol {
     const val KIND = "kind"
     const val AUDIO_KIND = "audio"
     const val SETUP_KIND = "setup"
+    const val BUG_KIND = "bug"
 
-    /** The `:ml` process's name's end, as the manifest declares it (`android:process`). */
+    /** The `:ml` process's name's end, as the manifest declares it (`android:process`): Caracole.MODELS_PROCESS's,
+     * which the app's ModelsProcessTest holds them to. */
     const val PROCESS_SUFFIX = ":ml"
+
+    /** A failure's kind and words, as the client says them: the known causes in their own words, an out of memory
+     * named as such, anything else caracole's own bug ("a bug in caracole: …", the computer's staged jobs' words). */
+    fun failure(e: Throwable): Pair<String, String> = when (e) {
+        is AudioUnreadable -> AUDIO_KIND to (e.message ?: "the audio can't be read")
+        is ChordsUnavailable -> SETUP_KIND to (e.message ?: "the chord models can't hear it now")
+        is TooHot -> SETUP_KIND to (e.message ?: HeatRules.TOO_HOT)
+        is Pipeline.Cancelled -> SETUP_KIND to (e.message ?: "the hearing was stopped")
+        is OutOfMemoryError -> SETUP_KIND to OUT_OF_MEMORY
+        else -> BUG_KIND to "a bug in caracole: $e"
+    }
+
+    const val OUT_OF_MEMORY = "the chord models ran out of memory (OutOfMemoryError); try again"
 }
 
 /**
  * The chord models' process, `:ml` (its manifest's `android:process`, debug builds alone, not exported): bound by
- * [MlChordModels], it hears one song at a time ([Pipeline], on a thread of its own), so the models' memory, and a
- * crash or the low-memory killer's end of them, never touch the app's server in the main process, where nothing of
- * this runs. A request while a hearing goes on is refused in words. Before each hearing the process's peak RSS is
- * reset (`/proc/self/clear_refs`), and its peak said with what was heard.
+ * [MlChordModels], it hears one song ([Pipeline], on a thread of its own), so the models' memory, and a crash or the
+ * low-memory killer's end of them, never touch the app's server in the main process, where nothing of this runs. One
+ * hearing a process: a second request while one goes on is refused in words, and once its client unbinds (after its
+ * answer, or to stop it: a [MlProtocol.CANCEL] too stops it at its next chunk) the process ends as soon as no hearing
+ * runs, giving the models' memory back to the phone. Before the hearing the process's peak RSS is reset
+ * (`/proc/self/clear_refs`), and its peak said with what was heard.
  */
 class MlService : Service() {
     private lateinit var looper: HandlerThread
     private val busy = AtomicBoolean(false)
+    private val cancelled = AtomicBoolean(false)
+    private val leaving = AtomicBoolean(false)
 
     override fun onCreate() {
         super.onCreate()
@@ -62,14 +83,27 @@ class MlService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder = Messenger(Handler(looper.looper) { message ->
-        if (message.what == MlProtocol.HEAR) hear(Bundle(message.data), message.replyTo)
+        when (message.what) {
+            MlProtocol.HEAR -> hear(Bundle(message.data), message.replyTo)
+            MlProtocol.CANCEL -> cancelled.set(true)
+        }
         true
     }).binder
+
+    /** Its client gone: the hearing stopped, and the process ended once none runs. */
+    override fun onUnbind(intent: Intent?): Boolean {
+        cancelled.set(true)
+        leaving.set(true)
+        if (!busy.get()) end()
+        return false
+    }
 
     override fun onDestroy() {
         looper.quitSafely()
         super.onDestroy()
     }
+
+    private fun end() = Process.killProcess(Process.myPid())
 
     private fun hear(request: Bundle, client: Messenger?) {
         if (client == null) return
@@ -77,30 +111,27 @@ class MlService : Service() {
             failed(client, MlProtocol.SETUP_KIND, "the chord models are hearing another song")
             return
         }
+        cancelled.set(false)
         thread(name = "caracole-ml-hearing") {
             try {
                 resetPeak()
                 val work = File(request.getString(MlProtocol.WORK)!!)
                 val audio = File(request.getString(MlProtocol.AUDIO)!!)
                 val pipeline = Pipeline(File(request.getString(MlProtocol.MODELS)!!), Heat(this),
-                    request.getInt(MlProtocol.THREADS, 0))
-                pipeline.hear(audio, work) { words -> send(client, MlProtocol.STEP, Bundle().apply {
+                    request.getInt(MlProtocol.THREADS, 0), cancelled = cancelled::get)
+                val result = pipeline.hear(audio, work) { words -> send(client, MlProtocol.STEP, Bundle().apply {
                     putString(MlProtocol.WORDS, words)
                 }) }
                 send(client, MlProtocol.DONE, Bundle().apply {
-                    putString(MlProtocol.HEARD, Checkpoints.of(work, audio).file(Checkpoints.HEARD).path)
+                    putString(MlProtocol.HEARD, result.points.file(Checkpoints.HEARD).path)
                     putLong(MlProtocol.PEAK_KB, peakKb())
                 })
-            } catch (e: AudioUnreadable) {
-                failed(client, MlProtocol.AUDIO_KIND, e.message ?: "the audio can't be read")
-            } catch (e: ChordsUnavailable) {
-                failed(client, MlProtocol.SETUP_KIND, e.message ?: "the chord models can't hear it now")
-            } catch (e: TooHot) {
-                failed(client, MlProtocol.SETUP_KIND, e.message ?: HeatRules.TOO_HOT)
             } catch (e: Throwable) {
-                failed(client, MlProtocol.SETUP_KIND, "the chord models failed: $e")
+                val (kind, words) = MlProtocol.failure(e)
+                failed(client, kind, words)
             } finally {
                 busy.set(false)
+                if (leaving.get()) end()
             }
         }
     }

@@ -24,7 +24,15 @@ object Mel {
     val HOP: Int get() = data.hop
 
     /** The log-mel of [y], mono at 22,050 Hz, longer than half a window: `[1 + y.size / HOP, MELS]`, row-major. */
-    fun logMel(y: FloatArray): FloatArray {
+    fun logMel(y: FloatArray): FloatArray = logMel(y.size, { y[it] }, 0, frames(y.size))
+
+    /** The frames a signal of [n] samples has. */
+    fun frames(n: Int): Int = 1 + n / data.hop
+
+    /** Frames [from] until [until] of the log-mel of a signal of [n] samples, each read by [sample]:
+     * `[until - from, MELS]`, the whole signal's frames bit for bit (MelTest), so a song's mel is made a chunk at a
+     * time from its memory-mapped samples. */
+    fun logMel(n: Int, sample: Stft.Samples, from: Int, until: Int): FloatArray {
         val d = data
         require(d.padMode == "reflect") { "an STFT of padding ${d.padMode}" }
         val fb = d.filterbank
@@ -34,13 +42,13 @@ object Mel {
         val mels = fb.rows
         val stft = Stft(d.nFft, d.hop)
         val magnitudes = DoubleArray(fb.cols)
-        val out = FloatArray((1 + y.size / d.hop) * mels)
-        stft.torch(y, d.window) { f, re, im ->
+        val out = FloatArray((until - from) * mels)
+        stft.torch(n, sample, d.window, from, until) { f, re, im ->
             for (k in magnitudes.indices) magnitudes[k] = sqrt(re[k] * re[k] + im[k] * im[k]) * d.norm
             for (m in 0 until mels) {
                 var sum = 0.0
                 for (i in fb.indptr[m] until fb.indptr[m + 1]) sum += fb.re[i] * magnitudes[fb.indices[i]]
-                out[f * mels + m] = ln1p(d.logMultiplier * sum).toFloat()
+                out[(f - from) * mels + m] = ln1p(d.logMultiplier * sum).toFloat()
             }
         }
         return out

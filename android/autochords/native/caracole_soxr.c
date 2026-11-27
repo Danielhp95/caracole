@@ -13,8 +13,7 @@ char const *caracole_soxr_resample(float const *x, size_t ilen, double in_rate, 
                                    float **y, size_t *ylen)
 {
     size_t const olen = (size_t)((double)ilen * out_rate / in_rate + 1);
-    double const div = 48000 * in_rate / out_rate;
-    size_t const div_len = (size_t)(div < 1000. ? 1000. : div);
+    size_t const div_len = caracole_soxr_piece(in_rate, out_rate);
     soxr_io_spec_t const io_spec = soxr_io_spec(SOXR_FLOAT32_S, SOXR_FLOAT32_S);
     soxr_quality_spec_t const quality_spec = soxr_quality_spec(SOXR_HQ, 0);
     soxr_error_t err = NULL;
@@ -51,4 +50,49 @@ char const *caracole_soxr_resample(float const *x, size_t ilen, double in_rate, 
     *y = out;
     *ylen = out_pos;
     return NULL;
+}
+
+size_t caracole_soxr_piece(double in_rate, double out_rate)
+{
+    double const div = 48000 * in_rate / out_rate;
+    return (size_t)(div < 1000. ? 1000. : div);
+}
+
+struct caracole_soxr_stream {
+    soxr_t soxr;
+};
+
+char const *caracole_soxr_stream_open(double in_rate, double out_rate, caracole_soxr_stream **stream)
+{
+    soxr_io_spec_t const io_spec = soxr_io_spec(SOXR_FLOAT32_S, SOXR_FLOAT32_S);
+    soxr_quality_spec_t const quality_spec = soxr_quality_spec(SOXR_HQ, 0);
+    soxr_error_t err = NULL;
+    caracole_soxr_stream *s;
+
+    *stream = NULL;
+    s = malloc(sizeof *s);
+    if (!s) return "out of memory for the resampler";
+    s->soxr = soxr_create(in_rate, out_rate, 1, &err, &io_spec, &quality_spec, NULL);
+    if (err) {
+        free(s);
+        return err;
+    }
+    *stream = s;
+    return NULL;
+}
+
+char const *caracole_soxr_stream_process(caracole_soxr_stream *stream, float const *x, size_t ilen, float *y,
+                                         size_t ocap, size_t *odone)
+{
+    float const *in_ptr = x;
+    float *out_ptr = y;
+    *odone = 0;
+    return soxr_process(stream->soxr, x ? &in_ptr : NULL, x ? ilen : 0, NULL, &out_ptr, ocap, odone);
+}
+
+void caracole_soxr_stream_close(caracole_soxr_stream *stream)
+{
+    if (!stream) return;
+    soxr_delete(stream->soxr);
+    free(stream);
 }

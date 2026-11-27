@@ -12,20 +12,43 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
+import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.StandardOpenOption
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
 /**
  * A hearing's checkpoints (the design's §3.3), in `<root>/<sha16>-c<contract>/` ([folder]): the first 16 hex digits
  * of the audio's SHA-256 and [Heard.CONTRACT], so a checkpoint of another file or another contract is never read.
- * Each step's file, in order: [PCM_META] and [PCM] (the audio mono at 22,050 Hz, float32), [CHORDS] (BTC's chords,
- * Harte labels spelled for the key, before [Labels.recognized]), [BEATS], then [HEARD]. A file is written under a name
- * of its own ([PART] after it) and renamed into place, so one cut off is never read: [read] reads the name alone.
+ * Each step's file, in order: [PCM_META] and [PCM] (the audio mono at 22,050 Hz, float32, deleted once [BEATS] is
+ * there), [CHORDS] (BTC's chords, Harte labels spelled for the key, before [Labels.recognized]), [BEATS], then
+ * [HEARD]. A file is written under a name of its own ([PART] after it), forced to the disk, and renamed into place,
+ * so one cut off is never read ([read] reads the name alone); one that won't parse all the same is absent
+ * ([parsed]), as is a [PCM] shorter than its meta says ([pcmWhole]).
  */
 class Checkpoints private constructor(val folder: File) {
     /** [name]'s text, or null while no whole one is there. */
     fun read(name: String): String? = File(folder, name).takeIf { it.isFile }?.readText(Charsets.UTF_8)
+
+    /** [name] read by [parse], or null: none there, or one that won't parse (a power cut after its rename, before
+     * the disk had it), which is deleted, so that it is made again, never failing every hearing after. */
+    fun <T> parsed(name: String, parse: (String) -> T): T? {
+        val text = read(name) ?: return null
+        return try {
+            parse(text)
+        } catch (e: Exception) {
+            delete(name)
+            null
+        }
+    }
+
+    /** The [PCM] whole: [meta]'s samples, every one of their bytes there. */
+    fun pcmWhole(meta: Pcm): Boolean = File(folder, PCM).let { it.isFile && it.length() == 4 * meta.samples }
+
+    fun delete(name: String) {
+        File(folder, name).delete()
+    }
 
     fun has(name: String): Boolean = File(folder, name).isFile
 
@@ -36,14 +59,18 @@ class Checkpoints private constructor(val folder: File) {
         folder.mkdirs()
         val part = File(folder, name + PART)
         write(part)
+        // On the disk before its name is: a rename the disk keeps before the bytes would leave a whole name over
+        // an empty or cut file after a power cut ([parsed] makes such a file again).
+        FileChannel.open(part.toPath(), StandardOpenOption.WRITE).use { it.force(true) }
         Files.move(part.toPath(), File(folder, name).toPath(), StandardCopyOption.ATOMIC_MOVE,
             StandardCopyOption.REPLACE_EXISTING)
     }
 
     fun file(name: String) = File(folder, name)
 
-    /** What [PCM_META] says of [PCM]: the audio's stated length and the samples at 22,050 Hz. */
-    data class Pcm(val duration: Double, val samples: Long)
+    /** What [PCM_META] says of [PCM]: the audio's stated length, the samples at 22,050 Hz (soxr's own count, which
+     * beat_this reads) and those BTC reads (librosa's `fix_length`: [Stages.btcSamples]). */
+    data class Pcm(val duration: Double, val samples: Long, val btcSamples: Long)
 
     companion object {
         const val PCM = "pcm.f32"
@@ -88,12 +115,26 @@ class Checkpoints private constructor(val folder: File) {
         fun pcmJson(pcm: Pcm): String = buildJsonObject {
             put("duration", pcm.duration)
             put("samples", pcm.samples)
+            put("btc_samples", pcm.btcSamples)
         }.toString()
 
         fun readPcm(text: String): Pcm {
             val doc = Json.parseToJsonElement(text).jsonObject
-            return Pcm(doc["duration"]!!.jsonPrimitive.double, doc["samples"]!!.jsonPrimitive.long)
+            return Pcm(doc["duration"]!!.jsonPrimitive.double, doc["samples"]!!.jsonPrimitive.long,
+                doc["btc_samples"]!!.jsonPrimitive.long)
         }
+
+        /** What a hearing cut off leaves of its stages under [root], in every song's folder: the stages' parts and
+         * their files between checkpoints ([STAGE_FILES]), never a checkpoint. Only while no hearing runs: one at a
+         * time (MlService). */
+        fun sweep(root: File) {
+            for (folder in root.listFiles().orEmpty().filter { it.isDirectory }) {
+                for (f in folder.listFiles().orEmpty()) if (f.name.endsWith(PART) || f.name in STAGE_FILES) f.delete()
+            }
+        }
+
+        /** The files between the checkpoints of the pcm stage: the decode, the mixdown, the resample. */
+        val STAGE_FILES = setOf("decoded.f32", "mono.f32", "resampled.f32")
 
         internal fun segments(chords: List<ChordSegment>) = JsonArray(chords.map {
             JsonArray(listOf(JsonPrimitive(it.start), JsonPrimitive(it.end), JsonPrimitive(it.label)))

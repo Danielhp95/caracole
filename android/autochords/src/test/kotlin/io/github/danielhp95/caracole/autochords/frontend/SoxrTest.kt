@@ -6,6 +6,10 @@ import io.github.danielhp95.caracole.autochords.testing.SoxrRecords.str
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -31,6 +35,29 @@ class SoxrTest {
             val worst = SoxrRecords.worst(got, c.y)
             assertTrue(worst <= TOLERANCE, "${c.what}: a sample differs by $worst")
         }
+    }
+
+    @get:Rule val tmp = TemporaryFolder()
+
+    @Test
+    fun `a file resampled a block at a time is the one-shot's sample for sample`() {
+        var longest = 0
+        for (c in SoxrRecords.conversions) {
+            val input = tmp.newFile()
+            val bytes = ByteBuffer.allocate(4 * c.x.size).order(ByteOrder.LITTLE_ENDIAN)
+            c.x.forEach { bytes.putFloat(it) }
+            input.writeBytes(bytes.array())
+            val output = tmp.newFile()
+            val written = Soxr.resample(input, c.from, c.to, output)
+            val back = ByteBuffer.wrap(output.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+            val streamed = FloatArray(back.remaining()).also { back.get(it) }
+            val whole = Soxr.resample(c.x, c.from, c.to)
+            assertEquals(whole.size.toLong(), written, "${c.what}: the length")
+            assertTrue(whole.contentEquals(streamed), "${c.what}: a sample differs from the one-shot's")
+            longest = maxOf(longest, whole.size)
+        }
+        // Some output many times a call's room: the stream drained across calls.
+        assertTrue(longest > 4 * Soxr.ROOM, "the longest conversion gives $longest samples")
     }
 
     @Test

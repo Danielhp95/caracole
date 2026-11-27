@@ -23,6 +23,24 @@ class MelTest {
     }
 
     @Test
+    fun `a log-mel made a chunk at a time is the whole signal's bit for bit`() {
+        // long.wav's 40 s: chunks of 1500 frames and an odd one, the first and last frames reflected at the ends.
+        val y = FrontendRecords.sources.first { it.name == "long" }.samples
+        val whole = Mel.logMel(y)
+        val frames = Mel.frames(y.size)
+        for (chunk in listOf(1500, 333)) {
+            val pieced = FloatArray(whole.size)
+            var at = 0
+            while (at < frames) {
+                val until = minOf(frames, at + chunk)
+                Mel.logMel(y.size, { y[it] }, at, until).copyInto(pieced, at * Mel.MELS)
+                at = until
+            }
+            assertTrue(whole.contentEquals(pieced), "in chunks of $chunk frames")
+        }
+    }
+
+    @Test
     fun `a frame a hop, centred`() {
         for (n in listOf(Mel.N_FFT / 2 + 1, 441 * 3, 441 * 3 + 440, 22050)) {
             assertEquals((1 + n / Mel.HOP) * Mel.MELS, Mel.logMel(FloatArray(n)).size, "$n samples")

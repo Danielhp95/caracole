@@ -2847,26 +2847,34 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     gate), the lossy ones at offset 0 and SNR ≥ 60 dB whole and each second, every file's frames the computer's and
     its stated length within 2 samples; android/README.md says what it doesn't cover.
   - The whole hearing (E9), in a process of its own: `MlService` (`:ml`'s manifest, `android:process=":ml"`, not
-    exported, the debug build's alone) runs `Pipeline.hear(audio, work, say)`, the computer's path step for step
-    (tests/helpers/autochords_reference.py): `Decoder`, `Mixdown`, libsoxr HQ to 22,050 Hz where the file is at another
-    rate (beat_this's own float64 resample on the computer: the same samples at 22,050 Hz, float32's last bits else);
-    btc.py's 10 s CQT chunks read from the memory-mapped pcm, BTC in windows of 108 (the last padded with the
-    features' mean, `BTC_BATCH` a run), argmax, `Labels`; the mel whole, beat_this's chunks, `Peaks`. One model at a
-    time, each session closed with its stage, BTC's first. Checkpoints (`:autochords`' `Checkpoints`,
-    `stateDir/cache/autochords/<sha16>-c<contract>/`: `pcm.json`, `pcm.f32`, `chords.json` (Harte labels, before
-    common names), `beats.json`, `heard.json`), each written to a `.part` and renamed, so a hearing killed goes on
-    from the last whole one. `MlChordModels` is `ChordModels` in the main process: `ready()` checks the three files
-    (BTC's graph and weights, beat_this fp16) by models.json's sizes and SHA-256 (the download is a later task's;
-    the emulator's are device-test.sh's push); `hear` binds the service, sends paths over a `Messenger`
-    (`MlProtocol`), polls its replies a second at a time calling `waiting`, holds `caracole:chords`'s wake lock, and
-    reads a dead process as `ChordsUnavailable` (`MlChordModels.DIED`). `HeatRules` (Heat.kt, the design's §3.4
-    table over a `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom
-    ≥ 0.85 or Battery Saver; severe waits between stages (10 s polls, 5 minutes at most); critical stops at the next
-    window batch or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml`
-    process, by its name (`MODELS_PROCESS`), never its class. `PipelineTest` (`device-test.sh --ml`) hears each
-    committed clip through the process against models.jsonl's meta `gates.end_to_end` (WCSR majmin and tetrads of
-    the Harte labels, beats and downbeats F after the 5 s trim), kills `:ml` mid-hearing (`ChordsUnavailable`, this
-    process still answering, the next hearing from `chords.json`), and checks every decode file's pcm length.
+    exported, the debug build's alone; one hearing a process, the process ended once its client lets go, a `CANCEL`
+    or the unbind stopping it at its next chunk) runs `Pipeline.hear(audio, work, say)`, the computer's path step for
+    step (tests/helpers/autochords_reference.py): `Decoder`, `Mixdown`, libsoxr HQ to 22,050 Hz through its stream
+    where the file is at another rate (soxr's own length, beat_this's; BTC reads librosa's `ceil(n · ratio)` of it,
+    `Stages.btcSamples`; beat_this's own float64 resample on the computer: the same samples at 22,050 Hz, float32's
+    last bits else), then `:autochords`' `Stages` (`chords`, `beats`) over the memory-mapped pcm, no array holding the
+    song. One model at a time (`Pipeline.Graphs`, `OrtGraphs`), BTC's first. Checkpoints (`:autochords`'
+    `Checkpoints`, `stateDir/cache/autochords/<sha16>-c<contract>/`: `pcm.json`, `pcm.f32` (deleted once the beats
+    are kept), `chords.json` (Harte labels, before common names), `beats.json`, `heard.json`), each written to a
+    `.part`, forced to the disk and renamed; one that won't parse, or a pcm shorter than its meta, is made again;
+    what a cut-off stage left anywhere under the folder is swept as a hearing starts. `MlChordModels` is
+    `ChordModels` in the main process: `ready()` checks the three files (BTC's graph and weights, beat_this fp16) by
+    models.json's sizes and SHA-256 (hashed once a process; the download is a later task's, the emulator's are
+    device-test.sh's push); `hear` waits for an earlier `:ml` to end, binds the service, sends paths over a
+    `Messenger` (`MlProtocol`), polls its replies a second at a time calling `waiting`, holds `caracole:chords`'s
+    wake lock (its 10 minutes begun again each step and minute), cancels on its way out unanswered, and reads a dead
+    process as `ChordsUnavailable` (`MlChordModels.DIED`); a bug in the process is an IllegalStateException "a bug in
+    caracole: …", an OutOfMemoryError said as one. `HeatRules` (Heat.kt, the design's §3.4 table over a
+    `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom ≥ 0.85 or
+    Battery Saver; severe waits before a stage (10 s polls, 5 minutes at most); critical stops at the next window batch
+    or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml` process, by its name
+    (`MODELS_PROCESS`, the app's `MlProcessTest` holding it to the manifest and `MlProtocol`). `PipelineCheckpointsTest`
+    (JVM, the graphs faked) holds the checkpoints; `PipelineTest` (`device-test.sh --ml`) hears each committed clip
+    and models.jsonl's `hearing` files (44.1 kHz stereo MP3, 48 kHz stereo AAC) through the process against
+    `gates.end_to_end` (WCSR of the Harte labels, beats and downbeats F after the 5 s trim; the clips' frames the
+    computer's argmax but at its margins; each model's input the computer's length), kills `:ml` mid-hearing
+    (`ChordsUnavailable`, this process still answering, the next hearing from `chords.json`), and checks every decode
+    file's pcm length.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
@@ -2898,8 +2906,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `ScoresTest` replay labels, peaks, chunks and scores.jsonl, which the area's replay holds on the device too.
   `ChordModels` (`ready()`, `hear(audio, onStep, waiting)`), `AudioUnreadable`, `ChordsUnavailable`, `Heard` (the
   design's §4.4 `heard`: contract 1, the stated duration, `recognize`'s chords, beats, downbeats; `json`, `read` of
-  that contract alone), `Labels.recognized` (`recognize`'s common names, a run joined) and `Checkpoints`; `HeardTest`
-  (recognized over models.jsonl's argmax gives its segments).
+  that contract alone), `Labels.recognized` (`recognize`'s common names, a run joined), `Checkpoints` and `Stages`
+  (`resample`, `chords`, `beats` over files, through `ChordsGraph` and `BeatsGraph`; their buffers fixed by the rates
+  and the models: `Soxr.resample(file, …)`, libsoxr's stream, the one-shot's output sample for sample, SoxrTest and
+  SoxrArm64Test; `Mel.logMel(n, sample, from, until)`, the whole signal's frames bit for bit, MelTest); `HeardTest`
+  (recognized over models.jsonl's argmax gives its segments; checkpoints that won't parse), `StagesTest` (each
+  model's length) and `StagesHeapTest` (15 minutes at 48 kHz heard in a 40 MB heap, where the old one-call resample
+  runs out of memory).
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps YouTube's routes and `GET /lookup` alone, answering "…: not on the phone yet."

@@ -65,7 +65,7 @@ val copyModelVectors by tasks.registering(Sync::class) {
     // DecoderTest's files, the computer's decode of which decode.jsonl holds, and PipelineTest's clips, the
     // computer's hearing of which models.jsonl holds.
     from("../../tests/fixtures/autochords") {
-        include("decode*.*", "steady.wav", "tempo-change.wav", "silence.wav", "long.wav")
+        include("decode*.*", "hearing.*", "steady.wav", "tempo-change.wav", "silence.wav", "long.wav")
         into("autochords")
     }
 }
@@ -84,6 +84,13 @@ tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource")
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+// The JVM's tests of the pipeline (PipelineCheckpointsTest) run the CQT, whose resamples are libsoxr's: the host's
+// build, :autochords' hostSoxr, as :autochords' own tests load it.
+tasks.withType<Test>().configureEach {
+    dependsOn(":autochords:hostSoxr")
+    systemProperty("java.library.path", project(":autochords").layout.buildDirectory.dir("hostSoxr").get().asFile.path)
 }
 
 dependencies {

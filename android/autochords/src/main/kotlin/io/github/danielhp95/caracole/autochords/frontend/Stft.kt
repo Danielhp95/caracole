@@ -51,17 +51,29 @@ class Stft(val nFft: Int, val hop: Int) {
 
     /** torch.stft's frames of [y] times [window] (`pad_mode="reflect"`), as many as `1 + y.size / hop`: reflection
      * needs more samples than half a window, as torch's padding does. The count. */
-    fun torch(y: FloatArray, window: FloatArray, take: (Int, DoubleArray, DoubleArray) -> Unit): Int {
+    fun torch(y: FloatArray, window: FloatArray, take: (Int, DoubleArray, DoubleArray) -> Unit): Int =
+        torch(y.size, { y[it] }, window, 0, 1 + y.size / hop, take)
+
+    /** A signal's samples by index, unboxed (a `(Int) -> Float` would box each sample read). */
+    fun interface Samples {
+        fun at(i: Int): Float
+    }
+
+    /** The same frames [from] until [until] of a signal of [n] samples, each sample read by [sample]: frame for
+     * frame the whole signal's (each frame's arithmetic its own), so a long signal is framed a chunk at a time. */
+    fun torch(n: Int, sample: Samples, window: FloatArray, from: Int, until: Int,
+              take: (Int, DoubleArray, DoubleArray) -> Unit): Int {
         val h = nFft / 2
         require(window.size == nFft)
-        require(y.size > h) { "torch's reflect padding of $h needs more than $h samples, not ${y.size}" }
-        val count = 1 + y.size / hop
-        for (f in 0 until count) {
+        require(n > h) { "torch's reflect padding of $h needs more than $h samples, not $n" }
+        val count = 1 + n / hop
+        require(from in 0..until && until <= count) { "frames $from until $until of $count" }
+        for (f in from until until) {
             val at = f * hop - h
-            if (at >= 0 && at + nFft <= y.size) {
-                for (j in 0 until nFft) frame[j] = y[at + j].toDouble() * window[j]
+            if (at >= 0 && at + nFft <= n) {
+                for (j in 0 until nFft) frame[j] = sample.at(at + j).toDouble() * window[j]
             } else {
-                for (j in 0 until nFft) frame[j] = y[reflected(at + j, y.size)].toDouble() * window[j]
+                for (j in 0 until nFft) frame[j] = sample.at(reflected(at + j, n)).toDouble() * window[j]
             }
             fft.real(frame, re, im)
             take(f, re, im)

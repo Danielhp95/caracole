@@ -12,6 +12,8 @@ import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertNull
 
 /** [Heard], the design's §4.4 `heard`, its checkpoints ([Checkpoints]) and recognize's common names
@@ -59,12 +61,51 @@ class HeardTest {
     }
 
     @Test
+    fun `a checkpoint that won't parse is absent, deleted to be made again`() {
+        val points = Checkpoints.of(tmp.root, tmp.newFile("a.wav").apply { writeText("y") })
+        points.folder.mkdirs()
+        // A power cut after the rename, before the disk had the bytes: a cut file, or an empty one.
+        points.file(Checkpoints.CHORDS).writeText("{\"harte\":[[0.0,1.2")
+        points.file(Checkpoints.HEARD).writeText("")
+        assertNull(points.parsed(Checkpoints.CHORDS, Checkpoints::readChords))
+        assertNull(points.parsed(Checkpoints.HEARD, Heard::read))
+        assertFalse(points.has(Checkpoints.CHORDS))
+        assertFalse(points.has(Checkpoints.HEARD))
+        points.write(Checkpoints.CHORDS, Checkpoints.chordsJson(emptyList()))
+        assertEquals(emptyList(), points.parsed(Checkpoints.CHORDS, Checkpoints::readChords))
+    }
+
+    @Test
+    fun `a pcm shorter than its meta says is no pcm`() {
+        val points = Checkpoints.of(tmp.root, tmp.newFile("a.wav").apply { writeText("z") })
+        val meta = Checkpoints.Pcm(1.0, 22050, 22050)
+        points.write(Checkpoints.PCM_META, Checkpoints.pcmJson(meta))
+        points.into(Checkpoints.PCM) { it.writeBytes(ByteArray(4 * 22050)) }
+        assertTrue(points.pcmWhole(meta))
+        points.file(Checkpoints.PCM).writeBytes(ByteArray(4 * 22049))
+        assertFalse(points.pcmWhole(meta))
+    }
+
+    @Test
+    fun `a sweep takes what cut-off stages left in any song's folder, never a checkpoint`() {
+        val a = File(tmp.root, "aaaa-c1").apply { mkdirs() }
+        val b = File(tmp.root, "bbbb-c1").apply { mkdirs() }
+        for (name in listOf("decoded.f32", "mono.f32", "pcm.f32.part", Checkpoints.PCM, Checkpoints.CHORDS)) {
+            File(a, name).writeText("x")
+        }
+        File(b, "beats.json.part").writeText("x")
+        Checkpoints.sweep(tmp.root)
+        assertEquals(setOf(Checkpoints.PCM, Checkpoints.CHORDS), a.list()!!.toSet())
+        assertEquals(emptySet(), b.list()!!.toSet())
+    }
+
+    @Test
     fun `chords and beats round-trip through their checkpoints`() {
         val harte = listOf(ChordSegment(0.0, 1.204, "N"), ChordSegment(1.204, 3.5, "A:min7"))
         assertEquals(harte, Checkpoints.readChords(Checkpoints.chordsJson(harte)))
         val beats = listOf(0.5, 1.0) to listOf(0.5)
         assertEquals(beats, Checkpoints.readBeats(Checkpoints.beatsJson(beats.first, beats.second)))
-        val pcm = Checkpoints.Pcm(12.0, 264_600)
+        val pcm = Checkpoints.Pcm(12.0, 264_599, 264_600)
         assertEquals(pcm, Checkpoints.readPcm(Checkpoints.pcmJson(pcm)))
     }
 

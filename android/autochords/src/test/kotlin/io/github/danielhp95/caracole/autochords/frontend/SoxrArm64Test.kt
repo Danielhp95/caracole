@@ -15,7 +15,8 @@ import kotlin.test.assertTrue
  * caracole_soxr_resample, built static by the NDK for arm64-v8a from the same sources and flags: build.gradle.kts's
  * arm64SoxrDriver) under qemu-aarch64 (android/flake.nix's shell), over every record of soxr.jsonl: python-soxr's
  * answers, made on x86_64 by its SIMD engine (cr32s, SSE), within [TOLERANCE], each length equal; by the patched NEON
- * engine (cr32s, soxr/aarch64.patch) and by the scalar one (cr32, SOXR_USE_SIMD=0). Skipped, saying why, where the
+ * engine (cr32s, soxr/aarch64.patch) and by the scalar one (cr32, SOXR_USE_SIMD=0), and the driver's stream (the
+ * one Soxr.kt feeds a file through) the one-shot's sample for sample on each. Skipped, saying why, where the
  * driver (no NDK) or qemu-aarch64 is missing; no device is involved.
  */
 class SoxrArm64Test {
@@ -40,14 +41,18 @@ class SoxrArm64Test {
             val d = SoxrRecords.worst(got, c.y)
             worst[c.family] = maxOf(worst[c.family] ?: 0.0, d)
             assertTrue(d <= TOLERANCE, "$name, ${c.what}: a sample differs by $d")
+            // The stream Soxr.kt feeds a file through: the one-shot's, sample for sample, on the phone's code too.
+            assertTrue(got.contentEquals(run(c.x, c.from, c.to, simd, stream = true)), "$name, ${c.what}: the stream")
         }
         println("arm64 $name: the largest difference from python-soxr, by family: $worst")
     }
 
-    private fun run(x: FloatArray, from: Double, to: Double, simd: Boolean): FloatArray {
+    private fun run(x: FloatArray, from: Double, to: Double, simd: Boolean, stream: Boolean = false): FloatArray {
         val input = ByteBuffer.allocate(4 * x.size).order(ByteOrder.LITTLE_ENDIAN)
         x.forEach { input.putFloat(it) }
-        val process = ProcessBuilder(qemu!!.path, driver!!.path, from.toString(), to.toString()).apply {
+        val args = listOf(qemu!!.path, driver!!.path, from.toString(), to.toString()) +
+            if (stream) listOf("stream") else emptyList()
+        val process = ProcessBuilder(args).apply {
             environment()["SOXR_USE_SIMD"] = if (simd) "1" else "0"
         }.start()
         val writer = Thread { process.outputStream.use { it.write(input.array()) } }.apply { start() }
