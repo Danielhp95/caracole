@@ -131,6 +131,80 @@ class BenchReportTest {
         assertTrue("Sign in to confirm" in text, text)
     }
 
+    // -- The shared sample: tests/fixtures/ytbench/sample.json --------------------------------------------------
+
+    /** A mobile-data session, enforced, of three songs, as [BenchReport.of] makes it from fixed inputs: the shape
+     * `tests/helpers/ytbench_gate.py` reads, and its tests' every report is built from. Its songs and hosts are made
+     * up (no song of the owner's), YouTube-shaped. */
+    private fun sampleReport(): JsonObject {
+        fun use(connects: Int, up: Long, down: Long, apart: Boolean = false) = HostGate.HostUse(connects, up, down, 0, apart)
+        val header = listOf(Stamped(40, "[debug] yt-dlp version stable@2026.11.23 from yt-dlp/yt-dlp [aaaaaaa] (pip)"),
+                            Stamped(41, "[debug] Python 3.13.16 (CPython aarch64 64bit) - Linux"),
+                            Stamped(42, "[debug] JS runtimes: quickjs-ng-0.18.0"))
+        fun search(song: String, at: String, seconds: Double, python: Long) = BenchRunRecord(
+            song, "search", null, at, 95, python, seconds, if (python > 2_000) 0.0 else 4.25,
+            header + listOf(Stamped(900, "[youtube:search] Extracting URL: ytsearch8:$song")), "ok", null,
+            mapOf("www.youtube.com" to use(2, 4_100, 310_000)), 321_000, mapOf("youtube" to 141.5))
+        fun download(song: String, cache: String, at: String, seconds: Double, challenge: Boolean, frames: Long,
+                     duration: Double) = BenchRunRecord(
+            song, "download", cache, at, 90, 780, seconds, 5.5,
+            header + listOf(Stamped(1_000, "[youtube] aaaaaaaaaaa: Downloading android_vr player API JSON")) +
+                (if (challenge) listOf(Stamped(2_000, "[youtube] [jsc:quickjs-ng] Solving JS challenges using quickjs-ng"),
+                                       Stamped(2_500, "[jsc:quickjs-ng] Running QuickJS"),
+                                       Stamped(11_000, "[info] aaaaaaaaaaa: Downloading 1 format(s): 140"))
+                 else emptyList()) +
+                listOf(Stamped(11_100, "[download] Sleeping 3.50 seconds as required by the site..."),
+                       Stamped(11_200, "WARNING: [youtube] aaaaaaaaaaa: Some web client https formats have been skipped")),
+            "ok", null,
+            mapOf("www.youtube.com" to use(1, 2_000, 1_350_000),
+                  "rr3---sn-5hne6nzk.googlevideo.com" to use(3, 9_800, 3_890_000)),
+            5_400_000, mapOf("youtube" to 236.0, "qjs" to 88.5),
+            JsonObject(linkedMapOf("ext" to JsonPrimitive("m4a"), "bytes" to JsonPrimitive(3_880_120),
+                                   "duration" to JsonPrimitive(duration))),
+            JsonObject(linkedMapOf("mime" to JsonPrimitive("audio/mp4a-latm"), "rate" to JsonPrimitive(44_100),
+                                   "channels" to JsonPrimitive(2), "frames" to JsonPrimitive(frames))),
+            "choose")
+        val runs = listOf(
+            search("Sample Artist - First Song", "2026-11-28T18:00:05Z", 6.5, 3_400),
+            download("Sample Artist - First Song", "cold", "2026-11-28T18:00:16Z", 19.5, true, 10_584_000, 240.0),
+            search("Another Artist - Second Song", "2026-11-28T18:00:41Z", 4.0, 800),
+            download("Another Artist - Second Song", "warm", "2026-11-28T18:00:50Z", 9.75, false, 8_820_000, 200.0),
+            search("Third Artist - Third Song", "2026-11-28T18:01:05Z", 3.75, 790),
+            download("Third Artist - Third Song", "warm", "2026-11-28T18:01:14Z", 10.5, false, 9_261_000, 210.0),
+        )
+        val device = JsonObject(linkedMapOf(
+            "device" to JsonPrimitive("Sample Phone"), "soc" to JsonPrimitive("Sample SoC"),
+            "android" to JsonPrimitive("15 (API 35)"), "app" to JsonPrimitive("0.4.0-debug+aaaaaaaa"),
+            "apk_bytes" to JsonPrimitive(75_241_158), "installed_bytes" to JsonPrimitive(144_636_078),
+            "abi" to JsonPrimitive("arm64-v8a")))
+        val network = JsonObject(linkedMapOf("transport" to JsonPrimitive("cellular"), "metered" to JsonPrimitive(true),
+                                             "validated" to JsonPrimitive(true)))
+        val kill = JsonObject(linkedMapOf(
+            "run" to JsonPrimitive(true), "spends" to JsonPrimitive(0), "killed" to JsonPrimitive(true),
+            "qjs_seen" to JsonPrimitive(true), "left" to kotlinx.serialization.json.JsonArray(emptyList()),
+            "next_run_ok" to JsonPrimitive(true)))
+        val first = JsonObject(linkedMapOf("first_after_install" to JsonPrimitive(true),
+                                           "process_start_ms" to JsonPrimitive(95), "python_ready_ms" to JsonPrimitive(3_400)))
+        return BenchReport.of(device, network, BenchRun.ENFORCE, HostGate.Mode.NETWORK.name, "2026-11-28T18:00:00Z",
+                              BenchIdle(0, 0, 0, 0, false, false), 0 to 6, 6, runs, kill, first, null)
+    }
+
+    /** The committed sample is what [BenchReport.of] writes for [sampleReport]'s inputs, member for member, so the
+     * Python checker's tests read the bench's own shape. `CARACOLE_YTBENCH_SAMPLE=write` writes it again (a change of
+     * the report's shape, which ytbench_gate.py's reading then follows). */
+    @Test
+    fun `the checker's sample is what the bench writes`() {
+        val file = File(checkNotNull(System.getProperty("caracole.youtube.ytbench_sample")))
+        val made = sampleReport()
+        val pretty = kotlinx.serialization.json.Json { prettyPrint = true }
+        if (System.getenv("CARACOLE_YTBENCH_SAMPLE") == "write") {
+            file.parentFile.mkdirs()
+            file.writeText(pretty.encodeToString(JsonObject.serializer(), made) + "\n")
+        }
+        assertTrue(file.isFile, "$file: write it with CARACOLE_YTBENCH_SAMPLE=write")
+        assertEquals(kotlinx.serialization.json.Json.parseToJsonElement(file.readText()), made)
+    }
+
     // -- BenchRun's terms, over fakes and the database ------------------------------------------------------------
 
     private var now = Instant.parse("2026-11-26T20:00:00Z")

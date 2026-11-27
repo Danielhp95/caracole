@@ -1052,11 +1052,33 @@ bench sent nothing after one, not how YouTube treats the phone afterwards.
 5. **Bring the report back**: `caracole-ytbench-<UTC>.json` (§4.3 of the design: the device and the app, the pins as
    the running code reports them, the network's kind, `idle`, the day's runs before and after, each run's timings,
    challenge, sleeps and pause, clients, outcome, ERROR and WARNING lines, hosts and bytes, PSS, and a download's file
-   and what MediaCodec decoded of it; the kill check; `summary`, each gate's numbers). The folder whole:
+   and what MediaCodec decoded of it; the kill check; `summary`, each gate's numbers). The folder whole, into a folder
+   outside the repository (nothing recorded of YouTube is committed):
 
-       adb -s SERIAL pull /sdcard/Android/data/io.github.danielhp95.caracole.debug/files/ytbench/ .
+       adb -s SERIAL pull /sdcard/Android/data/io.github.danielhp95.caracole.debug/files/ytbench/ ~/ytbench/
 
    It names your songs as typed, nothing else of yours.
+
+### The sessions of Gate Y0
+
+Two sessions, on two days, and only when you say so: no one else starts one, and none starts by adb.
+
+- **Day 1, on Wi-Fi**: three songs, **Start, observing every host**.
+- **Day 2, on mobile data**: three songs, **Start** (enforce).
+- At most 6 runs a day, any session counted (three songs are six); a session that would pass them is refused. A
+  block ends the day's session: the next one waits for its cooldown and another day.
+- Each session by a tap on Start, the app otherwise idle (no sync, no library page open).
+
+Then pull the reports (step 5) and, from the repository's root, give the checker both:
+
+    nix develop -c python -m tests.helpers.ytbench_gate [--apk-growth-mb N] ~/ytbench/caracole-ytbench-*.json
+
+It says each row of §4.4 (Y0-W works … Y0-C start) and the owner's terms (six runs in any 24 hours by the runs' own
+stamps, nothing after a block, each day's gate mode, no host outside YouTube's reached, no proxy secret in a report):
+PASS, FAIL or UNDECIDED, the numbers and why, then how often an observed session asked `youtubei.googleapis.com` (the
+controller decides it), then the whole verdict. It exits 0 only when every gate passed, 1 for a fail, 2 for undecided
+or a report that won't read. Y0-S is no report's: `--apk-growth-mb` gives the release-equivalent arm64 APK's growth.
+Three songs show no rate: what they can't decide is UNDECIDED, and the answer is more days, never more runs a day.
 
 ## YouTube's gate (not in the app yet)
 

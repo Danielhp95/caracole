@@ -1,0 +1,384 @@
+{
+    "format": 1,
+    "started_at": "2026-11-28T18:00:00Z",
+    "gate": "enforce",
+    "mode": "NETWORK",
+    "device": "Sample Phone",
+    "soc": "Sample SoC",
+    "android": "15 (API 35)",
+    "app": "0.4.0-debug+aaaaaaaa",
+    "apk_bytes": 75241158,
+    "installed_bytes": 144636078,
+    "abi": "arm64-v8a",
+    "pins": {
+        "ytdlp": "2026.11.23",
+        "python": "3.13.16",
+        "js_runtimes": "quickjs-ng-0.18.0"
+    },
+    "network": {
+        "transport": "cellular",
+        "metered": true,
+        "validated": true
+    },
+    "idle": true,
+    "idle_detail": {
+        "served_before": 0,
+        "served_after": 0,
+        "jobs_before": 0,
+        "jobs_after": 0,
+        "running_before": false,
+        "running_after": false
+    },
+    "budget": {
+        "before": 0,
+        "after": 6,
+        "of": 6
+    },
+    "runs": [
+        {
+            "song": "Sample Artist - First Song",
+            "kind": "search",
+            "cache": null,
+            "chosen_by": null,
+            "started_at": "2026-11-28T18:00:05Z",
+            "process_start_ms": 95,
+            "python_ready_ms": 3400,
+            "seconds": 6.5,
+            "challenge": null,
+            "sleeps_seconds": 0.0,
+            "pause_seconds": 0.0,
+            "clients": [],
+            "outcome": "ok",
+            "reason": null,
+            "said": [],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 2,
+                    "bytes_up": 4100,
+                    "bytes_down": 310000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 321000,
+            "pss_peak_mb": {
+                "youtube": 141.5
+            },
+            "file": null,
+            "decoded": null
+        },
+        {
+            "song": "Sample Artist - First Song",
+            "kind": "download",
+            "cache": "cold",
+            "chosen_by": "choose",
+            "started_at": "2026-11-28T18:00:16Z",
+            "process_start_ms": 90,
+            "python_ready_ms": 780,
+            "seconds": 19.5,
+            "challenge": {
+                "seconds": 9.0,
+                "runtime": "quickjs-ng"
+            },
+            "sleeps_seconds": 3.5,
+            "pause_seconds": 5.5,
+            "clients": [
+                "android_vr"
+            ],
+            "outcome": "ok",
+            "reason": null,
+            "said": [
+                "WARNING: [youtube] aaaaaaaaaaa: Some web client https formats have been skipped"
+            ],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 1,
+                    "bytes_up": 2000,
+                    "bytes_down": 1350000,
+                    "refused": 0,
+                    "apart": false
+                },
+                "rr3---sn-5hne6nzk.googlevideo.com": {
+                    "connects": 3,
+                    "bytes_up": 9800,
+                    "bytes_down": 3890000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 5400000,
+            "pss_peak_mb": {
+                "youtube": 236.0,
+                "qjs": 88.5
+            },
+            "file": {
+                "ext": "m4a",
+                "bytes": 3880120,
+                "duration": 240.0
+            },
+            "decoded": {
+                "mime": "audio/mp4a-latm",
+                "rate": 44100,
+                "channels": 2,
+                "frames": 10584000
+            }
+        },
+        {
+            "song": "Another Artist - Second Song",
+            "kind": "search",
+            "cache": null,
+            "chosen_by": null,
+            "started_at": "2026-11-28T18:00:41Z",
+            "process_start_ms": 95,
+            "python_ready_ms": 800,
+            "seconds": 4.0,
+            "challenge": null,
+            "sleeps_seconds": 0.0,
+            "pause_seconds": 4.25,
+            "clients": [],
+            "outcome": "ok",
+            "reason": null,
+            "said": [],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 2,
+                    "bytes_up": 4100,
+                    "bytes_down": 310000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 321000,
+            "pss_peak_mb": {
+                "youtube": 141.5
+            },
+            "file": null,
+            "decoded": null
+        },
+        {
+            "song": "Another Artist - Second Song",
+            "kind": "download",
+            "cache": "warm",
+            "chosen_by": "choose",
+            "started_at": "2026-11-28T18:00:50Z",
+            "process_start_ms": 90,
+            "python_ready_ms": 780,
+            "seconds": 9.75,
+            "challenge": null,
+            "sleeps_seconds": 3.5,
+            "pause_seconds": 5.5,
+            "clients": [
+                "android_vr"
+            ],
+            "outcome": "ok",
+            "reason": null,
+            "said": [
+                "WARNING: [youtube] aaaaaaaaaaa: Some web client https formats have been skipped"
+            ],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 1,
+                    "bytes_up": 2000,
+                    "bytes_down": 1350000,
+                    "refused": 0,
+                    "apart": false
+                },
+                "rr3---sn-5hne6nzk.googlevideo.com": {
+                    "connects": 3,
+                    "bytes_up": 9800,
+                    "bytes_down": 3890000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 5400000,
+            "pss_peak_mb": {
+                "youtube": 236.0,
+                "qjs": 88.5
+            },
+            "file": {
+                "ext": "m4a",
+                "bytes": 3880120,
+                "duration": 200.0
+            },
+            "decoded": {
+                "mime": "audio/mp4a-latm",
+                "rate": 44100,
+                "channels": 2,
+                "frames": 8820000
+            }
+        },
+        {
+            "song": "Third Artist - Third Song",
+            "kind": "search",
+            "cache": null,
+            "chosen_by": null,
+            "started_at": "2026-11-28T18:01:05Z",
+            "process_start_ms": 95,
+            "python_ready_ms": 790,
+            "seconds": 3.75,
+            "challenge": null,
+            "sleeps_seconds": 0.0,
+            "pause_seconds": 4.25,
+            "clients": [],
+            "outcome": "ok",
+            "reason": null,
+            "said": [],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 2,
+                    "bytes_up": 4100,
+                    "bytes_down": 310000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 321000,
+            "pss_peak_mb": {
+                "youtube": 141.5
+            },
+            "file": null,
+            "decoded": null
+        },
+        {
+            "song": "Third Artist - Third Song",
+            "kind": "download",
+            "cache": "warm",
+            "chosen_by": "choose",
+            "started_at": "2026-11-28T18:01:14Z",
+            "process_start_ms": 90,
+            "python_ready_ms": 780,
+            "seconds": 10.5,
+            "challenge": null,
+            "sleeps_seconds": 3.5,
+            "pause_seconds": 5.5,
+            "clients": [
+                "android_vr"
+            ],
+            "outcome": "ok",
+            "reason": null,
+            "said": [
+                "WARNING: [youtube] aaaaaaaaaaa: Some web client https formats have been skipped"
+            ],
+            "hosts": {
+                "www.youtube.com": {
+                    "connects": 1,
+                    "bytes_up": 2000,
+                    "bytes_down": 1350000,
+                    "refused": 0,
+                    "apart": false
+                },
+                "rr3---sn-5hne6nzk.googlevideo.com": {
+                    "connects": 3,
+                    "bytes_up": 9800,
+                    "bytes_down": 3890000,
+                    "refused": 0,
+                    "apart": false
+                }
+            },
+            "uid_bytes": 5400000,
+            "pss_peak_mb": {
+                "youtube": 236.0,
+                "qjs": 88.5
+            },
+            "file": {
+                "ext": "m4a",
+                "bytes": 3880120,
+                "duration": 210.0
+            },
+            "decoded": {
+                "mime": "audio/mp4a-latm",
+                "rate": 44100,
+                "channels": 2,
+                "frames": 9261000
+            }
+        }
+    ],
+    "after_block_requests": 0,
+    "kill_check": {
+        "run": true,
+        "spends": 0,
+        "killed": true,
+        "qjs_seen": true,
+        "left": [],
+        "next_run_ok": true
+    },
+    "first_start": {
+        "first_after_install": true,
+        "process_start_ms": 95,
+        "python_ready_ms": 3400
+    },
+    "stopped": null,
+    "summary": {
+        "W": {
+            "songs": 3,
+            "downloads_ok": 3,
+            "decoded": 3,
+            "blocked": 0
+        },
+        "T": {
+            "cold_challenge_s": 9.0,
+            "cold_whole_s_less_sleeps": 22.5,
+            "warm_downloads_s": [
+                9.75,
+                10.5
+            ]
+        },
+        "H": {
+            "hosts": [
+                "www.youtube.com",
+                "rr3---sn-5hne6nzk.googlevideo.com"
+            ],
+            "refused_by_name_asked": [],
+            "bytes": [
+                {
+                    "uid": 321000,
+                    "gate": 314100
+                },
+                {
+                    "uid": 5400000,
+                    "gate": 5251800
+                },
+                {
+                    "uid": 321000,
+                    "gate": 314100
+                },
+                {
+                    "uid": 5400000,
+                    "gate": 5251800
+                },
+                {
+                    "uid": 321000,
+                    "gate": 314100
+                },
+                {
+                    "uid": 5400000,
+                    "gate": 5251800
+                }
+            ],
+            "idle": true
+        },
+        "B": {
+            "unclassified": 0,
+            "after_block_requests": 0
+        },
+        "F": {
+            "decoded_vs_duration_s": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        "K": {
+            "run": true,
+            "left": 0
+        },
+        "M": {
+            "pss_peak_mb": 324.5
+        },
+        "C": {
+            "first_python_ready_ms": 3400.0,
+            "least_later_python_ready_ms": 780.0
+        }
+    }
+}

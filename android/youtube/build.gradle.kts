@@ -143,6 +143,7 @@ chaquopy {
 
 // PinsTest reads pins.json and the wheels' folder; GlueTest runs the glue with buildPython over the wheels.
 val glue: File = file("src/main/python")
+val ytbenchSample: File = rootProject.file("../tests/fixtures/ytbench/sample.json")
 tasks.withType<Test>().configureEach {
     inputs.file(pinsFile).withPropertyName("pins")
     inputs.files(wheels).withPropertyName("wheels")
@@ -153,6 +154,9 @@ tasks.withType<Test>().configureEach {
     systemProperty("caracole.youtube.glue", glue.absolutePath)
     inputs.dir(quickjsSrc).withPropertyName("quickjs").optional()
     systemProperty("caracole.youtube.quickjs", quickjsSrc.absolutePath)
+    // BenchReportTest holds the bench's report to the sample tests/helpers/ytbench_gate.py's tests read.
+    inputs.files(ytbenchSample).withPropertyName("ytbenchSample")
+    systemProperty("caracole.youtube.ytbench_sample", ytbenchSample.absolutePath)
 }
 
 kotlin {
