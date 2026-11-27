@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.ml
 
+import io.github.danielhp95.caracole.autochords.frontend.Mp4
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -106,6 +107,18 @@ data class Trim(val skip: Long, val keep: Long? = null, val cutEnd: Long = 0, va
         fun stated(delay: Int, padding: Int, rate: Int? = null) =
             Trim(skip = delay.toLong(), cutEnd = padding.toLong(), rate = rate?.takeIf { it > 0 })
     }
+}
+
+/**
+ * Where [Decoder] ends a fragmented MP4 with no edit list (yt-dlp's m4a on the phone): its fragments' length in its
+ * `mdhd` timescale, as the computer's remux of it (yt-dlp's FixupM4a) decodes it; null for any other [track] (not
+ * fragmented, or with an edit list, which decides); a fragmented one whose fragments can't be read, or of a timescale
+ * past an Int, is [UndecodableAudio]: never decoded to an unknown length stated as 0, nor cut to nothing.
+ */
+fun fragmentsKeep(track: Mp4.Track?): Long? {
+    if (track == null || !track.fragmented || track.edits.isNotEmpty()) return null
+    if (track.timescale !in 1..Int.MAX_VALUE) throw UndecodableAudio("its fragments' timescale can't be read")
+    return track.fragments ?: throw UndecodableAudio("its fragments can't be read (a download cut short?)")
 }
 
 /** [block]'s answer, a container's boxes or pages read; any failure there (a field that leads nowhere, an I/O error)

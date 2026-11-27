@@ -33,7 +33,10 @@ import org.junit.runner.RunWith
  *   `offset_search`, over `offset_window` samples), an SNR of `snr_db_min` or more against the computer's 16-bit
  *   decode over the samples both decoded, and of `snr_second_db_min` over each whole second;
  * - every one: its frames within `decoded_within_samples` of the computer's, and the length it states
- *   ([Decoded.durationS]) within `length_within_samples` samples of music.py read_audio's.
+ *   ([Decoded.durationS]) within `length_within_samples` samples of music.py read_audio's;
+ * - a fragmented MP4 (`fragmented`, yt-dlp's m4a on the phone), which the computer never holds as it is: held to the
+ *   computer's remux of it (yt-dlp's FixupM4a), its decode and its read_audio length, which the generator checks
+ *   against the remux beside it (`decode-frag-remux.m4a`, `decode-dash-remux.m4a`).
  *
  * It says, a file a line on the instrumentation's stream, which decoder ran, what it trimmed, and what it measured:
  * the offset, the SNR (and each second's), the lengths, the time, and the process's peak RSS while it decoded.

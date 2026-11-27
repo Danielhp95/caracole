@@ -253,7 +253,8 @@ Neither has an edit list (FFmpeg writes none in a fragmented file, `-use_editlis
 whole is its last frame's padding longer than its samples' durations say, and mutagen states no length of it. The
 computer never holds such a file: its yt-dlp remuxes it (FixupM4a, `ffmpeg -c copy -f mp4`), whose `elst` starts at 0,
 whose `mdhd` is the fragments' length (133,324 and 265,624 samples), and whose decode is the fragmented file's ended
-there (checked on both). decode.jsonl's records of them are that decode and that length (`fragmented`). Against the
+there: encode.sh writes each remux beside it (`decode-frag-remux.m4a`, `decode-dash-remux.m4a`), and the generator
+checks both against it. decode.jsonl's records of them are that decode and that length (`fragmented`). Against the
 plain file of the same frames (decode.m4a, and the itag 140 clip as a plain MP4), whose edit list trims the priming,
 those samples are the plain decode's 1,024 samples later.
 
