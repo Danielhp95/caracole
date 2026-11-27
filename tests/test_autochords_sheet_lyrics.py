@@ -408,7 +408,7 @@ def test_a_re_lay_keeps_who_made_it_and_from_what(conn, cfg, tmp_path):
     theirs = {**version.raw, "audio": "/data/user/0/phone/files/audio/7-0123456789abcdef.mp3", "made_on": "phone",
               "made_by": "0f1e2d3c4b5a6978",
               "models": {"chords": "btc_large_voca@aa", "beats": "beat_this final0 fp16@bb"},
-              "runtime": "onnxruntime 1.32.0", "audio_name": "river road.mp3", "audio_sha16": "0123456789abcdef"}
+              "runtime": "onnxruntime 1.27.1", "audio_name": "river road.mp3", "audio_sha16": "0123456789abcdef"}
     from caracole.versions import set_raw
 
     set_raw(conn, version.id, theirs)

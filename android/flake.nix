@@ -51,6 +51,13 @@
       # `.#chord-models`), which :ml's ModelParityTest runs on the emulator (scripts/device-test.sh --ml): in the ml
       # shell alone, so the other shells never build them (torch exports them).
       chordModels = pkgs.callPackage ../nix/autochords-onnx.nix { };
+      # ONNX Runtime 1.27.1 built from its source for arm64-v8a and x86_64 (../nix/onnxruntime-android.nix), an AAR in
+      # a Maven folder of its own, which settings.gradle.kts reads as $CARACOLE_ONNXRUNTIME for :ml in Maven Central's
+      # place: every shell, since :ml's classes compile against it in `gradle test` too. Built once a machine (hours, its
+      # compile jobs Nix's --cores), then the store's.
+      onnxruntime = pkgs.callPackage ../nix/onnxruntime-android.nix {
+        ndk = "${(sdkFor false).androidsdk}/libexec/android-sdk/ndk/${ndkVersion}";
+      };
 
       # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
       # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
@@ -71,6 +78,7 @@
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
           CARACOLE_BTC_WEIGHTS = "${autochordsFiles.btcWeights}";
+          CARACOLE_ONNXRUNTIME = "${onnxruntime}/maven";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;
           # The Android Gradle plugin fetches aapt2 from Maven, a binary NixOS can't run:
@@ -81,6 +89,9 @@
           '';
         };
     in {
+      # `nix build ./android#onnxruntime-android` (and `.natives.arm64-v8a`, `.natives.x86_64`, `.mirror`).
+      packages.${system}.onnxruntime-android = onnxruntime;
+
       devShells.${system} = {
         # Builds and tests the app: `nix develop ./android -c gradle -p android assembleDebug`.
         default = shellFor false;

@@ -17,10 +17,10 @@ import java.nio.FloatBuffer
  *
  * Each session is opened at its first run, on [threads] intra-op threads, and closed by [close]; [arena] keeps ONNX
  * Runtime's own CPU arena and memory patterns, off by default (below), so that the Chords bench measures both on the
- * phone. The runtime's
- * telemetry is off: `ORT_DISABLE_TELEMETRY` is set before the process's first [OrtEnvironment], which nothing but this
- * class makes, and the environment's events are turned off; `:ml`'s manifest removes the AAR's TelemetryInitializer,
- * which would hand the native side an HTTP client at the app's start.
+ * phone. The runtime is ONNX Runtime 1.27.1 built from its source (nix/onnxruntime-android.nix), which has no
+ * telemetry to send: its own is opt-in at build time and never set, and its AAR declares no provider (ApkScanTest).
+ * `ORT_DISABLE_TELEMETRY` is still set before the process's first [OrtEnvironment], which nothing but this class
+ * makes, and the environment's events turned off, so that a later runtime's telemetry would be off too.
  */
 class OrtModels(private val dir: File, private val threads: Int, private val beatsFile: String = BEATS_FP16,
                 private val arena: Boolean = false) : Closeable {
@@ -102,7 +102,8 @@ class OrtModels(private val dir: File, private val threads: Int, private val bea
     }
 
     companion object {
-        /** What a version's `raw["runtime"]` names (the design's §4.4). */
+        /** What a version's `raw["runtime"]` names (the design's §4.4): the runtime built from source, by its
+         * version ("onnxruntime 1.27.1"). */
         const val RUNTIME = "onnxruntime " + BuildConfig.ONNX_RUNTIME
 
         const val BTC_GRAPH = "btc-graph.onnx"

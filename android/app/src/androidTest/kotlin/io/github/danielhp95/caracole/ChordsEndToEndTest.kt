@@ -147,7 +147,7 @@ class ChordsEndToEndTest {
         val id = phone.parts.database.read { db -> db.kvGet("sync:id") }
         assertEquals(id?.let(::JsonPrimitive), raw["made_by"])
         assertEquals(JsonObject(phone.models.names().mapValues { JsonPrimitive(it.value) }), raw["models"])
-        assertEquals(JsonPrimitive("onnxruntime 1.32.0"), raw["runtime"])
+        assertEquals(JsonPrimitive("onnxruntime 1.27.1"), raw["runtime"])
 
         // Its checkpoints gone once it was heard, the process with them.
         val kept = phone.parts.database.read { db -> Songs.byKey(db, Normalize.identityKey(ARTIST, TITLE))!!.audioPath }

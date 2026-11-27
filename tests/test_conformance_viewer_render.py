@@ -347,7 +347,7 @@ def case_relaid(w: World) -> list[dict]:
     heard = Heard([ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G"), ChordSegment(8.0, 12.0, "Am")],
                   BEATS, BEATS[::4], 12.0)
     phone = Maker("phone", "f0f0f0f0f0f0f0f0", {"chords": "btc_large_voca@0123456789abcdef"},
-                  "onnxruntime 1.32.0", "song.mp3", "00112233aabbccdd")
+                  "onnxruntime 1.27.1", "song.mp3", "00112233aabbccdd")
     for title, video, words in (("Relaid On Timed Words", None, None),
                                 ("Relaid From A Video", VIDEO, None),
                                 ("Up To Date", None, SYNCED)):

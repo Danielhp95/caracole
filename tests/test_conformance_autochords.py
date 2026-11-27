@@ -864,7 +864,7 @@ PHONE_ID = "f0f0f0f0f0f0f0f0"  # the sync id of the caracole that made a phone-m
 HERE_ID = "1a2b3c4d5e6f7a8b"  # this side's, in relay.jsonl's library (kv sync:id)
 PHONE_MAKER = sheet.Maker("phone", PHONE_ID, {"chords": "btc_large_voca@0123456789abcdef",
                                               "beats": "beat_this final0@fedcba9876543210 fp16"},
-                          "onnxruntime 1.32.0", "song.mp3", "00112233aabbccdd")
+                          "onnxruntime 1.27.1", "song.mp3", "00112233aabbccdd")
 COMPUTER_MAKER = sheet.Maker("computer", HERE_ID, {"chords": "btc_large_voca@0123456789abcdef",
                                                    "beats": "beat_this final0@fedcba9876543210"},
                              "torch 2.13.0", "Song (purchase).m4a", "8899aabbccddeeff")

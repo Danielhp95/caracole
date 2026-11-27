@@ -128,6 +128,26 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+// ApkScanTest (Gate R's string scan): the runtime built from its source, the AAR in $CARACOLE_ONNXRUNTIME, in every
+// unit test run; the release and debug APKs by apkScan alone, which builds them (release-check.sh runs it).
+tasks.withType<Test>().configureEach {
+    systemProperty("caracole.onnxruntime", System.getenv("CARACOLE_ONNXRUNTIME") ?: "")
+    if (name != "apkScan") filter { excludeTestsMatching("*.ApkScanTest.theApksHoldNoTelemetry") }
+}
+val apkScan by tasks.registering(Test::class) {
+    description = "Scans the release and debug APKs for what made ONNX Runtime's Maven AAR phone home (ApkScanTest)."
+    group = "verification"
+    val unit = tasks.named<Test>("testDebugUnitTest").get()
+    dependsOn("assembleRelease", "assembleDebug", "compileDebugUnitTestKotlin")
+    testClassesDirs = unit.testClassesDirs
+    classpath = unit.classpath
+    filter { includeTestsMatching("*.ApkScanTest") }
+    systemProperty("caracole.apks", listOf("release", "debug").joinToString(File.pathSeparator) {
+        layout.buildDirectory.dir("outputs/apk/$it").get().asFile.path
+    })
+    outputs.upToDateWhen { false }
+}
+
 dependencies {
     implementation(project(":mirror"))
     implementation(project(":server"))

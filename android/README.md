@@ -749,16 +749,28 @@ A backup, its daily one and a restore are requests like a lookup, one at a time 
 
 ## Chords from audio: the models (debug build)
 
-The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.32.0 from Maven
-Central (`OrtModels`). It is the design's prototype, linked into the debug build alone (`debugImplementation`): the
-release carries no runtime until the owner chooses the one that ships. The AAR brings its native libraries for
-arm64-v8a, armeabi-v7a, x86 and x86_64; the debug APK keeps arm64-v8a and x86_64, about 81.5 MB of them uncompressed
-(36.4 MB and 45.1 MB).
+The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.27.1 built from its
+source (`OrtModels`; the owner's Gate R of 2026-11-27, "Build 1.27.1"). It is linked into the debug build alone
+(`debugImplementation`) until the release takes it (stage S). `../nix/onnxruntime-android.nix` builds it with no
+network, for arm64-v8a and x86_64, and makes an AAR of the two, in a Maven folder of its own that `settings.gradle.kts`
+reads in Maven Central's place (`$CARACOLE_ONNXRUNTIME`, every shell of `flake.nix`):
 
-The runtime phones home unless told not to: its AAR declares a content provider, `ai.onnxruntime.TelemetryInitializer`,
-which at the app's start gives the runtime's native telemetry (Microsoft's 1DS, `mobile.events.data.microsoft.com`)
-an HTTP client. `:ml`'s manifest removes it, `OrtModels` sets `ORT_DISABLE_TELEMETRY=1` before the first environment
-and turns its events off, and `NoTelemetryTest` checks that the installed app declares no provider of the runtime's.
+- the source is nixpkgs' pin of the tag v1.27.1 (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`), which
+  cache.nixos.org serves: github.com/microsoft/onnxruntime answers 404; each CMake dependency is the zip `deps.txt`
+  names, pinned by its SHA-256 in a local mirror (CMake checks `deps.txt`'s SHA-1 too);
+- `scripts/build-onnxruntime.sh` builds one ABI with the NDK r28c: the CPU execution provider alone, the kernels of the
+  graphs' ops alone (`ml/onnxruntime-ops.config`, the graphs and their optimized forms), telemetry off (1.27.1's is
+  opt-in, never set, and it has no Android telemetry at all), every path of the build mapped, no build id,
+  `SOURCE_DATE_EPOCH` fixed, so two folders give the same bytes; ORT's Java path runs Gradle, which fetches, so javac
+  makes the JNI headers and the AAR's classes instead;
+- built once a machine (about an hour an ABI on 8 cores: `nix build ./android#onnxruntime-android --cores 8`), then the
+  store's; every shell needs it, as `:ml`'s classes compile against it in `gradle test`.
+
+Its AAR declares no provider and no permission, and `ApkScanTest` scans it in every `gradle test` for what made Maven's
+AAR phone home (`mobile.events.data.microsoft.com`, `ai.onnxruntime.TelemetryInitializer`,
+`ai/onnxruntime/telemetry/`), and the release and debug APKs with `gradle :app:apkScan`. `OrtModels` still sets
+`ORT_DISABLE_TELEMETRY=1` before the first environment and turns its events off, and `NoTelemetryTest` checks that the
+installed app declares no provider of the runtime's.
 
 The models are the computer's own, `nix build .#chord-models` (`CARACOLE_CHORD_MODELS` in the `./android#ml` shell);
 the APK carries none of them. `ModelParityTest` runs them on the emulator over the computer's records

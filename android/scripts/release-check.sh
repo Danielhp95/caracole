@@ -25,7 +25,9 @@
 #   which no APK holds (the owner's folder does: android/README.md, "The Chords bench");
 # - the model files' names, those `nix build .#chord-models` makes ($CARACOLE_CHORD_MODELS, else the ./android#ml
 #   shell's), are each one the model-file probe matches;
-# - ONNX Runtime's AAR in Gradle's cache declares the TelemetryInitializer the manifest probe looks for.
+# - the runtime's AAR (ONNX Runtime built from its source, $CARACOLE_ONNXRUNTIME) declares no provider at all;
+# - and ApkScanTest (`gradle :app:apkScan`) finds none of what made Maven's AAR phone home in either APK, nor in the
+#   runtime's AAR, its scan's own control finding each where it would be.
 #
 # - and native-check.sh on both APKs: the debug one's libcaracole_soxr.so (both ABIs) stored aligned, stripped and
 #   naming no path of the build; the release's libcaracole_*, none today, which passes saying so.
@@ -36,7 +38,6 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 android="$(dirname "$here")"
 repo="$(dirname "$android")"
-ort=1.32.0
 
 cd "$repo"
 nix develop ./android -c gradle -p android :app:assembleRelease :app:assembleDebug --console=plain -q
@@ -160,15 +161,16 @@ check "the control: the model-file probe matches each of them" \
 check "the control: the weights' probe matches each but btc-graph.onnx" \
     "$(yes_if '[ "$(grep -v -E "$weights_file" <<<"$names" || true)" = btc-graph.onnx ]')"
 
-# The string the manifest probe looks for is the one the runtime's AAR declares.
-aar="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2" -name "onnxruntime-android-$ort.aar" 2>/dev/null \
-    | head -1)"
-declared=0
-[ -n "$aar" ] && declared="$(unzip -p "$aar" AndroidManifest.xml | grep -c 'ai.onnxruntime.TelemetryInitializer' \
-    || true)"
-echo "ONNX Runtime's AAR: ${aar:-none in the Gradle cache}"
-check "the control: the AAR's own manifest declares ai.onnxruntime.TelemetryInitializer" \
-    "$(yes_if '[ "$declared" -gt 0 ]')"
+# The runtime's AAR, built from its source, declares no provider (Maven's declared ai.onnxruntime.TelemetryInitializer).
+ort_maven="$(nix develop ./android -c printenv CARACOLE_ONNXRUNTIME)"
+aar="$(find "$ort_maven" -name '*.aar' | head -1)"
+providers_declared=1
+[ -n "$aar" ] && providers_declared="$(unzip -p "$aar" AndroidManifest.xml | grep -c '<provider' || true)"
+echo "ONNX Runtime's AAR: ${aar:-none in $ort_maven}"
+check "the runtime's AAR (from source) declares no provider" "$(yes_if '[ -n "$aar" ] && [ "$providers_declared" = 0 ]')"
+echo "ApkScanTest (gradle :app:apkScan):"
+if nix develop ./android -c gradle -p android :app:apkScan --console=plain -q; then scanned=1; else scanned=0; fi
+check "ApkScanTest: no telemetry host, provider or client in the APKs or the runtime's AAR" "$scanned"
 
 # Our own native libraries (native-check.sh): the debug APK's libcaracole_soxr.so, both ABIs, stored aligned,
 # stripped and naming no path of the build; the release's, none today, held to the same if one ever comes.

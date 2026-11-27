@@ -9,6 +9,14 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // ONNX Runtime built from its source (../nix/onnxruntime-android.nix), :ml's runtime in Maven Central's place:
+        // its group comes from this folder alone, every shell of flake.nix naming it.
+        val onnxRuntime = System.getenv("CARACOLE_ONNXRUNTIME")
+            ?: error("CARACOLE_ONNXRUNTIME is unset: run Gradle in a shell of android/flake.nix (nix develop ./android)")
+        exclusiveContent {
+            forRepository { maven { name = "onnxruntime-from-source"; url = uri(onnxRuntime) } }
+            filter { includeGroup("io.github.danielhp95.caracole") }
+        }
         google()
         mavenCentral()
     }

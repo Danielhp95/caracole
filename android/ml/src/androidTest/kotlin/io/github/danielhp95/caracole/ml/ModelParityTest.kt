@@ -73,7 +73,7 @@ class ModelParityTest {
             assertEquals("1", Os.getenv("ORT_DISABLE_TELEMETRY"))
             assertEquals(pins.getJSONObject("btc").getDouble("mean").toFloat(), ort.padding)
         }
-        // This test package carries :ml's manifest, which removes the runtime's TelemetryInitializer.
+        // This test package carries :ml's manifest and the runtime's AAR's, which declares no provider.
         val context = InstrumentationRegistry.getInstrumentation().context
         @Suppress("DEPRECATION")
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PROVIDERS)
