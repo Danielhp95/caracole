@@ -200,6 +200,11 @@ object JobCommands {
         Command("Making the PDF", listOf("render", "--song=$display")),
     )
 
+    /** jobs.audio_sheet_steps: a song's auto sheet from an audio file uploaded now, `caracole audio --progress`, one
+     * process for every stage (audio_sheet.py's STAGES); [upload] the staged upload's 16-hex id, never a path. */
+    fun audioSheetSteps(display: String, upload: String): List<Command> =
+        listOf(Command("Making the sheet", listOf("audio", "--progress", "--upload=$upload", "--song=$display")))
+
     /** Look one song up now: `caracole get --progress`, one process for every stage (get.py). */
     fun lookupSteps(artist: String, title: String, album: String? = null, durationMs: Long? = null,
                     ug: String? = null, tab: String? = null, lacuerda: String? = null, harptabs: String? = null,
@@ -359,6 +364,17 @@ object JobCommands {
     fun songKeyOf(jobKey: String): String =
         jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET).removePrefix(TRANSCRIBE).removePrefix(AUDIO_SHEET)
             .removePrefix(LYRICS_PICK).removePrefix(LYRICS_CLEAR)
+
+    /** The song a job is about, as the lane sees it (jobs.song_of_job): [songKeyOf]'s, and the song's own changes,
+     * Make this my version's and a harmonica tab's reading's, their song's identity key after their prefix up to its
+     * first ":", and a lyrics search's; any other job's key whole (no song's). A yield passes over a lookup of the
+     * running job's song by it (JobQueue): a song never has two jobs running. */
+    fun songOfJob(jobKey: String): String {
+        for (prefix in listOf(EXPORTING, READING)) {
+            if (jobKey.startsWith(prefix)) return jobKey.removePrefix(prefix).substringBefore(':')
+        }
+        return songKeyOf(jobKey.removePrefix(LYRICS_SEARCH))
+    }
 
     private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal=")
 
