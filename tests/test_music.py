@@ -339,3 +339,41 @@ def test_a_generic_part_of_a_tag_links_nothing(conn, tmp_path):
     make_wav(tmp_path / "music" / "a.wav", artist="宋冬野", title="斑马斑马 Remix")
     scan_music(conn, tmp_path / "music")
     assert get_song(conn, s.id).audio_path is None
+
+
+def test_the_scan_counts_a_headerless_mp3s_frames_once_until_the_file_changes(conn, tmp_path, monkeypatch):
+    import json
+
+    from caracole import mpeg_frames
+    from caracole.db import kv_get
+
+    fixtures = Path(__file__).parent / "fixtures" / "audio"
+    music = tmp_path / "Music"
+    music.mkdir()
+    for name in ("short-guess.mp3", "xing.mp3"):
+        (music / name).write_bytes((fixtures / name).read_bytes())
+    counted: list[str] = []
+    real = mpeg_frames.counted_length
+
+    def counting(source):
+        counted.append(Path(source).name)
+        return real(source)
+
+    monkeypatch.setattr(mpeg_frames, "counted_length", counting)
+
+    scan_music(conn, music)
+    assert counted == ["short-guess.mp3", "xing.mp3"]
+    scan_music(conn, music)  # nothing changed: the headerless one from the record, the other's first frame read again
+    assert counted == ["short-guess.mp3", "xing.mp3", "xing.mp3"]
+    record = json.loads(kv_get(conn, "music:frames"))
+    assert list(record) == [str(music / "short-guess.mp3")]
+    assert record[str(music / "short-guess.mp3")][2] == pytest.approx(386 * 1152 / 44100)
+
+    (music / "short-guess.mp3").write_bytes((fixtures / "short-guess.mp3").read_bytes() + b"\x00")  # changed
+    (music / "xing.mp3").unlink()
+    scan_music(conn, music)
+    assert counted[3:] == ["short-guess.mp3"]
+    (music / "short-guess.mp3").unlink()
+    make_wav(music / "x.wav")
+    scan_music(conn, music)
+    assert json.loads(kv_get(conn, "music:frames")) == {}  # a file gone leaves the record

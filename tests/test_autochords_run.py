@@ -1249,6 +1249,7 @@ def test_each_run_records_its_outcome_for_the_to_do_page(conn, cfg, tmp_path):
         "heard": 0,
         "silent": 0,
         "transcribe_problem": None,
+        "remeasured": [],
     }
     # The next night: one sheet up to date, one human sheet, the same unreadable file.
     run(conn, cfg, now=night.replace(day=19))
@@ -1260,6 +1261,7 @@ def test_each_run_records_its_outcome_for_the_to_do_page(conn, cfg, tmp_path):
         "heard": 0,
         "silent": 0,
         "transcribe_problem": None,
+        "remeasured": [],
     }
 
 
@@ -2346,3 +2348,132 @@ def test_the_count_of_songs_due_counts_those_the_words_make_due(conn, cfg, tmp_p
     said = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Working out the chords")]
     assert said == ["Working out the chords of Nobody - Two (1 of 2)…", "Working out the chords of Nobody - One (2 of 2)…"]
     assert all(over_words(conn, s) for s in songs)
+
+
+# --- once, the sheets an MP3 whose length was guessed wrong cut short (remeasure.py) --------------------------------
+
+AUDIO = Path(__file__).parent / "fixtures" / "audio"  # make.sh's files: tests/test_mpeg_frames.py says which is which
+
+
+def with_fixture(conn, tmp_path, song, name, **fields):
+    """One of tests/fixtures/audio/'s files, copied, linked to the song as scan_music would."""
+    path = tmp_path / "music" / f"{song.id}-{name}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes((AUDIO / name).read_bytes())
+    update_song(conn, song.id, audio_path=str(path), audio_mtime=os.stat(path).st_mtime, **fields)
+    return get_song(conn, song.id)
+
+
+def test_once_an_auto_sheet_of_an_mp3_whose_length_was_guessed_is_made_again_and_never_twice(
+        conn, cfg, tmp_path, caplog):
+    from caracole.autochords.remeasure import KEY
+    from caracole.db import kv_delete, kv_set
+
+    cut = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Luna", duration_ms=2_000), "short-guess.mp3",
+                       lyrics_status="missing", lyrics_at="2026-11-01T00:00:00Z")
+    long = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Mar", duration_ms=None), "long-guess.mp3")
+    agreed = [with_fixture(conn, tmp_path, add_song(conn, "Bea", name, duration_ms=None), name)
+              for name in ("cbr.mp3", "xing.mp3", "tone.m4a")]
+    human = with_fixture(conn, tmp_path, add_song(conn, "Cai", "Sol", duration_ms=None), "short-guess.mp3")
+    keep_human_sheet(conn, cfg, human)
+    cfg.wanted_file.write_text("Ana - Luna | 0:02\nAna - Mar\nBea - cbr.mp3\n", encoding="utf-8")
+    kv_set(conn, "megalobiz:checked:" + str(cut.id), "2026-11-01T00:00:00Z")
+    run(conn, cfg, now=datetime(2026, 11, 1, tzinfo=UTC))  # the sheets as a caracole made them before
+
+    recognizer = FakeRecognizer()
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.remeasure"):
+        stats = run(conn, cfg, recognizer, now=datetime(2026, 11, 26, tzinfo=UTC), remeasure=True)
+
+    assert sorted(p.name for p in recognizer.calls) == [f"{cut.id}-short-guess.mp3", f"{long.id}-long-guess.mp3"]
+    said = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(m.startswith("Ana - Luna: its MP3 is 0:10 long, not the 0:02") and "wanted.txt corrected" in m
+               for m in said)
+    assert any(m.startswith("Ana - Mar: its MP3 is 0:02 long, not the 0:11") for m in said)
+    # Named where the owner looks: the command's summary and the to-do page's record.
+    assert stats.remeasured == ["Ana - Luna", "Ana - Mar"]
+    assert stats.summary().endswith("; remeasured 2 whose MP3 names no length, made again: Ana - Luna, Ana - Mar")
+    assert kv_get_json(conn, STATUS)["remeasured"] == ["Ana - Luna", "Ana - Mar"]
+    # The length caracole wrote is corrected, and LRCLIB, asked with the wrong one, asked again; no other line.
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "Ana - Luna | 0:10\nAna - Mar\nBea - cbr.mp3\n"
+    now = get_song(conn, cut.id)
+    assert (now.duration_ms, now.lyrics_status, now.lyrics_at) == (10_000, "missing", None)
+    assert kv_get(conn, "megalobiz:checked:" + str(cut.id)) is None
+    assert kv_get(conn, KEY) == "2026-11-26T00:00:00Z"
+    assert all(get_song(conn, s.id).autochords_mtime == s.audio_mtime for s in agreed)
+    assert [f.name for f in kept_files(conn, human.id)] == ["sheet.txt"]
+
+    again = FakeRecognizer()
+    stats = run(conn, cfg, again, now=datetime(2026, 11, 27, tzinfo=UTC), remeasure=True)
+    assert again.calls == [] and stats.remeasured == []
+    assert kv_get_json(conn, STATUS)["remeasured"] == []  # the to-do page names them the run it happened alone
+    kv_delete(conn, KEY)
+
+
+def test_words_heard_from_a_mix_read_short_are_dropped_and_offered_again_but_the_owners_word_stands(
+        conn, cfg, tmp_path):
+    from caracole.autochords.transcript import HEARD_NOTHING, TRANSCRIPT, why_not_offered
+    from caracole.db import kv_set, kv_set_json
+
+    def heard(title: str, **record) -> object:
+        song = with_fixture(conn, tmp_path, add_song(conn, "Ana", title, duration_ms=None), "short-guess.mp3",
+                            lyrics_status="missing", lyrics_at="2026-11-01T00:00:00Z")
+        for site in ("megalobiz", "azlyrics"):
+            kv_set(conn, f"{site}:checked:{song.id}", "2026-11-01T00:00:00Z")
+        for prefix, value in record.items():
+            kv_set_json(conn, f"{prefix}{song.id}", {"audio": song.audio_path, "audio_mtime": song.audio_mtime,
+                                                    "at": "2026-11-01T00:00:00Z", **value})
+        return song
+
+    transcribed = heard("Luna", **{TRANSCRIPT: {"lrc": "[00:01.00]half the words", "plain": "half the words",
+                                                "model": "whisper-large-v3", "made_at": "2026-11-01T00:00:00Z"}})
+    silent = heard("Mar", **{HEARD_NOTHING: {"why": "sung 6.2 s", "by": "caracole"}})
+    unsung = heard("Sol", **{HEARD_NOTHING: {"why": "you said so", "by": "you"}})
+    failed = heard("Río", **{"transcribe:failed:": {"words": "the separator can't run here (…)"}})
+
+    stats = run(conn, cfg, now=datetime(2026, 11, 26, tzinfo=UTC), remeasure=True)
+
+    assert kv_get(conn, f"{TRANSCRIPT}{transcribed.id}") is None
+    assert kv_get(conn, f"{HEARD_NOTHING}{silent.id}") is None
+    assert kv_get_json(conn, f"{HEARD_NOTHING}{unsung.id}")["by"] == "you"
+    assert kv_get(conn, f"transcribe:failed:{failed.id}") is not None  # its setup's, not the read's
+    overrides = Overrides()
+    assert why_not_offered(conn, cfg, get_song(conn, transcribed.id), overrides) is None
+    assert why_not_offered(conn, cfg, get_song(conn, silent.id), overrides) is None
+    assert why_not_offered(conn, cfg, get_song(conn, unsung.id), overrides) == "you said it isn't sung"
+    assert stats.remeasured == ["Ana - Luna", "Ana - Mar"]  # no sheet yet: their words were all there was to redo
+
+
+def test_a_staged_job_about_one_song_never_remeasures_the_others(conn, cfg, tmp_path):
+    from caracole.autochords.remeasure import KEY
+
+    cut = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Luna", duration_ms=2_000), "short-guess.mp3")
+    other = with_audio(conn, tmp_path, add_song(conn, "Bea", "Mar"))
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Ana - Luna | 0:02\n", encoding="utf-8")
+    run(conn, cfg, now=datetime(2026, 11, 1, tzinfo=UTC))  # the sheets as a caracole made them before
+
+    stats = run(conn, cfg, now=datetime(2026, 11, 26, tzinfo=UTC), only={other.id})
+
+    assert kv_get(conn, KEY) is None and stats.remeasured == []
+    assert get_song(conn, cut.id).autochords_mtime == cut.audio_mtime
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "Ana - Luna | 0:02\n"
+
+
+def test_the_bulk_command_alone_remeasures_and_its_summary_names_them(tmp_path, monkeypatch, models_importable):
+    import caracole.autochords.run as ac_run
+
+    seen = []
+
+    def pending(conn, cfg, **kwargs):
+        seen.append(kwargs["remeasure"])
+        return AutoStats(generated=1, remeasured=["Ana - Luna"])
+
+    monkeypatch.setattr(ac_run, "autochords_pending", pending)
+    config = write_config(tmp_path)
+    result = invoke(config)
+    assert result.exit_code == 0, result.output
+    assert ("auto-chords: 1 generated, 0 skipped, 0 failed; remeasured 1 whose MP3 names no length, made again: "
+            "Ana - Luna") in result.output
+    add_song(bought(tmp_path), "Ana", "Luna")
+    assert invoke(config, "--song", "Ana - Luna").exit_code == 0  # one song by hand: never the others' lengths
+    assert seen == [True, False]

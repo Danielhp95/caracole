@@ -19,7 +19,8 @@ promise is that losing it costs only requests: a file you gave can't be fetched 
   (``drop``: the page's Cancel).
 - **What a file is** is read from its bytes alone (``sniff``: MP3, M4A, FLAC, WAV, Ogg or AIFF, ``FORMATS``), never
   its name or the Content-Type, then mutagen must read it as that format, with a length over 0 and at most
-  ``MAX_SECONDS``. The extension is caracole's, from the format. An upload is ``AUDIO_MAX`` at most (a file of your own,
+  ``MAX_SECONDS`` (an MP3 whose first frame names no length: its frames' length, mpeg_frames.py, never mutagen's
+  guess). The extension is caracole's, from the format. An upload is ``AUDIO_MAX`` at most (a file of your own,
   ``keep(move=False)``, any size, read first as ``examine`` reads it); either is refused when the disk would keep less
   than ``ROOM`` beside twice it.
 - **The client never chooses a path**: the name an upload is sent under is a name to show (its last part, control
@@ -232,6 +233,10 @@ def _read(reader: Any, f: IO[bytes], fmt: str) -> Audio:
 
     read = reader(f)
     length = getattr(read.info, "length", None)
+    if fmt == "MP3":  # one whose first frame names no length: mutagen's is a guess, its frames say (mpeg_frames.py)
+        from caracole.mpeg_frames import counted_length
+
+        length = counted_length(f) or length
     if not isinstance(length, (int, float)) or not math.isfinite(length) or length <= 0:
         raise AudioError(NOT_AUDIO, 415)
     if fmt == "M4A" and not (read.info.channels > 0 and read.info.sample_rate > 0):

@@ -15,6 +15,9 @@ proper sheet later, caracole uses that one.
   Sheet from an audio file…), or `caracole audio FILE`. caracole keeps a copy as the song's audio, in place
   of anything it had, and makes the sheet right away.
 
+An MP3 that never says its length (a recorder's, with no Xing or VBRI header) is measured by its frames and heard
+whole, and a sheet an older caracole made from only its first part is made again once, by itself.
+
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
 works from your own files only. caracole never tries to get around a block.
