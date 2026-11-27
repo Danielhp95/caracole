@@ -441,7 +441,9 @@ class AudioRunner(
                 fail(Words.text("bug").replace("{error}", "${e::class.simpleName}: ${e.message.orEmpty()}"))
             } finally {
                 // What the models kept to go on from goes once the sheet is kept, never before: a keep that failed
-                // leaves it, for Try again to lay the sheet out with no hearing.
+                // leaves it, for Try again to lay the sheet out with no hearing. A job refused after a whole hearing
+                // (`stillOurs`: the song got a human sheet meanwhile) keeps no sheet and never calls `forget`: the
+                // folder waits for the day-old sweep, and MlChordModels' entry of it stays for the process's life.
                 if (sheetKept) chords.forget(audio)
             }
         }
@@ -488,7 +490,6 @@ class AudioRunner(
                                "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
                 Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
             }
-            sheetKept = true
             val info = try {
                 InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
                 null
@@ -497,6 +498,9 @@ class AudioRunner(
                 e.message ?: e.javaClass.simpleName
             }
             Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
+            // Kept only now, the song's `autochords_mtime` its audio's: a write before it that fails leaves the
+            // checkpoints (the chords stage's `finally`), for Try again, which finds no sheet of this audio yet.
+            sheetKept = true
             again(db)
             info?.let { return fail(INFO_FAILED.replace("{held}", holds(raw)).replace("{why}", it)) }
             return "done" to holds(raw)

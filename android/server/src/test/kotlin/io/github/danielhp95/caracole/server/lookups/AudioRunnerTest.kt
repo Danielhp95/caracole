@@ -355,6 +355,36 @@ class AudioRunnerTest {
         assertTrue(models.kept.isEmpty())
     }
 
+    /** The song's `autochords_mtime`, the last write of a keep (run.py `_keep`'s order), failing after the sheet was
+     * kept: the checkpoints stay, as for any keep that fails, so that Try again, which finds the sheet of no audio
+     * yet, lays it out from them with no hearing. */
+    @Test fun aKeepWhoseLastWriteFailsLeavesTheCheckpoints() {
+        val phone = phone()
+        val models = object : Models() {
+            var heardWhole = 0
+            val kept = HashMap<String, Heard>()
+            val forgotten = CopyOnWriteArrayList<File>()
+            override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard =
+                kept[audio.path] ?: super.hear(audio, onStep, waiting).also { heardWhole++; kept[audio.path] = it }
+            override fun forget(audio: File) {
+                forgotten += audio
+                kept.remove(audio.path)
+            }
+        }
+        phone.database.writeBlocking { db ->
+            db.execute("CREATE TRIGGER no_mtime BEFORE UPDATE OF autochords_mtime ON songs " +
+                           "WHEN NEW.autochords_mtime IS NOT NULL BEGIN SELECT RAISE(ABORT, 'no mtime'); END")
+        }
+        val failed = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals(Job.FAILED, failed.state, "${ends(failed)}")
+        assertTrue(models.forgotten.isEmpty(), "the checkpoints kept")
+        phone.database.writeBlocking { db -> db.execute("DROP TRIGGER no_mtime") }
+        val again = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals(Job.DONE, again.state, "${ends(again)}")
+        assertEquals(1, models.heardWhole, "laid out from the checkpoints, never heard again")
+        assertEquals(1, models.forgotten.size)
+    }
+
     /** The models removed after the job was queued (Settings' Remove, before the job held them): the hearing holds
      * the models' files ([AudioRunner]'s `hold`, ModelsRunner.holding) and asks again under it, so the chords stage
      * fails in the one answer's words, Try again once they are downloaded, the models never asked and nothing kept

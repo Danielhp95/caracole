@@ -14,6 +14,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.PowerManager
 import android.os.RemoteException
+import android.util.Log
 import io.github.danielhp95.caracole.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.autochords.Checkpoints
 import io.github.danielhp95.caracole.autochords.ChordModels
@@ -78,7 +79,8 @@ class MlChordModels(
     @Volatile var lastPeakSplitKb: Pair<Long, Long>? = null
         private set
 
-    /** The checkpoints' folder of each audio file heard whole here, by its path, until [forget] lets it go. */
+    /** The checkpoints' folder of each audio file heard whole here, by its path, until [forget] lets it go (a job
+     * refused after its hearing never does: its entry stays for the process's life). */
     private val heardIn = ConcurrentHashMap<String, File>()
 
     /** The last song's stages that ran, each with its time in ns, in their order (Pipeline's [Pipeline.STAGES]). */
@@ -227,10 +229,13 @@ class MlChordModels(
     }
 
     /** [audio]'s checkpoints, heard whole here, deleted (the app's: [forgetHeard]) once the job kept its sheet and the
-     * process is gone, so nothing writes there after ([forgotten]). */
+     * process is gone, so nothing writes there after ([forgotten]). Never throws, as ChordModels says: it runs in the
+     * chords stage's `finally`, and what letting go throws is logged, the folder left for [sweepOld]. A job refused
+     * after a whole hearing (the song got a human sheet meanwhile) keeps no sheet and never calls it: its folder waits
+     * for the day-old sweep, and its entry in [heardIn] stays for the process's life. */
     override fun forget(audio: File) {
         val folder = heardIn.remove(audio.path) ?: return
-        if (forgetHeard) forgotten(folder, work, ::awaitEnded)
+        if (forgetHeard) forgotten(folder, work, { Log.w(TAG, "checkpoints of ${audio.name} kept", it) }, ::awaitEnded)
     }
 
     /** Waits, as a hearing does before it binds ([awaitGone], bounded by [PROCESS_GONE_MS]), for the `:ml` process of
@@ -358,21 +363,28 @@ class MlChordModels(
 
         const val DAY_MS = 24 * 60 * 60_000L
 
+        /** The log's tag of what [forget] tells. */
+        const val TAG = "caracole-ml"
+
         /** [folder], a song's checkpoints in [work], deleted once [ended] says the process is gone; kept for the
          * start's sweep while it is still ending ([ChordsUnavailable]) or when the wait is interrupted (the thread's
-         * flag set again). Whether it went. */
-        internal fun forgotten(folder: File, work: File, ended: () -> Unit): Boolean {
-            if (folder.parentFile?.canonicalFile != work.canonicalFile) return false
+         * flag set again). Whether it went. Anything else it throws (a path that won't resolve, a bug in the wait)
+         * is [told] and kept, the folder left: it never throws. */
+        internal fun forgotten(folder: File, work: File, told: (Exception) -> Unit = {}, ended: () -> Unit): Boolean =
             try {
-                ended()
+                folder.parentFile?.canonicalFile == work.canonicalFile && run {
+                    ended()
+                    folder.deleteRecursively()
+                }
             } catch (e: ChordsUnavailable) {
-                return false
+                false
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
-                return false
+                false
+            } catch (e: Exception) {
+                told(e)
+                false
             }
-            return folder.deleteRecursively()
-        }
 
         /** The songs' checkpoint folders in [work] a hearing last wrote to a day or more before [now] (a killed app's,
          * or one whose job failed and was never tried again), deleted under the hearings' one turn ([turn] of

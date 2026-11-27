@@ -4319,8 +4319,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   a remove after the job was queued fails its chords "the chord models aren't downloaded …". What `waiting` throws
   (the queue's stop) propagates through `hear` as itself, never as `ChordsUnavailable`: the job ends as the queue's
   stop, its audio kept, no sheet. `ChordModels.forget(audio)`, once the sheet is kept and never before: `:ml`'s
-  checkpoints go then (MlChordModels, `forgetHeard`), so a keep that fails leaves them and Try again hears nothing
-  again; the start's sweep (`sweepOld`) takes those a day old under the hearings' one turn, none while it is held.
+  checkpoints go then (MlChordModels, `forgetHeard`; the sheet kept only once its `autochords_mtime` is written, the
+  keep's last write), so a keep that fails leaves them and Try again hears nothing again; `forget` never throws (what
+  letting go throws logged, the folder left); a job refused after a whole hearing (the song got a human sheet
+  meanwhile) never calls it, so its folder waits for the day-old sweep and MlChordModels' entry of it stays for the
+  process's life; the start's sweep (`sweepOld`) takes those a day old under the hearings' one turn, none while it is
+  held.
 - `ChordModels`, `AudioUnreadable` and `ChordsUnavailable` live in :viewer's viewer.autochords (`:autochords` names
   them by typealias): :server, which the release ships, never depends on `:autochords`, whose `caracole/autochords/`
   data release-check.sh keeps out of the release.

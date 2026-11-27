@@ -244,6 +244,11 @@ def harmonica_tab(title: str) -> str:
 # --- the computer ---------------------------------------------------------------------------------------------------
 
 
+def no_model_stub(name: str) -> str:
+    """The source of a package ``name`` that raises ImportError as it is imported (``Library.without_models``)."""
+    return f"raise ImportError({name + ': the end to end computer runs no model'!r})\n"
+
+
 def free_port() -> int:
     """A port nothing listens on now, of 127.0.0.1."""
     with socket.socket() as s:
@@ -481,8 +486,7 @@ class Computer:
         stubs = self.dir / "no-models"
         for name in ("torch", "librosa", "beat_this"):
             (stubs / name).mkdir(parents=True, exist_ok=True)
-            (stubs / name / "__init__.py").write_text(
-                f"raise ImportError('{name}: the end to end\'s computer runs no model')\n", encoding="utf-8")
+            (stubs / name / "__init__.py").write_text(no_model_stub(name), encoding="utf-8")
         env = self.env()
         env["PYTHONPATH"] = os.pathsep.join((env["PYTHONPATH"], str(stubs)))
         done = subprocess.run(self.command("-vv", *args), env=env, cwd=self.root, capture_output=True, text=True,

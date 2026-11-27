@@ -164,6 +164,17 @@ class HearingGuardTest {
         assertTrue(elsewhere.isDirectory)
     }
 
+    /** [MlChordModels.forget] runs in the chords stage's `finally`: whatever letting the checkpoints go throws (a
+     * bug in the wait, a path that won't resolve) is told and kept there, never thrown over the stage's own result. */
+    @Test fun lettingTheCheckpointsGoNeverThrows() {
+        val work = tmp.newFolder("autochords")
+        val folder = File(work, "0123456789abcdef-c1").apply { mkdirs(); File(this, "heard.json").writeText("{}") }
+        val told = mutableListOf<Throwable>()
+        assertFalse(MlChordModels.forgotten(folder, work, { told += it }) { throw IllegalStateException("a bug") })
+        assertEquals(listOf("a bug"), told.map { it.message })
+        assertTrue(File(folder, "heard.json").isFile)
+    }
+
     /** The turn is the app's processes' one: a turn another PROCESS holds (an flock: the bench's, or the app's jobs
      * while the bench asks) refuses a hearing here in [MlChordModels.BUSY]'s words, and is free once it ends. */
     @Test fun aTurnAnotherProcessHoldsRefusesAHearingHere() {

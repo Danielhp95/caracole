@@ -338,6 +338,15 @@ def test_caracole_keeps_the_chinese_songs_other_version_beside_it_and_the_harmon
     assert [r["status"] for r in every if r["provider"] == "harptabs"] == [200]
 
 
+def test_the_e2e_packages_without_models_compile_and_raise_import_error():
+    from helpers.e2e_library import no_model_stub
+
+    for name in ("torch", "librosa", "beat_this"):
+        code = compile(no_model_stub(name), f"{name}/__init__.py", "exec")
+        with pytest.raises(ImportError, match=f"^{name}: the end to end computer runs no model$"):
+            exec(code, {})
+
+
 @pytest.mark.slow
 def test_serve_answers_on_its_port_until_stopped(tmp_path):
     from helpers.e2e_library import free_port
