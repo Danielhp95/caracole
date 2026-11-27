@@ -53,7 +53,7 @@
       chordModels = pkgs.callPackage ../nix/autochords-onnx.nix { };
       # ONNX Runtime 1.27.1 built from its source for arm64-v8a and x86_64 (../nix/onnxruntime-android.nix), an AAR in
       # a Maven folder of its own, which settings.gradle.kts reads as $CARACOLE_ONNXRUNTIME for :ml in Maven Central's
-      # place: every shell, since :ml's classes compile against it in `gradle test` too. Built once a machine (hours, its
+      # place: every shell, since :ml's classes compile against it in `gradle test` too. Built once a machine (some 20 min, its
       # compile jobs Nix's --cores), then the store's.
       onnxruntime = pkgs.callPackage ../nix/onnxruntime-android.nix {
         ndk = "${(sdkFor false).androidsdk}/libexec/android-sdk/ndk/${ndkVersion}";

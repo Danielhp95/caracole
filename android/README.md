@@ -763,7 +763,7 @@ reads in Maven Central's place (`$CARACOLE_ONNXRUNTIME`, every shell of `flake.n
   opt-in, never set, and it has no Android telemetry at all), every path of the build mapped, no build id,
   `SOURCE_DATE_EPOCH` fixed, so two folders give the same bytes; ORT's Java path runs Gradle, which fetches, so javac
   makes the JNI headers and the AAR's classes instead;
-- built once a machine (about an hour an ABI on 8 cores: `nix build ./android#onnxruntime-android --cores 8`), then the
+- built once a machine (about ten minutes an ABI on 8 cores: `nix build ./android#onnxruntime-android --cores 8`), then the
   store's; every shell needs it, as `:ml`'s classes compile against it in `gradle test`.
 
 Its AAR declares no provider and no permission, and `ApkScanTest` scans it in every `gradle test` for what made Maven's

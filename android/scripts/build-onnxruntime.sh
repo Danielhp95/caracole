@@ -45,7 +45,8 @@ case "$abi" in
     x86_64) target=x86_64-linux-android ;;
     *) echo "build-onnxruntime.sh: no ABI $abi (arm64-v8a, x86_64)" >&2; exit 2 ;;
 esac
-export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-315532802}"
+# Fixed whatever the shell says (a Nix shell sets 1980-01-01T00:00:00Z, which jar refuses): 1980-01-01T00:00:02Z.
+export SOURCE_DATE_EPOCH=315532802
 export LC_ALL=C TZ=UTC
 api=26
 
