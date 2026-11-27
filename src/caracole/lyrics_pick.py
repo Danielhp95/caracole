@@ -61,6 +61,11 @@ STAGES = (
     ("pages", "The logbook page"),
 )
 NO_NEW = "no new lyrics"
+# The chords stage's words for a sheet another caracole made whose ``heard`` this caracole can't read (a newer
+# contract, a damaged record): it keeps its old words under the new lyrics, and only a sheet made here replaces it.
+ELSEWHERE_UNREAD = ("its auto sheet was made on your other caracole and can't be laid out again here over these "
+                    "lyrics (what was heard there can't be read here): ask for a new sheet here, from an audio file "
+                    "or a video")
 NOTHING_KEPT = "; nothing kept"
 NO_LYRICS_NOW = " has no lyrics now"  # a record gone, its lyrics stage's words before NOTHING_KEPT: an answer, no wait
 KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
@@ -312,6 +317,22 @@ class _Pick(StagedRun):
 
     # --- chords, pdf --------------------------------------------------------------------------------------------
 
+    def _heard_reads(self) -> bool:
+        """Whether the song's auto sheet's ``heard`` reads (autochords/sheet.py ``read_heard``): its words re-lay it."""
+        from caracole.autochords.sheet import read_heard
+        from caracole.library import kept_files
+        from caracole.songs import AUTO_SHEET
+        from caracole.versions import get_version
+
+        auto = next((f for f in kept_files(self.conn, self.song.id) if f.name == AUTO_SHEET), None)
+        if auto is None:
+            return False
+        try:
+            read_heard(get_version(self.conn, auto.version_id).raw.get("heard"))
+        except ValueError:
+            return False
+        return True
+
     def _why_no_chords(self) -> str | None:
         from pathlib import Path
 
@@ -334,7 +355,8 @@ class _Pick(StagedRun):
         if relaid is not None:
             return relaid
         if auto_made_elsewhere(self.conn, self.song.id):  # words never run a model on another caracole's sheet (R3)
-            return "skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model"
+            return "skipped", (ELSEWHERE_UNREAD if not self._heard_reads()
+                               else f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
         why = self._why_no_chords()
         if why is not None:
             return "skipped", why

@@ -115,7 +115,6 @@ from caracole.autochords.sheet import (
 from caracole.autochords import transcript as words_rule  # its ``WORDS_WIN``, read as each song is weighed
 from caracole.autochords.sheet_lyrics import (
     MADE_ELSEWHERE,
-    auto_made_elsewhere,
     made_elsewhere,
     relay_onto_sheets,
     relay_reason,
@@ -381,9 +380,9 @@ class _Turns:
 @dataclass
 class _Listening:
     """A run's hearing of words: ``hearing``, up to ``cap`` songs (``tried`` so far), ``stopped`` once its setup
-    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``said``). Where
-    words don't win (transcript.py ``WORDS_WIN`` false), a song whose auto sheet another caracole made isn't heard by a
-    pass over the library (``asked`` false): its words would make no sheet here."""
+    failed; with no ``hearing``, why this machine hears none said once a song is offered its words (``said``). A song
+    whose auto sheet another caracole made isn't heard by a pass over the library (``asked`` false) unless its words
+    would replace it (``_hears_here``): they would make no sheet here."""
 
     hearing: Hearing | None
     cap: int
@@ -402,8 +401,8 @@ class _Listening:
             return song
         if why_not_offered(conn, cfg, song, turns.overrides) is not None:
             return song
-        if not self.asked and not words_rule.WORDS_WIN and auto_made_elsewhere(conn, song.id):
-            return song  # another caracole's sheet, which words heard here wouldn't replace: Transcribe by hand does
+        if not _hears_here(conn, song, self.asked):
+            return song  # another caracole's sheet, which words heard here wouldn't replace: no Whisper, no slot
         failed = hearing_failed(conn, song, parse_stamp(stamp) or datetime.now(UTC))
         if failed is not None:  # its hearing failed lately: passed over, no slot taken, till a new file or 30 days
             log.info("%s: its words aren't heard tonight (its hearing failed lately: %s)", song.display, failed)
@@ -507,8 +506,7 @@ def _count_due(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], ove
         try:
             raw = _auto_raw(conn, song)
             elsewhere = raw is not None and made_elsewhere(conn, raw)
-            if heard and elsewhere and not asked and not words_rule.WORDS_WIN:
-                heard = False  # ``_Listening.first`` passes over it, no slot taken
+            heard = heard and _hears_here(conn, song, asked)  # as ``_Listening.first`` decides: no slot taken
             hears -= heard
             if raw is not None and raw.get("heard") is not None:  # its words heard re-lay it, no model ...
                 heard = heard and elsewhere and _words_replace(raw)  # ... but another caracole's chords alone (R5)
@@ -529,8 +527,21 @@ def _auto_raw(conn: sqlite3.Connection, song: Song) -> dict | None:
 
 def _words_replace(raw: dict) -> bool:
     """Whether words heard here would replace this sheet another caracole made (transcript.py ``WORDS_WIN``, the
-    design's R5): its chords alone, over no words and no transcript of its own."""
-    return words_rule.WORDS_WIN and raw.get("lyrics") == "none" and raw.get("lyrics_source") != LYRICS_SOURCE
+    design's R5): its chords alone, over no words and no transcript of its own, and not the owner's word that it isn't
+    sung (``not_sung_by`` "you", the one trace of it that crosses a sync: Whisper can hear words in an instrumental)."""
+    said = raw.get("heard_nothing") is True and raw.get("not_sung_by") == "you"
+    return (words_rule.WORDS_WIN and raw.get("lyrics") == "none" and raw.get("lyrics_source") != LYRICS_SOURCE
+            and not said)
+
+
+def _hears_here(conn: sqlite3.Connection, song: Song, asked: bool) -> bool:
+    """Whether words heard here may make the song's sheet, so a pass may spend Whisper and a slot on them: always for
+    an ask and for a sheet this side made (or none); for one another caracole made, only where they would replace it
+    (``_words_replace``). ``_Listening.first`` and ``_count_due`` decide by it alike."""
+    raw = _auto_raw(conn, song)
+    if asked or raw is None or not made_elsewhere(conn, raw):
+        return True
+    return _words_replace(raw)
 
 
 def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,

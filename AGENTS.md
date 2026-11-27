@@ -2642,8 +2642,14 @@ It is rows.js's, shared by both pages:
     is no ask (lyrics_pick.py `chords`: re-laid, else skipped in `MADE_ELSEWHERE`'s words, no model). And None for its
     chords alone (`lyrics` "none", no transcript of its own) once this side keeps a transcript of its own audio and no
     site has words or an instrumental verdict, while transcript.py `WORDS_WIN` (§11.5's yes, one constant: False
-    leaves it, `_Listening.first` hearing no words for it unless asked; `why_not_offered` offers it either way, the
-    card's Transcribe by hand). `caracole peer new-id` makes every earlier sheet another's.
+    leaves it; `why_not_offered` offers it either way, the card's Transcribe by hand); never one the owner said isn't
+    sung (the raw's `not_sung_by` "you", the one trace of their word that crosses a sync). run.py `_words_replace`
+    says which sheets words would replace, and `_hears_here` whether a pass spends Whisper and a slot on the song
+    (an ask, a sheet of this side's or none, else `_words_replace`), `_Listening.first` and `_count_due` alike: a sheet
+    made elsewhere over a transcript or a site's words is never heard again here. A lyrics pick on one whose `heard`
+    can't be read says so (lyrics_pick.py `ELSEWHERE_UNREAD`: ask for a new sheet here); the to-do page says its
+    chords were done on your other caracole (todo.py), the card's `youtube` note still says YouTube's (a later task).
+    `caracole peer new-id` makes every earlier sheet another's.
 - export.py, for the phone (nothing on the computer runs it but `nix build .#chord-models` and its tests): BTC and
   beat_this as ONNX graphs, `CONTRACT` what each takes and gives, torch's TorchScript exporter at opset 17:
   - `export_btc`: `btc-graph.onnx`, raw log-CQT frames (`features`, [N, 108, 144]) to `logits` ([N, 108, 170]),

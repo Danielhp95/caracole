@@ -1513,3 +1513,23 @@ def test_the_songs_the_last_auto_chords_run_remeasured_are_named(conn, cfg):
                    {"remeasured": "Ana - Luna"}, {"remeasured": [None, 3]}):
         kv_set_json(conn, "autochords:status", record)
         assert REMEASURED_TITLE not in todo(conn, cfg), record
+
+
+def test_a_sheet_another_caracole_made_beside_youtubes_audio_is_said_made_there(conn, cfg, tmp_path, monkeypatch):
+    # Its chords came from the other caracole's audio, never from this side's video: the page says where it was made.
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.versions import upsert_version
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    there = youtube_record(conn, buy_song(conn), on)
+    v = upsert_version(conn, provider="auto", tab_id="42", song_id=there.id, slot="sheet", kind="auto", rating=0,
+                       votes=0, version=1, label=None, url="u", raw={"made_on": "phone", "made_by": "0f1e2d3c4b5a6978"},
+                       now="x")
+    keep_file(conn, on.library_dir, song=there, version_id=v, name="sheet (auto).txt", data=b"x", rank=1)
+    update_song(conn, there.id, status="found")  # a take writes no autochords_mtime
+    section = section_of(todo(conn, on), f"{NO_SHEET} (1)")
+    line = next(line for line in section.splitlines() if line.startswith("- **"))
+    assert ("chords done on your other caracole, from its audio: [auto sheet](Radiohead/Creep/sheet%20%28auto%29.txt)"
+            in line)
+    assert "chords done, from [" not in line

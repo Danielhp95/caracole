@@ -856,3 +856,21 @@ def test_a_pick_re_lays_a_sheet_another_caracole_made_and_never_runs_a_model_on_
     assert result.ok, result
     assert heard.ends()["chords"] == ("skipped", f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
     assert auto_raw(conn, song)["made_by"] == "0f1e2d3c4b5a6978"
+
+
+def test_a_pick_on_a_sheet_another_caracole_made_whose_heard_cant_be_read_says_so(cfg, conn, song, sites, here):
+    # A newer contract, a damaged record: it can't be laid out again here, and the job says what to do.
+    from caracole.lyrics_pick import ELSEWHERE_UNREAD
+
+    auto_sheet_of(cfg, conn, song)
+    version_id = next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)
+    set_raw(conn, version_id, {**auto_raw(conn, song), "made_on": "phone", "made_by": "0f1e2d3c4b5a6978",
+                               "heard": {"contract": 99}})
+    update_song(conn, song.id, autochords_mtime=None)
+    sites.lrclib.search = [lrc(77)]
+    searched(cfg, conn, get_song(conn, song.id), sites)
+    result, heard = pick(cfg, n=1, recognizer=Recognizer(fail=True))
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("skipped", ELSEWHERE_UNREAD)
+    assert "re-lay" not in ELSEWHERE_UNREAD and "ask for a new sheet here" in ELSEWHERE_UNREAD
+    assert auto_raw(conn, song)["heard"] == {"contract": 99}
