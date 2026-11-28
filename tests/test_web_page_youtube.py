@@ -249,16 +249,18 @@ SLOW = " (up to half an hour when they're heard)"
 
 
 @pytest.mark.parametrize("member, title", [
-    ({"ok": True, "why": None, "songs": [], "time": "up to half an hour"}, SITES_FIRST + SLOW),
-    ({"ok": True, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_FIRST),
+    ({"ok": True, "hears": True, "why": None, "songs": [], "time": "up to half an hour"}, SITES_FIRST + SLOW),
+    ({"ok": True, "hears": True, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_FIRST),
+    ({"ok": True, "hears": False, "why": None, "songs": [], "time": "a couple of minutes"}, SITES_ONLY),
     ({"ok": False, "why": "no GPU", "songs": [], "time": ""}, SITES_ONLY),
     (None, SITES_ONLY),
-], ids=["cpu", "gpu", "cannot", "no-member"])
+], ids=["cpu", "gpu", "turned-off", "cannot", "no-member"])
 def test_the_form_titles_its_button_by_where_the_words_are_heard(able, live, sheet, browser, monkeypatch, member,
                                                                  title):
     # ``server.transcribe`` (library_page.transcribe_member) says whether and how long a transcription takes here;
     # only a CPU's "up to half an hour" is added to the button's title, never where it can't or the member is absent;
-    # and the words are said heard from the audio only where it transcribes (never on the phone).
+    # and the words are said heard from the audio only where it transcribes, `hears` (never on the phone, nor with
+    # `[autochords] transcribe` off).
     import caracole.library_page as library_page
 
     monkeypatch.setattr(library_page, "transcribe_member", lambda conn, cfg, overrides: member)
