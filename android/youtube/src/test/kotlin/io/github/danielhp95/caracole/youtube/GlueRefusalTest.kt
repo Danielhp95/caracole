@@ -186,15 +186,25 @@ class GlueRefusalTest {
         refusedInBoth(data.argv("download", video, cache, "/system/bin/sh", gate, into))
     }
 
+    /** Byoutube-3: the search's suggested video (YouTubeSearchRunner) asks `search.results` (youtube_search.py's
+     * RESULTS, 1), the sheet job's search `search_results` (8): the service runs both, as the phone sends them. */
     @Test
-    fun `a search asks for the phone's own count of results, never another`() {
-        runs(search(data.searchTarget("anything", data.searchResults)), HostGate.Mode.NETWORK)
-        for (n in listOf(1, data.searchResults + 1, 99999)) {
+    fun `the argv of a search's suggested video runs in network mode`() {
+        runs(search(data.searchTarget("nick cani vikingos veganos", data.suggestResults)), HostGate.Mode.NETWORK)
+    }
+
+    @Test
+    fun `a search asks for one of the phone's own counts of results, never another`() {
+        assertEquals(listOf(data.searchResults, data.suggestResults), data.searchCounts)
+        for (n in data.searchCounts) runs(search(data.searchTarget("anything", n)), HostGate.Mode.NETWORK)
+        for (n in listOf(0, 2, data.searchResults + 1, 99999)) {
+            assertFalse(n in data.searchCounts)
             val why = refused(search(data.searchTarget("anything", n)), HostGate.Mode.NETWORK)
             assertEquals(NOT_YOUTUBE, why)
         }
         refused(search("ytsearch:anything"), HostGate.Mode.NETWORK)
         refused(search("ytsearch08:anything"), HostGate.Mode.NETWORK)
+        refused(search("ytsearch01:anything"), HostGate.Mode.NETWORK)
     }
 
     @Test

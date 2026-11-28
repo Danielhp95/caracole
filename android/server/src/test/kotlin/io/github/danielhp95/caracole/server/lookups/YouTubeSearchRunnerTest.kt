@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Ran
+import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
 import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import io.github.danielhp95.caracole.core.youtube.YtDlpProcess
@@ -165,6 +166,11 @@ class YouTubeSearchRunnerTest {
         // what it found then, said in the query as typed now
         assertEquals(listOf(searched.replace("“Radiohead Creep”", "“radiohead CREEP”")), w.search("  radiohead   CREEP "))
         assertEquals(1, w.runs.size)
+        // Byoutube-3: the run's target is the suggestion's own count (youtube.json's search.results), one of the
+        // counts the :youtube service's glue lets through (GlueRefusalTest), never a literal of the runner's.
+        val data = YouTubeData.read()
+        assertEquals(data.searchTarget("Radiohead Creep", data.suggestResults), w.runs.single().last())
+        assertTrue(data.suggestResults in data.searchCounts)
         assertEquals(listOf("GET https://i.ytimg.com/vi/$id/hqdefault.jpg"), w.transport.said)
         assertNotNull(w.kv("youtube-search:creep-radiohead"))
     }

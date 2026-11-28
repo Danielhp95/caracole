@@ -3181,8 +3181,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `LANG`, `PATH`; no proxy variable), and runs the argv only through the glue's `refusal`, an allowlist: read by
     yt-dlp's own option parser (an alias as what it expands to), it must be one of youtube.json's `phone_argv`
     templates as that parser reads them (`GlueRules`: the templates, their placeholders and targets through
-    `YouTubeData`, the search's one count `search_results`, the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from
-    `HostGate`, and the run's own two folders, `RunFolders`, which the request names and the service checks: in the
+    `YouTubeData`, the searches' two counts, a sheet's `search_results` and a suggestion's `search.results`
+    (`search_counts`), the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from `HostGate`, and the run's own two folders, `RunFolders`, which the request names and the service checks: in the
     app's storage, no link from there down): each option a template sets with its value or a value its placeholder's check
     passes, every other at the parser's default; under LOOPBACK the
     tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). It kills

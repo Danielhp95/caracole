@@ -10,7 +10,8 @@ import kotlinx.serialization.json.jsonObject
 /**
  * What the glue's `refusal` judges an argv by, as one JSON text, each part from its one source: the phone's argv
  * templates, their placeholders and the targets' rules (youtube.json's `phone_argv`, `placeholders`, `targets` and
- * `runner.cache_folder`, and `search_results`, the one count a search asks for, through [YouTubeData]), the gate's
+ * `runner.cache_folder`, and `search_counts`, the counts the phone's searches ask for, a sheet's `search_results` and a suggestion's
+ * `search.results`, through [YouTubeData]), the gate's
  * `--proxy` shape and the loopback hosts ([HostGate]'s constants), and what only this process knows: the [mode]
  * (LOOPBACK or NETWORK, the main process's, as the request said it), the app's [qjs], and this run's own two folders
  * ([folders], as the client named them and [YtDlpService] checked them: in the app's storage, no link), the only
@@ -33,7 +34,7 @@ object GlueRules {
             "proxy_pattern" to JsonPrimitive(HostGate.PROXY_PATTERN),
             "loopback_hosts" to JsonArray(HostGate.LOOPBACK_NAMES.map { JsonPrimitive(it) }),
             "qjs" to JsonPrimitive(qjs),
-            "search_results" to JsonPrimitive(data.searchResults),
+            "search_counts" to JsonArray(data.searchCounts.map { JsonPrimitive(it) }),
             "cache_dir" to JsonPrimitive(folders.cache?.path),
             "into" to JsonPrimitive(folders.into?.path),
             "verbose" to JsonPrimitive(verbose),
