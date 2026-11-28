@@ -93,7 +93,8 @@ class YtDlpEngineTest {
 
     @Test
     fun theEngineIsTheDebugBuildsAndReady() {
-        assertTrue(engine is YtDlpEngine)
+        // The app's own engine; the phone's wraps it so a device test may set its process (Caracole.youtubeForTests).
+        assertTrue(Caracole.youtube(context) is YtDlpEngine)
         assertNull(engine.ready())
         assertTrue(engine.qjs.canExecute())
         assertEquals(File(Caracole.cacheDir(context), "youtube"), engine.cacheDir)
