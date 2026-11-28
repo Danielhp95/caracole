@@ -15,17 +15,17 @@ import java.time.Instant
  */
 object Todo {
     /**
-     * todo.songs_to_buy's buy list: the wanted songs (not ignored, no audio linked: [audio] by id, the song's own
-     * `audio_path` where it names none) whose next step is buying the track, once nothing caracole will still do may
+     * todo.songs_to_buy's buy list: the wanted songs (not ignored, no audio linked: [audio] by id where given, else
+     * each song's own `audio_path`) whose next step is buying the track, once nothing caracole will still do may
      * find them a sheet: matched and fetched, or not found with the index read whole; no fetch due, no LaCuerda check
      * due, no pick on LaCuerda still to come. In [songs]' order.
      */
     fun songsToBuy(db: Db, songs: List<SongRow>, overrides: Overrides, now: Instant,
-                   audio: Map<Long, String?> = emptyMap()): List<SongRow> {
+                   audio: Map<Long, String?>? = null): List<SongRow> {
         val partial = Matcher.indexState(db) == "partial"
         val buy = ArrayList<SongRow>()
         for (s in songs) {
-            val path = if (s.id in audio) audio[s.id] else s.audioPath
+            val path = if (audio != null) audio[s.id] else s.audioPath
             if (s.status != "wanted" || !path.isNullOrEmpty() || s.key in overrides.ignore) continue
             if (s.matchDecision !in listOf("accept", "pinned", "not_found")) continue
             val unfetched = s.matchDecision != "not_found" && s.ugCheckedAt.isNullOrEmpty()

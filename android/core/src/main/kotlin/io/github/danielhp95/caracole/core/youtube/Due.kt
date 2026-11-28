@@ -53,7 +53,7 @@ object Due {
             if (kept(db, song.id, Versions.SHEET_FILE_NAMES)) continue
             val noted = db.kvGet(WANTED_PREFIX + song.id) != null
             if (paired && !noted) continue
-            due += Triple(record.error != null, !noted, song)
+            due += Triple(!record.error.isNullOrEmpty(), !noted, song)  // Python's truth
         }
         return due.sortedWith(compareBy<Triple<Boolean, Boolean, SongRow>> { it.first }.thenBy { it.second })
             .map { it.third }

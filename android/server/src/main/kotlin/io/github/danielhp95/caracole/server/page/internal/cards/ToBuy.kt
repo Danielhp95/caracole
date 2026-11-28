@@ -14,7 +14,7 @@ import java.time.Instant
 internal object ToBuy {
     /** todo.songs_to_buy's buy list, :core's Todo.songsToBuy ([audio] the songs' linked audio, by id). */
     fun songsToBuy(db: Db, songs: List<SongRow>, overrides: Overrides, now: Instant, audio: Map<Long, String?>):
-        List<SongRow> = Todo.songsToBuy(db, songs, overrides, now, songs.associate { it.id to audio[it.id] })
+        List<SongRow> = Todo.songsToBuy(db, songs, overrides, now, audio)
 
     /** todo.search_links: where to look for what caracole won't do itself: buying, Chordify, Songsterr, YouTube. */
     fun searchLinks(artist: String, title: String): Map<String, String> {

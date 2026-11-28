@@ -10,7 +10,9 @@ import java.time.temporal.ChronoUnit
  * runs in any 24 hours, the computer's budget for one run used as the phone's day. Every run the phone sent in that
  * window counts, asked-now ones and the bench's among them, whatever its run id: `events` rows of provider `youtube`
  * whose decision is `ok`, `error` or `blocked` ([runs]); a `budget` row ran nothing. A run frees its slot 24 hours
- * after it. Settings' YouTube row says the same count (YouTubeRow.runsSince).
+ * after it. Settings' YouTube row says the same count (YouTubeRow.runsSince). A bench run counts once its `events`
+ * row is written (the bench's ledger records one for every run it sent, in a `finally`); its kv `ytbench:runs`
+ * stamps, reserved before the gate opens, are the bench's own count, which it reads beside this one.
  */
 object DayBudget {
     private const val PROVIDER = "youtube"

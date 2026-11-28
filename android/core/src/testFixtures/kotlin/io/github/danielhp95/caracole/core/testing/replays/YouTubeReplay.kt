@@ -1,51 +1,50 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
-import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.http.Draws
+import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.LaCuerdaPick
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.search.ArtistHit
 import io.github.danielhp95.caracole.core.search.IndexFound
 import io.github.danielhp95.caracole.core.search.IndexHit
 import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.SiteArtist
 import io.github.danielhp95.caracole.core.search.SiteHit
-import io.github.danielhp95.caracole.core.youtube.Records
-import io.github.danielhp95.caracole.core.youtube.Due
-import io.github.danielhp95.caracole.core.library.LaCuerdaPick
-import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.testing.AreaReplay
+import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
-import io.github.danielhp95.caracole.core.youtube.SearchGate
-import io.github.danielhp95.caracole.core.youtube.Thumbs
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.long
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.http.Draws
-import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.lookup.Pace
-import io.github.danielhp95.caracole.core.lookup.Pacing
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.youtube.FakeYtDlpProcess
+import io.github.danielhp95.caracole.core.youtube.AnswerError
+import io.github.danielhp95.caracole.core.youtube.Choose
+import io.github.danielhp95.caracole.core.youtube.Classify
 import io.github.danielhp95.caracole.core.youtube.Download
+import io.github.danielhp95.caracole.core.youtube.Due
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Ran
+import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.SearchGate
+import io.github.danielhp95.caracole.core.youtube.Thumbs
+import io.github.danielhp95.caracole.core.youtube.Video
+import io.github.danielhp95.caracole.core.youtube.Videos
+import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import io.github.danielhp95.caracole.core.youtube.YtDlp
 import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import java.io.File
 import java.nio.file.Files
 import java.time.Duration
 import java.time.Instant
-import io.github.danielhp95.caracole.core.testing.AreaReplay
-import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.core.testing.Misses
-import io.github.danielhp95.caracole.core.youtube.AnswerError
-import io.github.danielhp95.caracole.core.youtube.Choose
-import io.github.danielhp95.caracole.core.youtube.Classify
-import io.github.danielhp95.caracole.core.youtube.Video
-import io.github.danielhp95.caracole.core.youtube.Videos
-import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
@@ -55,6 +54,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 
 /**
  * youtube.py's phone half (tests/test_conformance_youtube.py), area `youtube`:
@@ -436,8 +436,7 @@ object YouTubeReplay : AreaReplay {
         return n
     }
 
-    /** video_cmd.jsonl's `checked_jpeg` records (its command's records are :server's, YouTubeVideoReplay): Thumbs'
-     * reading of each head with its trailing zeros, kept or not as Python's. */
+    /** due.jsonl: Due.songs of each scene, unpaired and paired, against Python's ids in order. */
     private fun due(misses: Misses): Int {
         var n = 0
         for (r in records("due")) {
@@ -465,6 +464,8 @@ object YouTubeReplay : AreaReplay {
         return n
     }
 
+    /** video_cmd.jsonl's `checked_jpeg` records (its command's records are :server's, YouTubeVideoReplay): Thumbs'
+     * reading of each head with its trailing zeros, kept or not as Python's. */
     private fun jpegs(misses: Misses): Int {
         var n = 0
         for (r in records("video_cmd").filter { it["fn"]?.jsonPrimitive?.content == "checked_jpeg" }) {
