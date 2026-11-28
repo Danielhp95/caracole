@@ -366,11 +366,13 @@ class MlChordModels(
         private const val CANT_TAKE_TURN = "the chord models' turn can't be taken"
 
         /** The phone's reasons not to hear here (the design's §8.1), the first that holds: Android before 13 (API 33),
-         * no processor the app carries the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
-         * release), under [LEAST_MEMORY] of memory; null for none. */
+         * a primary ABI ([abis]' first, Build.SUPPORTED_ABIS', the one Android installs the APK's native libraries
+         * for) the app doesn't carry the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
+         * release; an x86_64 phone that translates arm64 runs the release's x86_64 libraries, which hold none: the
+         * app's PhoneYouTube.carries is the same rule), under [LEAST_MEMORY] of memory; null for none. */
         fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>, carried: Set<String> = ABIS): String? = when {
             sdk < LEAST_SDK -> "chords from audio need Android 13 or later"
-            abis.none { it in carried } -> "no chord models for this phone's processor"
+            abis.firstOrNull() !in carried -> "no chord models for this phone's processor"
             totalMem < LEAST_MEMORY -> "chords from audio need 6 GB of memory or more"
             else -> null
         }
