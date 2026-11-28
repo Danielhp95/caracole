@@ -3147,8 +3147,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   raised). `qjs`, QuickJS-NG's command (MIT), is youtube/native/CMakeLists.txt's: upstream's `qjs_exe` sources (`gen/`'s
   committed bytecode, no host `qjsc` step) by the NDK for both ABIs, libsoxr's reproducibility flags, 16 KB pages, a PIE
   executable named `libqjs.so`, run from the app's native library folder (`Qjs.path(context)`), which needs
-  `useLegacyPackaging`, the debug variants' alone (app/build.gradle.kts, and the module's test APK): every native
-  library then compressed in the APK and extracted at install (21.0 MB more installed on arm64); yt-dlp is told of it
+  `useLegacyPackaging`, every variant's since Y5.1 (app/build.gradle.kts, and the module's test APK): every native
+  library then compressed in the APK and extracted at install (the release 55.6 MB installed on arm64, Chaquopy's
+  first-start copy of its assets, about 14 MB, on top: android/README.md's Release); yt-dlp is told of it
   alone (`--no-js-runtimes --js-runtimes quickjs:<path>`), runs it with `--script FILE` and `--help` (its version), each
   piped. `PinsTest` (JVM) holds the wheels to the pins, yt-dlp-ejs to the version yt-dlp's `METADATA` requires and
   `CARACOLE_QUICKJS_SRC` to the tag; `GlueTest` (JVM) runs the glue with the shell's python3.13 over the wheels;
@@ -3156,10 +3157,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   Python started, `version()` the pins', yt-dlp's `--version` alone, an exception out of `main` its traceback and 1, and
   none of the standard library's modules the design leaves out (Chaquopy packages none of them). `QjsTest` (the same
   APK): qjs executable there, its `--version` the tag, a script run, and yt-dlp's `-v` (no URL: its header, exit 2)
-  naming `quickjs-ng-<version>` among its runtimes. release-check.sh: no `libpython*`, `libchaquopy_java.so`,
-  `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, no
-  class of `:youtube` and no `YtDlpService`, `GateService` or `:youtube` in its manifest, its native libraries every
-  one stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
+  naming `quickjs-ng-<version>` among its runtimes. release-check.sh: the release holds Python for arm64-v8a alone
+  (`libpython*`, `libchaquopy_java.so`, `lib*_python.so` and `lib*_chaquopy.so`, classes under `com/chaquo/`,
+  `assets/chaquopy/`; none of them, and no Chaquopy asset, for x86_64), `:youtube`'s classes, `YtDlpService`,
+  `GateService` and the `:youtube` process in its manifest, `lib/arm64-v8a/libqjs.so` alone, none of the YouTube bench,
+  `extractNativeLibs="true"` with every native library compressed, and as many notices under
+  `assets/licenses/youtube/` as copyLicences wrote (NoticesTest's `NOTICES`, the APKs held to them by `apkScan`); the
+  debug APK the control of each.
   `android/scripts/bump-ytdlp.sh [--older] [VERSION]`, the owner's alone (the design's §7): PyPI's JSON of yt-dlp
   (VERSION's, leading zeros dropped as PyPI's, else the latest) and of the yt-dlp-ejs its wheel's `Requires-Dist`
   names, each wheel's URL `https://files.pythonhosted.org/…/<its file name>` alone (the loopback fake's own host for

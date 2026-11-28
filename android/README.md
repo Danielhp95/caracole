@@ -139,8 +139,9 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    out, `DropPythonAbis`), with its notices under `licenses/youtube/`
    ([below](#youtube-on-the-phone-the-engine)), and extracts every native library at install
    (`useLegacyPackaging`, so Android runs qjs). That makes the release 28.8 MB, 9.3 MB more than chords alone (19.6 MB),
-   and 55.6 MB installed on an arm64 phone (its 26.8 MB of libraries extracted beside the APK), 36.0 MB more (34.4 MiB);
-   Chaquopy unpacks its standard library into the app's files at Python's first start, on top. Two builds of the same
+   and 55.6 MB installed on an arm64 phone (its 26.8 MB of libraries extracted beside the APK), 36.0 MB more (34.4 MiB).
+   That installed figure leaves out what Chaquopy copies out of its assets into the app's files at Python's first start
+   (its standard library, yt-dlp, the glue): about 14 MB more after the first YouTube run. Two builds of the same
    commit from checkouts at different paths give the same unsigned APK, byte for byte (`:youtube`'s assets and
    `libqjs.so` among it). `android/scripts/release-check.sh` checks all of it.
 
@@ -990,11 +991,12 @@ What the APK carries of it is checked by a script, after `gradle -p android :app
 
     nix develop ./android -c android/scripts/native-check.sh
 
-`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release holds no
-`libcaracole_*` or `libqjs.so` today, which passes, saying so), and fails with it: run it after any change to the
-native code or the packaging. It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is
-packaged as the APK installs it (stored uncompressed and 16 KB aligned, or compressed in a debug APK that extracts its
-libraries at install: release-check.sh asks the debug APK's extracted, `--expect extracted`), its segments 16 KB
+`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release's
+`libcaracole_soxr.so` and `libqjs.so` arm64-v8a's alone, `--release`), and fails with it: run it after any change to
+the native code or the packaging. It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is
+packaged as the APK installs it (stored uncompressed and 16 KB aligned, or compressed in an APK that extracts its
+libraries at install, as every build does since Y5.1: release-check.sh asks both APKs' extracted, `--expect
+extracted`), its segments 16 KB
 aligned, stripped (no `.debug_*`, `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`,
 `/nix/store/`, `.cxx/`, `/tmp/`), and prints its SHA-256: two checkouts at different paths build the same bytes (the
 library carries no debug information, `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's
