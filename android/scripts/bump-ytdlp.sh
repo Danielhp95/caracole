@@ -203,7 +203,8 @@ Left to do (android/README.md, "A release when YouTube changes"):
   2. nix develop ./android -c gradle -p android :youtube:testDebugUnitTest   (PinsTest: the wheels are the pins)
   3. android/scripts/device-test.sh --youtube   (YtDlpVersionTest: the app runs the pinned yt-dlp)
   4. raise versionCode and versionName in android/app/build.gradle.kts
-  5. nix develop ./android -c gradle -p android :app:assembleRelease, then android/scripts/release-check.sh
+  5. nix develop ./android#ml -c gradle -p android :app:assembleRelease   (the ml shell: the release carries the
+     chord models), then android/scripts/release-check.sh
   6. one song by hand on the phone: a pasted video to Ready
   7. publish: the APK into docs/fdroid/repo, fdroid update, commit docs/fdroid and push main (android/README.md,
      "Release")""")

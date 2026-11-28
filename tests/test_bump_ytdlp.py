@@ -217,8 +217,12 @@ def test_with_no_version_it_pins_pypis_latest_yt_dlp_and_the_ejs_its_wheel_requi
     assert "/pypi/yt-dlp-ejs/9.1.0/json" in pypi.asked
     assert [call[-1] for call in prefetched(checkout)] == [got["ytdlp"]["url"], got["ejs"]["url"]]
     for line in (f"yt-dlp {OLD['ytdlp']['version']} -> {NEW}", "git add android/youtube/pins.json",
-                 "device-test.sh --youtube", "versionCode", ":app:assembleRelease"):
+                 "device-test.sh --youtube", "versionCode",
+                 "nix develop ./android#ml -c gradle -p android :app:assembleRelease"):
         assert line in result.stdout
+    # The release gate (android/app/build.gradle.kts) refuses a release outside flake.nix's ml shell.
+    assert all("nix develop ./android#ml " in line
+               for line in result.stdout.splitlines() if ":app:assembleRelease" in line), result.stdout
 
 
 def test_a_version_given_is_the_one_pinned(checkout, pypi):
