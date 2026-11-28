@@ -498,7 +498,8 @@ first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-55
 `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
 port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD). As it
 ends, on any path, it stops the emulator it started, while it still holds its lock, and leaves one that was up already;
-`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. It stops the adb server it
+`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. The computers and the other servers it starts are
+stopped as it ends, every one (whatever each started under it too), and the folders it made for them removed. It stops the adb server it
 started once adb lists no device and no other caller holds an emulator, never one with a phone attached. That is the
 owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them for testing or development.
 same thing for gradle biuld and adb servers." An emulator left by a run that was SIGKILLed, or by a script older than

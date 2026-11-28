@@ -20,9 +20,13 @@
 #   caller holds an emulator of the pool (one may be booting, not listed yet); never one it would start itself just to
 #   look.
 #
-# It prints one line for each thing it stopped or left and why, does nothing twice, and exits 0 when nothing was
-# running. Only this user's processes are looked at, each by its own program name and arguments.
+# It prints one line for each thing it stopped or left and why, does nothing twice, goes on to its end when its reader
+# has gone (stop-all.sh | head), and exits 0 when nothing was running. Only this user's processes are looked at, each
+# by its own program name and arguments.
 set -uo pipefail
+# A reader gone (`stop-all.sh | head`) never cuts it short: its words fail quietly, and what comes after them (the adb
+# server's part) still runs.
+trap '' PIPE
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 android="$(dirname "$here")"
@@ -38,7 +42,7 @@ case "${1-}" in
     *) echo "stop-all.sh: unknown argument $1" >&2; exit 2 ;;
 esac
 
-say() { echo "stop-all.sh: $*"; }
+say() { echo "stop-all.sh: $*" 2>/dev/null; }  # a reader gone: no "write error" line a say
 lock_of() { if [ "$1" = 5554 ]; then echo "$lock"; else echo "${lock%.lock}-$1.lock"; fi; }
 # This user's processes, "pid comm args" a line.
 procs() { ps -u "$(id -u)" -o pid=,comm=,args= 2>/dev/null; }
