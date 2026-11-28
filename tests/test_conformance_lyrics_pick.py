@@ -101,6 +101,12 @@ def pick(w: World, case: str, display: str, record: str | None, answers, cache: 
             stack.enter_context(mock.patch("caracole.library.write_info", lambda *a, **k: None))
             if models:  # auto-chords here, its models never to run (a sheet up to date asks none)
                 stack.enter_context(mock.patch("caracole.youtube_fetch.autochords_problem", lambda cfg: None))
+            else:  # auto-chords not here, whatever this Python holds: its words in ``python`` are the record's, the
+                # same in `nix develop` and in the auto-chords package's check (whose torch made them other words)
+                from caracole.commands.autochords import MODEL_PACKAGES
+
+                stack.enter_context(mock.patch("caracole.youtube_fetch.autochords_missing",
+                                               lambda: list(MODEL_PACKAGES)))
             result = lyrics_pick.pick_lyrics(w.cfg, lyrics_pick.PickRequest(artist, title, pick=row, record=record),
                                              heard, now=NOW, clock=lambda: 0.0, recognizer=NoModel(),
                                              beats_fn=NoModel())
