@@ -16,6 +16,9 @@ import kotlin.test.assertTrue
  *   from the pinned wheels, the notice yt-dlp-ejs's lib.min.js begins with (its bundled meriyah's and astring's), and
  *   QuickJS-NG's LICENSE from its pinned source; and nothing else;
  * - by `gradle :app:apkScan` (release-check.sh), the release and debug APKs carry that folder byte for byte.
+ *
+ * [NOTICES] is the one list: release-check.sh counts the release's notices against copyLicences' folder, never a
+ * number of its own.
  */
 class NoticesTest {
     private val folder = File(System.getProperty("caracole.youtube.licenses").orEmpty())

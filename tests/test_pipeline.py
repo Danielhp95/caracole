@@ -864,8 +864,7 @@ def test_the_runs_clients_keep_the_pause_after_another_caracoles_last_request(co
         ("earlier", at, "ug", "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"),
     )
     made = make_services(cfg, conn, "2026-10-18T03:30:00Z")
-    for client in made.clients.values():
-        client.close()
+    made.close()  # UG's directory's client too: each holds caracole's lock until closed
     pause = sum(slept)  # in slices, each a chance to hand the lock to a lookup
     low, high = cfg.provider("ug").delay
     assert low - 4 <= pause <= high - 3
@@ -878,8 +877,7 @@ def test_a_run_makes_no_client_for_the_services_a_link_shared_to_the_phone_is_re
     from caracole.pipeline import make_services
 
     made = make_services(cfg, conn, "2026-10-18T03:30:00Z")
-    for client in made.clients.values():
-        client.close()
+    made.close()  # UG's directory's client too: each holds caracole's lock until closed
     assert not set(SHARE_PROVIDERS) & set(made.clients)
     assert not set(SHARE_PROVIDERS) & set(PROVIDERS)
 

@@ -30,7 +30,8 @@
 # - the licences of what the chord models ship, under assets/chords/licenses/, each its source's bytes: ONNX Runtime's
 #   LICENSE and ThirdPartyNotices.txt (from its AAR), libsoxr's LICENCE and COPYING.LGPL and PFFFT's (pffft.c's own,
 #   verbatim), BTC's and beat_this's, and the README saying where the source is; and those of what its yt-dlp ships,
-#   assets/licenses/youtube/'s thirteen (NoticesTest, through apkScan below, holds each to its source);
+#   assets/licenses/youtube/'s, as many as :youtube's copyLicences wrote (NoticesTest holds that folder to its list and
+#   each to its source, and, through apkScan below, the APK to the folder: the one list is NoticesTest's NOTICES);
 # - its size: 100 MiB at most;
 #
 # and the controls, so that no probe passes for nothing:
@@ -211,7 +212,10 @@ check "release APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses
 check "release APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
 check "release APK holds none of the yt-dlp's libraries for x86_64 (Python's, libqjs.so)" "$(yes_if '[ "$py86" = 0 ]')"
 check "release APK holds none of Chaquopy's x86_64 assets" "$(yes_if '[ "$pyassets86" = 0 ]')"
-check "release APK holds the yt-dlp's thirteen notices under assets/licenses/youtube/" "$(yes_if '[ "$notices" = 13 ]')"
+noticed="$android/youtube/build/generated/licenceAssets/licenses/youtube"
+wanted="$(find "$noticed" -maxdepth 1 -type f 2>/dev/null | wc -l)"
+check "release APK holds the yt-dlp's $wanted notices under assets/licenses/youtube/ (copyLicences' folder)" \
+    "$(yes_if '[ "$wanted" -gt 0 ] && [ "$notices" = "$wanted" ]')"
 echo "release APK: $ytclasses classes of :youtube in its dex, $ytmanifest YtDlpService, GateService or :youtube" \
     "entries in its manifest"
 check "release APK holds classes of :youtube (io/github/danielhp95/caracole/youtube/)" \

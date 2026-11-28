@@ -561,12 +561,15 @@ def test_a_dead_record_cleared_has_every_site_asked_under_the_songs_own_name_bef
 
     # The next nightly pass asks the three at once, under the song's own name, and only then is it offered.
     picks = overrides.lyrics
-    lrclib = fetch_pending_lyrics(conn, sites_client(cfg, conn, "lrclib"), cfg.library_dir, NOW, picks=picks)
+    with sites_client(cfg, conn, "lrclib") as client:  # each client holds caracole's lock until closed
+        lrclib = fetch_pending_lyrics(conn, client, cfg.library_dir, NOW, picks=picks)
     assert lrclib.missing == 1
     assert why_not_offered(conn, cfg, get_song(conn, song.id), overrides) == "megalobiz hasn't been asked"
-    megalobiz_lyrics(conn, sites_client(cfg, conn, "megalobiz"), cfg.library_dir, NOW, picks=picks)
+    with sites_client(cfg, conn, "megalobiz") as client:
+        megalobiz_lyrics(conn, client, cfg.library_dir, NOW, picks=picks)
     assert why_not_offered(conn, cfg, get_song(conn, song.id), overrides) == "azlyrics hasn't been asked"
-    azlyrics_lyrics(conn, sites_client(cfg, conn, "azlyrics"), cfg.library_dir, NOW, lyrics=picks)
+    with sites_client(cfg, conn, "azlyrics") as client:
+        azlyrics_lyrics(conn, client, cfg.library_dir, NOW, lyrics=picks)
     assert [e for e, _ in sites.megalobiz.requests] == ["search"]
     assert sites.megalobiz.requests[0][1]["artist"] == SONG[0]  # the song's own name: no [lyrics] holds
     assert sites.azlyrics.requests == ["/n/nickcani.html"]  # its artist's page, under the song's own name
