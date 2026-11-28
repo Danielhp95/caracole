@@ -274,7 +274,8 @@ class AudioRunnerTest {
         }
         val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
         assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
-        assertEquals(listOf("hearing", "get Paper Boats", "heard"), log.take(3))
+        // One snapshot: take() reads the size, then copies, so the job's own song's lookup could slip in between.
+        assertEquals(listOf("hearing", "get Paper Boats", "heard"), log.toList().take(3))
         runBlocking { withTimeout(30_000) { while (log.size < 4) kotlinx.coroutines.delay(10) } }
         assertEquals("get River Road", log[3])  // the job's own song's, once the job was over
         val ends = ends(job)
