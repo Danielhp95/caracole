@@ -24,6 +24,7 @@ import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.youtube.Choose
 import io.github.danielhp95.caracole.core.youtube.DayBudget
+import io.github.danielhp95.caracole.core.youtube.Due
 import io.github.danielhp95.caracole.core.youtube.ExtractorOutdated
 import io.github.danielhp95.caracole.core.youtube.GateRefused
 import io.github.danielhp95.caracole.core.youtube.NotSent
@@ -218,10 +219,25 @@ class YouTubeSheetRunner(
             context.say(said)
         }
 
-        /** The sheet kept: the video's audio goes (the design's §5.4), the song's link and its record's with it. */
+        /** The video's download the phone couldn't hear, noted for the automatic pass (kv `youtube-unheard:<id>`,
+         * Due): once the sweep lets its audio go, the pass takes the song again only for another video, or 30 days on. */
+        override fun unreadable(why: String) {
+            val v = video ?: return
+            val id = song?.id ?: return
+            parts.database.writeBlocking { db ->
+                db.kvSetJson(Due.UNHEARD_PREFIX + id, JsonObject(mapOf("video" to JsonPrimitive(v.id),
+                    "at" to JsonPrimitive(stamp), "error" to JsonPrimitive(why))))
+            }
+        }
+
+        /** The sheet kept: the video's audio goes (the design's §5.4), the song's link and its record's with it, and
+         * any note that the phone couldn't hear it. */
         override fun afterPages() {
             if (!sheetKept) return
-            parts.database.writeBlocking { db -> YouTubeAudio.letGo(db, folder, again(db), stamp) }
+            parts.database.writeBlocking { db ->
+                YouTubeAudio.letGo(db, folder, again(db), stamp)
+                db.kvDelete(Due.UNHEARD_PREFIX + song!!.id)
+            }
             kept = null
         }
 

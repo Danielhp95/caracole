@@ -700,3 +700,33 @@ def test_words_win_still_downloads_for_a_chords_only_sheet_made_elsewhere(conn, 
                  (song.id,))
     monkeypatch.setattr(transcript, "WORDS_WIN", False)
     assert yf.songs_for_youtube(conn, o, NOW) == []  # without the owner's call, R3 alone
+
+
+def test_a_phone_never_takes_again_a_video_whose_audio_it_couldnt_hear_until_another_or_30_days(conn):
+    from caracole.songs import _PER_SONG_KV
+
+    song = to_buy(conn)
+    # its pick remembered, its audio let go by the phone's 3-day sweep
+    kv_set_json(conn, f"youtube:{song.id}", {"video": {"id": TOPIC, "url": watch_url(TOPIC)}, "source": "search"})
+
+    def note(video, days):
+        at = (NOW - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        kv_set_json(conn, f"{yf.UNHEARD_PREFIX}{song.id}",
+                    {"video": video, "at": at, "error": "audio the phone can't read: x"})
+
+    def due(o=Overrides()):
+        return [x.id for x in yf.phone_due(conn, o, NOW, paired=False)]
+
+    assert due() == [song.id]
+    note(TOPIC, days=4)
+    assert due() == []  # the video it would take again
+    assert due(Overrides(youtube={song.key: TOPIC})) == []  # pasted, the same video
+    assert due(Overrides(youtube={song.key: OTHER})) == [song.id]  # another video pasted
+    note(OTHER, days=4)
+    assert due() == [song.id]  # a note of another video than its pick
+    note(TOPIC, days=31)
+    assert due() == [song.id]  # 30 days on
+    kv_set_json(conn, f"{yf.UNHEARD_PREFIX}{song.id}", [TOPIC])  # no object: no note
+    assert due() == [song.id]
+    assert [x.id for x in yf.songs_for_youtube(conn, Overrides(), NOW)] == [song.id]  # the computer's rule unchanged
+    assert yf.UNHEARD_PREFIX in _PER_SONG_KV

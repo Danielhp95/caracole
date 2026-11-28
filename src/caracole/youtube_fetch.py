@@ -63,6 +63,7 @@ from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, s
 log = logging.getLogger(__name__)
 
 RECORD_PREFIX = "youtube:"  # + song id, in songs._PER_SONG_KV
+UNHEARD_PREFIX = "youtube-unheard:"  # + song id, in songs._PER_SONG_KV: the video whose audio the phone couldn't hear
 WANTED_PREFIX = "youtube-wanted:"  # + song id, in songs._PER_SONG_KV: the phone's note of a song for its own pass
 AUDIO_FOLDER = "youtube"  # in cache_dir
 RECHECK_AFTER = timedelta(days=30)  # a song whose search found nothing that fits
@@ -309,6 +310,20 @@ def _recent(stamp: str | None, now: datetime) -> bool:
     return when is not None and when > now - RECHECK_AFTER
 
 
+def _unheard(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> bool:
+    """Whether the phone couldn't hear the audio of the video the song would take now (its ``[youtube]`` video, else
+    its record's pick) within ``RECHECK_AFTER``: kv ``youtube-unheard:<id>`` (``video``, ``at``, ``error``), which the
+    phone's sheet job writes when its chords stage can't read the download, as its audio goes three days on. The
+    computer never writes it: it keeps its file and its ``autochords:failed:`` note."""
+    note = kv_get_json(conn, f"{UNHEARD_PREFIX}{song.id}")
+    if not isinstance(note, dict):
+        return False
+    video = _text(note.get("video"))
+    record = load_record(conn, song.id)
+    taking = overrides.youtube.get(song.key) or (record.video.id if record.video is not None else None)
+    return video is not None and video == taking and _recent(_text(note.get("at")), now)
+
+
 def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[Song]:
     from caracole.todo import songs_to_buy  # it shows what this module keeps
 
@@ -366,13 +381,16 @@ def _due(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[
 def phone_due(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *, paired: bool) -> list[Song]:
     """The songs a phone takes the audio of from YouTube by itself (its automatic pass), recorded for it: those of
     ``songs_for_youtube`` with no audio of their own (no upload, no YouTube audio kept: ``audio_path`` none) and no
-    sheet at all, human or auto, whoever made it; on a ``paired`` phone (one that syncs with a computer) only those it
+    sheet at all, human or auto, whoever made it, none whose video's audio the phone couldn't hear in the last 30 days
+    (kv ``youtube-unheard:<id>``, until another video is given); on a ``paired`` phone (one that syncs with a computer) only those it
     noted (kv ``youtube-wanted:<id>``, a lookup that ended "Not on the sites"), the rest being the computer's nightly
     work. The noted first, then the rest, newest first in each; those whose last try failed after the others, the
     noted first among them."""
     due = []
     for song, failed in _due(conn, overrides, now):
         if song.audio_path or _kept(conn, song.id, HUMAN_SHEET) or _kept(conn, song.id, AUTO_SHEET):
+            continue
+        if _unheard(conn, song, overrides, now):
             continue
         wanted = conn.execute("SELECT 1 FROM kv WHERE key = ?", (f"{WANTED_PREFIX}{song.id}",)).fetchone() is not None
         if paired and not wanted:

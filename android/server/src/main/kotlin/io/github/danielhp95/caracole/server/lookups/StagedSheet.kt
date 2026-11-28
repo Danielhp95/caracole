@@ -337,7 +337,9 @@ internal abstract class StagedSheet(
                 chords.hear(audio, { step -> doing("chords", step) }, { context.yieldToQueued() })
             }
         } catch (e: AudioUnreadable) {
-            return fail(AudioRunner.UNREADABLE + (e.message ?: e.javaClass.simpleName))
+            val why = AudioRunner.UNREADABLE + (e.message ?: e.javaClass.simpleName)
+            unreadable(why)
+            return fail(why)
         } catch (e: ChordsUnavailable) {
             return fail(e.message ?: e.javaClass.simpleName)
         }
@@ -364,6 +366,9 @@ internal abstract class StagedSheet(
 
     /** What the models heard, once they did, before the sheet is laid out. */
     protected open fun heard(heard: Heard) {}
+
+    /** The chords stage couldn't read the audio the audio stage kept ([why]: its failed words), in no write. */
+    protected open fun unreadable(why: String) {}
 
     /** The sheet already made of this audio here: up to date, or laid out again over its words where they changed
      * (Relay.onto); null where the models are to hear it (no auto sheet, one of other audio, one another caracole

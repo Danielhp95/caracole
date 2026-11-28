@@ -394,8 +394,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing. `caracole youtube
     --song` refuses such a song too (commands/youtube.py `_one_song`, `MADE_THERE`), pointing at `--sheet`.
   - `phone_due(conn, overrides, now, paired=)`: the songs a phone takes the audio of by itself (its automatic pass),
-    within `songs_for_youtube`: no audio of their own, no sheet at all (either side's); on a paired phone only those
-    it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held by
+    within `songs_for_youtube`: no audio of their own, no sheet at all (either side's); none whose video's download the
+    phone couldn't hear within 30 days (kv `youtube-unheard:<id>`, `UNHEARD_PREFIX`, until another video is given); on a
+    paired phone only those it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held by
     vectors/youtube/due.jsonl (fixture libraries, tests/test_conformance_youtube.py), which core.youtube's port
     replays.
 - youtube_sheet.py is no step but `caracole youtube --sheet`: one song's auto sheet from a video now.
@@ -3767,7 +3768,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     video), `suggestion` (/api/search's `youtube`) and `sheetOnScreen`;
   - `Due` (Y3.3): youtube_fetch.py's `phone_due`, `songs(db, overrides, now, paired)`: `songs_for_youtube`'s songs
     (todo.songs_to_buy's rule, core.todo's `Todo.songsToBuy`, which the cards' buy links read too) with no
-    `audio_path` and no sheet kept, human or auto; on a paired phone the noted alone (kv `youtube-wanted:<id>`); the
+    `audio_path` and no sheet kept, human or auto, none whose video's download the phone couldn't hear within
+    `recheck_after_days` (kv `youtube-unheard:<id>`, `Due.UNHEARD_PREFIX`); on a paired phone the noted alone (kv `youtube-wanted:<id>`); the
     noted first, failures last;
   - `DayBudget` (Y3.3): the phone's day, `left(db, config, now)`, `PhoneConfig.provider("youtube").budget` less
     `runs`, every yt-dlp run of the last 24 hours (`events` of `youtube` decided ok, error or blocked: asked-now runs
@@ -3775,7 +3777,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     wins over its policy's, the caller's to give (an automatic job's the day's left);
   - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
     byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
-    song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
+    song for its automatic pass, and `youtube-unheard:<song id>`, the video whose download it couldn't hear (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
     `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
   - `Thumbs` (Y2.4): youtube_search.py's thumbnail, youtube.json's `thumb` (provider `ytimg`, its address, folder,
     names, limits and frame markers): `fetch` one request through the caller's PoliteClient (robots' rules: `/sb/`
@@ -4700,7 +4702,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   the phone's words, counted against nothing; yt-dlp out of date (`ExtractorOutdated`) or the gate's refusal
   (`GateRefused`), a host's problem, the stage failed in their words, a wait, counted against nothing; any other error
   counted against the video (the data's `network` pattern aside), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
-  nothing. A download the decoder refuses fails the chords "audio the phone can't read: …".
+  nothing. A download the decoder refuses fails the chords "audio the phone can't read: …",
+  noted (kv `youtube-unheard:<id>`: the video, when, the words) so the automatic pass never takes that video again
+  within 30 days once the sweep lets its audio go; a sheet kept forgets the note (YouTubeUnheardTest).
 - chords as `AudioRunner`'s, credited to the video (`AutoSheet.youtubeCredit`), the version's `raw.youtube` and
   `url` the video's, the maker the phone's with no `audio_name`; the decoded length said beside yt-dlp's (the job's
   Output and the `caracole.youtube` log). The sheet kept, the pages stage lets the audio go (`YouTubeAudio.letGo`:
