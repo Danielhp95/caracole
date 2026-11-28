@@ -2657,7 +2657,10 @@ It is rows.js's, shared by both pages:
     sheet taken from another caracole). Its words re-lay it with no model and no audio:
     sheet.py `relay_due(song, raw, noted=None)`, those same reasons moved as they were, plus a sheet over a site's
     words (keyed) whose song has none now or is instrumental (what a pick taken back made due by clearing
-    `autochords_mtime`); `relay(song, raw, noted=None) -> Made`, `make_sheet` over `read_heard(raw["heard"])`, the
+    `autochords_mtime`), and a keyed timed sheet whose `raw["synced_lyrics"]` isn't the song's `synced_key` now, one
+    it has (the same words timed otherwise, a record picked for another cut: what a pick made due by clearing it;
+    untimed now, or keyless, up to date; Relay.kt `due` alike); `relay(song, raw, noted=None) -> Made`, `make_sheet`
+    over `read_heard(raw["heard"])`, the
     video `raw["youtube"]` names and `noted` (`Noted`: transcript, silent, said; by default `noted_in(raw)`, what it was
     laid with), `Made.kept` the raw's `RELAY_KEEPS` (`audio`, `youtube`, `made_on`, `made_by`, `models`, `runtime`,
     `audio_name`, `audio_sha16`) that `raw_of` writes in their places, so the raw is a fresh hearing's but for those

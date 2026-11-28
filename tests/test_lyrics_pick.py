@@ -21,6 +21,7 @@ from helpers.rendered import fake_chordpro
 from test_youtube_sheet import Heard, Recognizer, beats, wav
 
 from caracole import youtube_fetch
+from caracole.autochords.sheet import relay
 from caracole.autochords.transcript import (
     PICKED_NONE,
     Transcript,
@@ -43,6 +44,8 @@ SONG = ("Nick Cani", "Vikingos veganos (Video Oficial)")
 NAME = ("Nick Cani", "Vikingos veganos")
 SYNCED = "[00:00.50]Somos vikingos de prueba\n[00:05.20]comemos lechuga de prueba\n"
 OTHER = "[00:00.50]Otras palabras\n[00:05.20]nada que ver\n"
+# The same words as SYNCED, the second line sung three seconds earlier: another cut's timing of one text.
+RETIMED = "[00:00.50]Somos vikingos de prueba\n[00:02.20]comemos lechuga de prueba\n"
 
 
 def lrc(lrclib_id=77, *, synced=SYNCED, plain=None, duration=10.0, album="Pruebas", instrumental=False) -> dict:
@@ -394,6 +397,35 @@ def test_a_pick_after_the_audio_changed_has_the_models_hear_the_new_audio(cfg, c
     assert result.ok, result
     assert heard.ends()["chords"] == ("done", "chords over the lyrics")
     assert recognizer.calls == [other] and auto_raw(conn, song)["audio"] == str(other)
+
+
+@pytest.mark.parametrize("kept", [True, False], ids=["heard kept", "made before"])
+def test_a_pick_of_the_same_words_timed_otherwise_lays_the_sheet_over_the_new_timing(cfg, conn, song, sites, here,
+                                                                                      kept):
+    # LRCLIB holds one text under several records, timed for different cuts: the one picked for your cut is the timing
+    # the chords go over, laid out again from what was heard (no model), or by the models for a sheet made before.
+    auto_sheet_of(cfg, conn, song)
+    sites.lrclib.search = [lrc(77), lrc(78, synced=RETIMED, album="Otro corte")]
+    searched(cfg, conn, song, sites)
+    first, _ = pick(cfg, record="lrclib:77")
+    assert first.ok and auto_raw(conn, song)["lyrics"] == "synced"
+    over_77 = sheet_text(cfg, song)
+    if not kept:
+        before_heard(conn, song)
+    heard_before = auto_raw(conn, song).get("heard")
+    recognizer = Recognizer()
+    result, heard = pick(cfg, record="lrclib:78", recognizer=recognizer)
+    assert result.ok, result
+    now = get_song(conn, song.id)
+    assert song_lyrics(now).synced.strip() == RETIMED.strip()  # the picked record is the song's lyrics now
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert bool(recognizer.calls) is not kept
+    if kept:  # what the sheet is, laid out from what was heard over the lyrics the song has now (no model)
+        wanted = relay(now, {**auto_raw(conn, song), "heard": heard_before}).text
+        assert wanted != over_77
+        assert sheet_text(cfg, song) == wanted
+    else:
+        assert sheet_text(cfg, song) != over_77  # the models made it again over them
 
 
 def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, song, sites, monkeypatch):
