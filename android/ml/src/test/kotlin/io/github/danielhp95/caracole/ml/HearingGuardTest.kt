@@ -180,8 +180,9 @@ class HearingGuardTest {
         assertTrue(File(folder, "heard.json").isFile)
     }
 
-    /** The turn is the app's processes' one: a turn another PROCESS holds (an flock: the bench's, or the app's jobs
-     * while the bench asks) refuses a hearing here in [MlChordModels.BUSY]'s words, and is free once it ends. */
+    /** The turn is the app's processes' one: a turn another PROCESS holds (a record lock of its
+     * file: the bench's, or the app's jobs while the bench asks) refuses a hearing here in [MlChordModels.BUSY]'s
+     * words, and is free once it ends. */
     @Test fun aTurnAnotherProcessHoldsRefusesAHearingHere() {
         val turn = tmp.newFile("turn")
         val java = File(System.getProperty("java.home"), "bin/java").path
