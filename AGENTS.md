@@ -4494,7 +4494,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   byte is read where `Phone.audioProblem` says why), then the library screen opens `GET /share/audio?upload=ID`
   (ShareRoutes', `AudioSharePage`, the message page's frame, no script: the file, the guess, the library's song and its
   sheet, words heard on the computer said, Make sheet the library page's `POST /audio`, Cancel `POST
-  /share/audio/cancel`, the upload dropped then `/share/cancel`, which the app takes as leaving the share); where no
+  /share/audio/cancel`, the upload dropped then `/share/cancel`, which the app takes as leaving the share); opened
+  again once its job kept the file (Back from the Journal), the song it is the audio of now, Open the Journal (that
+  job's line) and Done, never the store's gone (`AudioRoutes.keptView`, `AudioStore.marked`); where no
   sheet is made, `?name=` and why, naming Settings; each audio file of a share of several "Share one audio file at a
   time." (ShareAudioTest, AudioSharePageTest). The page's file input that asks for audio (the "+") opens the picker on
   the audio types (`FileChooser`, `AudioShare.chooser`).

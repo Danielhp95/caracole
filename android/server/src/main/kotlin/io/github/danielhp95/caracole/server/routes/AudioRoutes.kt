@@ -233,8 +233,9 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
      * What the share's page shows ([AudioShareView]): with [uploadId], the staged upload (its name, format and
      * length), the names it gives (audio_sheet.names_of, [namesOf]), the library's song of them, its sheet now and
      * the audio the file replaces (the upload's answer's `song.audio`, [audioOf]), and whether its auto sheet has words heard on the computer (its version's `lyrics_source`, a transcript); with
-     * none, the file's [name] alone. Where no sheet is made here, why, in the routes' words; an upload that isn't
-     * there, the store's words of it.
+     * none, the file's [name] alone. Where no sheet is made here, why, in the routes' words; an upload its job kept as its
+     * song's audio, that song and the job's line ([keptView]); any other upload that isn't there, the store's words
+     * of it.
      */
     internal fun shareView(uploadId: String?, name: String): AudioShareView {
         val why = problem()?.let { "$NOT_HERE: $it." }
@@ -242,7 +243,7 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
             try {
                 store.staged(it)
             } catch (e: AudioStore.AudioError) {
-                return AudioShareView(null, name, why = why, gone = e.message.orEmpty())
+                return keptView(it, why) ?: AudioShareView(null, name, why = why, gone = e.message.orEmpty())
             }
         } ?: return AudioShareView(null, name, why = why ?: AudioStore.WORDS.getValue("gone"))
         val length = if (up.durationS > 0) JobCommands.formatDuration(PyFormat.roundHalfEven(up.durationS * 1000)) else ""
@@ -265,6 +266,21 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
     }
 
     /** The raw record of the song's auto version that names a kept file (its sheet), or null for none. */
+    /**
+     * The share's page of an upload a keep moved into place ([AudioStore.marked]: Back from the Journal after Make
+     * sheet loads it again): the song it is the audio of, while that song's row names the kept file, or its keep is
+     * under way (the row not written yet), and the Journal's line of the newest job naming the upload; null for none
+     * (no marker, the song gone, or its audio another since), the store's words then.
+     */
+    private fun keptView(uploadId: String, why: String?): AudioShareView? {
+        val marked = store.marked(uploadId) ?: return null
+        val song = parts.database.read { db -> Songs.byId(db, marked.song) } ?: return null
+        if (marked.done && store.uploaded(song)?.path != marked.file.path) return null
+        val job = parts.queue.snapshot().firstOrNull { j -> j.steps.any { "--upload=$uploadId" in it.args } }
+        return AudioShareView(null, song.display, why = why, kept = song.display,
+                              journal = job?.let { "/#tab=requests&job=${it.id}" })
+    }
+
     private fun autoRaw(db: Db, song: SongRow): JsonObject? =
         db.one("SELECT v.raw FROM versions v WHERE v.song_id = ? AND v.provider = ? AND EXISTS (SELECT 1 FROM files f " +
                    "WHERE f.version_id = v.id) ORDER BY v.id LIMIT 1", song.id, AUTO) { it.text(0) }
