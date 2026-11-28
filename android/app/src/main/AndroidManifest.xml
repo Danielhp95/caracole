@@ -96,19 +96,10 @@
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="audio/midi" />
                 <data android:mimeType="application/x-musescore" />
-                <data android:mimeType="audio/mpeg" />
-                <data android:mimeType="audio/mp4" />
-                <data android:mimeType="audio/x-m4a" />
-                <data android:mimeType="audio/aac" />
-                <data android:mimeType="audio/flac" />
-                <data android:mimeType="audio/x-flac" />
-                <data android:mimeType="audio/ogg" />
-                <data android:mimeType="audio/opus" />
-                <data android:mimeType="audio/wav" />
-                <data android:mimeType="audio/x-wav" />
-                <data android:mimeType="audio/vnd.wave" />
-                <data android:mimeType="audio/aiff" />
-                <data android:mimeType="audio/x-aiff" />
+                <!-- Any audio type: apps label files audio/mp3, audio/x-mpeg, audio/webm…, and the upload judges
+                     the bytes (AudioStore's sniff), refusing what isn't audio it reads; MIDI goes to the inbox
+                     (AudioShare.isAudio). -->
+                <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
 
