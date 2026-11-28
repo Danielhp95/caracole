@@ -3097,6 +3097,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `lib*_python.so` or `lib*_chaquopy.so`, class under `com/chaquo/` or `assets/chaquopy/` entry, no `libqjs.so`, no
   class of `:youtube` and no `YtDlpService`, `GateService` or `:youtube` in its manifest, its native libraries every
   one stored and aligned with no `extractNativeLibs`, in the release, the debug APK the control of each.
+  `android/scripts/bump-ytdlp.sh [--older] [VERSION]`, the owner's alone (the design's §7): PyPI's JSON of yt-dlp
+  (VERSION's, leading zeros dropped as PyPI's, else the latest) and of the yt-dlp-ejs its wheel's `Requires-Dist`
+  names, each wheel's URL `https://files.pythonhosted.org/…/<its file name>` alone (the loopback fake's own host for
+  the tests), `nix-prefetch-url`ed and held to PyPI's SHA-256 and its `METADATA`, then pins.json's `ytdlp` and `ejs`
+  rewritten (synced, renamed) and the steps left printed; a version not on PyPI, yanked or older than the pin (but
+  with `--older`), a wheel elsewhere or of other bytes, or an answer of another shape refused, "pins.json is as it
+  was"; tests/test_bump_ytdlp.py runs it against a fake PyPI on loopback (`CARACOLE_PYPI`) and a stand-in
+  `nix-prefetch-url`.
   - The process (the design's §3.2): `YtDlpService` in `:youtube` takes one request a process (`TAKEN`, process-wide;
     a second refused and the process ended), each answer carrying its run's id: `argv`, and `network`, exactly
     `LOOPBACK` or `NETWORK` (`HostGate.Mode`'s names, the main process's `caracole.network` sent by the client: the

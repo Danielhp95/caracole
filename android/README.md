@@ -141,6 +141,30 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
 signed with another key. Keep a copy of both outside the repository.
 
+## A release when YouTube changes
+
+YouTube breaks older yt-dlp often: the phone then says "YouTube changed what yt-dlp … reads". A fix is one pin moved
+and the usual release, under an hour once yt-dlp has one:
+
+1. Move the pin to PyPI's latest yt-dlp, or to a release you name (a tag's `2026.01.05` is PyPI's `2026.1.5`):
+
+       nix develop ./android -c android/scripts/bump-ytdlp.sh [--older] [VERSION]
+
+   It reads PyPI's JSON for yt-dlp and for the yt-dlp-ejs its wheel requires (`Requires-Dist: yt-dlp-ejs==…; extra
+   == 'default'`), fetches both wheels into Nix's store (`nix-prefetch-url`), checks each is PyPI's SHA-256 and the
+   version its `METADATA` says, and rewrites `youtube/pins.json`'s `ytdlp` and `ejs`. A version not on PyPI or
+   yanked, a wheel anywhere but `https://files.pythonhosted.org/…/<its file name>` or of other bytes, and a version
+   older than the pin are refused with `pins.json` as it was; `--older VERSION` goes back to an older one after a
+   yt-dlp regression, every check still made. The version pinned already changes nothing. It prints the steps below.
+2. `git add android/youtube/pins.json` (the flake reads only what git tracks), then
+   `nix develop ./android -c gradle -p android :youtube:testDebugUnitTest`: `PinsTest` holds the wheels to the pins.
+3. On the emulator, `android/scripts/device-test.sh --youtube`: `YtDlpVersionTest`, the app runs the pinned yt-dlp.
+4. Raise `versionCode` and `versionName` in `app/build.gradle.kts`, build the release (`:app:assembleRelease`) and run
+   `android/scripts/release-check.sh` ("Release", step 2).
+5. One song by hand on the phone: a pasted video to Ready.
+6. Publish: the APK into `docs/fdroid/repo`, `fdroid update`, commit `docs/fdroid/` and `android/youtube/pins.json`,
+   push `main` ("Release", steps 3 and 5).
+
 ## Point it at caracole serve
 
 1. Run `caracole serve` where the phone can reach it, on the LAN or the tailnet:
@@ -1099,8 +1123,9 @@ QuickJS-NG's tree into `CARACOLE_QUICKJS_SRC`, and puts `python3.13`, Chaquopy's
 the two wheels from that folder alone, `--no-index --no-deps`: none of `yt-dlp[default]`'s native packages, no FFmpeg.
 A build of `:youtube` without any of them fails, naming it (its `checkEngine` task); the other modules build without
 them. The flake reads only
-files git tracks: `git add` a changed `pins.json` before building. To move yt-dlp, change its pin and the yt-dlp-ejs
-version its wheel's `METADATA` requires (`PinsTest` checks both).
+files git tracks: `git add` a changed `pins.json` before building. To move yt-dlp, run `bump-ytdlp.sh` ("A release
+when YouTube changes"): it changes its pin and the yt-dlp-ejs version its wheel's `METADATA` requires (`PinsTest`
+checks both).
 
 `caracole_ytdlp.py` is the glue: `version()` says the Python, yt-dlp and yt-dlp-ejs it runs, and `run(argv, out, err)`
 is one yt-dlp run, `yt_dlp.main` with `sys.stdout` and `sys.stderr` line-buffered into two files and its exit status
