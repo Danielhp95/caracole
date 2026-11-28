@@ -114,6 +114,7 @@ object OverridesReplay : AreaReplay {
             "add_lacuerda" -> OverrideWriters.addLacuerda(db, s("display"), s("url"))
             "add_harptabs" -> OverrideWriters.addHarptabs(db, s("display"), s("url"))
             "add_gametabs" -> OverrideWriters.addGametabs(db, s("display"), s("url"))
+            "add_youtube" -> OverrideWriters.addYoutube(db, s("display"), s("url"))
             "add_reject" -> OverrideWriters.addReject(db, s("display"), strings("ug_refs"))
             "add_alias" -> OverrideWriters.addAlias(db, s("source_artist"), s("ug_artist"))
             "add_ignore" -> OverrideWriters.addIgnore(db, s("display"))

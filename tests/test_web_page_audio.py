@@ -193,6 +193,15 @@ SETTLED = "document.getAnimations().length === 0"  # a press lands where the dia
 SAID = "document.querySelector('#audio-sheet .audio-said').textContent"
 FIELDS = "['artist', 'title'].map((n) => document.querySelector(`#audio-sheet [name=${n}]`).value)"
 
+# The dialog's hint and the card entry's title: the words heard from the file only where this caracole transcribes
+# (``server.transcribe.ok``: never the phone), the time a CPU's transcription takes only then.
+HEARD_HINT = "Chords from the file; lyrics from the lyrics sites, else heard from it. "
+SITES_ONLY_HINT = "Chords from the file; lyrics from the lyrics sites. A few minutes."
+HEARD_TITLE = "Chords from the file; lyrics from the lyrics sites, else heard from it."
+SITES_ONLY_TITLE = "Chords from the file; lyrics from the lyrics sites."
+CANNOT = {"ok": False, "why": "Whisper isn't installed", "songs": [], "nothing": [], "unsung": [], "transcribed": [],
+          "time": ""}
+
 
 def test_the_plus_shows_only_where_a_sheet_can_be_made_from_a_file(able, live, browser, conn, cfg, tmp_path,
                                                                   monkeypatch):
@@ -233,8 +242,45 @@ def test_a_file_chosen_uploads_with_the_token_and_shows_its_guess(able, live, br
     assert browser.js(FIELDS) == list(NICK)
     assert browser.js("document.activeElement.name") == "title"
     hint = browser.js("document.querySelector('#audio-sheet .hint').textContent")
-    assert hint.startswith("Chords from the file; lyrics from the lyrics sites, else heard from it.")
+    assert hint == SITES_ONLY_HINT  # ``able`` transcribes nothing (no Whisper model configured)
     assert len(staged_ids(able)) == 1
+
+
+@pytest.mark.parametrize("member, hint, title", [
+    ({**CANNOT, "ok": True, "why": None, "hears": True, "time": "up to half an hour"},
+     HEARD_HINT + "A few minutes, up to half an hour when they're heard.", HEARD_TITLE),
+    ({**CANNOT, "ok": True, "why": None, "hears": True, "time": "a couple of minutes"},
+     HEARD_HINT + "A few minutes.", HEARD_TITLE),
+    ({**CANNOT, "ok": True, "why": None, "hears": False, "time": "a couple of minutes"},
+     SITES_ONLY_HINT, SITES_ONLY_TITLE),
+    (CANNOT, SITES_ONLY_HINT, SITES_ONLY_TITLE),
+    (None, SITES_ONLY_HINT, SITES_ONLY_TITLE),
+], ids=["cpu", "gpu", "transcribe-off", "cannot", "no-member"])
+def test_the_dialog_and_the_cards_entry_say_heard_only_where_this_caracole_transcribes(able, live, browser, tmp_path,
+                                                                                       monkeypatch, member, hint,
+                                                                                       title):
+    # ``server.transcribe`` (library_page.transcribe_member) says whether words are heard here: where they aren't (the
+    # phone's page, a computer without Whisper), neither the card's entry nor the dialog says they are heard from it.
+    monkeypatch.setattr(library_page, "transcribe_member", lambda conn, cfg, overrides: member)
+    base, _ = live
+    conn = db.connect(able.db_path)
+    try:
+        song = add_song(conn, *NICK)
+        conn.commit()
+    finally:
+        conn.close()
+    line = f'article.line[data-id="{song.id}"]'
+    browser.open(base)
+    assert browser.wait(f"document.querySelector({json.dumps(line + ' .line-more')}) !== null")
+    browser.click(cards.name_of(line))
+    card = cards.open_card(browser, line)
+    entry = card + " form.audio-sheet button"
+    assert browser.wait(f"document.querySelector({json.dumps(entry)}) !== null")
+    assert browser.js(f"document.querySelector({json.dumps(entry)}).title") == title
+    choose(browser, mp3(tmp_path, artist=NICK[0], title=NICK[1]))
+    assert browser.wait("document.getElementById('audio-sheet').open")
+    assert browser.wait(f"{SAID} === '03 whatever.mp3 · MP3 · 3:18'"), browser.js(SAID)
+    assert browser.js("document.querySelector('#audio-sheet .hint').textContent") == hint
 
 
 def test_make_sheet_with_names_corrected_posts_and_shows_the_requests_line(able, live, made, browser, tmp_path):

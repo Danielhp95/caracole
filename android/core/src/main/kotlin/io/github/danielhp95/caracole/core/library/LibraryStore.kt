@@ -21,10 +21,11 @@ import java.io.IOException
  * removed ([remove], removal.remove_song's rules) stays removed until it is asked for again, and then comes back new
  * (AGENTS.md's invariant "A removed song stays removed until you ask for it again"). [ensureCurrentKeys] is
  * songs.ensure_current_keys. [audioDir], the audio store's folder (AudioStore.root), is where a removal finds the
- * audio file the owner gave the song, which goes with it; none, no store. Every method that writes is called inside
+ * audio file the owner gave the song, which goes with it; none, no store. [youtubeDir], the folder of the audio the
+ * phone takes from YouTube (YouTubeAudio.folder), is where it finds the song's, which goes too; none, none taken. Every method that writes is called inside
  * Database.write (the plan's §5.5).
  */
-class LibraryStore(val libraryDir: File, val audioDir: File? = null) {
+class LibraryStore(val libraryDir: File, val audioDir: File? = null, val youtubeDir: File? = null) {
     /**
      * The song of [artist] and [title] (each stripped), new, or the one of its identity key found and given [album],
      * [durationMs] and the variant ([variant], else the one its title names). A new song's artist takes the
@@ -52,7 +53,7 @@ class LibraryStore(val libraryDir: File, val audioDir: File? = null) {
         Rekey.ensure(db, Stamps.now())
         val song = Songs.byKey(db, key) ?: return null
         val stamp = Stamps.stampOf(now) // as peer_sync._remove_song reads its time: only for a song to remove
-        return Removal.remove(db, libraryDir, Removal.plan(db, libraryDir, song, audioDir), stamp).tombstone
+        return Removal.remove(db, libraryDir, Removal.plan(db, libraryDir, song, audioDir, youtubeDir), stamp).tombstone
     }
 
     /** The audio file the owner gave [song] that its removal would delete (in [audioDir], the audio store's folder,

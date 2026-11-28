@@ -28,18 +28,62 @@ class Clients(val cfg: PhoneConfig, val cacheDir: File, val transport: (provider
     fun interactive(db: Db, provider: String, runId: String, policy: ProviderPolicy? = null,
                     onEvent: ((Event) -> Unit)? = null): PoliteClient {
         val run = if (runId.startsWith(Pace.LOOKUP_RUN)) runId else Pace.LOOKUP_RUN + runId
+        return built(Writes.of(db), provider, run, { d, now -> policy ?: Pace.lookupPolicy(cfg, d, provider, now) }, onEvent)
+    }
+
+    /** [provider]'s client under the run [runId] as it is, at the provider's own policy (its `budget` and `delay`,
+     * within the day), as `make_client` makes bulk work's: what the owner asked for now that the computer asks so too
+     * (a pasted video's thumbnail, youtube_search.py's, provider `ytimg`). Its database is reached through [writes],
+     * a write a touch (the day's count and the last request's pause read before it, each event and its
+     * `http:last_request:` after its request), so that no write is held while a request goes. */
+    fun named(writes: Writes, provider: String, runId: String, onEvent: ((Event) -> Unit)? = null): PoliteClient =
+        built(writes, provider, runId, { _, _ -> cfg.provider(provider) }, onEvent)
+
+    /** [provider]'s client for bulk work under the run [run] as it is (never a `lookup:` one): the provider's own
+     * policy, its `budget` and `delay`, within the day's `per_day`, every event logged and its `http:last_request:`
+     * written, as `make_client` makes the nightly run's; over [db], the caller's (a lookup's stage holds its write). An
+     * automatic YouTube job's lyrics stage asks through it (the design's §5.3), so its requests count in no hour's
+     * lookups. */
+    fun bulk(db: Db, provider: String, run: String, onEvent: ((Event) -> Unit)? = null): PoliteClient {
+        require(!run.startsWith(Pace.LOOKUP_RUN)) { "a bulk run is no lookup's: $run" }
+        return named(Writes.of(db), provider, run, onEvent)
+    }
+
+    /** The one builder: the policy within the day, the pause after the last request this side sent (read in a touch,
+     * slept after it), every event logged and, for one sent, kv `http:last_request:<provider>` written. */
+    private fun built(writes: Writes, provider: String, run: String, policy: (Db, java.time.Instant) -> ProviderPolicy,
+                      onEvent: ((Event) -> Unit)?): PoliteClient {
         val now = pacing.clock()
-        val paced = Pace.withinTheDay(db, provider, policy ?: Pace.lookupPolicy(cfg, db, provider, now), now)
-        Pace.pauseAfterLastRequest(db, provider, paced.delay, pacing.draws, pacing.sleep, pacing.wallSeconds)
-        val log = EventLog(db, run, pacing.clock)
+        var owed = 0.0
+        val paced = writes.use { db ->
+            Pace.withinTheDay(db, provider, policy(db, now), now).also {
+                Pace.pauseAfterLastRequest(db, provider, it.delay, pacing.draws, { seconds -> owed = seconds },
+                                           pacing.wallSeconds)
+            }
+        }
+        if (owed > 0) pacing.sleep(owed)
         val logged: (Event) -> Unit = { event ->
-            log(event)
-            if (event.decision in Pace.SENT) {
-                db.kvSet(Pace.LAST_SENT + provider, PyFormat.fixed(pacing.wallSeconds(), 3))
+            writes.use { db ->
+                EventLog(db, run, pacing.clock)(event)
+                if (event.decision in Pace.SENT) {
+                    db.kvSet(Pace.LAST_SENT + provider, PyFormat.fixed(pacing.wallSeconds(), 3))
+                }
             }
             onEvent?.invoke(event)
         }
         return PoliteClient(provider, paced, cacheDir, cfg.userAgent, transport(provider), pacing.sleep, pacing.draws,
                             onEvent = logged, monotonic = pacing.monotonic, wallClock = pacing.clock)
+    }
+
+    /** How a client reaches the database: [use] runs its block with it, as one write. */
+    interface Writes {
+        fun <T> use(block: (Db) -> T): T
+
+        companion object {
+            /** [db] itself, for a caller that holds its write the whole time (a lookup's stage). */
+            fun of(db: Db): Writes = object : Writes {
+                override fun <T> use(block: (Db) -> T): T = block(db)
+            }
+        }
     }
 }

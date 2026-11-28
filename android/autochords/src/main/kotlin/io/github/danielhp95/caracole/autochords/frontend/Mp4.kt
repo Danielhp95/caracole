@@ -15,9 +15,13 @@ import java.nio.ByteOrder
  * - its edit list (`edts/elst`), by which FFmpeg trims the decoded samples (libavformat's mov demuxer, autochords/
  *   audio.py `load_mono` reading an M4A through it): the samples from the one media edit's `media_time`, as many as
  *   its segment duration rescaled from the movie's timescale to the media's, never past the media's known length
- *   ([keptFrames], [Track.bound]).
+ *   ([keptFrames], [Track.bound]);
+ * - of a fragmented file (yt-dlp's m4a on the phone, which has no FFmpeg to remux it), the length of its fragments
+ *   ([Track.fragments]): what FFmpeg's remux of it writes in its `mdhd` (yt-dlp's FixupM4a on the computer, `ffmpeg -c
+ *   copy -f mp4`), so the computer's length of the same audio ([Track.statedSeconds]), and where its decode ends.
  *
- * Only the box headers are read on the way to `moov`, which is read whole (at most [MOOV_MOST]), never the samples.
+ * Only the box headers are read on the way to `moov`, which is read whole (at most [MOOV_MOST]), and to each `moof` of
+ * a fragmented file (each at most [MOOV_MOST]), never the samples.
  */
 object Mp4 {
     const val MOOV_MOST = 16L * 1024 * 1024
@@ -29,12 +33,23 @@ object Mp4 {
     /** The sound track: its `mdhd` timescale and duration (or the `mvhd`'s, with no sound track), the movie's
      * timescale, its edits, its sample table's total length (`stbl/stts`: each entry's count times its delta, in the
      * media's timescale; null where none is read, or past a Long), and whether the file is [fragmented] (an `mvex` in
-     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty); [sound] false for the `mvhd`'s of a
-     * file with no sound track (a video alone, which audio_store refuses). */
+     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty) and then its [fragments]' length;
+     * [sound] false for the `mvhd`'s of a file with no sound track (a video alone, which audio_store refuses). */
     data class Track(val timescale: Long, val duration: Long, val movieTimescale: Long, val edits: List<Edit>,
-                     val samples: Long? = null, val fragmented: Boolean = false, val sound: Boolean = true) {
+                     val samples: Long? = null, val fragmented: Boolean = false, val fragments: Long? = null,
+                     val sound: Boolean = true) {
         /** mutagen's length: `float(duration) / timescale`, 0 for a timescale of 0. */
         val seconds: Double get() = if (timescale == 0L) 0.0 else duration.toDouble() / timescale
+
+        /** The length the computer states of this audio as it holds it: mutagen's [seconds]; of a [fragmented] file,
+         * which the computer's yt-dlp remuxes before anything reads it (FixupM4a), the remux's `mdhd`, its
+         * [fragments]' length over the timescale, and none where that isn't read (never its empty `mdhd`'s 0). */
+        val statedSeconds: Double?
+            get() = when {
+                !fragmented -> seconds
+                fragments != null && timescale > 0 -> fragments.toDouble() / timescale
+                else -> null
+            }
 
         /** The one media edit (empty ones aside), or none: no list, several media edits, which are not trimmed
          * exactly here, or numbers that lead nowhere (a timescale of 0, a segment of no length or less, as a
@@ -75,6 +90,7 @@ object Mp4 {
     fun audioTrack(file: File): Track? = RandomAccessFile(file, "r").use { f ->
         val moov = topLevel(f, "moov") ?: return null
         val movie = child(moov, "mvhd")?.let(::header) ?: return null
+        val mvex = child(moov, "mvex")
         for (trak in children(moov, "trak")) {
             val mdia = child(trak, "mdia") ?: continue
             val hdlr = child(mdia, "hdlr") ?: return null
@@ -82,9 +98,83 @@ object Mp4 {
             val mdhd = child(mdia, "mdhd")?.let(::header) ?: return null
             val edits = child(trak, "edts")?.let { child(it, "elst") }?.let(::edits) ?: emptyList()
             val stts = child(mdia, "minf")?.let { child(it, "stbl") }?.let { child(it, "stts") }?.let(::total)
-            return Track(mdhd.first, mdhd.second, movie.first, edits, stts, child(moov, "mvex") != null)
+            val fragments = mvex?.let { trackId(trak)?.let { id -> fragmentsLength(f, id, trexDuration(it, id)) } }
+            return Track(mdhd.first, mdhd.second, movie.first, edits, stts, mvex != null, fragments)
         }
         Track(movie.first, movie.second, movie.first, emptyList(), sound = false)
+    }
+
+    /** A `trak`'s `tkhd` track_ID, or null. */
+    private fun trackId(trak: ByteBuffer): Long? {
+        val tkhd = child(trak, "tkhd") ?: return null
+        val at = when (tkhd.get(0).toInt()) {
+            0 -> 12
+            1 -> 20
+            else -> return null
+        }
+        return if (tkhd.remaining() < at + 4) null else u32(tkhd, at)
+    }
+
+    /** The default sample duration an `mvex`'s `trex` gives [track], 0 for none. */
+    private fun trexDuration(mvex: ByteBuffer, track: Long): Long = children(mvex, "trex")
+        .firstOrNull { it.remaining() >= 24 && u32(it, 4) == track }?.let { u32(it, 12) } ?: 0L
+
+    /**
+     * [track]'s fragments' length in its media's timescale, as FFmpeg's mov demuxer times their samples and its remux
+     * writes the `mdhd`: from the first fragment's decode time (its `tfdt`, else 0) to its last sample's end, each
+     * `traf` of the track starting at its `tfdt` (else where the one before ended), each sample's duration its
+     * `trun`'s, else its `tfhd`'s default, else the `trex`'s ([default]). Null, an unknown length, never a wrong one:
+     * where none is read; where the file's top-level boxes can't all be read (a download cut short, trailing junk, a
+     * `moof` past [MOOV_MOST]); where one is cut short or leads past a Long; where a `tfdt` goes back before the end
+     * of the fragment before it; where the length comes to 0 or less (samples of no duration at all).
+     */
+    private fun fragmentsLength(f: RandomAccessFile, track: Long, default: Long): Long? {
+        var first: Long? = null
+        var end = 0L
+        var any = false
+        for (moof in topLevels(f, "moof") ?: return null) {
+            for (traf in children(moof, "traf")) {
+                val tfhd = child(traf, "tfhd") ?: return null
+                if (tfhd.remaining() < 8) return null
+                if (u32(tfhd, 4) != track) continue
+                val flags = tfhd.getInt(0) and 0xFFFFFF
+                var at = 8 + (if (flags and 0x01 != 0) 8 else 0) + (if (flags and 0x02 != 0) 4 else 0)
+                val duration = if (flags and 0x08 != 0) {
+                    if (tfhd.remaining() < at + 4) return null
+                    u32(tfhd, at)
+                } else default
+                child(traf, "tfdt")?.let { tfdt ->
+                    val time = when {
+                        tfdt.remaining() >= 12 && tfdt.get(0).toInt() == 1 ->
+                            tfdt.getLong(4).also { if (it < 0) return null }
+                        tfdt.remaining() >= 8 && tfdt.get(0).toInt() == 0 -> u32(tfdt, 4)
+                        else -> return null
+                    }
+                    if (first != null && time < end) return null  // back before where the fragment before ended
+                    end = time
+                }
+                if (first == null) first = end
+                for (trun in children(traf, "trun")) {
+                    if (trun.remaining() < 8) return null
+                    val tflags = trun.getInt(0) and 0xFFFFFF
+                    val count = u32(trun, 4)
+                    at = 8 + (if (tflags and 0x01 != 0) 4 else 0) + (if (tflags and 0x04 != 0) 4 else 0)
+                    val each = listOf(0x100, 0x200, 0x400, 0x800).count { tflags and it != 0 } * 4
+                    if (at + count * each > trun.remaining()) return null
+                    try {
+                        if (tflags and 0x100 == 0) {
+                            end = Math.addExact(end, Math.multiplyExact(count, duration))
+                        } else {
+                            for (i in 0 until count.toInt()) end = Math.addExact(end, u32(trun, at + i * each))
+                        }
+                    } catch (e: ArithmeticException) {
+                        return null
+                    }
+                    any = true
+                }
+            }
+        }
+        return if (any) (end - first!!).takeIf { it > 0 } else null
     }
 
     /** A `mvhd` or `mdhd` payload's timescale and duration, or null for a version mutagen doesn't read. */
@@ -125,10 +215,16 @@ object Mp4 {
     private fun u32(b: ByteBuffer, at: Int): Long = b.getInt(at).toLong() and 0xFFFFFFFFL
 
     /** The payload of the first top-level box [name], read whole, or null. */
-    private fun topLevel(f: RandomAccessFile, name: String): ByteBuffer? {
+    private fun topLevel(f: RandomAccessFile, name: String): ByteBuffer? =
+        topLevels(f, name, first = true)?.firstOrNull()
+
+    /** The payloads of the top-level boxes [name] (the first alone where [first]), each read whole; null where one is
+     * past [MOOV_MOST], or a box's size leads past the file (the boxes before it are no answer then). */
+    private fun topLevels(f: RandomAccessFile, name: String, first: Boolean = false): List<ByteBuffer>? {
         val length = f.length()
         var at = 0L
         val head = ByteArray(16)
+        val out = mutableListOf<ByteBuffer>()
         while (at + 8 <= length) {
             f.seek(at)
             f.readFully(head, 0, 8)
@@ -147,11 +243,12 @@ object Mp4 {
                 if (size - headerSize > MOOV_MOST) return null
                 val body = ByteArray((size - headerSize).toInt())
                 f.readFully(body)
-                return ByteBuffer.wrap(body).order(ByteOrder.BIG_ENDIAN)
+                out += ByteBuffer.wrap(body).order(ByteOrder.BIG_ENDIAN)
+                if (first) return out
             }
             at += size
         }
-        return null
+        return out
     }
 
     /** The payloads of [parent]'s child boxes named [name], in order. */

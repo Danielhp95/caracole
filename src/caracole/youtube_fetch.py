@@ -6,7 +6,9 @@ purchase is linked), when it isn't ignored, and when its search didn't find noth
 the last 30 days. A video pasted under ``[youtube]`` in overrides.toml is used instead of
 a search, also for a song whose search found nothing; one pasted for a song whose audio
 came from another video replaces it; "none" never takes the song's audio from YouTube,
-and lets go of any it has. Newest first, as far as the budget goes.
+and lets go of any it has. Newest first, as far as the budget goes. A song whose auto sheet another caracole made
+is none of them where no pass here would make it again (R3, ``left_elsewhere``; R5's words aside), a video pasted
+for it too: a paste is no ask, where ``caracole youtube --sheet`` (R3's exception, a sheet from a video) makes it again.
 
 For each, yt-dlp (youtube.py) searches ``ytsearch8:<artist> <title>`` and ``choose``
 picks the video, or the pasted or earlier pick is taken; the download goes to a folder of
@@ -61,12 +63,15 @@ from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, s
 log = logging.getLogger(__name__)
 
 RECORD_PREFIX = "youtube:"  # + song id, in songs._PER_SONG_KV
+UNHEARD_PREFIX = "youtube-unheard:"  # + song id, in songs._PER_SONG_KV: the video whose audio the phone couldn't hear
+WANTED_PREFIX = "youtube-wanted:"  # + song id, in songs._PER_SONG_KV: the phone's note of a song for its own pass
 AUDIO_FOLDER = "youtube"  # in cache_dir
 RECHECK_AFTER = timedelta(days=30)  # a song whose search found nothing that fits
 GIVE_UP_AFTER = 3  # downloads of one video that failed, the network aside, before it is given up
-# yt-dlp's words for a network that failed, rather than the video: no count against it.
+# yt-dlp's words for a network that failed, rather than the video: no count against it. Through a proxy (the phone's
+# gate) a host it couldn't resolve or connect is the tunnel's 502, or 504 in time: "Tunnel connection failed: 502 …".
 _NETWORK = re.compile(r"\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable"
-                      r"|Remote end closed|HTTP Error 5\d\d", re.IGNORECASE)
+                      r"|Remote end closed|HTTP Error 5\d\d|Tunnel connection failed: 5\d\d", re.IGNORECASE)
 _PART_PREFIX = ".part-"  # a download's own folder, until its file is in place
 
 # Where a song without a human sheet stands, for the to-do page and index.html.
@@ -306,15 +311,47 @@ def _recent(stamp: str | None, now: datetime) -> bool:
     return when is not None and when > now - RECHECK_AFTER
 
 
+def _unheard(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> bool:
+    """Whether the phone couldn't hear the audio of the video the song would take now (its ``[youtube]`` video, else
+    its record's pick) within ``RECHECK_AFTER``: kv ``youtube-unheard:<id>`` (``video``, ``at``, ``error``), which the
+    phone's sheet job writes when its chords stage can't read the download, as its audio goes three days on. The
+    computer never writes it: it keeps its file and its ``autochords:failed:`` note."""
+    note = kv_get_json(conn, f"{UNHEARD_PREFIX}{song.id}")
+    if not isinstance(note, dict):
+        return False
+    video = _text(note.get("video"))
+    record = load_record(conn, song.id)
+    taking = overrides.youtube.get(song.key) or (record.video.id if record.video is not None else None)
+    return video is not None and video == taking and _recent(_text(note.get("at")), now)
+
+
 def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[Song]:
     from caracole.todo import songs_to_buy  # it shows what this module keeps
 
     return songs_to_buy(conn, songs, overrides, now)[0]
 
 
+def left_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether the song keeps an auto sheet another caracole made that no pass here would make again from audio this
+    side took (autochords/run.py ``left_as_made_elsewhere``: R3, but for words heard here, R5): its audio would be
+    for nothing."""
+    if not _kept(conn, song.id, AUTO_SHEET):
+        return False
+    from caracole.autochords.run import left_as_made_elsewhere
+
+    return left_as_made_elsewhere(conn, song)
+
+
 def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
-    after the others, so they never hold up the rest (see the module docstring)."""
+    after the others, so they never hold up the rest (see the module docstring). A song whose
+    auto sheet another caracole made, which no pass here would make again (``left_elsewhere``),
+    is none of them."""
+    return [song for song, _ in _due(conn, overrides, now)]
+
+
+def _due(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[tuple[Song, bool]]:
+    """``songs_for_youtube``'s songs in its order, each with whether its last try failed."""
     now = stamps.utc(now)
     songs = list_songs(conn)
     buy = {s.id for s in _to_buy(conn, songs, overrides, now)}
@@ -338,7 +375,29 @@ def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datet
                 due.append(song)
         elif not _recent(record.missing_at, now):
             due.append(song)
-    return sorted(due, key=lambda s: s.id in failed)  # stable: newest first within each
+    due = [song for song in due if not left_elsewhere(conn, song)]
+    return [(song, song.id in failed) for song in sorted(due, key=lambda s: s.id in failed)]  # stable: newest first
+
+
+def phone_due(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *, paired: bool) -> list[Song]:
+    """The songs a phone takes the audio of from YouTube by itself (its automatic pass), recorded for it: those of
+    ``songs_for_youtube`` with no audio of their own (no upload, no YouTube audio kept: ``audio_path`` none) and no
+    sheet at all, human or auto, whoever made it, none whose video's audio the phone couldn't hear in the last 30 days
+    (kv ``youtube-unheard:<id>``, until another video is given); on a ``paired`` phone (one that syncs with a
+    computer) only those it noted (kv ``youtube-wanted:<id>``, a lookup that ended "Not on the sites"), the rest
+    being the computer's nightly work. The noted first, then the rest, newest first in each; those whose last try failed after the others, the
+    noted first among them."""
+    due = []
+    for song, failed in _due(conn, overrides, now):
+        if song.audio_path or _kept(conn, song.id, HUMAN_SHEET) or _kept(conn, song.id, AUTO_SHEET):
+            continue
+        if _unheard(conn, song, overrides, now):
+            continue
+        wanted = conn.execute("SELECT 1 FROM kv WHERE key = ?", (f"{WANTED_PREFIX}{song.id}",)).fetchone() is not None
+        if paired and not wanted:
+            continue
+        due.append((failed, not wanted, song))
+    return [song for _, _, song in sorted(due, key=lambda d: d[:2])]  # stable: newest first within each
 
 
 # --- a pass -------------------------------------------------------------------------------------------

@@ -15,20 +15,32 @@ import io.github.danielhp95.caracole.server.http.Response
  * ShareLinks; null for a link of no service caracole asks, or none), the best match ([best]) and the others
  * ([others]), a note on what the phone could search ([note]), and the Edit form's fields ([artist], [title]); the
  * service of a link the page didn't ask by itself and the cache doesn't answer ([unread]: another site sent the page),
- * and the share's own fields ([fields]), which Read the link posts again.
+ * and the share's own fields ([fields]), which Read the link posts again; and, for a YouTube video shared ([video]:
+ * its plain address, kept through Edit), whether its sheet may be made from it ([fromVideo]).
  */
 internal data class ShareView(
     val app: String?, val sent: List<Pair<String, String>>, val said: String?, val names: Pair<String, String>?,
     val link: String?, val typed: Boolean, val best: SongLine?, val others: List<SongLine>, val note: String?,
     val artist: String, val title: String, val read: ShareLinks.Read? = null,
     val unread: ShareLinks.Service? = null, val fields: List<Pair<String, String>> = emptyList(),
+    val video: String? = null, val fromVideo: FromVideo? = null,
 )
+
+/**
+ * A sheet from the YouTube video shared (the phone-youtube design's §5.2): [why] null where this phone makes one for
+ * the song named (YouTubeRoutes.whyNotFromVideo: the route ready, a song with no human sheet, not ignored, no audio of
+ * its own), else the one hint the page says in its place; [first] where no site has the song's sheet, so that Make
+ * its sheet from this video is the page's main button and Fetch comes second.
+ */
+internal data class FromVideo(val why: String?, val first: Boolean)
 
 /**
  * The page of a song shared to the app (ShareRoutes' `GET /share`), in the message page's frame, style and policy (no
  * script, its style by its hash, forms to the server alone): what caracole read, the best match and its sites, and
  * the owner's choices, each a plain form or link: Read the link (POST /share, with the form token: a link the page
- * didn't ask its service of by itself), Fetch (POST /lookup, the library page's own, with the form token),
+ * didn't ask its service of by itself), Fetch (POST /lookup, the library page's own, with the form token), Make its
+ * sheet from this video for a YouTube video shared (POST /request with `youtube`, the library page's request form's
+ * own, with the form token: nothing downloaded before the owner presses it),
  * Open (a song of yours), Edit (the names typed, `GET /share` again) and Cancel (`/share/cancel`, which the app takes
  * as leaving the share).
  */
@@ -46,10 +58,13 @@ internal object SharePage {
         append(read(v))
         v.unread?.let { append(readTheLink(v, it, csrf)) }
         if (v.sent.isNotEmpty() || v.read is ShareLinks.Read.Named) append(sent(v))
+        val video = v.fromVideo
+        val first = video?.first == true && video.why == null  // the main button: Fetch's no longer
+        if (video?.first == true) append(fromVideo(v, video, csrf))
         val best = v.best
         if (best != null) {
             append("<h2 class=\"sub\">Best match</h2>\n<ul class=\"readings\">\n")
-            append(line(best, csrf, primary = true))
+            append(line(best, csrf, primary = !first))
             append("</ul>\n")
         }
         if (v.others.isNotEmpty()) {
@@ -58,7 +73,8 @@ internal object SharePage {
             for (other in v.others) append(line(other, csrf, primary = false))
             append("</ul>\n")
         }
-        if (best == null && v.names != null) append(byName(v.names, csrf, found = v.others.isNotEmpty()))
+        if (best == null && v.names != null) append(byName(v.names, csrf, found = v.others.isNotEmpty(), primary = !first))
+        if (video != null && !video.first) append(fromVideo(v, video, csrf))
         v.note?.let { append("<p class=\"message\">${esc(it)}</p>\n") }
         append(edit(v))
         append("<p class=\"confirm\"><a class=\"btn\" href=\"$CANCEL\">Cancel</a></p>\n")
@@ -134,12 +150,29 @@ internal object SharePage {
         append("</div></li>\n")
     }
 
+    /** Make its sheet from this video: POST /request with `youtube`, as the library page's request form posts it
+     * (the names read, or typed through Edit), the form token first; else its one hint, in the route's words. */
+    private fun fromVideo(v: ShareView, video: FromVideo, csrf: String): String = buildString {
+        video.why?.let { return "<p class=\"message\">${esc(it)}</p>\n" }
+        val names = v.names ?: return ""
+        append("<div class=\"confirm\"><form class=\"pick-form\" method=\"post\" action=\"/request\">")
+        append("<input type=\"hidden\" name=\"csrf\" value=\"${esc(csrf)}\">")
+        for ((name, value) in listOf("artist" to names.first, "title" to names.second, "youtube" to v.video.orEmpty())) {
+            append("<input type=\"hidden\" name=\"$name\" value=\"${esc(value)}\">")
+        }
+        append("<button class=\"btn${if (video.first) " primary" else ""}\" type=\"submit\" aria-label=\"Make the sheet " +
+                   "of ${esc(names.second)} by ${esc(names.first)} from this video\">$MAKE</button></form></div>\n")
+    }
+
+    /** The design's §5.2: the share page's button for a YouTube video. */
+    const val MAKE = "Make its sheet from this video"
+
     /** No line is the song read: Fetch by its names, which the lookup matches on the sites. */
-    private fun byName(names: Pair<String, String>, csrf: String, found: Boolean): String {
+    private fun byName(names: Pair<String, String>, csrf: String, found: Boolean, primary: Boolean = true): String {
         val said = if (found) "None of them? Fetch looks up" else "Not in the phone's indexes. Fetch looks up"
         return "<p class=\"message\">$said <strong>${esc(dashed(names))}</strong> on the sites anyway.</p>\n" +
             "<div class=\"confirm\">" +
-            getIt(listOf("artist" to names.first, "title" to names.second), "Fetch", !found, dashed(names), csrf) +
+            getIt(listOf("artist" to names.first, "title" to names.second), "Fetch", !found && primary, dashed(names), csrf) +
             "</div>\n"
     }
 
@@ -159,6 +192,7 @@ internal object SharePage {
         append("<details class=\"picker\"${if (v.names == null) " open" else ""}><summary class=\"btn\">Edit</summary>\n")
         append("<form class=\"pick-form\" method=\"get\" action=\"/share\">\n")
         v.app?.let { append("<input type=\"hidden\" name=\"app\" value=\"${esc(it)}\">\n") }
+        v.video?.let { append("<input type=\"hidden\" name=\"youtube\" value=\"${esc(it)}\">\n") }
         append("<label class=\"f\">Artist <input name=\"artist\" value=\"${esc(v.artist)}\" autocomplete=\"off\" " +
                    "autocapitalize=\"words\"></label>\n")
         append("<label class=\"f\">Title <input name=\"title\" value=\"${esc(v.title)}\" autocomplete=\"off\" " +

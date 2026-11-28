@@ -899,3 +899,55 @@ def test_video_takes_a_youtube_videos_link_alone(tmp_path, fake, conn, image_hos
     result = invoke(write_config(tmp_path, fake), "--video", link)
     assert result.exit_code == 2 and "not a YouTube video" in result.output
     assert fake.argvs() == []
+
+
+ANOTHER_CARACOLE = "0f1e2d3c4b5a6978"  # another caracole's sync:id
+
+
+@pytest.mark.parametrize("url", [None, f"https://www.youtube.com/watch?v={TOPIC}"])
+def test_a_song_whose_auto_sheet_another_caracole_made_gets_no_audio_by_hand_either(tmp_path, ntfy, fake, conn, url):
+    """A sheet the phone made over a site's lyrics is one no pass here makes again (R3): ``--song`` (a paste or not)
+    takes no audio for it, which nothing would use, and points at ``--sheet``, the ask that makes it here."""
+    from caracole.library import keep_file
+    from caracole.lyrics import Lyrics
+    from caracole.versions import upsert_version
+
+    config = write_config(tmp_path, fake)
+    song = to_buy(conn)
+    timed = Lyrics(plain="Hello\n", synced="[00:01.00] Hello\n", instrumental=False, duration=239.0, lrclib_id=1)
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=timed.to_json())
+    v = upsert_version(conn, provider="auto", tab_id="42", song_id=song.id, slot="sheet", kind="auto", rating=0,
+                       votes=0, version=1, label=None, url="x",
+                       raw={"made_on": "phone", "made_by": ANOTHER_CARACOLE, "lyrics": "synced"}, now="x")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=v, name="sheet (auto).txt", data=b"x", rank=1)
+    update_song(conn, song.id, status="found", autochords_mtime=None)
+    creep(fake)
+    args = ("--song", "Radiohead - Creep", *(("--url", url) if url else ()))
+    result = invoke(config, *args)
+    assert result.exit_code == 1, result.output
+    assert "made by another caracole" in result.output and "--sheet" in result.output
+    assert "Next, `caracole autochords`" not in result.output
+    assert fake.argvs() == []
+    assert get_song(conn, song.id).audio_path is None
+
+
+def test_a_chords_only_sheet_another_caracole_made_still_gets_its_audio_by_hand_where_words_heard_here_would_win(
+        tmp_path, ntfy, fake, conn):
+    """R5: every lyrics site missed and the phone's sheet is chords alone, so words heard here would replace it: the
+    audio is of use, and ``--song`` takes it as the nightly step would."""
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    config = write_config(tmp_path, fake)
+    song = to_buy(conn)
+    update_song(conn, song.id, lyrics_status="missing")
+    v = upsert_version(conn, provider="auto", tab_id="42", song_id=song.id, slot="sheet", kind="auto", rating=0,
+                       votes=0, version=1, label=None, url="x",
+                       raw={"made_on": "phone", "made_by": ANOTHER_CARACOLE, "lyrics": "none"}, now="x")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=v, name="sheet (auto).txt", data=b"x", rank=1)
+    update_song(conn, song.id, status="found", autochords_mtime=None)
+    creep(fake)
+    result = invoke(config, "--song", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Creep: downloaded Creep (Radiohead - Topic)" in result.output
+    assert get_song(conn, song.id).audio_path

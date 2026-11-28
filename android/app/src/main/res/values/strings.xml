@@ -93,6 +93,7 @@
     <string name="backup_restore_message">The songs, their versions, songbooks and kept files go back to what this backup holds, and what changed since is gone from the phone. The cooldowns, pace and settings stay as they are now.</string>
     <string name="backup_restore_yes">Restore</string>
     <string name="alerts_channel">Alerts</string>
+    <string name="alert_outdated">caracole: YouTube audio out of date</string>
     <string name="alert_blocked">caracole: %1$s blocked</string>
     <string name="alert_cooling">Cooling down until %1$s.</string>
     <string name="print_refused">The phone\'s caracole didn\'t name that version (HTTP %1$d).</string>
@@ -119,6 +120,16 @@
     <string name="chords_remove_yes">Remove</string>
     <string name="chords_remove_no">Keep them</string>
     <string name="chords_queue_full">The phone\'s queue is full: try again in a moment.</string>
+
+    <!-- YouTube audio (YouTubeRow): Settings' row; its line is YouTubeRow's. -->
+    <string name="youtube_label">YouTube audio</string>
+    <string name="youtube_failed">Couldn\'t read YouTube\'s state · %1$s</string>
+    <string name="youtube_auto">Find audio on YouTube by itself</string>
+    <string name="youtube_auto_failed">Couldn\'t keep the switch · %1$s</string>
+    <string name="youtube_auto_working">Finding audio on YouTube</string>
+    <string name="youtube_auto_unscheduled">Kept, but its work couldn\'t be scheduled · %1$s</string>
+    <string name="youtube_auto_hint">For a song no site has a sheet of: on Wi-Fi, after a lookup, and daily while charging when no computer synced in 14 days</string>
+    <string name="youtube_hint">A sheet from a YouTube video you paste or share: its audio taken with yt-dlp once you press Make sheet, then let go</string>
 
     <!-- The site catalogues (SiteCatalogues, CataloguesRunner's job): Settings' row, the question a metered network
          leaves, and the first start's offer (MainActivity). -->

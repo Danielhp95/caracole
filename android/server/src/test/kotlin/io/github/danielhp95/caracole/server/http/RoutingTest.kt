@@ -70,7 +70,7 @@ class RoutingTest {
             ), TestApp.form(listOf("csrf" to test.csrf)), "wrong"))
             assertEquals(403, posted.status)
             assertEquals("Not this app's scribe.\n", posted.text, "never JSON: no page of ours asked")
-            assertEquals(200, test.get("/api/youtube/video?id=dQw4w9WgXcQ").status, "with it, the route")
+            assertEquals(409, test.get("/lookup").status, "with it, the route")
         }
     }
 
@@ -172,14 +172,11 @@ class RoutingTest {
                        page.text.substringAfter("<p class=\"message\">").substringBefore("</p>"))
             val said = test.script("/lookup?song=1").json.jsonObject["error"]!!.jsonPrimitive.content
             assertTrue(said.endsWith(" on the phone yet."), said)
-            val posts = Stubs().routes.filter { it.method == "POST" }.map { it.path }
-            assertEquals(listOf("/youtube", "/youtube/search", "/youtube/video"), posts)
-            for (path in posts) {
-                val refused = test.postScript(path, listOf("song" to "1"))
-                assertEquals(409, refused.status, path)
-                assertTrue(refused.json.jsonObject["error"]!!.jsonPrimitive.content.endsWith(" on the phone yet."))
-                assertEquals(403, test.postScript(path, token = "old").status, "$path: the form's checks come first")
-            }
+            // no form is a stub: a sheet from a video, its panel and a search's suggested video are YouTubeRoutes'
+            assertEquals(emptyList(), Stubs().routes.filter { it.method == "POST" }.map { it.path })
+            assertTrue(Stubs().routes.none {
+                it.path in setOf("/youtube", "/youtube/video", "/api/youtube/video", "/youtube/search")
+            })
             assertEquals(404, test.post("/peer/push").status, "no stub for a route the phone never answers")
             assertEquals(404, test.get("/review").status, "a route a module answers has no stub")
             assertTrue(Stubs().routes.all { it.doc.isNotBlank() })
@@ -215,26 +212,6 @@ class RoutingTest {
             }
         } finally {
             scope.cancel()
-        }
-    }
-
-    @Test fun youTubeIsOffOnThePhone() {
-        TestApp(tmp.root).use { test ->
-            val off = test.script("/api/youtube/video?id=dQw4w9WgXcQ")
-            assertEquals(200, off.status)
-            assertEquals("""{"id":"dQw4w9WgXcQ","url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","state":"off",""" +
-                         """"why":"YouTube isn't on the phone.","video":null,"guess":{"artist":"","title":""},""" +
-                         """"song":null}""", off.text)
-            for (link in listOf("https://youtu.be/dQw4w9WgXcQ", "www.youtube.com/watch?v=dQw4w9WgXcQ&t=1",
-                                "https://m.youtube.com/shorts/dQw4w9WgXcQ/", "https://music.youtube.com/embed/dQw4w9WgXcQ")) {
-                val read = test.script("/api/youtube/video?url=" + java.net.URLEncoder.encode(link, Charsets.UTF_8))
-                assertEquals("dQw4w9WgXcQ", read.json.jsonObject["id"]!!.jsonPrimitive.content, link)
-            }
-            for (bad in listOf("?id=short", "?url=https%3A%2F%2Fevil.example%2Fwatch%3Fv%3DdQw4w9WgXcQ", "", "?id=")) {
-                val refused = test.script("/api/youtube/video$bad")
-                assertEquals(400, refused.status, bad)
-                assertEquals("""{"error":"Not a YouTube video link."}""", refused.text)
-            }
         }
     }
 

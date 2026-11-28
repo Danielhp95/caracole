@@ -22,6 +22,9 @@ import io.github.danielhp95.caracole.core.lookup.Clients
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.sync.PeerClient
 import io.github.danielhp95.caracole.core.sync.SyncEngine
+import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.youtube.YouTubeAudio
+import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
 import io.github.danielhp95.caracole.mirror.ServerAddress
@@ -36,6 +39,11 @@ import io.github.danielhp95.caracole.server.jobs.JobHistory
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.Outcomes
+import io.github.danielhp95.caracole.server.jobs.SongFacts
+import io.github.danielhp95.caracole.core.youtube.Due
+import io.github.danielhp95.caracole.core.youtube.Outdated
+import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.jobs.QueueFull
@@ -43,6 +51,10 @@ import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeRunners
+import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeSearchRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeVideoRunner
 import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
@@ -64,6 +76,7 @@ import io.github.danielhp95.caracole.server.page.ServerControls
 import io.github.danielhp95.caracole.server.page.SongbookSection
 import io.github.danielhp95.caracole.server.routes.AudioRoutes
 import io.github.danielhp95.caracole.server.routes.ExportRoutes
+import io.github.danielhp95.caracole.server.routes.YouTubeRoutes
 import io.github.danielhp95.caracole.server.routes.GuitarRoutes
 import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
@@ -109,7 +122,9 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * reaches a site by accident). [searchesLacuerda] false: `/api/search`'s `lacuerda_search` null, as the computer's
  * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
  * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
- * now, read as the job runs (the app's ConnectivityManager; none metered by default). [models]: where the chord
+ * now, read as the job runs (the app's ConnectivityManager; none metered by default). [youtube]: the app's yt-dlp (the
+ * debug build's :youtube, `ProcessYtDlp` through `YtDlpClient`, one gate a run opened in the main process), null in a
+ * build without it. [models]: where the chord
  * models' job downloads them from, with this build's pins (ModelFiles.carried(): `:ml` puts them on the classpath,
  * the release's as a debug build's; a device test's GitHub on loopback and pins of its own), null for a build that
  * carries none (one without `:ml`), whose job and Settings say so. [chords]: the chord models that hear a song's audio
@@ -126,6 +141,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
                      val searchesLacuerda: Boolean = true,
                      val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
                      val metered: () -> Boolean = { false },
+                     val youtube: YouTubeEngine? = null,
                      val models: ModelsSource? = ModelFiles.carried()?.let { pins -> ModelsSource(pins = { pins }) },
                      val chords: ChordModels? = null, val examiner: AudioStore.Examiner = NO_EXAMINER) {
     companion object {
@@ -142,13 +158,15 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
  * box), LyricsRoutes (a song's lyrics looked up under a name typed), then milestone 6's, SongbookRoutes, VersionsRoutes,
  * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, AudioRoutes (a sheet from an audio file: the "+" and a
- * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then the phone's own
- * ShareRoutes (a song shared to the app, a link alone read by asking its service once: ShareReader; an audio file
- * shared, its page, through [audioRoutes]), then Stubs for every route no module answers; the
+ * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then YouTubeRoutes
+ * ([youtubeRoutes]: a sheet from a YouTube video, a pasted video's panel), then the phone's own ShareRoutes (a song
+ * shared to the app, a link alone read by asking its service once: ShareReader; an audio file shared, its page, through
+ * [audioRoutes]), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
- * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords]), and
+ * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords], `youtube`: YouTubeSheetRunner over
+ * [PhoneDeps.youtube] and the same, and its `--video` YouTubeVideoRunner's), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -158,7 +176,8 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  */
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
-    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER))
+    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER),
+                                     YouTubeAudio.folder(File(deps.stateDir, "cache")))
     private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */
@@ -177,6 +196,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                              deps.pacing)
 
     val parts: PhoneParts
+
+    /** The app's yt-dlp ([PhoneDeps.youtube]): null in a build that carries none (the release, until stage Y5). */
+    val youtube: YouTubeEngine? = deps.youtube
 
     /** The site catalogues' job (`catalogues`), which the app queues ([CataloguesRunner.spec]): GitHub's release read
      * through its API (the owner's choice S1; [PhoneDeps.catalogues], a test's GitHub), asked with caracole's user
@@ -225,6 +247,33 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands["lyrics"] = LyricsRunner(parts, deps.chords, audio, problem = ::audioProblem, names = models::names,
                                           hold = { hearing -> models.holding(hearing) })
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
+        commands[YouTubeSheetRunner.COMMAND] = YouTubeRunners(
+            YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio, problem = ::youtubeProblem, names = models::names,
+                               hold = { hearing -> models.holding(hearing) }, chordsProblem = ::audioProblem,
+                               metered = deps.metered),
+            YouTubeVideoRunner(parts, deps.youtube, routeWhy = ::youtubeProblem),
+            YouTubeSearchRunner(parts, deps.youtube, routeWhy = ::youtubeProblem, metered = deps.metered),
+        )
+        sweepYouTube()  // the YouTube audio past its days, and what a stopped download left, as the phone starts
+    }
+
+    /** Why this phone makes no sheet from a YouTube video now, or null (YouTubeSheetRunner.problemOf over the
+     * settings, [PhoneDeps.chords], [ModelsRunner.ready] and [PhoneDeps.youtube]): the job's refusal. */
+    fun youtubeProblem(): String? = YouTubeSheetRunner.problemOf(config(), deps.youtube, deps.chords, models.ready())
+
+    /** Why the library page offers no sheet from a YouTube video now (`server.youtube.why`, the design's §5.6), null
+     * where it does: [youtubeProblem]'s reasons, then YouTube cooling down after a block, "YouTube refused caracole;
+     * asked again after …" ("Out of date" offers it all the same: its audio stage says so). */
+    fun youtubeOffered(): String? {
+        val problem = youtubeProblem()  // its config read first: no read nested in the one below
+        return deps.database.read { db -> YouTubeRoutes.offered(problem, db, Instant.now()) }
+    }
+
+    /** YouTubeAudio.sweep of the phone's YouTube audio, in a write of its own. */
+    private fun sweepYouTube() {
+        deps.database.writeBlocking { db ->
+            YouTubeAudio.sweep(db, YouTubeAudio.folder(File(deps.stateDir, "cache")), Instant.now(), Stamps.now())
+        }
     }
 
     /** Why this phone makes no sheet from an audio file now, or null (AudioRunner.problemOf over [PhoneDeps.chords]
@@ -249,8 +298,12 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
 
+    /** /api/search; its `youtube` read with [youtubeProblem] and the network ([PhoneDeps.metered]: none sent by itself
+     * on a metered one). */
     val search: SearchRoutes = SearchRoutes(deps.database, cards, searchesLacuerda = deps.searchesLacuerda,
-                                            cacheDir = File(deps.stateDir, "cache"))
+                                            cacheDir = File(deps.stateDir, "cache"), youtube = {
+        SearchRoutes.YouTubeAsked(youtubeProblem(), if (deps.metered()) YouTubeSearchRunner.METERED else null)
+    })
 
     private val engine = SyncEngine(
         deps.database, store, deps.stateDir,
@@ -286,6 +339,12 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         afterSync = ::afterSync, version = deps.version,
     ).also { sync.files = it }
 
+    /** A sheet from a YouTube video, a pasted video's panel and a search's suggested video (POST /youtube, GET
+     * /api/youtube/video, POST /youtube/video, POST /youtube/search, GET /youtube/thumb/), refused where
+     * [youtubeProblem] says why, a search on a metered network ([PhoneDeps.metered]); POST /request with `youtube` is
+     * handed to it by LibraryRoutes. */
+    val youtubeRoutes: YouTubeRoutes = YouTubeRoutes(parts, audio, ::youtubeProblem, metered = deps.metered)
+
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(
         PageRoutes(deps.database, LibraryPage(LibraryAssets.load()), cards, ::controls,
@@ -295,7 +354,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         RequestsRoutes(parts),
         sync,
         files,
-        LibraryRoutes(store, queue, cards, deps.database),
+        LibraryRoutes(store, queue, cards, deps.database, youtube = youtubeRoutes::sheetFromYoutube),
         LookupRoutes(parts),
         UgLinkRoutes(parts),
         LyricsRoutes(parts, fileLength = { path ->
@@ -308,8 +367,9 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         ExportRoutes(parts),
         GuitarRoutes(parts),
         audioRoutes,
+        youtubeRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
-                    links = ShareReader(parts), audio = audioRoutes),
+                    links = ShareReader(parts), youtube = youtubeRoutes, audio = audioRoutes),
     )
 
     val app: App = App(
@@ -367,7 +427,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * shared to the app that wait for a song tried again ([InboxRetry]). */
     private fun afterJob(job: Job) {
         search.invalidate()
-        if (job.state == Job.FAILED) {
+        if (job.state == Job.FAILED && !job.quiet) {
             deps.alerts.failed(job.display, JobViews.line(job).text)
         }
         if (job.state == Job.DONE && job.spec.kind != PhoneKinds.RENDER.kind && deps.database.read { db ->
@@ -382,6 +442,30 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
             }
         }
         inbox.afterJob(job)
+        if (noteNoSheet(job)) onNoSheet()
+    }
+
+    /** The automatic YouTube pass (the design's §5.3): what the app's YouTubeWorker runs. */
+    val youtubeAuto: YouTubeAuto = YouTubeAuto(parts, ::youtubeProblem, deps.metered,
+                                               outdated = { db, now -> Outdated.state(db, deps.youtube?.version, now) })
+
+    /** Told after a lookup left its song "Not on the sites" (noted for the automatic pass): the app's YouTubeWorker
+     * .soon; nothing by default. Never inside a job: a lookup never runs yt-dlp. */
+    @Volatile var onNoSheet: () -> Unit = {}
+
+    /** A lookup done whose outcome is "Not on the sites" (Outcomes, as the Requests tab says it) notes its song for the
+     * automatic pass, kv `youtube-wanted:<id>` (Due.WANTED_PREFIX), its time; whether it did. */
+    private fun noteNoSheet(job: Job): Boolean {
+        if (deps.youtube == null) return false  // no yt-dlp: no pass to note a song for
+        if (job.state != Job.DONE || !job.looksUp) return false
+        val now = Instant.now()
+        val song = deps.database.read { db ->
+            val (id, facts) = SongFacts.ended(queue).songOf(db, job, parts.cards, now)
+            val outcome = Outcomes.outcome(job, JobViews.line(job, facts = facts), facts, id)
+            id.takeIf { outcome.word == Outcomes.NOT_ON_THE_SITES }
+        } ?: return false
+        deps.database.writeBlocking { db -> db.kvSetJson(Due.WANTED_PREFIX + song, JsonPrimitive(Stamps.of(now))) }
+        return true
     }
 
     /**
@@ -437,7 +521,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
             audio = audioProblem(),
-            inApp = true,
+            inApp = true, youtube = youtubeOffered(), youtubeOff = !config().provider("youtube").enabled,
         )
     }
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The debug build's alone (src/debug), never the release's: the YouTube bench (the phone-youtube design's §4.2), from
+     Settings' YouTube bench row: its screen in a process of its own, ":ytbench", which never starts Python (its runs
+     are :youtube's, its gates the main process's GateService's), and the record of its runs in the main process, where
+     the phone's database is. Where :ml is, src/debugMl's manifest (the Chords bench) is merged over it
+     (build.gradle.kts). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".YouTubeBenchActivity"
+            android:exported="false"
+            android:label="YouTube bench"
+            android:process=":ytbench" />
+
+        <service
+            android:name=".YouTubeBenchLedger"
+            android:exported="false" />
+    </application>
+</manifest>

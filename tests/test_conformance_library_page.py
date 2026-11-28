@@ -6,13 +6,15 @@
   ``library_assets.read``), and the templates are filled in by name.
 - ``vectors/web/library_page.json``: the hashes the page's policy allows its script and its style by
   (``script_hash``, ``style_hash``: ``inline.sha256_source`` of the concatenated files), the served page's policy
-  (``csp``), the reason the request form gives for no sheet from YouTube on the phone (``youtube_problem``), the
-  library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
+  (``csp``), the reason the request form gives for no sheet from YouTube on the phone (``youtube_problem``), why the
+  phone transcribes no lyrics (``transcribe_problem``, ``server.transcribe.why``; its request form's line then says
+  the lyrics come from the lyrics sites alone), the library's name (``library_name``), and ``cases``: for fixed data objects (``data``: one with Chinese and the
   characters a JSON block must escape, one with no songs; each object's keys sorted, as the vector keeps them, so
   that its JSON block is the one a reader of the vector writes) and the server's controls (``controls``: the form
   token, the badge, the sync, ``sync``: ``"sheet"``, the phone's, the sheet alone, ``"tab"``, caracole serve's, the
   Sync tab, its panel and the sheet, which the phone never serves, or null, and ``active``, how many requests wait or
-  run, the data's ``server.active``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself
+  run, the data's ``server.active``, and ``youtube`` where it is given: null for a phone that makes a sheet from a
+  YouTube video, its request form's field drawn, else its own reason why not; absent, ``youtube_problem``), the SHA-256 of the page (``sha256``, of its UTF-8), and the page itself
   (``page``) for the smallest case, the phone's (its sync the sheet). The page is ``library_page.assemble_page``'s served page as it is, its Requests tab counting
   ``active`` (data/caracole/page/requests.json, tests/test_conformance_requests.py, holds the tab and its panel).
   The vector also holds ``server``, the server's member of the page's data (``build_library_page``'s, for the phone's
@@ -156,7 +158,7 @@ def server_member(controls: WebControls) -> dict[str, Any]:
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
             "transcribe": {"ok": False, "why": TRANSCRIBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
-                           "transcribed": [], "time": ""},
+                           "transcribed": [], "time": "", "hears": False},
             "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""},
             "lyricsSearch": controls.lyrics_search}
 
@@ -197,6 +199,11 @@ CASES = (
     ("chinese", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 2, "in_app": True}),
     ("chinese", {"csrf": CSRF, "badge": None, "sync": "sheet", "active": 2, "in_app": False}),
     ("chinese", {"csrf": CSRF, "badge": None, "sync": "tab", "active": 2, "in_app": False}),
+    # A phone that makes a sheet from a YouTube video (``youtube`` None: the request form's field), and one that says
+    # its own reason why not (LibraryPage's ServerControls.youtube).
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 0, "in_app": True, "youtube": None}),
+    ("empty", {"csrf": CSRF, "badge": "Phone", "sync": "sheet", "active": 0, "in_app": True,
+               "youtube": "this phone's caracole has no yt-dlp"}),
 )
 
 
@@ -204,7 +211,7 @@ def phone_page(data: dict[str, Any], controls: dict[str, Any]) -> str:
     """The page the phone serves for ``data`` and ``controls``: caracole serve's (``assemble_page``, served)."""
     served = WebControls(controls["csrf"], badge=controls["badge"], sync=controls["sync"], active=controls["active"],
                          in_app=controls["in_app"])
-    return assemble_page(data, served, problem=YOUTUBE_PROBLEM, library_name=LIBRARY_NAME)
+    return assemble_page(data, served, problem=controls.get("youtube", YOUTUBE_PROBLEM), library_name=LIBRARY_NAME)
 
 
 # Songs only the phone has (taken in a sync before the mirror came again, or added on the phone): their artist,
@@ -299,7 +306,8 @@ def library_page_json(conn, cfg) -> str:
     cases = []
     for n, (name, controls) in enumerate(CASES):
         page = phone_page(objects[name], controls)
-        cases.append({"name": f"{name}, sync {controls['sync']}, badge {controls['badge']}, app {controls['in_app']}",
+        youtube = f", youtube {controls['youtube']}" if "youtube" in controls else ""
+        cases.append({"name": f"{name}, sync {controls['sync']}, badge {controls['badge']}, app {controls['in_app']}{youtube}",
                       "data": objects[name], "controls": controls,
                       "sha256": hashlib.sha256(page.encode("utf-8")).hexdigest(),
                       **({"page": page} if n == 0 else {})})
@@ -310,6 +318,7 @@ def library_page_json(conn, cfg) -> str:
         "style_hash": sha256_source(library_page._PAGE_STYLE),
         "csp": served_csp,
         "youtube_problem": YOUTUBE_PROBLEM,
+        "transcribe_problem": TRANSCRIBE_PROBLEM,
         "library_name": LIBRARY_NAME,
         "cases": cases,
         "server": {"controls": {"csrf": SERVER_CONTROLS.csrf, "busy": sorted(SERVER_CONTROLS.busy),

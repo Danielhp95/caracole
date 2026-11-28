@@ -818,10 +818,29 @@ def _elsewhere_reason(conn: sqlite3.Connection, song: Song, raw: dict, asked: bo
     re-lay it, ``MADE_ELSEWHERE`` otherwise."""
     if asked:
         return None  # the owner's ask now: made again here from this side's audio, this side its maker (R3)
-    if (_words_replace(raw) and transcript_of(conn, song) is not None and not sung_lyrics(song)
-            and not instrumental(song)):
+    if _words_would_win(song, raw) and transcript_of(conn, song) is not None:
         return None  # words heard here from this side's audio win over another caracole's chords alone (R5)
     return RELAID if relay_reason(conn, song, raw) is not None else MADE_ELSEWHERE
+
+
+def _words_would_win(song: Song, raw: dict) -> bool:
+    """Whether words heard here would make again this sheet another caracole made (R5), once heard: its chords alone
+    (``_words_replace``), and no lyrics site has the song's words or says it is instrumental."""
+    return _words_replace(raw) and not sung_lyrics(song) and not instrumental(song)
+
+
+def left_as_made_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether no pass here would make the song's auto sheet again, whatever audio this side takes for it: another
+    caracole made it (R3, ``MADE_ELSEWHERE``, or ``RELAID`` by its own words), and words heard here wouldn't replace it
+    (R5, ``_words_would_win``, the words still to hear). youtube_fetch.py's step takes no audio for such a song. A
+    record or lyrics that can't be read are no answer: False, as before the rule."""
+    try:
+        raw = _auto_raw(conn, song)
+        if not isinstance(raw, dict) or not made_elsewhere(conn, raw):
+            return False
+        return not _words_would_win(song, raw)
+    except (TypeError, ValueError):
+        return False
 
 
 def _models(

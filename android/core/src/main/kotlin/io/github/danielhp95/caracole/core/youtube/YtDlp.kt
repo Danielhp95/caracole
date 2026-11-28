@@ -43,6 +43,16 @@ class ExtractorOutdated(provider: String, url: String?, status: Int?, msg: Strin
 /** The phone's: the app's gate refused a host yt-dlp asked for, in youtube.json's `gate.refusal` words. Never a block. */
 class GateRefused(provider: String, url: String?, val host: String, msg: String) : ProviderError(provider, url, null, msg)
 
+/** The phone's: no yt-dlp was started for a run ([YtDlpProcess.NotStarted]: the service wouldn't run it, another run of
+ * the app's was going, a stop came first), so nothing was sent: an error, never a miss, and nothing counted against the
+ * video. */
+class NotSent(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
+
+/** The phone's: a run that started and was then cut off by the phone itself (the `:youtube` process gone unasked, as
+ * when the phone runs out of memory; its connection broken): something may have been sent, so it is counted in the
+ * hour and the day and logged as an error, never a miss, and nothing counted against the video. */
+class RunCutOff(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
+
 /** The phone's: [YtDlp]'s `beforeRun` refused the run in its words (the metered check): no process, nothing spent, no
  * event. An error, never a miss. */
 class RunHeldBack(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
@@ -77,11 +87,19 @@ data class Download(val path: File, val video: Video)
  * Every rule, flag and word is youtube.json's; the pace, the budget, the block and the events are the phone's own
  * HTTP providers' machinery, for provider `youtube`:
  *
- * - [budget] runs at most ([requestsMade] counts them), then `BudgetExhausted`, the `budget` event written once;
+ * - the database reached through [writes], each touch of it a [Writes.use] of its own (a cooldown read, an event
+ *   written, a block recorded): none is held across a run or a pause, so a job that lets queued work have the
+ *   database meanwhile (its pauses' [Pacing.sleep] and its process's wait yielding) can;
+ * - [budget] runs at most ([requestsMade] counts them), then `BudgetExhausted`, the `budget` event written once:
+ *   [budget] wins, [policy]'s `budget` is never read here (the caller gives the job's own: the day's left,
+ *   [DayBudget.left], for an automatic job);
  * - before each run, a cooldown recorded by an earlier job (`Health.isCooling`) refuses it: `ProviderBlocked` in the
  *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
  *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no
- *   budget spent, no event);
+ *   budget spent, no event), and is asked again once the run's pauses are over, right before its process (a run held
+ * back there gives its reserved slot back); then the run is reserved ([DayBudget.reserve], one write before its gate
+ * opens), so the day counts it whatever ends it, its slot given back ([DayBudget.release]) for a run that never started
+ * ([NotSent]);
  * - before the first, the pause after the last run this side sent ([Pace.pauseAfterLastRequest], kv
  *   `http:last_request:youtube`); before each later one, `_pause`'s: a draw of [policy]'s delay from [rng], less the
  *   time since the last run ended on [clock]'s monotonic clock;
@@ -118,7 +136,7 @@ class YtDlp(
     private val cacheDir: File,
     private val qjs: String,
     private val gate: () -> YtDlpGate,
-    private val db: Db,
+    private val writes: Writes,
     private val clock: Pacing,
     private val rng: Draws = clock.draws,
     val budget: Int,
@@ -133,7 +151,7 @@ class YtDlp(
     var requestsMade: Int = 0
         private set
 
-    private val log = EventLog(db, runId, clock.clock)
+    private val runId = runId
     private val started = clock.clock()
     private var last: Double? = null
     private var pacedAfterLastRun = false
@@ -187,17 +205,37 @@ class YtDlp(
 
     private fun run(what: String, target: String, timeout: Double, into: File?): String {
         blocked?.let { throw ProviderBlocked(PROVIDER, target, it.status, words("blocked_earlier")) }
-        if (Health.isCooling(db, PROVIDER, clock.clock())) throw ProviderBlocked(PROVIDER, target, null, coolingWords())
-        if (requestsMade >= budget) {
-            if (!budgetReported) {
-                budgetReported = true
-                event(target, null, BUDGET, YouTubeData.fillAll(words("budget_spent"), mapOf("budget" to budget.toString())))
+        val refused: Exception? = writes.use { db ->
+            when {
+                Health.isCooling(db, PROVIDER, clock.clock()) -> ProviderBlocked(PROVIDER, target, null, coolingWords(db))
+                requestsMade >= budget -> {
+                    if (!budgetReported) {
+                        budgetReported = true
+                        event(db, target, null, BUDGET,
+                              YouTubeData.fillAll(words("budget_spent"), mapOf("budget" to budget.toString())))
+                    }
+                    BudgetExhausted(PROVIDER)
+                }
+                else -> null
             }
-            throw BudgetExhausted(PROVIDER)
         }
+        refused?.let { throw it }
         beforeRun()?.let { throw RunHeldBack(PROVIDER, target, it) }
+        val reserved = writes.use { db -> DayBudget.reserve(db, clock.clock()) }  // counted whatever ends it
+        val opened = try {
+            gate()
+        } catch (e: Exception) {  // no gate, no run
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
+        }
         try {
-            return gate().use { opened -> runThrough(opened, what, target, timeout, into) }
+            return opened.use { runThrough(it, what, target, timeout, into) }
+        } catch (e: NotSent) {
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
+        } catch (e: RunHeldBack) {  // held back after its pauses (runThrough): no process, its slot given back
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt() // kept, once the gate is closed (its close joins its threads)
             throw e
@@ -209,19 +247,24 @@ class YtDlp(
         val argv = DATA.argv(what, target, File(cacheDir, words("cache_folder")).path, qjs, opened.proxyArg, into?.path)
         if (!pacedAfterLastRun) {
             pacedAfterLastRun = true
-            Pace.pauseAfterLastRequest(db, PROVIDER, policy.delay, rng, clock.sleep, clock.wallSeconds)
+            var owed = 0.0 // read in a write, slept after it
+            writes.use { db -> Pace.pauseAfterLastRequest(db, PROVIDER, policy.delay, rng, { owed = it }, clock.wallSeconds) }
+            if (owed > 0) clock.sleep(owed)
         }
         pause()
+        // Asked again once the pauses are over (each may yield seconds to queued work): a phone that left Wi-Fi
+        // meanwhile sends nothing ([run] gives the run's reserved slot back).
+        beforeRun()?.let { throw RunHeldBack(PROVIDER, target, it) }
         val refusedBefore = refusals(opened)
         val ran = try {
             process.run(argv, timeout, { line -> onLine(redacted(line, opened)) }, waiting)
         } catch (e: YtDlpProcess.NotStarted) { // nothing was sent
-            throw ProviderError(PROVIDER, target, null, redacted(e.message ?: e.toString(), opened))
+            throw NotSent(PROVIDER, target, redacted(e.message ?: e.toString(), opened))
         } catch (e: Exception) { // started, then cut off: counted and logged, said with no secret
             requestsMade++
             last = clock.monotonic()
             val said = redacted(e.message ?: e::class.simpleName.orEmpty(), opened)
-            event(target, null, ERROR, said)
+            writes.use { db -> event(db, target, null, ERROR, said) }
             throw cutOff(e, target, said)
         }
         requestsMade++
@@ -230,21 +273,21 @@ class YtDlp(
         if (refused.isNotEmpty()) {
             val host = refused.first()
             val message = YouTubeData.fillAll(DATA.text("refusal", DATA.gate), mapOf("host" to host))
-            event(target, null, ERROR, message)
+            writes.use { db -> event(db, target, null, ERROR, message) }
             throw GateRefused(PROVIDER, target, host, message)
         }
         if (DATA.text("stopped", DATA.gate) in opened.log()) {
             val message = DATA.text("stopped_said", DATA.gate)
-            event(target, null, ERROR, message)
+            writes.use { db -> event(db, target, null, ERROR, message) }
             throw ProviderError(PROVIDER, target, null, message)
         }
         if (ran.timedOut) {
             val message = YouTubeData.fillAll(words("timed_out"), mapOf("timeout:g" to PyFormat.general(timeout)))
-            event(target, null, ERROR, message)
+            writes.use { db -> event(db, target, null, ERROR, message) }
             throw ProviderError(PROVIDER, target, null, message).also { it.initCause(TimeoutException(message)) }
         }
         if (ran.exit == Classify.OK_EXIT) {
-            event(target, null, OK, null)
+            writes.use { db -> event(db, target, null, OK, null) }
             return ran.stdout
         }
         val stderr = ran.stderr
@@ -254,24 +297,26 @@ class YtDlp(
             BLOCKED -> {
                 val e = ProviderBlocked(PROVIDER, target, status?.takeIf { it in blockStatuses }, reason)
                 blocked = e
-                event(target, status, BLOCKED, reason)
-                Health.recordBlock(db, PROVIDER, started, e.message!!)
+                writes.use { db ->
+                    event(db, target, status, BLOCKED, reason)
+                    Health.recordBlock(db, PROVIDER, started, e.message!!)
+                }
                 throw e
             }
             UNAVAILABLE -> {
-                event(target, status, OK, YouTubeData.fillAll(words("unavailable_said"), mapOf("reason" to reason)))
+                writes.use { db -> event(db, target, status, OK, YouTubeData.fillAll(words("unavailable_said"), mapOf("reason" to reason))) }
                 throw VideoUnavailable(PROVIDER, target, status, reason)
             }
             PASS_OVER -> {
-                event(target, status, ERROR, reason)
+                writes.use { db -> event(db, target, status, ERROR, reason) }
                 throw PassedOver(PROVIDER, target, status, reason)
             }
             OUTDATED -> {
-                event(target, status, ERROR, reason)
+                writes.use { db -> event(db, target, status, ERROR, reason) }
                 throw ExtractorOutdated(PROVIDER, target, status, reason)
             }
             else -> {
-                event(target, status, ERROR, reason)
+                writes.use { db -> event(db, target, status, ERROR, reason) }
                 throw ProviderError(PROVIDER, target, status, reason)
             }
         }
@@ -284,20 +329,23 @@ class YtDlp(
         if (remaining > 0) clock.sleep(remaining)
     }
 
-    private fun event(target: String, status: Int?, decision: String, message: String?) {
+    private fun event(db: Db, target: String, status: Int?, decision: String, message: String?) {
         val e = Event(PROVIDER, target, status, decision, message)
-        log(e)
+        EventLog(db, runId, clock.clock)(e)
         if (decision in Pace.SENT) db.kvSet(Pace.LAST_SENT + PROVIDER, PyFormat.fixed(clock.wallSeconds(), 3))
         onEvent?.invoke(e)
     }
 
-    /** youtube_sheet.py's words for a cooling YouTube (the data's `runner.cooling`, its end as `cooling_when`, else
-     * `cooling_later`): "waiting out YouTube until 2026-11-27 13:00 UTC". */
-    private fun coolingWords(): String {
-        val stamp = Health.state(db, PROVIDER).cooldownUntil?.let { Strptime.format(it) }
-        val until = if (stamp == null) words("cooling_later") else YouTubeData.fillAll(words("cooling_when"),
-            mapOf("date" to stamp.substring(0, 10), "time" to stamp.substring(11, 16)))
-        return YouTubeData.fillAll(words("cooling"), mapOf("when" to until))
+    /** How the runner reaches the database (the class's KDoc): [use] runs its block with the database, as one write. */
+    interface Writes {
+        fun <T> use(block: (Db) -> T): T
+
+        companion object {
+            /** [db] itself, for a caller that holds its write the whole time (a test, a replay). */
+            fun of(db: Db): Writes = object : Writes {
+                override fun <T> use(block: (Db) -> T): T = block(db)
+            }
+        }
     }
 
     /** What a run cut off by [e] is rethrown as: its kind kept where a caller acts on it, its words [said]. */
@@ -305,7 +353,7 @@ class YtDlp(
         val again = when (e) {
             is InterruptedException -> InterruptedException(said)
             is java.util.concurrent.CancellationException -> java.util.concurrent.CancellationException(said)
-            else -> ProviderError(PROVIDER, target, null, said)
+            else -> RunCutOff(PROVIDER, target, said)
         }
         again.stackTrace = e.stackTrace
         return again
@@ -333,6 +381,18 @@ class YtDlp(
         private const val OUTDATED = "outdated"
 
         private fun words(name: String): String = DATA.text(name, DATA.runner)
+
+        /** When YouTube's cooldown ends, as youtube_sheet.py shows it (the data's `cooling_when`, else
+         * `cooling_later`): "2026-11-27 13:00 UTC". */
+        fun coolingUntil(db: Db): String {
+            val stamp = Health.state(db, PROVIDER).cooldownUntil?.let { Strptime.format(it) }
+            return if (stamp == null) words("cooling_later") else YouTubeData.fillAll(words("cooling_when"),
+                mapOf("date" to stamp.substring(0, 10), "time" to stamp.substring(11, 16)))
+        }
+
+        /** youtube_sheet.py's words for a cooling YouTube (the data's `runner.cooling`): "waiting out YouTube until
+         * 2026-11-27 13:00 UTC". */
+        fun coolingWords(db: Db): String = YouTubeData.fillAll(words("cooling"), mapOf("when" to coolingUntil(db)))
 
         /** A word of the data's `answers`: what an answer that can't be read says. */
         private fun answerWords(name: String): String = DATA.text(name, DATA.json.getValue("answers") as JsonObject)

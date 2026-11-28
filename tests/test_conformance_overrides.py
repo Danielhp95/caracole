@@ -557,6 +557,18 @@ WRITE_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("add_gametabs", "the same tab again", {"display": "Yuzo Koshiro - Fillmore",
                                            "url": "https://gametabs.net/tabs/actraiser/fillmore"}),
     ("add_gametabs", "a game's page", {"display": "Yuzo Koshiro - Fillmore", "url": "https://gametabs.net/tabs/actraiser"}),
+    # add_youtube
+    ("add_youtube", "a new song's video, written as its plain address",
+     {"display": "Radiohead - Creep", "url": "https://youtu.be/XFkzRNyygfk?t=30"}),
+    ("add_youtube", "a video's bare id: no address", {"display": "Blur - Song 2", "url": "SSbBvKaM6sk"}),
+    ("add_youtube", "the same video again, written another way: nothing written",
+     {"display": "PORTISHEAD - ROADS", "url": "https://m.youtube.com/watch?v=AhFkVvPVAnA&list=x"}),
+    ("add_youtube", "another video for the song written another way: its name kept",
+     {"display": "PORTISHEAD - ROADS", "url": "https://www.youtube.com/shorts/XFkzRNyygfk"}),
+    ("add_youtube", '"none"', {"display": "Portishead - Roads", "url": " NONE "}),
+    ("add_youtube", '"none" again', {"display": "Massive Attack - Teardrop", "url": "none"}),
+    ("add_youtube", "a channel's address", {"display": "Radiohead - Creep", "url": "https://www.youtube.com/@radiohead"}),
+    ("add_youtube", "no song named", {"display": "Creep", "url": "https://youtu.be/XFkzRNyygfk"}),
     # add_reject
     ("add_reject", "a new song's, each keyed once, in code-point order",
      {"display": "𝄞 Band - 𝄞 Song", "ug_refs": ["\U00020000/y", "/x", "Abc/Z", "abc/z", "ábc/w"]}),
@@ -675,6 +687,12 @@ LYRICS_BASE = BASE + '''
 '''
 LYRICS_CASES = {("add_match", "a song with a [lyrics] entry: it stays as it is"),
                 ("add_ignore", "a song with a [lyrics] entry alone")}
+YOUTUBE_BASE = BASE + '''
+[youtube]
+"Portishead - Roads" = "https://youtu.be/AhFkVvPVAnA"
+"massive attack - teardrop" = "none"
+'''
+YOUTUBE_CASES = {(fn, case) for fn, case, _ in WRITE_CASES if fn == "add_youtube"}
 LYRICS_WRITERS = ("set_lyrics_name", "set_lyrics_record", "clear_lyrics_record")
 # The lyrics writers' cases that start from BASE's rows, of no [lyrics] table.
 BASE_CASES = {("set_lyrics_name", "a song of no [lyrics] table yet"),
@@ -726,10 +744,14 @@ def write_records(tmp: Path) -> list[dict[str, Any]]:
     with_lyrics = tmp / "lyrics.toml"
     with_lyrics.write_text(LYRICS_BASE, encoding="utf-8")
     lyrics_rows = rows_of(with_lyrics)
+    with_youtube = tmp / "youtube.toml"
+    with_youtube.write_text(YOUTUBE_BASE, encoding="utf-8")
+    youtube_rows = rows_of(with_youtube)
     records = []
     for n, (fn, case, kw) in enumerate(WRITE_CASES):
         with_entry = (fn, case) in LYRICS_CASES or (fn in LYRICS_WRITERS and (fn, case) not in BASE_CASES)
-        rows = [] if (fn, case) in EMPTY_CASES else lyrics_rows if with_entry else base_rows
+        rows = ([] if (fn, case) in EMPTY_CASES else lyrics_rows if with_entry
+                else youtube_rows if (fn, case) in YOUTUBE_CASES else base_rows)
         path = tmp / f"write-{n}.toml"
         path.write_text(toml_of(rows), encoding="utf-8")
         before = path.read_bytes()
@@ -902,7 +924,8 @@ def test_every_writer_and_reader_is_in_the_vectors(made):
     writes = [json.loads(line) for line in made[WRITES].splitlines()[1:]]
     names = {r["fn"].rsplit(".", 1)[1] for r in writes}
     assert names == {"add_match", "add_pin", "remove_pin", "add_lacuerda", "add_harptabs", "add_gametabs",
-                     "add_reject", "add_alias", "add_ignore", "add_version", "add_harmonica", *LYRICS_WRITERS}
+                     "add_youtube", "add_reject", "add_alias", "add_ignore", "add_version", "add_harmonica",
+                     *LYRICS_WRITERS}
     for name in names:  # each writer writes, refuses or leaves the rows as they were
         mine = [r for r in writes if r["fn"].endswith(name)]
         assert any("out" in r and r["out"]["rows"] != r["rows"] for r in mine), name

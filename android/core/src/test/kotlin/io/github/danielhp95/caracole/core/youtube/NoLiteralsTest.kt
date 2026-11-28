@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
  * - any of the data's own texts of four characters or more ([dataTexts]): the arguments and each template element's
  *   fixed text (`quickjs:`, the `--print` expression), the targets' and the lines' prefixes, every pattern's source
  *   and each of its alternatives that is a phrase (a word alone is any code's), the phone's format and output name,
- *   the gate's hosts and words, the runner's and the answers' words, the search gate's states, keys and words and
- *   the record's; a literal that is exactly one of the data's keys, of the record's fields or of the search gate's
+ *   the gate's hosts and words, the runner's and the answers' words, the search gate's states, keys and words, the
+ *   thumbnail's address, folder and names, and the record's; a literal that is exactly one of the data's keys, of the record's fields or of the search gate's
  *   states (how the code reads the data, a record and a gate's answer), excepted;
  *
  * and no literal is compiled as a pattern (`Regex(`, `PyRegex.compile(`, `Pattern.compile(` or `.toRegex()` of one).
@@ -35,7 +35,7 @@ class NoLiteralsTest {
     @Test fun noFlagPatternOrPrefixIsTypedInThePackage() {
         val files = root.listFiles { f -> f.name.endsWith(".kt") }.orEmpty().sortedBy { it.name }
         assertTrue(files.map { it.name }.containsAll(listOf("Choose.kt", "Classify.kt", "HostGate.kt", "Videos.kt",
-            "YouTubeData.kt", "YtDlp.kt", "YtDlpProcess.kt", "SearchGate.kt", "Records.kt")), "the package's files: ${files.map { it.name }}")
+            "YouTubeData.kt", "YtDlp.kt", "YtDlpProcess.kt", "SearchGate.kt", "Records.kt", "Thumbs.kt")), "the package's files: ${files.map { it.name }}")
         val found = files.flatMap { f -> scan(f.readText()).map { "${f.name}: $it" } }
         assertEquals(emptyList(), found)
     }
@@ -118,6 +118,7 @@ class NoLiteralsTest {
         strings(json.getValue("gate")).forEach(::fixed)
         strings(json.getValue("runner")).forEach(::fixed)
         strings(json.getValue("search")).forEach(::fixed)
+        strings(json.getValue("thumb")).forEach(::fixed)
         json.getValue("record").jsonObject.let { r -> strings(JsonObject(r - "fields")).forEach(::fixed) }
         strings(json.getValue("answers").jsonObject.let { JsonObject(it - "provider" - "live_statuses") }).forEach(::fixed)
         out.filter { it.length >= 4 }.toSet()

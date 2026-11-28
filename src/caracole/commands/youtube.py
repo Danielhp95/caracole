@@ -3,7 +3,9 @@
 Without ``--song`` it makes the same pass as the step (youtube_fetch.py): the songs with
 no human sheet that are due for their audio from YouTube, newest first, within the
 budget. With ``--song "Artist - Title"`` it takes that song's audio, even when its search
-found nothing lately, unless it has a human sheet, is ignored or has a purchase linked;
+found nothing lately, unless it has a human sheet, is ignored, has a purchase linked, or keeps
+an auto sheet another caracole made that no run here makes again (youtube_fetch.py ``left_elsewhere``: --sheet
+makes that one here);
 ``--url`` first writes the video to use under ``[youtube]`` in overrides.toml, and
 ``--none`` writes "none" there, lets go of any audio the song has from YouTube, and asks
 YouTube nothing: it does so with YouTube off too, and for a song not in the library yet.
@@ -70,6 +72,11 @@ if TYPE_CHECKING:
 
 PROVIDER = "youtube"
 NOT_BUILT = "use the flake's packages.autochords, which has auto-chords and yt-dlp"
+# --song for a song whose auto sheet another caracole made, which no pass here makes again (youtube_fetch.py
+# ``left_elsewhere``, R3): --sheet is the ask that makes it here
+MADE_THERE = ('"{song}" keeps an auto sheet made by another caracole, which no run here makes again: caracole '
+              'takes no audio from YouTube for it. To make its sheet here from a video, run caracole youtube '
+              '--song "{song}" --sheet (with --url URL for the video).')
 
 
 def register(app: typer.Typer) -> None:
@@ -231,13 +238,46 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
     artist, _, title = display.partition(" - ")
     with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
         result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
-        sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
-                         for p, n in result.requests.items() if n)
+        sent = sent_words(result.requests)
         _common.staged_end(reporter, result, progress=progress, refused="No sheet made",
                            done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
 
 
+def sent_words(requests: dict[str, int]) -> str:
+    """What ``--sheet``'s done line says it sent ("1 yt-dlp run, 2 LRCLIB requests"): each provider's count, yt-dlp's
+    runs by their name and every other's as LRCLIB requests, those of none left out; "" for none."""
+    return ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
+                     for p, n in requests.items() if n)
+
+
 NOT_SEARCHED = "Not searched: "
+# --video's and the thumbnail's words, which the phone says as they are (youtube.json's ``video_cmd``)
+NOT_A_VIDEO = "--video: not a YouTube video's link: {link}"  # ``link`` its repr
+ASKING = "asking YouTube"
+SEARCHED_VIDEO = "Searched: YouTube video {id}: {title} ({channel})."
+WONT_GIVE = "Nothing found: YouTube won't give video {id} ({unavailable})."
+TRY_LATER = "{why}. Try again later."
+TURNED_BACK = "YouTube turned us back ({error}); no yt-dlp runs until {until}."
+NO_RUNS = "no YouTube runs left. Try again later."
+YTDLP_FAILED = "yt-dlp failed ({error}). Try again later."
+VIDEO_DONE = "{title} ({channel})"
+RUNS_ALERT = "{error}\nNo more yt-dlp runs until {until} (block #{strikes})."
+THUMB_OFF = "turned off"
+THUMB_COOLING = "waiting out a block until {until}"
+THUMB_KEPT = "kept"
+THUMB_NONE = "none"
+THUMB_BLOCKED = "YouTube's images turned us back; waiting until {until}"
+THUMB_SPENT = "no asks left"
+THUMB_FAILED = "no thumbnail"
+THUMBS_ALERT = "{error}\nNo more thumbnails until {until} (block #{strikes})."
+# --search's words, which the phone says as they are (youtube.json's ``search_cmd``); ``query`` is the query quoted
+QUOTED = "“{query}”"
+NO_WORD = "{query} has no word to search for."
+NO_SHEETS_HERE = "no YouTube sheets here ({problem})."
+NOTHING_TO_SEARCH = "nothing to search for"
+SEARCHED = "Searched: YouTube's first video for {query}: {title} ({channel}), {url}."
+NONE_LATELY = "Nothing found: YouTube had no video for {query} lately."
+NONE_NOW = "Nothing found: YouTube has no video for {query}."
 
 
 def _search(cfg: Config, query: str, *, progress: bool) -> None:
@@ -261,7 +301,7 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
     )
     from caracole.youtube_search import gate as search_gate
 
-    shown_query = f"“{query}”"
+    shown_query = QUOTED.format(query=query)
 
     def say(stage: str, state: str, detail: str = "") -> None:
         if progress:
@@ -272,26 +312,26 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
         typer.echo(line)
 
     if not query_key(query):
-        end(f"{NOT_SEARCHED}{shown_query} has no word to search for.")
+        end(NOT_SEARCHED + NO_WORD.format(query=shown_query))
         return
     problem = route_problem(cfg)
     if problem is not None:
-        end(f"{NOT_SEARCHED}no YouTube sheets here ({problem}).")
+        end(NOT_SEARCHED + NO_SHEETS_HERE.format(problem=problem))
         return
-    say("video", "running", "asking YouTube")
+    say("video", "running", ASKING)
     with exclusive(cfg, f"youtube --search {query}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = search_gate(cfg, conn, query, on_screen=False, now=now)
         if said is not None and said.asked is not None:
             video = said.asked.get("video")
             if isinstance(video, dict):
-                end(f"Searched: YouTube's first video for {shown_query}: {video.get('title')} "
-                    f"({video.get('channel')}), {video.get('url')}.", "done")
+                end(SEARCHED.format(query=shown_query, title=video.get('title'), channel=video.get('channel'),
+                                    url=video.get('url')), "done")
             else:
-                end(f"Nothing found: YouTube had no video for {shown_query} lately.", "done")
+                end(NONE_LATELY.format(query=shown_query), "done")
             return
         if said is None or said.state in ("spent", "failed"):
-            end(f"{NOT_SEARCHED}{said.why if said else 'nothing to search for'}. Try again later.")
+            end(NOT_SEARCHED + TRY_LATER.format(why=said.why if said else NOTHING_TO_SEARCH))
             return
         run_id = RUN + run_id_for(now)
         runner = make_youtube(cfg, conn, run_id)
@@ -300,29 +340,28 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
             found = search(conn, runner, query, now)
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
-            message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
+            message = RUNS_ALERT.format(error=e, until=shown(state.cooldown_until), strikes=state.strikes)
             _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
-            end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
-                f"{shown(state.cooldown_until)}.")
+            end(NOT_SEARCHED + TURNED_BACK.format(error=e, until=shown(state.cooldown_until)))
             return
         except BudgetExhausted:
-            end(f"{NOT_SEARCHED}no YouTube runs left. Try again later.")
+            end(NOT_SEARCHED + NO_RUNS)
             return
         except ProviderError as e:
             record_error(conn, PROVIDER, now, str(e))
             record_failure(conn, query_key(query), now, str(e.message or e))
-            end(f"{NOT_SEARCHED}yt-dlp failed ({e.message or e}). Try again later.")
+            end(NOT_SEARCHED + YTDLP_FAILED.format(error=e.message or e))
             return
         finally:
             runner.close()
         if answered_any(conn, run_id, PROVIDER, runner.requests_made):
             record_ok(conn, PROVIDER, now)
         if found is None:
-            end(f"Nothing found: YouTube has no video for {shown_query}.", "done")
+            end(NONE_NOW.format(query=shown_query), "done")
             return
-        say("video", "done", f"{found.title} ({found.channel})")
+        say("video", "done", VIDEO_DONE.format(title=found.title, channel=found.channel))
         _thumbnail(cfg, conn, found.id, query_key(query), run_id, now, say)
-    typer.echo(f"Searched: YouTube's first video for {shown_query}: {found.title} ({found.channel}), {found.url}.")
+    typer.echo(SEARCHED.format(query=shown_query, title=found.title, channel=found.channel, url=found.url))
 
 
 def _video(cfg: Config, link: str, *, progress: bool) -> None:
@@ -343,7 +382,7 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
 
     video_id = link.strip() if VIDEO_ID.fullmatch(link.strip()) else video_id_from_url(link)  # an id, as jobs pass it
     if video_id is None:
-        fail(f"--video: not a YouTube video's link: {link!r}", 2)
+        fail(NOT_A_VIDEO.format(link=repr(link)), 2)
     key = video_key(video_id)
 
     def say(stage: str, state: str, detail: str = "") -> None:
@@ -354,19 +393,19 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
         say("video", state, line)
         typer.echo(line)
 
-    say("video", "running", "asking YouTube")
+    say("video", "running", ASKING)
     with exclusive(cfg, f"youtube --video {video_id}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = video_gate(cfg, conn, video_id, now)
         if said.asked is not None:
             found = said.asked.get("video")
             if isinstance(found, dict):
-                end(f"Searched: YouTube video {video_id}: {found.get('title')} ({found.get('channel')}).", "done")
+                end(SEARCHED_VIDEO.format(id=video_id, title=found.get('title'), channel=found.get('channel')), "done")
             else:
-                end(f"Nothing found: YouTube won't give video {video_id} ({said.asked.get('unavailable')}).", "done")
+                end(WONT_GIVE.format(id=video_id, unavailable=said.asked.get('unavailable')), "done")
             return
         if said.state != "auto":
-            end(f"{NOT_SEARCHED}{said.why}. Try again later.")
+            end(NOT_SEARCHED + TRY_LATER.format(why=said.why))
             return
         run_id = RUN + key + ":" + run_id_for(now)
         runner = make_youtube(cfg, conn, run_id)
@@ -375,18 +414,17 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
             found_video = read_video(conn, runner, video_id, now)
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
-            message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
+            message = RUNS_ALERT.format(error=e, until=shown(state.cooldown_until), strikes=state.strikes)
             _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
-            end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
-                f"{shown(state.cooldown_until)}.")
+            end(NOT_SEARCHED + TURNED_BACK.format(error=e, until=shown(state.cooldown_until)))
             return
         except BudgetExhausted:
-            end(f"{NOT_SEARCHED}no YouTube runs left. Try again later.")
+            end(NOT_SEARCHED + NO_RUNS)
             return
         except ProviderError as e:
             record_error(conn, PROVIDER, now, str(e))
             record_failure(conn, key, now, str(e.message or e))
-            end(f"{NOT_SEARCHED}yt-dlp failed ({e.message or e}). Try again later.")
+            end(NOT_SEARCHED + YTDLP_FAILED.format(error=e.message or e))
             return
         finally:
             runner.close()
@@ -394,11 +432,11 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
             record_ok(conn, PROVIDER, now)
         if found_video is None:
             reason = video_gate(cfg, conn, video_id, now).asked or {}
-            end(f"Nothing found: YouTube won't give video {video_id} ({reason.get('unavailable')}).", "done")
+            end(WONT_GIVE.format(id=video_id, unavailable=reason.get('unavailable')), "done")
             return
-        say("video", "done", f"{found_video.title} ({found_video.channel})")
+        say("video", "done", VIDEO_DONE.format(title=found_video.title, channel=found_video.channel))
         _thumbnail(cfg, conn, video_id, key, run_id, now, say)
-    typer.echo(f"Searched: YouTube video {video_id}: {found_video.title} ({found_video.channel}).")
+    typer.echo(SEARCHED_VIDEO.format(id=video_id, title=found_video.title, channel=found_video.channel))
 
 
 def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, key: str, run_id: str, now: datetime,
@@ -410,28 +448,28 @@ def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, key: str, r
     from caracole.youtube_search import THUMBS_PROVIDER, fetch_thumbnail
 
     if not cfg.provider(THUMBS_PROVIDER).enabled:
-        say("thumbnail", "skipped", "turned off")
+        say("thumbnail", "skipped", THUMB_OFF)
         return
     if is_cooling(conn, THUMBS_PROVIDER, now):
-        say("thumbnail", "skipped", f"waiting out a block until {shown(get_state(conn, THUMBS_PROVIDER).cooldown_until)}")
+        say("thumbnail", "skipped", THUMB_COOLING.format(until=shown(get_state(conn, THUMBS_PROVIDER).cooldown_until)))
         return
     say("thumbnail", "running", "")
     client = make_client(cfg, conn, THUMBS_PROVIDER, run_id)
     try:
         kept = fetch_thumbnail(cfg, conn, client, video_id, key, now)
-        say("thumbnail", "done" if kept else "skipped", "kept" if kept else "none")
+        say("thumbnail", "done" if kept else "skipped", THUMB_KEPT if kept else THUMB_NONE)
     except ProviderBlocked as e:
         state = record_block(conn, THUMBS_PROVIDER, now, str(e))
-        _common.alert_block(cfg, THUMBS_PROVIDER, f"{e}\nNo more thumbnails until {shown(state.cooldown_until)} "
-                                                  f"(block #{state.strikes}).", strikes=state.strikes)
-        say("thumbnail", "skipped", f"YouTube's images turned us back; waiting until {shown(state.cooldown_until)}")
+        _common.alert_block(cfg, THUMBS_PROVIDER, THUMBS_ALERT.format(error=e, until=shown(state.cooldown_until),
+                                                                      strikes=state.strikes), strikes=state.strikes)
+        say("thumbnail", "skipped", THUMB_BLOCKED.format(until=shown(state.cooldown_until)))
         return
     except BudgetExhausted:
-        say("thumbnail", "skipped", "no asks left")
+        say("thumbnail", "skipped", THUMB_SPENT)
         return
     except ProviderError as e:
         record_error(conn, THUMBS_PROVIDER, now, str(e))
-        say("thumbnail", "skipped", "no thumbnail")
+        say("thumbnail", "skipped", THUMB_FAILED)
         return
     finally:
         client.close()
@@ -465,11 +503,13 @@ def _decline(cfg: Config, display: str) -> None:
 
 def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Overrides) -> Song:
     """The song ``--song`` names, if YouTube may be asked for its audio; otherwise say why not."""
-    from caracole.youtube_fetch import youtube_audio
+    from caracole.youtube_fetch import left_elsewhere, youtube_audio
 
     song = song_named(conn, display, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
+    if left_elsewhere(conn, song):  # R3: no pass here would make its sheet again, so the audio would be for nothing
+        fail(MADE_THERE.format(song=song.display))
     if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, or a file you gave it
         audio = Path(song.audio_path)
         where = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio

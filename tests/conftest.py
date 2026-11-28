@@ -146,6 +146,29 @@ def _no_live_line_left():
     progress._screen_gone = False
 
 
+@pytest.fixture(autouse=True)
+def _no_lock_left():
+    """No test leaves caracole's lock held in its worker (commands/_common.py's ``_held``): a client a test made and
+    never closed holds it, and the worker's next test would then read itself as holding it (a lookup's ``pass_turn``
+    reads the config of whatever test runs next). Its descriptors, and the lane's, are closed, as the process's end
+    would close them, and the test fails: close what it made (a client's ``close``, a ``with``)."""
+    yield
+    import os
+
+    from caracole.commands import _common
+
+    left = sorted(str(path) for path in [*_common._held, *_common._lane])
+    for fd, _ in _common._held.values():
+        os.close(fd)
+    for fd in _common._lane.values():
+        os.close(fd)
+    _common._held.clear()
+    _common._lane.clear()
+    _common._as_lookup.clear()
+    if left:
+        pytest.fail(f"the test left caracole's lock held: {', '.join(left)}", pytrace=False)
+
+
 _migrated: dict[tuple, bytes] = {}
 
 

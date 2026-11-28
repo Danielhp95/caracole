@@ -63,6 +63,10 @@ class HostGateTest {
 
     private val never = HostGate.Resolver { host, port -> fail("the gate looked up $host:$port") }
 
+    /** A connector that fails the test if the gate dials at all: a NETWORK gate under the tests' loopback names its own
+     * resolver and connector (HostGate refuses SYSTEM's and DIRECT's there). */
+    private val noDial = HostGate.Connector { _, address, _ -> fail("the gate dialled $address") }
+
     private fun gate(
         mode: HostGate.Mode,
         rule: HostGate.HostRule,
@@ -72,7 +76,8 @@ class HostGateTest {
         headTimeoutMs: Int = HostGate.HEAD_TIMEOUT_MS,
     ): Pair<HostGate, HostGate.Opened> {
         val gate = HostGate(mode, rule, resolver, maxConnections, HostGate.CONNECT_TIMEOUT_MS, idleTimeoutMs, headTimeoutMs,
-                            connector = resolver as? HostGate.Connector ?: HostGate.Connector.DIRECT)
+                            connector = resolver as? HostGate.Connector
+                                ?: if (mode == HostGate.Mode.NETWORK) noDial else HostGate.Connector.DIRECT)
         gates += gate
         return gate to gate.start()
     }
@@ -165,6 +170,37 @@ class HostGateTest {
             gate.log()["127.0.0.1"] == HostGate.HostUse(connects = 1, bytesUp = 1000, bytesDown = 23_456, refused = 0)
         }
         assertFalse(gate.refusedAny())
+    }
+
+    /** The kill check's gate, LOOPBACK with its hosts narrowed to [HostGate.KILL_CHECK_HOSTS]: 127.0.0.1 tunnelled,
+     * 10.0.2.2 (the emulator's host, a routable private address on some real networks) refused and never dialled;
+     * the tests' LOOPBACK gate keeps both, and a host outside LOOPBACK_NAMES can't be named. */
+    @Test
+    fun theKillChecksGateReaches127001Alone() {
+        assertEquals(listOf("127.0.0.1"), HostGate.KILL_CHECK_HOSTS)
+        val server = upstream(0, "ok".toByteArray())
+        val gate = HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never,
+                            loopbackHosts = HostGate.KILL_CHECK_HOSTS).also { gates += it }
+        val opened = gate.start()
+        assertEquals(403, status(ask(opened, connectLine("10.0.2.2:${server.port}", auth(opened)))))
+        assertEquals(403, status(ask(opened, "GET http://10.0.2.2:${server.port}/clip.m4a HTTP/1.1\r\n" +
+            "Host: 10.0.2.2:${server.port}\r\nProxy-Authorization: ${auth(opened)}\r\n\r\n")))
+        assertEquals(HostGate.HostUse(refused = 2, why = "not 127.0.0.1"), gate.log()["10.0.2.2"])
+        connect(opened).use { s ->
+            s.getOutputStream().write(connectLine("127.0.0.1:${server.port}", auth(opened)).toByteArray())
+            assertEquals(200, status(head(s.getInputStream())))
+            assertEquals("ok", s.getInputStream().readAllBytes().toString(Charsets.US_ASCII))
+        }
+        server.done.join(5_000)
+        assertEquals(1, gate.log()["127.0.0.1"]?.connects)
+        // The tests' LOOPBACK gate keeps both hosts (not dialled here: 10.0.2.2 is no host of this machine's).
+        assertEquals(listOf("127.0.0.1", "10.0.2.2"), HostGate.LOOPBACK_NAMES)
+        assertFailsWith<IllegalArgumentException> {
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never, loopbackHosts = listOf("192.168.1.1"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE, never, loopbackHosts = emptyList())
+        }
     }
 
     @Test
@@ -425,6 +461,31 @@ class HostGateTest {
         val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
         assertEquals(loopback, gate.boundAddress)
         assertTrue(opened.proxyArg.endsWith("@127.0.0.1:${opened.port}"))
+    }
+
+    /** PROXY_PATTERN, the shape `:youtube`'s glue holds a `--proxy` to (a Python regex; this one reads the same in
+     * Java's), matches every proxyArg whole, and nothing of another host, scheme or token. */
+    @Test
+    fun theProxyPatternIsProxyArgsShape() {
+        val pattern = Regex(HostGate.PROXY_PATTERN)
+        repeat(3) {
+            val (_, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+            assertTrue(pattern.matches(opened.proxyArg), opened.proxyArg)
+            assertFalse(pattern.matches(opened.proxyArg.replace("127.0.0.1", "127.0.0.2")))
+            assertFalse(pattern.matches(opened.proxyArg.replace("http://", "socks5://")))
+            assertFalse(pattern.matches(opened.proxyArg.replace("@", "0@")))
+        }
+        assertEquals(listOf("127.0.0.1", "10.0.2.2"), HostGate.LOOPBACK_NAMES)
+    }
+
+    /** The log's names that are no host's are youtube.json's (`gate`: youtube.py's PHONE_GATE), which the bench's
+     * checker reads too. */
+    @Test
+    fun theLogsOwnNamesAreTheDatas() {
+        val data = YouTubeData.read()
+        assertEquals(data.text("malformed", data.gate), HostGate.MALFORMED)
+        assertEquals(data.text("other_hosts", data.gate), HostGate.OTHER_HOSTS)
+        assertEquals(data.text("stopped", data.gate), HostGate.STOPPED)
     }
 
     @Test
@@ -709,14 +770,36 @@ class HostGateTest {
         assertEquals(403, status(ask(opened, connectLine("www.youtube.com:443", auth(opened)))))
     }
 
+    /** OBSERVE logs every host but reaches no address that isn't public, as YOUTUBE: a name that resolves to one, or
+     * an IP literal of one (loopback, site-local, link-local), is refused and logged; the LAN and another app's local
+     * service stay out of an observed session's reach, a redirect's too. */
     @Test
-    fun observeConnectsToALocalAddressAsResolved() {
+    fun observeRefusesANameThatResolvesToALocalAddressAndLogsIt() {
         val server = upstream(0, ByteArray(0))
         val ten = InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1))
         val net = ToLoopback(server.port, ten)
-        val (_, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
-        assertEquals(200, status(ask(opened, connectLine("example.com:443", auth(opened)))))
-        assertEquals(listOf(InetSocketAddress(ten, 443)), net.dialled.toList())
+        val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
+        assertEquals(403, status(ask(opened, connectLine("example.com:443", auth(opened)))))
+        assertEquals(emptyList(), net.dialled.toList())
+        assertEquals(1, gate.log()["example.com"]?.refused, gate.log().toString())
+    }
+
+    @Test
+    fun observeRefusesAnIpLiteralThatIsntPublicAndTakesAPublicOne() {
+        val server = upstream(0, ByteArray(0))
+        val net = ToLoopback(server.port)
+        val (gate, opened) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.OBSERVE, net)
+        for (target in listOf("127.0.0.1:80", "10.0.2.2:80", "192.168.1.1:443", "169.254.1.1:80", "[::1]:80",
+                              "[fe80::1]:80")) {
+            assertEquals(403, status(ask(opened, connectLine(target, auth(opened)))), target)
+        }
+        assertEquals(emptyList(), net.dialled.toList())
+        assertEquals(6, gate.log().values.sumOf { it.refused }, gate.log().toString())
+        assertEquals(200, status(ask(opened, connectLine("203.0.113.7:443", auth(opened)))))
+        assertEquals(1, net.dialled.size)
+        // YOUTUBE takes no literal at all, as before.
+        val (_, youtube) = gate(HostGate.Mode.NETWORK, HostGate.HostRule.YOUTUBE, net)
+        assertEquals(403, status(ask(youtube, connectLine("203.0.113.7:443", auth(youtube)))))
     }
 
     @Test
@@ -951,5 +1034,37 @@ class HostGateTest {
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(was)
         }
+    }
+
+    // Y1.5: the gates this process has open, and no NETWORK gate under the tests' loopback with the system's resolver
+    // or a direct connector.
+
+    @Test
+    fun aStartedGateIsOpenByItsPortAndUserUntilItCloses() {
+        val (gate, opened) = gate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE)
+        assertTrue(HostGate.isOpen(opened.proxyArg))
+        val (user, secret) = credentials(opened)
+        val otherUser = "0".repeat(32)
+        assertFalse(HostGate.isOpen("http://$otherUser:$secret@127.0.0.1:${opened.port}"), "another user")
+        assertFalse(HostGate.isOpen("http://$user:$secret@127.0.0.1:${opened.port + 1}"), "another port")
+        assertFalse(HostGate.isOpen("http://127.0.0.1:${opened.port}"), "no credentials: not a gate's shape")
+        assertFalse(HostGate.isOpen("http://$user:$secret@10.0.2.2:${opened.port}"), "another host")
+        assertTrue(HostGate.isOpen(opened.port, user))
+        gate.close()
+        assertFalse(HostGate.isOpen(opened.proxyArg), "closed")
+        assertFalse(HostGate.isOpen(opened.port, user))
+    }
+
+    @Test
+    fun aNetworkGateUnderTheTestsLoopbackIsRefusedWithTheSystemsResolverOrADirectConnector() {
+        assertEquals("loopback", System.getProperty("caracole.network"))
+        for (rule in listOf(HostGate.HostRule.YOUTUBE, HostGate.HostRule.OBSERVE)) {
+            val plain = assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule) }
+            assertEquals(HostGate.NETWORK_UNDER_LOOPBACK, plain.message)
+            assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule, resolver = never) }
+            assertFailsWith<IllegalArgumentException> { HostGate(HostGate.Mode.NETWORK, rule, connector = noDial) }
+            HostGate(HostGate.Mode.NETWORK, rule, never, connector = noDial).close()
+        }
+        HostGate(HostGate.Mode.LOOPBACK, HostGate.HostRule.YOUTUBE).close()
     }
 }

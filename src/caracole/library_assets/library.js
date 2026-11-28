@@ -459,11 +459,13 @@
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from this video");
-    // Where the lyrics are heard from the audio on a CPU alone, the time says so (``server.transcribe.time``).
-    const slow = server && server.transcribe && server.transcribe.ok === true &&
-      String(server.transcribe.time || "").indexOf("half an hour") >= 0;
-    go.title = "Chords from its audio; lyrics from the lyrics sites, else heard from the audio. A few minutes." +
-      (slow ? " (up to half an hour when they're heard)" : "");
+    // The lyrics heard from the audio only where a sheet hears them (``server.transcribe.hears``: this caracole
+    // transcribes and [autochords] transcribe is on, never the phone); on a CPU alone, the time says so
+    // (``server.transcribe.time``).
+    const hears = Boolean(server && server.transcribe && server.transcribe.hears === true);
+    const slow = hears && String(server.transcribe.time || "").indexOf("half an hour") >= 0;
+    go.title = "Chords from its audio; lyrics from the lyrics sites" + (hears ? ", else heard from the audio" : "") +
+      ". A few minutes." + (slow ? " (up to half an hour when they're heard)" : "");
     form.append(label, go);
     postInPlace(form, go, s);
     return form;
@@ -490,7 +492,9 @@
     go.type = "button";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from an audio file");
-    go.title = "Chords from the file; lyrics from the lyrics sites, else heard from it.";
+    // The lyrics heard from the file only where a sheet hears them (``server.transcribe.hears``, never the phone).
+    const hears = Boolean(server && server.transcribe && server.transcribe.hears === true);
+    go.title = "Chords from the file; lyrics from the lyrics sites" + (hears ? ", else heard from it" : "") + ".";
     go.addEventListener("click", () => openAudio(s, form, go));
     form.appendChild(go);
     postInPlace(form, go, s);
@@ -666,8 +670,12 @@
           for (const n of names) n.addEventListener("input", () => (make.disabled = same()));
         }
       }
-      const slow = TRANSCRIBE && TRANSCRIBE.ok === true && String(TRANSCRIBE.time || "").indexOf("half an hour") >= 0;
-      form.appendChild(el("p", "hint", "Chords from the file; lyrics from the lyrics sites, else heard from it. " +
+      // The lyrics heard from the file only where a sheet hears them (``server.transcribe.hears``, never the phone);
+      // on a CPU alone, the time says so (``server.transcribe.time``).
+      const hears = Boolean(TRANSCRIBE && TRANSCRIBE.hears === true);
+      const slow = hears && String(TRANSCRIBE.time || "").indexOf("half an hour") >= 0;
+      form.appendChild(el("p", "hint", "Chords from the file; lyrics from the lyrics sites" +
+        (hears ? ", else heard from it" : "") + ". " +
         (slow ? "A few minutes, up to half an hour when they're heard." : "A few minutes.")));
       const no = button("Cancel");
       no.addEventListener("click", cancel);

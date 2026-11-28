@@ -128,18 +128,38 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    Without those properties the release APK is built unsigned. Outside the `ml` shell every packaging task of the
    release (assemble, bundle, package, install) refuses before anything runs, so no `app-release.apk` without the chord
    models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
-   over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
-   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
-   models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
+   over 100 MiB, the most the repository's Pages site takes (about 28.8 MB today). The chord models' libraries are
+   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone (one that translates arm64 too: Android
+   installs its primary ABI's libraries) gets SQLite's and no chords, saying "no chord models for this phone's
+   processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
    ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, PFFFT's, which libsoxr is built with, BTC's and
    beat_this's) are its assets `chords/licenses/`, as alphaTab's are `alphatab/licenses/`, with a README saying that
    libsoxr is compiled into `libcaracole_soxr.so` and that caracole's, libsoxr's and the build's source is this
-   repository, github.com/Danielhp95/caracole. `android/scripts/release-check.sh` checks all of it.
+   repository, github.com/Danielhp95/caracole. It carries the app's yt-dlp too (`:youtube`: Chaquopy's Python, yt-dlp,
+   `libqjs.so`), for arm64-v8a alone (`releaseYoutubeAbis`: Python's x86_64 libraries and Chaquopy's x86_64 assets left
+   out, `DropPythonAbis`), with its notices under `licenses/youtube/`
+   ([below](#youtube-on-the-phone-the-engine)), and extracts every native library at install
+   (`useLegacyPackaging`, so Android runs qjs). That makes the release 28.8 MB, 9.3 MB more than chords alone (19.6 MB),
+   and 55.6 MB installed on an arm64 phone (its 26.8 MB of libraries extracted beside the APK), 36.0 MB more (34.4 MiB).
+   That installed figure leaves out what Chaquopy copies out of its assets into the app's files at Python's first start
+   (its standard library, yt-dlp, the glue): about 14 MB more after the first YouTube run. Two builds of the same
+   commit from checkouts at different paths give the same unsigned APK, byte for byte (`:youtube`'s assets and
+   `libqjs.so` among it). `android/scripts/release-check.sh` checks all of it.
+
+   F-Droid's own build server (an f-droid.org recipe, not this repository) would need, besides ONNX Runtime from its
+   source: CPython for Android and Chaquopy's runtime built from source (both come prebuilt from Maven Central,
+   `com.chaquo.python:target` and `com.chaquo.python.runtime`, which F-Droid's scanner refuses), python3.13 as
+   Chaquopy's `buildPython`, the two wheels from `youtube/pins.json` by URL and SHA-256 into `CARACOLE_YTDLP_WHEELS`
+   (pure Python, no build), QuickJS-NG's tree at pins.json's commit as `CARACOLE_QUICKJS_SRC`, NDK r28c and CMake
+   3.31, and `AntiFeatures: NonFreeNet` (docs/fdroid/metadata/).
 3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
    that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
    same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
    release's R8 output and its arm64 libraries run nowhere else before it is published (the emulator takes debug
-   builds alone, the Chords bench is a debug build's).
+   builds alone, the Chords bench is a debug build's). Its yt-dlp likewise, before the first release that carries it
+   and again whenever `youtube/pins.json` or `:youtube` changes: paste one video and take it to Ready on Wi-Fi, and the
+   next day read in the Journal one sheet the phone made by itself (after a lookup found no sheet on the sites, or its
+   daily pass). Both fit in the day's 50 runs.
 4. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
@@ -177,6 +197,30 @@ have no licence, NonFreeAssets; no Tracking.
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
 signed with another key. Keep a copy of both outside the repository.
 
+## A release when YouTube changes
+
+YouTube breaks older yt-dlp often: the phone then says "YouTube changed what yt-dlp … reads". A fix is one pin moved
+and the usual release, under an hour once yt-dlp has one:
+
+1. Move the pin to PyPI's latest yt-dlp, or to a release you name (a tag's `2026.01.05` is PyPI's `2026.1.5`):
+
+       nix develop ./android -c android/scripts/bump-ytdlp.sh [--older] [VERSION]
+
+   It reads PyPI's JSON for yt-dlp and for the yt-dlp-ejs its wheel requires (`Requires-Dist: yt-dlp-ejs==…; extra
+   == 'default'`), fetches both wheels into Nix's store (`nix-prefetch-url`), checks each is PyPI's SHA-256 and the
+   version its `METADATA` says, and rewrites `youtube/pins.json`'s `ytdlp` and `ejs`. A version not on PyPI or
+   yanked, a wheel anywhere but `https://files.pythonhosted.org/…/<its file name>` or of other bytes, and a version
+   older than the pin are refused with `pins.json` as it was; `--older VERSION` goes back to an older one after a
+   yt-dlp regression, every check still made. The version pinned already changes nothing. It prints the steps below.
+2. `git add android/youtube/pins.json` (the flake reads only what git tracks), then
+   `nix develop ./android -c gradle -p android :youtube:testDebugUnitTest`: `PinsTest` holds the wheels to the pins.
+3. On the emulator, `android/scripts/device-test.sh --youtube`: `YtDlpVersionTest`, the app runs the pinned yt-dlp.
+4. Raise `versionCode` and `versionName` in `app/build.gradle.kts`, build the release (`:app:assembleRelease`) and run
+   `android/scripts/release-check.sh` ("Release", step 2).
+5. One song by hand on the phone: a pasted video to Ready.
+6. Publish: the APK into `docs/fdroid/repo`, `fdroid update`, commit `docs/fdroid/` and `android/youtube/pins.json`,
+   push `main` ("Release", steps 3 and 5).
+
 ## Point it at caracole serve
 
 1. Run `caracole serve` where the phone can reach it, on the LAN or the tailnet:
@@ -213,10 +257,12 @@ open in the browser, and so does a link to caracole serve.
 What needs a network: looking songs up, which asks the sites from the phone itself ([Lookups on the
 phone](#lookups-on-the-phone)) or a sheet's other version from Ultimate Guitar, and a sync with the computer. Making
 a songbook, Export PDF (which prints) and Make this my version, a backup, and filing a shared file all work with
-none. What isn't on the phone
-at all says so ("…: not on the phone yet."): a sheet from a YouTube video and YouTube's suggestions (the computer
-runs yt-dlp, the phone never does), and caracole serve's lookup page (the library page's search does its work). Use
-caracole serve in a browser for those.
+none. A sheet from a YouTube video needs a network too, and an arm64 phone ([A sheet from a YouTube
+video](#a-sheet-from-a-youtube-video)), and so does YouTube's first video for a search with no sheet on the sites,
+which an arm64 phone suggests as the computer's page does, on an unmetered network alone (`YouTubeSearchRunner`,
+`POST /youtube/search`): its row fills the request form, and nothing downloads until you send it. What isn't on the
+phone at all says so ("…: not on the phone yet."): caracole serve's lookup page (the library page's search does its
+work). Use caracole serve in a browser for it.
 
 The pages come from the app's own server, with the same Content-Security-Policy and sandbox headers caracole serve
 sends, so the viewers run sandboxed as they do there.
@@ -269,7 +315,8 @@ merge's words ("the file was exported at schema version 14…": export it again 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
 artist's songs. LaCuerda's own search goes from the phone itself, as on the computer ([Lookups on the
-phone](#lookups-on-the-phone)); YouTube's suggestions need the computer. A link to an Ultimate Guitar tab or artist
+phone](#lookups-on-the-phone)), and so does YouTube's first video for a search with no sheet on the sites, on an arm64
+phone and an unmetered network (above). A link to an Ultimate Guitar tab or artist
 page pasted into the box is no search: its panel reads that page from the phone itself, once, at a lookup's pace (the
 tab's page, then its artist's lists), so the next search finds every song of that artist, and its Fetch this version
 keeps the tab you pasted.
@@ -451,16 +498,18 @@ first free emulator of its pool, `CARACOLE_EMULATORS`, 3 by default: emulator-55
 `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}` for the first and the same name with the
 port for the others), starting that emulator if it isn't up (each read-only, so several run on the one AVD). As it
 ends, on any path, it stops the emulator it started, while it still holds its lock, and leaves one that was up already;
-`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. It stops the adb server it
-started once adb lists no device and no other caller holds an emulator, never one with a phone attached. That is the
-owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them for testing or development.
-same thing for gradle biuld and adb servers." An emulator left by a run that was SIGKILLed, or by a script older than
-this, reads as someone else's to every later caller and stays up until `android/scripts/stop-all.sh` runs, which stops
-what is left at a task's end: every pool emulator no caller holds, and the adb server when no device is listed and no
-caller holds an emulator. A Gradle daemon stops after two idle minutes (gradle.properties), and the Kotlin compile
-daemon with it; `stop-all.sh --gradle` stops them at once, but `gradle --stop` stops every daemon of that version for
-you, another worktree's running build among them, so it refuses while one is busy or `gradle --status` fails; the
-check and the stop are not atomic, so a build that starts elsewhere between them can still be killed.
+`--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it. The computers and the other
+servers it starts are stopped as it ends, every one (whatever each started under it too), and the folders it made for
+them removed. It stops the adb server it started once adb lists no device and no other caller holds an emulator, never
+one with a phone attached. That is the owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using
+them for testing or development. same thing for gradle biuld and adb servers." An emulator left by a run that was
+SIGKILLed, or by a script older than this, reads as someone else's to every later caller and stays up until
+`android/scripts/stop-all.sh` runs, which stops what is left at a task's end: every pool emulator no caller holds, and
+the adb server when no device is listed and no caller holds an emulator. A Gradle daemon stops after two idle minutes
+(gradle.properties), and the Kotlin compile daemon with it; `stop-all.sh --gradle` stops them at once, but `gradle
+--stop` stops every daemon of that version for you, another worktree's running build among them, so it refuses while one
+is busy or `gradle --status` fails; the check and the stop are not atomic, so a build that starts elsewhere between them
+can still be killed.
 
     android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
     android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest,
@@ -707,6 +756,10 @@ opens Edit. A link shared again is read from the cache, with no request. Each se
 `[providers.spotify] enabled = false` (or `itunes`, `tidal`, `youtube-oembed`) in caracole.toml, which the phone takes
 at its next sync. Deezer's shares carry the song's names; a Navidrome or Subsonic link is never asked.
 
+A YouTube video shared to a phone that makes sheets from YouTube (an arm64 phone) also offers **Make its sheet from
+this video** for the song it names ([A sheet from a YouTube video](#a-sheet-from-a-youtube-video)). Nothing downloads
+before you press it.
+
 **To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
 Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
 as they came.
@@ -874,9 +927,11 @@ The phone decodes a song's audio as the computer does (autochords/audio.py `load
 `:ml`'s `Decoder.decode(file, into)` writes interleaved float32 PCM to a file, a buffer at a time. A WAV or an AIFF is
 read by `:autochords`' `Pcm`, with no codec, as libsndfile reads it; anything else goes through MediaExtractor and
 Android's own software decoders (`c2.android.*`, never a vendor's). `Mixdown.mono` means the channels as numpy does.
-`DecoderTest` holds it to the computer's decode of eleven files (`tests/fixtures/autochords/encode.sh`: MP3 from
-FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; Vorbis; Opus; FLAC of 16 and
-24 bits; WAV; AIFF; `tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
+`DecoderTest` holds it to the computer's decode of thirteen files (`tests/fixtures/autochords/encode.sh`: MP3 from
+FFmpeg's LAME, from the lame program, and with no header; AAC at 22.05 and 11.025 kHz; AAC as yt-dlp leaves it on the
+phone, as fragmented MP4, in two forms (one fragment, and a DASH-style file of six); Vorbis; Opus; FLAC of 16 and 24
+bits; WAV; AIFF;
+`tests/conformance/vectors/autochords/decode.jsonl`), on the emulator with `--ml`:
 
     android/scripts/device-test.sh --ml
 
@@ -893,6 +948,11 @@ is laid over) the computer's `read_audio`'s to the bit. What a plain MediaCodec 
   the first 529 samples it makes, where FFmpeg keeps them;
 - it reads the length as mutagen does (an MP4's `mdhd`, a LAME tag's delay and padding taken off only where its
   version string is LAME's), never the extractor's;
+- a fragmented MP4 (yt-dlp's m4a with no FFmpeg: an empty `mdhd`, no edit list) it decodes as the computer's remux of
+  it does (yt-dlp's FixupM4a): its priming kept, as no box names it, and ended at its fragments' length, which is the
+  length it states (2026-11-27: both forms to the frame, 82.7 and 78.1 dB; read whole and stated by its `mdhd`, the
+  last frame's padding, 820 and 616 frames, was too many and the length 0); one whose fragments can't be read (a
+  download cut short, trailing junk) it refuses in words, never stating a length of 0;
 - it reads the decoder's output in the encoding it names, and refuses one it doesn't read;
 - a decoder that stops, or changes its rate or channels partway, fails the decode in words.
 
@@ -914,10 +974,10 @@ runs the same C. It is vendored in `autochords/native/soxr/` (LGPL-2.1+, its REA
 two patches) and built with caracole's resample over it (`caracole_soxr.c`: python-soxr's `soxr.resample` of a
 contiguous 1-D float32 array, the path that takes, `csoxr_split_ch`, one channel of split I/O) and the JNI to that
 (`soxr_jni.c`) into one shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for
-arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`, so the debug build's alone), and by the host's gcc for the
-JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM,
-holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates finite
-and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
+arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`; the release keeps arm64-v8a's alone), and by the host's gcc
+for the JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`,
+plain JVM, holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates
+finite and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
 (`tests/conformance/vectors/autochords/soxr.jsonl`, made on x86_64 by libsoxr's SIMD engine, cr32s) within 1e-6:
 
     nix develop ./android -c gradle -p android :autochords:test
@@ -934,16 +994,20 @@ What the APK carries of it is checked by a script, after `gradle -p android :app
 
     nix develop ./android -c android/scripts/native-check.sh
 
-`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release holds no
-`libcaracole_*` today, which passes, saying so), and fails with it: run it after any change to the native code or the
-packaging. It checks each ABI's `libcaracole_soxr.so` is stored uncompressed and 16 KB aligned, stripped (no `.debug_*`,
-`.symtab`, `.comment` or build-id), and names no path of the build (`/home/`, `/nix/store/`, `.cxx/`, `/tmp/`), and
-prints its SHA-256: two checkouts at different paths build the same bytes (the library carries no debug information,
-`-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's is hidden.
+`android/scripts/release-check.sh` runs it on the debug and the release APKs it builds (the release's
+`libcaracole_soxr.so` and `libqjs.so` arm64-v8a's alone, `--release`), and fails with it: run it after any change to
+the native code or the packaging. It checks each ABI's `libcaracole_soxr.so`, and `:youtube`'s `libqjs.so` (below), is
+packaged as the APK installs it (stored uncompressed and 16 KB aligned, or compressed in an APK that extracts its
+libraries at install, as every build does since Y5.1: release-check.sh asks both APKs' extracted, `--expect
+extracted`), its segments 16 KB
+aligned, stripped (no `.debug_*`, `.symtab`, `.comment` or build-id), and names no path of the build (`/home/`,
+`/nix/store/`, `.cxx/`, `/tmp/`), and prints its SHA-256: two checkouts at different paths build the same bytes (the
+library carries no debug information, `-g0`, its folders mapped away, `-ffile-prefix-map`). Every symbol but the JNI's
+is hidden.
 
 ## Chords from audio: the hearing
 
-The phone hears a song in a process of its own, `:ml` (`MlService`, debug builds alone), so the models' memory, a
+The phone hears a song in a process of its own, `:ml` (`MlService`, in both builds), so the models' memory, a
 crash or Android's low-memory killer never touch the app's server: `MlChordModels.hear(audio, onStep, waiting)` sends
 the service the file's path and waits, saying run.py's steps ("setting up the models", "hearing the chords", "finding
 the beats", and "waiting for the phone to cool"). The service's `Pipeline` decodes, mixes down and resamples to 22,050
@@ -1161,10 +1225,235 @@ songs (B1) button runs it.
    WCSR and F against each threshold, `failures`, `pass`, the samples and frames each model read beside the
    computer's, `frames_differ` and where, `seconds`, `rtf`, `stages_seconds`, `ml_peak_mb`); `over_all` (`pass`,
    each score's least and its mean by length, `rtf_max`, `ml_peak_mb_max`); `unmatched`; and `pass`.
+## YouTube on the phone: the engine
 
-## YouTube's gate (not in the app yet)
+A song's audio from YouTube on the phone runs yt-dlp itself, in Python, inside the app: `:youtube`, Chaquopy's Python
+3.13 with yt-dlp and yt-dlp-ejs, linked into both builds (stage Y5.1), the release's for arm64-v8a alone: an x86_64
+phone of the release gets no yt-dlp (`PhoneYouTube`, `BuildConfig.YOUTUBE_ABIS`) and says "this phone's caracole has
+no yt-dlp".
 
-A song's audio from YouTube, on the phone, will come from yt-dlp run inside the app, reaching the network only through a
+Every piece is pinned in `youtube/pins.json`: Chaquopy's version (its Gradle plugin and its Python runtime, from Maven
+Central), the Python minor version, the two pure wheels by URL and SHA-256, and QuickJS-NG's source for the JavaScript
+challenges, by its tag's commit and the NAR hash of its tree (`fetchFromGitHub`'s; never GitHub's generated archive,
+whose bytes have changed before). `flake.nix` reads it: it fetches the wheels into one folder, `CARACOLE_YTDLP_WHEELS`,
+QuickJS-NG's tree into `CARACOLE_QUICKJS_SRC`, and puts `python3.13`, Chaquopy's `buildPython`, on PATH. pip installs
+the two wheels from that folder alone, `--no-index --no-deps`: none of `yt-dlp[default]`'s native packages, no FFmpeg.
+A build of `:youtube` without any of them fails, naming it (its `checkEngine` task); the other modules build without
+them. The flake reads only
+files git tracks: `git add` a changed `pins.json` before building. To move yt-dlp, run `bump-ytdlp.sh` ("A release
+when YouTube changes"): it changes its pin and the yt-dlp-ejs version its wheel's `METADATA` requires (`PinsTest`
+checks both).
+
+`caracole_ytdlp.py` is the glue: `version()` says the Python, yt-dlp and yt-dlp-ejs it runs, and `run(argv, out, err)`
+is one yt-dlp run, `yt_dlp.main` with `sys.stdout` and `sys.stderr` line-buffered into two files and its exit status
+returned, never raised: anything that goes wrong under it is its traceback in the err file and status 1, as the
+computer's yt-dlp process says it (`GlueTest` runs it with the shell's python3.13). One run a process: yt-dlp keeps
+module state. Its own code ships as source, the wheels and the standard library compiled. Chaquopy already leaves out
+the standard library's `tkinter`, `idlelib`, `test`, `ensurepip` and `pydoc_data` (3.13 has no `lib2to3`), and has no
+setting to leave out more. On the emulator alone, with no network:
+
+    android/scripts/device-test.sh --youtube
+
+runs `YtDlpVersionTest` and `QjsTest` from `:youtube`'s own test APK (under `YoutubeTestRunner`,
+`caracole.network=loopback`): Python starts, `version()` is `pins.json`'s, yt-dlp's own `--version` prints the pinned
+one, and none of those modules is there; qjs is executable in the native library folder, says the pinned version and
+runs a script, and yt-dlp, told of it alone (`--no-js-runtimes --js-runtimes quickjs:<path>`), names it among its
+runtimes (its `-v` with no URL: the header, then its usage error, no request). `release-check.sh` checks the release
+holds no `libpython*`, `libchaquopy_java.so`, `lib*_python.so` or `lib*_chaquopy.so`, no class under `com/chaquo/` and
+nothing under `assets/chaquopy/`, with the debug build as the control. No route runs it yet.
+
+Each yt-dlp run is a process of its own, `:youtube` (`YtDlpService`), as the computer runs a fresh `yt-dlp`:
+`YtDlpClient` binds it, sends the argv, the main process's mode (`caracole.network`, as `LOOPBACK` or `NETWORK`; a
+client of another process is given its gate's: that process has no test runner to set it, and refuses any other
+value) and the run's own two folders (its cache and a download's, which the service checks are in the app's storage
+with no link), follows yt-dlp's stderr line by line, and once it is answered the service kills its process; one
+request a process, none run once its client let go, and one run at a time across the app's processes (a file lock, a
+client that can't take it starting and killing nothing: "another run is going"). The environment is built from nothing (`Env`: `HOME` and `TMPDIR` of the app's own, `LANG`, `PATH`, no proxy
+variable). The service runs an argv only as one of the phone's own templates (youtube.json's `phone_argv`) reads to
+yt-dlp's own option parser: each option a template sets with its value, or a value its placeholder's check passes
+(the gate's `--proxy` shape, the app's qjs, the run's own folders, a search of the phone's 8 results or a video on the network and
+a 127.0.0.1 or 10.0.2.2 address under `LOOPBACK`), every other at its default; under `LOOPBACK` the tests' own forms
+too (`--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). So a test can't reach a real host through
+it, and no argv runs a command, loads a plugin, reads cookies or writes outside the app. A timeout, a cancel or a close
+kills the `:youtube` process (found by its name when its pid hasn't come yet), and Android kills what it started with
+it (qjs among them: measured, nothing of the app's uid left 2 s after); one killed from outside is "yt-dlp stopped (the
+phone may have run out of memory)". `GateService`, in the main process, gives another process of the app a gate there.
+
+Two cautions for what builds on it. Never kill a process group: every process of the app's uid, the main one
+included, shares one (zygote's). And yt-dlp's `-v` prints its proxy map, the gate's secret in it: `YtDlpClient` redacts
+any gate-shaped address (however the argv spelled its `--proxy`: yt-dlp takes `--prox` too) from every line and the
+output it gives back, but a bench or a debug run that adds `-v` must keep those `[debug]` lines out of every log,
+report and screen but through it.
+
+`YtDlpServiceTest`, `KillTest`, `GateServiceTest` and `AcrossProcessesTest` (`device-test.sh --youtube`) download a 6 s clip of the tests' own (made from
+`tests/helpers/synth_music.py`, CC0) from a server of the test's on 127.0.0.1, by plain HTTP and by HTTPS, through the
+gate: on the x86_64 emulator the process starts about 0.1 s after the bind, Python is ready with yt-dlp imported at
+0.6–0.8 s, a `--version` run takes 0.7–0.8 s whole, and the clip's download 4.6–5.7 s (yt-dlp's own pause before a
+download, 2.5–5 s, among it).
+
+yt-dlp solves YouTube's player challenges in JavaScript, with QuickJS-NG's `qjs` (v0.18.0, MIT): no prebuilt Android
+binary exists, so `youtube/native/CMakeLists.txt` builds it by the NDK for both ABIs (upstream's `qjs` command: the
+engine, its libc and `qjs.c`, with the REPL's and standalone's bytecode upstream commits in `gen/`, so no host `qjsc`
+step), with libsoxr's reproducibility flags and 16 KB pages, as a position-independent executable named `libqjs.so`.
+Android runs no program an app writes, only one from its native library folder, where the package manager extracts the
+APK's `lib*.so` when the build asks for it: `useLegacyPackaging`, every build's (`app/build.gradle.kts`, and
+`:youtube`'s test APK). That applies to every native library, not qjs alone: ONNX Runtime's, SQLite's, Python's and
+libsoxr are then compressed in the APK and extracted again at install, which costs the compressed copies, 21.0 MB on
+arm64 (24.7 MB on x86_64). The two-ABI debug APK goes from 140.0 to 74.8 MB and installs smaller (126.0 MB on arm64,
+134.8 MB on the x86_64 emulator, from 140.0), `libqjs.so` 1.2 MB of it an ABI. `Qjs.path(context)` is where it is;
+yt-dlp runs it with `--script FILE` for each challenge and `--help` to read its version, each with its output piped
+back, never onto the app's own descriptors. `release-check.sh` checks the release holds `lib/arm64-v8a/libqjs.so` and
+no x86_64 one, and extracts its native libraries at install. QuickJS-NG's `LICENSE` (MIT, Fabrice Bellard, Charlie
+Gordon, Ben Noordhuis, Saúl Ibarra Corretgé), which its `libregexp`, `libunicode` and `dtoa` sources repeat, is
+`assets/licenses/youtube/quickjs-ng-LICENSE`.
+
+It costs the debug APK 45.0 MB, both ABIs (26.3 MB of an arm64-only APK): Python's native libraries 12.3 MB an ABI, the
+standard library and Chaquopy's bootstrap, the CA bundle and yt-dlp 10.8 MB for both. The licences of what ships with
+it are the APK's assets `licenses/youtube/` (the design's §3.6; `youtube/licenses/README` says which is whose): CPython
+3.13.16's LICENSE and Doc/license.rst (PSF-2.0, with what it incorporates), Chaquopy's (MIT), OpenSSL 3.5.9's
+(Apache-2.0), libffi 3.4.4's, bzip2 1.0.8's and xz 5.4.6's, each that project's text at the version Chaquopy's Python
+is built with (CPython's `Android/android.py`; SQLite is public domain, zlib Android's own), certifi's (MPL-2.0, its CA
+bundle's), all kept in `youtube/licenses/`; and, copied at build time from the pinned wheels and source (`:youtube`'s
+`copyLicences`), yt-dlp's and yt-dlp-ejs's (Unlicense), the notice yt-dlp-ejs's `lib.min.js` begins with (its bundled
+meriyah, ISC, and astring, MIT) and QuickJS-NG's. Setuptools' (MIT) and pyelftools' (public domain) are in Chaquopy's
+bootstrap beside their code. The app's `NoticesTest` holds each to its source, and (`gradle :app:apkScan`,
+release-check.sh's) both APKs to that folder.
+
+## A sheet from a YouTube video
+
+Paste a video into the library page's request form (its YouTube field), or into a song card's From a YouTube video
+and press Make sheet, or share a YouTube link to the app and press Make its sheet from this video: the phone takes the
+video's audio with its yt-dlp, asks the lyrics sites for the words, hears the chords with its own models and keeps the
+sheet, then lets the audio go. Nothing downloads before you press the button. A video pasted into the search box shows
+its title and thumbnail first: one yt-dlp run of its metadata, one request for the picture. It works on Wi-Fi or
+mobile data, on YouTube's terms as the computer keeps them (AGENTS.md, "The one exception is YouTube"): within
+YouTube's budget of 50 runs, one run at a time, a pause between two, a block honoured with no retry, audio alone.
+
+Settings' **YouTube audio** row says where it stands: "On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours", "Off
+(the computer's settings)", "Needs the chord models", "Cooling down until …" or "Out of date: …" (`YouTubeRow`); a
+build without yt-dlp has no row. When it says out of date, see [A release when YouTube
+changes](#a-release-when-youtube-changes).
+
+`YouTubeEndToEndTest` runs it whole on the emulator, with the real models and a yt-dlp of the test's own
+(`Caracole.youtubeForTests`: its one download the committed clip, `tests/fixtures/autochords/hearing.m4a`, nothing
+sent to YouTube) and LRCLIB the fake sites':
+
+    android/scripts/device-test.sh --models --sites chords YouTubeEndToEndTest
+
+It asserts Ready, "chords over the lyrics", requests to LRCLIB and the test's yt-dlp alone, the audio gone after Ready,
+and the Settings row's line.
+
+## The YouTube bench (debug build)
+
+Gate Y0 asks whether yt-dlp works on your phone: whether YouTube answers it, how long the player's challenge takes on
+QuickJS, how much memory and how many bytes a song costs, which hosts it asks. The debug build has a screen that
+measures it, run by hand, a few songs at a time. No test runs on your phone, and no test reaches YouTube: on the
+emulator the bench reaches a loopback clip alone (`YouTubeBenchTest`, `device-test.sh --youtube`).
+
+It keeps the owner's terms by itself, on the phone's own records. Every run of the phone's counted (kv `ytbench:runs`
+and the `events` rows of provider `youtube` of the last 24 hours, the larger): each run reserves its slot in the main
+process before its gate opens, so it counts whatever ends it, and only a run that never started gives its slot back; a
+clock set back only counts more runs, never fewer. Its cap, YouTube's budget (50 runs in any 24 hours since
+2026-11-27, 6 before), is lifted while the feature is
+developed, the owner's word of 2026-11-27 ("ignore the run limits while developing this feature. as connection is
+patchy"): no count refuses a session, the screen says the count and that there is no daily limit, and the report's
+`budget` says `lifted`; `DbLedger.DAY_CAP_LIFTED = false` puts it back (a session that would pass the cap then refused,
+saying how many runs are left). The computer's pause between runs (3.75–7.5 s, and after the phone's last run, kv
+`http:last_request:youtube`). One run at a time (the client's lock, across the app's processes) and one session at a
+time. A block honoured: recorded as the runner records one, the session stops, and none starts until the cooldown
+ends. YouTube turned off, no session. Each song is a search (`ytsearch8:`), the computer's `choose`, and a download,
+or a download alone for a video id; yt-dlp's cache is emptied as a session starts, so the first download solves the
+player cold and the others warm, and each download is deleted once measured. Runs add `-v` (the service's leave for
+the bench under the network): what the screen and the report keep came back from the client, the gate's secret taken
+out, and no `[debug]` line.
+
+The screen (`YouTubeBenchActivity`) runs in a process of its own, `:ytbench`, which never starts Python: its runs are
+`:youtube`'s, its gates and its record of runs the main process's (`GateService`, `YouTubeBenchLedger`). On your phone
+a session starts by a tap alone. Start enforces YouTube's hosts; Start, observing every host logs every host the run
+asks but reaches no address that isn't public (`jnn-pa.googleapis.com` still refused), and is that button's alone. The
+kill check runs at the end of every session, on your phone too, and never leaves it: a trickled download from a small
+server inside the bench, through a gate that can reach 127.0.0.1 alone, stopped 2 s in, then no `:youtube` or qjs
+process may be left and the next run must work. It spends none of the day's runs.
+
+What three songs can't show: a success rate, how the timings spread across player versions, and what YouTube does
+after days of a phone asking. `after_block_requests` is 0 by construction (a session stops at a block): it says the
+bench sent nothing after one, not how YouTube treats the phone afterwards.
+
+1. **Install the debug build**: `android/scripts/phone-install.sh` (above), and leave the app otherwise idle (no sync,
+   no library page open: the report's `idle` says whether it was).
+2. **Open the bench**: Debug caracole › Settings › YouTube bench. It says how many runs the last 24 hours held (no
+   daily limit while the feature is developed).
+3. **Type or paste up to three songs**, a line each: "Artist - Title", the artist first (AC/DC's slash is fine;
+   quotes around a line are taken off), or a YouTube video id. Three songs are six runs. A search no video fits says
+   the artist and the title it looked for, and the bench asks nothing more for that song. A session lost to the
+   network (an error, no block) may be run again the same day: the cap is lifted; a block still ends the day's
+   sessions until its cooldown ends.
+4. **Tap Start** on mobile data (enforce), or **Start, observing every host** on Wi-Fi. Keep the screen open until it
+   says `report:`; a session started again while one runs is refused.
+5. **Bring the report back**: `caracole-ytbench-<UTC>.json` (§4.3 of the design: the device and the app, the pins as
+   the running code reports them, the network's kind, `idle`, the day's runs before and after, each run's timings,
+   challenge, sleeps and pause, clients, outcome, ERROR and WARNING lines, hosts and bytes, PSS, and a download's file
+   and what MediaCodec decoded of it; the kill check; `summary`, each gate's numbers). The folder's files, into a
+   folder outside the repository (nothing recorded of YouTube is committed). `…/ytbench/.` pulls its files, so a
+   second day's pull into the same folder doesn't nest, and each report, kept on the phone, lands there once:
+
+       mkdir -p ~/ytbench
+       adb -s SERIAL pull /sdcard/Android/data/io.github.danielhp95.caracole.debug/files/ytbench/. ~/ytbench/
+
+   It names your songs as typed, nothing else of yours.
+
+### The sessions of Gate Y0
+
+Sessions by hand, as many as you like, only when you say so: no one else starts one, and none starts by adb. What the
+gate needs now (the controller's ruling of 2026-11-27, after the owner chose several short sessions a day):
+
+- **On mobile data, Start** (enforce): at least three songs downloaded over any sessions, and at least one warm
+  download, the second song's of a session: so run **two or three songs in one session**.
+- An observed session (**Start, observing every host**, Wi-Fi alone) is wanted, not needed: an enforcing gate logs
+  every host asked and every refusal. Enforcing on Wi-Fi is fine too. Two days aren't needed either: the days are
+  reported, and what one day can't show is what YouTube does after days of a phone asking.
+- A session the network lost (every run an error of a timeout's or a transport's, no block) counts for nothing: run it
+  again. So does a song the network failed inside a session; the checker lists it by session and song, with its
+  reason.
+- A block, or a song failing for another reason, holds the gate until a later session, on a later day after any
+  cooldown, on mobile data with Start, downloads its songs with no block and none failing: that clears it (the checker
+  names it as cleared), and the three songs and the warm download are counted from the sessions after it. Blocked or
+  failing on Wi-Fi on two days with no clean day after is §3.8's trigger, if the computer's yt-dlp worked on the same
+  Wi-Fi the same hour (no report says: check it).
+- The warm download must be one on mobile data with Start; each cold and warm limit is still checked wherever it was
+  measured.
+- Every run counted, any session's, and the optional Termux smoke test's (Y0.0, the design's §4.0) too, which the bench
+  can't see. No daily cap while the feature is developed (the owner's word of 2026-11-27, above); a report written
+  before it, which says no `lifted`, is still held to the cap it kept (its budget's `of`: six) in any 24 hours.
+- Each session by a tap on Start, the app otherwise idle (no sync, no library page open).
+
+Then pull the reports (step 5, the same folder) and, from the repository's root, give the checker all of them:
+
+    nix develop -c python -m tests.helpers.ytbench_gate [--apk-growth-mb N] ~/ytbench/caracole-ytbench-*.json
+
+It says the sessions and days given, each row of §4.4 (Y0-W works … Y0-C start; a run's error said with its reason, a
+session lost to the network apart from a block) and the owner's terms (the cap a report kept, its `of`, in any 24
+hours by the runs' own stamps for a report without `lifted`, the busiest 24 hours said where the cap was lifted,
+nothing after a block, no
+session observing every host but on Wi-Fi, a kill check that spent none, no host outside YouTube's reached, no proxy
+secret in a report): PASS, FAIL or UNDECIDED, the numbers and what is missing or what to run next, then how often an
+observed session asked `youtubei.googleapis.com` (the controller decides it), then the whole verdict. It exits 0 only
+when every gate passed, 1 for a fail, 2 for undecided or a report that won't read. Y0-S is no report's:
+`--apk-growth-mb` gives the release-equivalent arm64 APK's growth.
+
+A run's `uid_bytes` are TrafficStats' bytes of the app's uid, loopback too (the report's `uid_counts`): yt-dlp's bytes
+to the gate on 127.0.0.1 are counted sent and received, and the gate's on the network once, so a run counts about 3.1
+times the gate's bytes (the phone's numbers; `YouTubeBenchTest` measures a loopback byte counted twice). Y0-H holds
+them to three legs of the gate's bytes, 8 % more for headers and retransmits, and 64 KB a run: a bypass of the gate
+would show as bytes the gate never saw, unless it stayed under about a sixth of the gate's bytes and 64 KB a run. The
+bytes are judged over the idle sessions alone (at least one on mobile data with Start holding a download); a session
+not idle is set aside from them, named, and counts everywhere else.
+
+Three songs show no rate: what they can't decide is UNDECIDED, and the answer is more songs and, in time, more days.
+
+## YouTube's gate
+
+A song's audio from YouTube, on the phone, comes from yt-dlp run inside the app, reaching the network only through a
 proxy of the app's own, `core.youtube.HostGate`: on 127.0.0.1 at a port of its own, with a user and a secret made for
 each run (its `--proxy`). It tunnels a CONNECT on port 443 to `youtube.com`, `www.`, `m.`, `music.` and
 `consent.youtube.com` and any `*.googlevideo.com`, and to nothing else: any other host gets 403, and

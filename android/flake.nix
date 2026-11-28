@@ -51,6 +51,20 @@
       # `.#chord-models`), which :ml's ModelParityTest runs on the emulator (scripts/device-test.sh --ml): in the ml
       # shell alone, so the other shells never build them (torch exports them).
       chordModels = pkgs.callPackage ../nix/autochords-onnx.nix { };
+      # yt-dlp and yt-dlp-ejs, the two pure wheels of youtube/pins.json (the one place they are pinned), each fetched
+      # by its URL and SHA-256 (fixed-output) into one folder, CARACOLE_YTDLP_WHEELS, from which :youtube's pip
+      # installs them, `--no-index --no-deps` (youtube/build.gradle.kts).
+      pins = builtins.fromJSON (builtins.readFile ./youtube/pins.json);
+      ytdlpAndroid = pkgs.linkFarm "caracole-ytdlp-wheels" (map (pin: {
+        name = baseNameOf pin.url;
+        path = pkgs.fetchurl { inherit (pin) url sha256; };
+      }) [ pins.ytdlp pins.ejs ]);
+      # QuickJS-NG, yt-dlp's JavaScript runtime on the phone, pins.json's tag by its commit and the NAR hash of its tree
+      # (never GitHub's generated archive's bytes): CARACOLE_QUICKJS_SRC, which youtube/native/CMakeLists.txt builds by
+      # the NDK into `libqjs.so`.
+      quickjsSrc = pkgs.fetchFromGitHub { inherit (pins.quickjs) owner repo rev hash; };
+      # Chaquopy's buildPython (:youtube's pyc and pip) must be the app's Python's minor version, pins.json's.
+      python = pkgs."python${lib.replaceStrings [ "." ] [ "" ] pins.python}";
       # ONNX Runtime 1.27.1 built from its source for arm64-v8a and x86_64 (../nix/onnxruntime-android.nix), an AAR in
       # a Maven folder of its own, which settings.gradle.kts reads as $CARACOLE_ONNXRUNTIME for :ml in Maven Central's
       # place: in the ml shell alone, so the other shells build and test everything but :ml with no ONNX Runtime. Built
@@ -74,9 +88,11 @@
           # hostSoxr task); qemu's user-mode emulators run the NDK's static arm64 build of it there
           # (SoxrArm64Test), so the phone's engine is measured on this machine, never on a phone.
           # unzip, for the scripts that read an APK (scripts/native-check.sh, release-check.sh).
-          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user pkgs.unzip ];
+          packages = [ jdk gradle sdk pkgs.cmake pkgs.gcc pkgs.qemu-user python pkgs.unzip ];
           JAVA_HOME = jdk.home;
           CARACOLE_ALPHATAB_DIR = "${alphatab}";
+          CARACOLE_YTDLP_WHEELS = "${ytdlpAndroid}";
+          CARACOLE_QUICKJS_SRC = "${quickjsSrc}";
           CARACOLE_BTC_WEIGHTS = "${autochordsFiles.btcWeights}";
           ANDROID_HOME = home;
           ANDROID_SDK_ROOT = home;

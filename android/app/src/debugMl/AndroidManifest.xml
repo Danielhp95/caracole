@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The debug build's alone (src/debug), never the release's: the Chords bench (the chords-on-the-phone design's §9.1),
-     which the owner opens from Settings' Chords bench row (shown in debug builds alone) and runs by hand. It is no
-     launcher entry and changes no other screen. Its screen and its service run in a process of their own, ":bench",
-     and each of its sessions in a fresh ":benchrun", so that what a session measures of memory is the models' and
-     its own, never the phone's server or WebView or another session's; nothing else starts there (the app has no
-     Application class: the phone's caracole starts at its first caller). -->
+<!-- The debug build's alone where :ml is (src/debugMl, merged over src/debug's), never the release's: the Chords bench
+     (the chords-on-the-phone design's §9.1), which the owner opens from Settings' Chords bench row (shown in debug
+     builds alone) and runs by hand. It is no launcher entry and changes no other screen. Its screen and its service
+     run in a process of their own, ":bench", and each of its sessions in a fresh ":benchrun", so that what a session
+     measures of memory is the models' and its own, never the phone's server or WebView or another session's; nothing
+     else starts there (the app has no Application class: the phone's caracole starts at its first caller). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- The bench's runs go on with the screen off in a foreground service, which Android 14 types: a special use,

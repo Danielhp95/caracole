@@ -12,6 +12,8 @@ import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
+import io.github.danielhp95.caracole.core.youtube.YtDlpProcess
 import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.mirror.Http
 import io.github.danielhp95.caracole.mirror.Mirror
@@ -42,6 +44,10 @@ import java.util.Locale
  * for ever, as http.py keeps them: under the files folder, never Android's cacheDir, which the system may clear), and
  * the mirror's `blobs/` and `manifest.json`. A lookup reaches the sites through [transport], [RealTransport] in the
  * app, read on every request.
+ *
+ * All of it is the main process's, the app's yt-dlp's gates ([youtube]) among it. The debug build's `:youtube`
+ * process (:youtube's YtDlpService, one yt-dlp run a process) starts none of it: the app has no Application class, its providers are the main process's, and that service
+ * touches nothing here, so no database, server or queue opens there.
  */
 object Caracole {
     /**
@@ -91,6 +97,11 @@ object Caracole {
     /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none: the
      * app's own (PhoneExaminer: `:autochords`' lengths and Android's tags in a build with `:ml`, none without). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
+
+    /** A device test's yt-dlp (YouTubeEndToEndTest's ClipYtDlp, whose one download is the committed clip), read
+     * each time a job takes the engine's process: in place of `:youtube`'s, the app's own gate, readiness and folder
+     * kept; null, `:youtube`'s own. A release has no engine to put it in. */
+    @Volatile var youtubeForTests: YtDlpProcess? = null
 
     /** Where the catalogues' job lists the release: GitHub's API, or [cataloguesForTests]. */
     private fun catalogues(http: Http): CatalogueSource =
@@ -163,6 +174,7 @@ object Caracole {
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
+                youtube = youtube(context)?.let(::withTestsProcess),
                 // `:ml`'s chord models (src/ml's PhoneChords, both builds of the ml shell; src/noMl's none); the models'
                 // source this build's pins (ModelFiles.carried, `:ml`'s), asked of GitHub, or a test's.
                 chords = PhoneChords.of(context, state),
@@ -182,6 +194,10 @@ object Caracole {
             this.working = working
             // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
             phone.start()
+            // The automatic YouTube pass (YouTubeWorker): soon after a lookup left its song with no sheet, and daily on
+            // a phone with no computer.
+            phone.onNoSheet = { guarded("asking YouTube's pass for soon") { YouTubeWorker.soon(context, phone) } }
+            guarded("scheduling YouTube's daily pass") { YouTubeWorker.schedule(context, phone) }
             // A hearing's checkpoints a killed app left a day ago; a failure logged, the start going on.
             guarded("sweeping the chord models' old checkpoints") { PhoneChords.sweep(context, state) }
             return phone
@@ -217,6 +233,21 @@ object Caracole {
     }
 
     fun cacheDir(context: Context): File = File(context.applicationContext.filesDir, "state/cache")
+
+    /**
+     * The app's yt-dlp for the phone's jobs: `:youtube`'s ([PhoneYouTube], both builds), its runner's folder
+     * `files/state/cache/youtube`; null on a phone whose processor the APK carries no Python for (an x86_64 phone of the
+     * release, which carries arm64-v8a's alone).
+     */
+    internal fun youtube(context: Context): YouTubeEngine? =
+        PhoneYouTube.engine(context.applicationContext, File(cacheDir(context), YOUTUBE), Build.SUPPORTED_ABIS.toList())
+
+    /** [real], its process [youtubeForTests]'s while a test sets one. */
+    private fun withTestsProcess(real: YouTubeEngine): YouTubeEngine = object : YouTubeEngine by real {
+        override fun process(): YtDlpProcess = youtubeForTests ?: real.process()
+    }
+
+    private const val YOUTUBE = "youtube"
 
     /**
      * Whether [path] of the library ("Estopa/Tu calorro/sheet.pdf") is a file another app opens rather than a page the

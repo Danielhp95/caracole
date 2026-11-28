@@ -2730,6 +2730,36 @@ def test_words_heard_from_a_mix_read_short_are_dropped_and_offered_again_but_the
     assert stats.remeasured == ["Ana - Luna", "Ana - Mar"]  # no sheet yet: their words were all there was to redo
 
 
+def test_a_sheet_another_caracole_made_is_never_said_made_again_but_its_line_is_still_corrected(
+        conn, cfg, tmp_path, caplog):
+    # Both MP3s' lengths were guessed wrong, and both songs keep an auto sheet another caracole made (R3): no pass
+    # here makes it again by itself, so the remeasure neither claims it nor lists a song for it alone.
+    from caracole.autochords.remeasure import KEY
+
+    luna = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Luna", duration_ms=2_000), "short-guess.mp3")
+    mar = with_fixture(conn, tmp_path, add_song(conn, "Ana", "Mar", duration_ms=None), "long-guess.mp3")
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Ana - Luna | 0:02\nAna - Mar\n", encoding="utf-8")
+    run(conn, cfg, now=datetime(2026, 11, 1, tzinfo=UTC))  # the sheets as a caracole made them before
+    for song in (luna, mar):  # as a sync's take leaves them: made by another caracole
+        conn.execute("UPDATE versions SET raw = json_set(raw, '$.made_by', 'theirs') WHERE song_id = ?", (song.id,))
+
+    recognizer = FakeRecognizer()
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.remeasure"):
+        stats = run(conn, cfg, recognizer, now=datetime(2026, 11, 26, tzinfo=UTC), remeasure=True)
+
+    said = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert not any("auto sheet is made again" in m for m in said)
+    assert any(m.startswith("Ana - Luna: its MP3 is 0:10 long, not the 0:02") and m.endswith(
+        ": its line in wanted.txt corrected.") for m in said)
+    assert not any(m.startswith("Ana - Mar:") for m in said)  # nothing else was to do for it
+    assert stats.remeasured == ["Ana - Luna"] and kv_get_json(conn, STATUS)["remeasured"] == ["Ana - Luna"]
+    assert recognizer.calls == []  # neither sheet made here
+    assert all(get_song(conn, s.id).autochords_mtime == s.audio_mtime for s in (luna, mar))
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "Ana - Luna | 0:10\nAna - Mar\n"
+    assert kv_get(conn, KEY) == "2026-11-26T00:00:00Z"
+
+
 def test_a_staged_job_about_one_song_never_remeasures_the_others(conn, cfg, tmp_path):
     from caracole.autochords.remeasure import KEY
 

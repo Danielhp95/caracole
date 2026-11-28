@@ -4,9 +4,21 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.http.HttpAnswer
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.http.TransportError
+import io.github.danielhp95.caracole.core.library.Kept
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
+import io.github.danielhp95.caracole.core.models.From
+import io.github.danielhp95.caracole.core.models.ModelFiles
+import io.github.danielhp95.caracole.core.models.ModelsSource
+import io.github.danielhp95.caracole.core.models.Pin
+import io.github.danielhp95.caracole.core.models.Pins
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
+import io.github.danielhp95.caracole.viewer.autochords.ChordModels
+import io.github.danielhp95.caracole.viewer.autochords.Heard
+import kotlinx.serialization.json.JsonObject
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.http.MessagePage
@@ -52,7 +64,7 @@ class ShareRoutesTest {
 
     /** The phone over [fixture] (none: an empty database), every request to a site counted, and refused but those
      * [sites] answers ("GET url" to its answer). */
-    private fun phone(fixture: String? = "ug", sites: Map<String, HttpAnswer> = emptyMap()): Phone {
+    private fun phone(fixture: String? = "ug", sites: Map<String, HttpAnswer> = emptyMap(), youtube: Boolean = false): Phone {
         val database = TestDb.fresh(tmp.newFolder())
         if (fixture != null) database.writeBlocking { Fixtures.load(it, "search/fixtures/$fixture.jsonl") }
         val counting = Transport { request ->
@@ -60,8 +72,34 @@ class ShareRoutesTest {
             sites["${request.method} ${request.url}"]
                 ?: throw TransportError("refused", "no site in a test: ${request.url}")
         }
-        return Phone(PhoneDeps(database, tmp.newFolder(), tmp.newFolder(), null, scope, NoAddress, TestApp.SECRET,
-                               TestApp.CSRF, transport = { counting }, searchesLacuerda = false)).also { phone = it }
+        val state = tmp.newFolder()
+        val deps = PhoneDeps(database, tmp.newFolder(), state, null, scope, NoAddress, TestApp.SECRET, TestApp.CSRF,
+                             transport = { counting }, searchesLacuerda = false)
+        return Phone(if (youtube) ready(deps, state) else deps).also { phone = it }
+    }
+
+    /** [deps] of a phone that makes a sheet from a video (Phone.youtubeProblem null): a yt-dlp that runs nothing
+     * here, chords whose models are installed (a folder of this test's pins, its manifest as a download writes it). */
+    private fun ready(deps: PhoneDeps, state: java.io.File): PhoneDeps {
+        val data = ByteArray(3) { it.toByte() }
+        val pins = Pins(1, "models", listOf(Pin("model.onnx", data.size.toLong(), "0".repeat(64), From.App)))
+        val folder = pins.folder(state).apply { mkdirs() }
+        val file = java.io.File(folder, "model.onnx").apply { writeBytes(data) }
+        java.io.File(folder, ModelFiles.MANIFEST).writeText(
+            """{"contract": 1, "files": [{"name": "model.onnx", "bytes": 3, "sha256": "${"0".repeat(64)}", """ +
+                """"modified": ${file.lastModified()}}]}""" + "\n")
+        val engine = object : YouTubeEngine {
+            override fun ready(): String? = null
+            override fun process() = error("no yt-dlp run in a test")
+            override fun gate() = error("no gate in a test")
+            override val qjs = java.io.File("/qjs")
+            override val cacheDir = java.io.File(state, "cache/youtube")
+        }
+        val chords = object : ChordModels {
+            override fun ready(): String? = null
+            override fun hear(audio: java.io.File, onStep: (String) -> Unit, waiting: () -> Unit): Heard = error("not heard")
+        }
+        return deps.copy(youtube = engine, chords = chords, models = ModelsSource(pins = { pins }))
     }
 
     @After fun down() {
@@ -327,6 +365,145 @@ class ShareRoutesTest {
         assertFalse("<script>" in html, "escaped")
         assertTrue("<li>Text: <code>&lt;script&gt;alert(1)&lt;/script&gt; - &quot;x&quot;</code></li>" in html, shown(html))
         assertTrue("<li>Subject: <code>a &amp; b</code></li>" in html, shown(html))
+    }
+
+    // --- a YouTube video shared: Make its sheet from this video (the phone-youtube design's §5.2) ---------------------
+
+    private val queenVideo = "https://www.youtube.com/watch?v=fJ9rUzIMcZQ"
+    private val queenOembed = "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DfJ9rUzIMcZQ&format=json"
+    private val queen = mapOf("GET $queenOembed" to HttpAnswer(200, emptyList(), Corpus.fixture("youtube/oembed.json")))
+    private val eaglesVideo = "https://www.youtube.com/watch?v=EaglesLive1"
+    private val eaglesOembed = "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DEaglesLive1&format=json"
+    private val eagles = mapOf("GET $eaglesOembed" to HttpAnswer(200, emptyList(),
+        """{"title": "Eagles - Hotel California", "author_name": "Eagles"}""".toByteArray()))
+    private val make = ">Make its sheet from this video</button>"
+
+    /** Each `<form>`'s action in the page's order, and where Make its sheet's button stands among them. */
+    private fun actions(html: String): List<String> =
+        Regex("""<form[^>]*action="([^"]*)"""").findAll(html).map { it.groupValues[1] }.toList()
+
+    @Test fun `a video shared whose song no site has a sheet of offers Make its sheet first, and it queues the sheet`() {
+        val phone = phone(sites = queen, youtube = true)
+        assertEquals(null, phone.youtubeProblem(), "this test's phone makes a sheet from a video")
+        val html = unescape(page(phone.get(share("text" to "https://youtu.be/fJ9rUzIMcZQ?si=Qx1",
+                                                  "from" to "com.google.android.youtube"))))
+        assertTrue("Read from the video's title on YouTube: <strong>Queen – Bohemian Rhapsody</strong>." in html, shown(html))
+        val made = forms(html, "/request")
+        assertEquals(listOf(listOf("csrf" to TestApp.CSRF, "artist" to "Queen", "title" to "Bohemian Rhapsody",
+                                   "youtube" to queenVideo)), made)
+        assertTrue("<button class=\"btn primary\" type=\"submit\" aria-label=\"Make the sheet of Bohemian Rhapsody by " +
+                       "Queen from this video\">Make its sheet from this video</button>" in html, shown(html))
+        assertEquals("/request", actions(html).first(), "first, before Fetch: no site has its sheet")
+        assertFalse(Regex("""class="btn primary"[^>]*aria-label="Fetch""").containsMatchIn(html), "Fetch comes second")
+        assertEquals(1, asked.get(), "oEmbed, the page's one request")
+
+        // Pressed, as the WebView posts it: the library page's own request, its sheet made from that video.
+        val answer = phone.post("/request", made.single())
+        assertEquals(303, answer.status, answer.text)
+        val location = assertNotNull(answer.header("Location"))
+        assertTrue(location.startsWith("/#tab=requests&job="), location)
+        val job = assertNotNull(phone.queue.job(location.substringAfterLast('=').toInt()))
+        assertEquals(JobCommands.youtubeSheetSteps("Queen - Bohemian Rhapsody", queenVideo).map { it.args },
+                     job.steps.map { it.args })
+        assertEquals(1, asked.get(), "nothing downloaded or asked before the job runs")
+    }
+
+    @Test fun `a video of a song the sites have a sheet of offers Fetch first and Make its sheet second`() {
+        val phone = phone(sites = eagles, youtube = true)
+        val html = unescape(page(phone.get(share("text" to eaglesVideo))))
+        val best = html.substringAfter("Best match").substringBefore("</ul>")
+        assertTrue("UG: chords ×1" in best, best)
+        assertEquals(listOf("/lookup", "/request"), actions(html).filter { it in setOf("/lookup", "/request") }.take(2))
+        assertTrue("<button class=\"btn\" type=\"submit\" aria-label=\"Make the sheet of Hotel California by Eagles " +
+                       "from this video\">Make its sheet from this video</button>" in html, shown(html))
+        assertTrue(Regex("""class="btn primary"[^>]*aria-label="Fetch Eagles""").containsMatchIn(html), "Fetch first")
+        assertEquals(listOf("csrf" to TestApp.CSRF, "artist" to "Eagles", "title" to "Hotel California",
+                            "youtube" to eaglesVideo), forms(html, "/request").single())
+    }
+
+    @Test fun `where this phone makes no sheet from a video there is no button and one hint`() {
+        val phone = phone(sites = queen)
+        val html = unescape(page(phone.get(share("text" to "https://youtu.be/fJ9rUzIMcZQ"))))
+        assertFalse(make in html)
+        assertEquals(emptyList(), forms(html, "/request"))
+        val hint = "No sheets from YouTube here: ${phone.youtubeProblem()}."
+        assertEquals(1, html.split(hint).size - 1, shown(html))
+        // a link of no video's: nothing of YouTube said
+        val other = unescape(page(phone.get(share("text" to "Eagles - Hotel California"))))
+        assertFalse(make in other || "from YouTube" in other, shown(other))
+    }
+
+    @Test fun `a song with a human sheet has no button, its hint the route's words`() {
+        val phone = phone(sites = eagles, youtube = true)
+        phone.parts.database.writeBlocking { db ->
+            val song = phone.parts.store.add(db, "Eagles", "Hotel California", now = "2026-11-27T12:00:00Z")
+            val version = Versions.upsert(db, "ug", "1", song.id, "sheet", "chords", 4.5, 10, 1, null,
+                                          "https://tabs.ultimate-guitar.com/tab/1", JsonObject(emptyMap()), "2026-11-27T12:00:00Z")
+            Kept.keepFile(db, phone.parts.store, Songs.byId(db, song.id)!!, version, "sheet.txt", "[ch]C[/ch]\n".toByteArray(),
+                          1, "2026-11-27T12:00:00Z")
+        }
+        val html = unescape(page(phone.get(share("text" to eaglesVideo))))
+        assertFalse(make in html)
+        assertEquals(1, html.split("Eagles - Hotel California already has a sheet.").size - 1, shown(html))
+    }
+
+    /** The one hint of a ready phone where the song named isn't one a sheet from a video is for, in the route's words. */
+    @Test fun `an ignored song, one with audio of its own, YouTube cooling down and no names each say why in one hint`() {
+        val phone = phone(sites = eagles, youtube = true)
+        fun hint(target: String): String {
+            val html = unescape(page(phone.get(target)))
+            assertFalse(make in html, shown(html))
+            assertEquals(emptyList(), forms(html, "/request"))
+            return Regex("""<p class="message">([^<]*)</p>""").findAll(html).map { it.groupValues[1] }
+                .single { "Fetch looks up" !in it && "UG index" !in it }
+        }
+        val video = share("text" to eaglesVideo)
+        phone.parts.database.writeBlocking { db ->
+            phone.parts.store.add(db, "Eagles", "Hotel California", now = "2026-11-27T12:00:00Z")
+            io.github.danielhp95.caracole.core.library.OverrideWriters.addIgnore(db, "Eagles - Hotel California")
+        }
+        assertEquals("Eagles - Hotel California is ignored in overrides.toml.", hint(video))
+        phone.parts.database.writeBlocking { db ->
+            db.execute("DELETE FROM phone_overrides")
+            val song = Songs.byKey(db, "eagles/hotel-california")!!
+            Versions.updateSong(db, song.id, mapOf("audio_path" to "/music/Eagles/Hotel California.m4a"))
+        }
+        assertEquals("Eagles - Hotel California has its own audio (bought or given); auto-chords uses that.", hint(video))
+        // the names typed with no artist: Edit's to fill in
+        assertEquals(YouTubeRoutes.NO_NAMES, hint(share("artist" to "", "title" to "Hotel California", "youtube" to eaglesVideo)))
+        // YouTube cooling down after a block: the route not ready now, whatever the song
+        phone.parts.database.writeBlocking { db ->
+            io.github.danielhp95.caracole.core.health.Health.recordBlock(db, "youtube", java.time.Instant.now(), "blocked")
+        }
+        assertTrue(hint(video).startsWith("No sheets from YouTube here: YouTube refused caracole; asked again after "),
+                   hint(video))
+    }
+
+    /** A page another site sent, of a YouTube link the cache doesn't answer: Read the link, no button and no hint, and
+     * nothing asked (oEmbed waits for the owner's press, as any service's). */
+    @Test fun `a page another site sent of a video not read yet offers Read the link and no button`() {
+        val phone = phone(sites = queen, youtube = true)
+        val html = unescape(page(phone.getFrom("cross-site", share("text" to "https://youtu.be/fJ9rUzIMcZQ"))))
+        assertTrue(">Read the link</button>" in html, shown(html))
+        assertFalse(make in html)
+        assertFalse("No sheets from YouTube here" in html || YouTubeRoutes.NO_NAMES in html, shown(html))
+        assertEquals(emptyList(), forms(html, "/request"))
+        assertEquals(0, asked.get())
+    }
+
+    @Test fun `Edit keeps the video, so the names typed are the ones its sheet is made under, with no request`() {
+        val phone = phone(sites = queen, youtube = true)
+        val html = unescape(page(phone.get(share("text" to "https://youtu.be/fJ9rUzIMcZQ"))))
+        assertTrue("<input type=\"hidden\" name=\"youtube\" value=\"$queenVideo\">" in
+                       html.substringAfter("<summary class=\"btn\">Edit</summary>"), shown(html))
+        val typed = unescape(page(phone.get(share("artist" to "Queen", "title" to "Bohemian Rhapsody (Live Aid)",
+                                                  "youtube" to queenVideo))))
+        assertEquals(listOf(listOf("csrf" to TestApp.CSRF, "artist" to "Queen", "title" to "Bohemian Rhapsody (Live Aid)",
+                                   "youtube" to queenVideo)), forms(typed, "/request"))
+        // a `youtube` that names no video's is no video
+        val bad = unescape(page(phone.get(share("artist" to "Queen", "title" to "X", "youtube" to "https://evil.example/v"))))
+        assertEquals(emptyList(), forms(bad, "/request"))
+        assertEquals(1, asked.get(), "the share's oEmbed alone")
     }
 
     @Test fun `Cancel leads to the library page`() {

@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
@@ -19,6 +20,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.YouTubeRow
+import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.QueueFull
@@ -52,7 +55,10 @@ import java.time.Instant
  * (§6's question, then a metered network's, then ModelsRunner's job queued, its line followed) and Remove (its
  * question, then ModelsRunner.remove, its refusal said); in the debug build, the Chords bench after it. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
- * its start tried again as the screen comes back. The library screen's bar has the same sync button.
+ * its start tried again as the screen comes back. YouTube audio ([YouTubeRow], the phone-youtube design's §7) says
+ * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours",
+ * off, the chord models needed, a cooldown, out of date), none in a build without yt-dlp; in the debug build, the
+ * YouTube bench after it. The library screen's bar has the same sync button.
  * No item's text ends in "…".
  */
 class SettingsActivity : Activity() {
@@ -143,6 +149,7 @@ class SettingsActivity : Activity() {
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
         if (BuildConfig.CHORDS_BENCH) addChordsBench()
+        if (BuildConfig.DEBUG) addYouTubeBench()
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
         chordsDownload.setOnClickListener { askToDownloadChords() }
         chordsRemove.setOnClickListener { askToRemoveChords() }
@@ -158,6 +165,73 @@ class SettingsActivity : Activity() {
         showCatalogues()
         followCatalogues()
         followChords()
+        showYouTube()
+    }
+
+    /** Settings' YouTube audio row (YouTubeRow): its line read off the main thread, as the screen comes back; no row in
+     * a build that carries no yt-dlp (the phone's engine decides, before its problem is read), and none while the
+     * phone's caracole can't start (said under the catalogues' button). A read that fails is said in the row, and
+     * logged, as the catalogues' date says its failure. */
+    private fun showYouTube() {
+        scope.launch {
+            val phone = phone() ?: return@launch
+            val row = findViewById<View>(R.id.youtube_row)
+            if (phone.youtube == null) {
+                row.visibility = View.GONE
+                return@launch
+            }
+            val read = withContext(Dispatchers.IO) {
+                runCatching {
+                    val problem = phone.youtubeProblem()
+                    phone.parts.database.read { db ->
+                        YouTubeRow.line(YouTubeRow.of(db, engine = true, problem = problem,
+                                                      version = BuildConfig.YTDLP_VERSION, now = Instant.now())) to
+                            YouTubeAuto.on(db)
+                    }
+                }
+            }
+            // The automatic pass's switch: as the phone holds it; a read that failed leaves it unknown (off, and not to
+            // be pressed), a write that fails puts it back and says so.
+            val auto = findViewById<Switch>(R.id.youtube_auto)
+            auto.setOnCheckedChangeListener(null)
+            val known = read.getOrNull()?.second
+            auto.isChecked = known == true
+            auto.isEnabled = known != null
+            var reverting = false
+            auto.setOnCheckedChangeListener { button, on ->
+                if (reverting) return@setOnCheckedChangeListener
+                scope.launch {
+                    val kept = withContext(Dispatchers.IO) {
+                        runCatching { phone.parts.database.writeBlocking { db -> YouTubeAuto.set(db, on) } }
+                    }
+                    kept.onFailure { e ->  // not kept: the switch back as it was, and said
+                        Log.w("caracole", "the automatic YouTube pass's switch couldn't be kept", e)
+                        reverting = true
+                        button.isChecked = !on
+                        reverting = false
+                        findViewById<TextView>(R.id.youtube_line).text = getString(R.string.youtube_auto_failed, why(e))
+                        return@launch
+                    }
+                    val scheduled = withContext(Dispatchers.IO) {
+                        runCatching {
+                            YouTubeWorker.schedule(this@SettingsActivity, phone)
+                            if (on) YouTubeWorker.switchedOn(this@SettingsActivity, phone)
+                        }
+                    }
+                    scheduled.onFailure { e ->  // kept as written; its work not (re)scheduled, said
+                        Log.w("caracole", "the automatic YouTube pass's work couldn't be scheduled", e)
+                        findViewById<TextView>(R.id.youtube_line).text =
+                            getString(R.string.youtube_auto_unscheduled, why(e))
+                    }
+                }
+            }
+            val line = read.map { it.first }.getOrElse { e ->
+                Log.w("caracole", "Settings' YouTube audio row couldn't be read", e)
+                getString(R.string.youtube_failed, why(e))
+            }
+            row.visibility = if (line == null) View.GONE else View.VISIBLE
+            findViewById<TextView>(R.id.youtube_line).text = line.orEmpty()
+        }
     }
 
     override fun onStart() {
@@ -508,6 +582,21 @@ class SettingsActivity : Activity() {
         rows.addView(button, rows.indexOfChild(findViewById(R.id.chords_hint)) + 1)  // in the Chords from audio section
     }
 
+    /** The debug build's YouTube bench (src/debug's YouTubeBenchActivity, the phone-youtube design's §4.2), a button
+     * right after the YouTube audio row, by its class's name alone (a main source names no debug class); a release has
+     * none (BuildConfig.DEBUG is false there, and R8 drops this). */
+    private fun addYouTubeBench() {
+        val youtube = findViewById<View>(R.id.youtube_row)
+        val rows = youtube.parent as android.view.ViewGroup
+        val button = Button(this).apply {
+            text = YOUTUBE_BENCH
+            setOnClickListener {
+                startActivity(Intent().setClassName(this@SettingsActivity, "$PACKAGE.YouTubeBenchActivity"))
+            }
+        }
+        rows.addView(button, rows.indexOfChild(youtube) + 1)  // in the YouTube audio section
+    }
+
     private fun fitInsets() {
         val bar = findViewById<View>(R.id.bar)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { root, insets ->
@@ -524,6 +613,9 @@ class SettingsActivity : Activity() {
     companion object {
         /** The debug build's Chords bench row's words (ChordsBenchTest finds it by them). */
         const val CHORDS_BENCH = "Chords bench"
+
+        /** The debug build's YouTube bench row's words (YouTubeBenchTest finds it by them). */
+        const val YOUTUBE_BENCH = "YouTube bench"
         private const val PACKAGE = "io.github.danielhp95.caracole"
 
         /** An extra: ask to show notifications as the screen opens (the first start's Download of the catalogues). */

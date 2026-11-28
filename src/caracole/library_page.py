@@ -492,7 +492,12 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     data["sites"] = sites_data(conn, cfg, songs, now)  # the Sites tab's (sites.js draws it)
     if note is not None:
         note(data)
-    return assemble_page(data, controls, problem=problem, library_name=cfg.library_name)
+    # The request form's line says a video's lyrics are heard from it only where a sheet from a video hears them:
+    # this caracole transcribes and [autochords] transcribe is on (youtube_sheet.py `_why_not_heard`'s TURNED_OFF);
+    # server.transcribe.ok stays whether it can, as the card's Transcribe the lyrics is offered with the setting off.
+    hears = (controls is not None and cfg.autochords.transcribe
+             and (data["server"].get("transcribe") or {}).get("ok") is True)
+    return assemble_page(data, controls, problem=problem, library_name=cfg.library_name, hears=hears)
 
 
 def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
@@ -501,14 +506,18 @@ def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Override
     ``youtube_fetch.transcribe_reason``), the songs offered one (``songs``), those offered Transcribe anyway, heard to
     have nothing sung (``nothing``) or said not sung by the owner (``unsung``), and those with a transcript kept,
     offered Not sung: chords only (``transcribed``), all four ``transcript.offers``, read with no model; and how long
-    one takes here (``time``, ``transcribe_time``); none offered and no time where it can't. The phone's
+    one takes here (``time``, ``transcribe_time``); none offered and no time where it can't; and whether a sheet from
+    a video or an audio file hears its words (``hears``: this caracole transcribes and ``[autochords] transcribe`` is
+    on, as youtube_sheet.py's ``_why_not_heard`` answers), which the dialogs' lines say. The phone's
     (LibraryPage.kt) is the same shape."""
     from caracole.autochords.transcript import offers
 
     why = transcribe_reason(cfg)
     if why is not None:
-        return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": ""}
-    return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg)}
+        return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": "",
+                "hears": False}
+    return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg),
+            "hears": cfg.autochords.transcribe}
 
 
 def audio_member(cfg: Config) -> dict[str, Any]:
@@ -528,14 +537,16 @@ def audio_member(cfg: Config) -> dict[str, Any]:
 
 
 def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, problem: str | None,
-                  library_name: str | None) -> str:
+                  library_name: str | None, hears: bool = False) -> str:
     """The page around its ``data``: the templates of library_assets/ filled in, the stylesheets and scripts inlined,
     the data as its JSON block. A pure function of its arguments and the assets, which the phone's server builds the
     same way (android/server's ``LibraryPage``, from the same files).
 
     ``controls``, as ``build_library_page`` takes them (None: the file on disk); ``problem``, why this caracole makes
-    no sheet from a YouTube video (``youtube_fetch.route_problem``), for the request form; ``library_name``, the
-    configured name (``Config.library_name``).
+    no sheet from a YouTube video (``youtube_fetch.route_problem``), for the request form, and ``hears``, whether a
+    sheet from a video hears its words (``youtube_fetch.transcribe_reason`` None and ``[autochords] transcribe`` on:
+    never on the phone), for its line;
+    ``library_name``, the configured name (``Config.library_name``).
     """
     # The page caracole serve serves may also ask it how its requests go (connect-src), and show the thumbnail of a
     # video it suggests for a search (img-src 'self': web/youtube_routes.py's); the file can't.
@@ -549,7 +560,7 @@ def assemble_page(data: Mapping[str, Any], controls: WebControls | None, *, prob
         + _BODY.replace("__MARK__", page_mark()).replace("__LIBRARY__", "" if controls is not None and controls.in_app else shown.markup("p"))
         .replace("__TABSYNC__", _sync_tab(controls)).replace("__TABREQUESTS__", _requests_tab(controls))
         .replace("__SYNC__", _sync_panel(controls))
-        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem))
+        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem, hears))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
@@ -1319,16 +1330,20 @@ _YOUTUBE_FIELD = (
     '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
     'placeholder="youtube.com/watch?v=…"></label>'
 )
+# Its line: the lyrics heard from the video only where a sheet from one hears them (``transcribe_reason`` None and
+# ``[autochords] transcribe`` on), else the lyrics sites' alone (the phone's, which hears no words, among them).
 _YOUTUBE_HINT = '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>'
+_YOUTUBE_HINT_SITES = '<p class="hint">Sheet made from the video, its lyrics from the lyrics sites</p>'
 
 
-def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:
-    """The request form, served: with its YouTube video field where this caracole makes a sheet from one, else a
-    line that says why not (``youtube_fetch.route_problem``); on the file, none."""
+def _request_form(controls: WebControls | None, youtube_problem: str | None = None, hears: bool = False) -> str:
+    """The request form, served: with its YouTube video field where this caracole makes a sheet from one, its line
+    saying where the lyrics come from (``hears``: a sheet from a video hears its words here), else a line that says
+    why not (``youtube_fetch.route_problem``); on the file, none."""
     if controls is None:
         return ""
     if youtube_problem is None:
-        field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT
+        field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT if hears else _YOUTUBE_HINT_SITES
     else:
         field = ""
         hint = f'<p class="hint">No sheets from YouTube here: {html_text.escape(youtube_problem)}.</p>'

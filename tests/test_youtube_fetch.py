@@ -383,6 +383,22 @@ def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_
 
 
 @pytest.mark.slow
+def test_a_tunnel_the_proxy_couldnt_connect_never_counts_against_a_pasted_video(conn, ycfg, fake):
+    # The phone's gate (a proxy) answers a CONNECT it can't resolve or connect 502, a connect timeout 504: the
+    # network's failure, in the pinned yt-dlp's own words.
+    song = to_buy(conn)
+    fake.video(OTHER, stderr=f"ERROR: [youtube] {OTHER}: Unable to download API page: <urlopen error Tunnel "
+                             "connection failed: 502 Bad Gateway> (caused by ProxyError('<urlopen error Tunnel "
+                             "connection failed: 502 Bad Gateway>'))", exit=1)
+    o = Overrides(youtube={song.key: OTHER})
+    for night in range(yf.GIVE_UP_AFTER + 1):
+        run(conn, ycfg, o, now=NOW + timedelta(days=night))
+    record = kv_get_json(conn, f"youtube:{song.id}")
+    assert record["failures"] == {} and record["unusable"] is None
+    assert [s.id for s in yf.songs_for_youtube(conn, o, NOW)] == [song.id]
+
+
+@pytest.mark.slow
 def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
     failing = to_buy(conn, added_at="2026-10-02T00:00:00Z")  # the newest
     other = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
@@ -598,3 +614,135 @@ def test_youtubes_audio_beside_a_sheet_another_caracole_made_waits_for_no_chords
                  (creep.id,))
     update_song(conn, creep.id, autochords_mtime=None)  # as a take leaves it
     assert yf.song_states(conn, Overrides(), NOW)[creep.id].state == yf.CHORDS
+
+
+# --- which songs a phone takes by itself, and the computer's step beside a sheet made elsewhere -------------------
+
+PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id
+
+
+def youtube_gave(conn, song, video=TOPIC):
+    """The song's audio as the nightly step leaves it: a file YouTube gave, recorded in kv ``youtube:<id>``."""
+    path = f"/cache/youtube/{song.id}-{video}.m4a"
+    update_song(conn, song.id, audio_path=path, audio_mtime=1.0)
+    kv_set_json(conn, f"youtube:{song.id}", {"video": {"id": video, "url": watch_url(video)}, "source": "search",
+                                            "audio": path})
+    return get_song(conn, song.id)
+
+
+def sheet_made_there(conn, cfg, song, **raw):
+    """An auto sheet another caracole made (its raw's ``made_by``), as a sync's take leaves it."""
+    v = upsert_version(conn, provider="auto", tab_id="42", song_id=song.id, slot="sheet", kind="auto", rating=0,
+                       votes=0, version=1, label=None, url="x", raw={"made_on": "phone", "made_by": PHONE, **raw},
+                       now="x")
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet (auto).txt", data=b"x", rank=1)
+    update_song(conn, song.id, status="found", autochords_mtime=None)
+    return get_song(conn, song.id)
+
+
+def noted(conn, song):
+    kv_set_json(conn, f"{yf.WANTED_PREFIX}{song.id}", NOW.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+def a_phones_library(conn, cfg):
+    """Songs of every kind the phone's rule weighs, newest first by their names' order here."""
+    def song(title, day, **kw):
+        return to_buy(conn, "Radiohead", title, added_at=f"2026-10-{day:02d}T00:00:00Z", **kw)
+
+    s = {"noted": song("Noted", 20), "plain": song("Plain", 19), "noted failed": song("Noted Failed", 18),
+         "failed": song("Failed", 17), "noted old": song("Noted Old", 16), "missed": song("Missed", 15),
+         "pasted": song("Pasted", 14), "declined": song("Declined", 13), "with audio": song("With Audio", 12),
+         "unsettled": song("Unsettled", 11), "made there": song("Made There", 10)}
+    for name in ("noted", "noted failed", "noted old"):
+        noted(conn, s[name])
+    for name in ("noted failed", "failed"):
+        kv_set_json(conn, f"youtube:{s[name].id}", {"error": "HTTP Error 502", "error_at": "2026-10-18T00:00:00Z"})
+    kv_set_json(conn, f"youtube:{s['missed'].id}", {"missing_at": "2026-10-10T00:00:00Z"})
+    youtube_gave(conn, s["with audio"])
+    update_song(conn, s["unsettled"].id, match_decision=None)
+    sheet_made_there(conn, cfg, s["made there"], lyrics="none")
+    o = Overrides(youtube={s["pasted"].key: OTHER, s["declined"].key: None, s["with audio"].key: OTHER})
+    return s, o
+
+
+def test_phone_due_is_within_songs_for_youtube(conn, cfg):
+    s, o = a_phones_library(conn, cfg)
+    computer = [x.id for x in yf.songs_for_youtube(conn, o, NOW)]
+    for paired in (False, True):
+        due = [x.id for x in yf.phone_due(conn, o, NOW, paired=paired)]
+        assert set(due) <= set(computer), paired
+    assert [x.id for x in yf.phone_due(conn, o, NOW, paired=False)] == [
+        s["noted"].id, s["noted old"].id, s["plain"].id, s["pasted"].id,  # the noted first, then the rest
+        s["noted failed"].id, s["failed"].id]  # those whose last try failed last, the noted first among them
+    assert s["with audio"].id in computer  # a new paste over YouTube's audio: the computer's, never the phone's
+
+
+def test_a_paired_phone_takes_the_noted_songs_alone(conn, cfg):
+    s, o = a_phones_library(conn, cfg)
+    assert [x.id for x in yf.phone_due(conn, o, NOW, paired=True)] == [
+        s["noted"].id, s["noted old"].id, s["noted failed"].id]
+    kv_set_json(conn, f"youtube:{s['noted'].id}", {"missing_at": "2026-10-18T00:00:00Z"})  # found nothing lately
+    assert [x.id for x in yf.phone_due(conn, o, NOW, paired=True)] == [s["noted old"].id, s["noted failed"].id]
+
+
+def test_the_nightly_step_downloads_nothing_for_a_sheet_another_caracole_made_that_it_would_leave(conn, cfg):
+    from caracole.lyrics import Lyrics
+
+    song = youtube_gave(conn, to_buy(conn))
+    o = Overrides(youtube={song.key: OTHER})  # a new paste: the step would take its audio
+    assert [x.id for x in yf.songs_for_youtube(conn, o, NOW)] == [song.id]
+    timed = Lyrics(plain="Hello\n", synced="[00:01.00] Hello\n", instrumental=False, duration=239.0, lrclib_id=1)
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=timed.to_json())
+    sheet_made_there(conn, cfg, get_song(conn, song.id), lyrics="synced")  # over a site's words: left (R3)
+    assert yf.songs_for_youtube(conn, o, NOW) == []
+    conn.execute("UPDATE versions SET raw = json_set(raw, '$.lyrics', 'none') WHERE song_id = ?", (song.id,))
+    assert yf.songs_for_youtube(conn, o, NOW) == []  # chords alone, but a site has the words: heard ones never win
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.made_by') WHERE song_id = ?", (song.id,))
+    assert [x.id for x in yf.songs_for_youtube(conn, o, NOW)] == [song.id]  # this side's own sheet: as before
+
+
+def test_words_win_still_downloads_for_a_chords_only_sheet_made_elsewhere(conn, cfg, monkeypatch):
+    from caracole.autochords import transcript
+
+    song = youtube_gave(conn, to_buy(conn))
+    update_song(conn, song.id, lyrics_status="missing")
+    sheet_made_there(conn, cfg, get_song(conn, song.id), lyrics="none")  # chords alone, every site missed
+    o = Overrides(youtube={song.key: OTHER})
+    assert [x.id for x in yf.songs_for_youtube(conn, o, NOW)] == [song.id]  # words heard here would win (R5)
+    conn.execute("UPDATE versions SET raw = json_set(raw, '$.heard_nothing', json('true'), '$.not_sung_by', 'you') "
+                 "WHERE song_id = ?", (song.id,))
+    assert yf.songs_for_youtube(conn, o, NOW) == []  # the owner said it isn't sung: no words to win
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.heard_nothing', '$.not_sung_by') WHERE song_id = ?",
+                 (song.id,))
+    monkeypatch.setattr(transcript, "WORDS_WIN", False)
+    assert yf.songs_for_youtube(conn, o, NOW) == []  # without the owner's call, R3 alone
+
+
+def test_a_phone_never_takes_again_a_video_whose_audio_it_couldnt_hear_until_another_or_30_days(conn):
+    from caracole.songs import _PER_SONG_KV
+
+    song = to_buy(conn)
+    # its pick remembered, its audio let go by the phone's 3-day sweep
+    kv_set_json(conn, f"youtube:{song.id}", {"video": {"id": TOPIC, "url": watch_url(TOPIC)}, "source": "search"})
+
+    def note(video, days):
+        at = (NOW - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        kv_set_json(conn, f"{yf.UNHEARD_PREFIX}{song.id}",
+                    {"video": video, "at": at, "error": "audio the phone can't read: x"})
+
+    def due(o=Overrides()):
+        return [x.id for x in yf.phone_due(conn, o, NOW, paired=False)]
+
+    assert due() == [song.id]
+    note(TOPIC, days=4)
+    assert due() == []  # the video it would take again
+    assert due(Overrides(youtube={song.key: TOPIC})) == []  # pasted, the same video
+    assert due(Overrides(youtube={song.key: OTHER})) == [song.id]  # another video pasted
+    note(OTHER, days=4)
+    assert due() == [song.id]  # a note of another video than its pick
+    note(TOPIC, days=31)
+    assert due() == [song.id]  # 30 days on
+    kv_set_json(conn, f"{yf.UNHEARD_PREFIX}{song.id}", [TOPIC])  # no object: no note
+    assert due() == [song.id]
+    assert [x.id for x in yf.songs_for_youtube(conn, Overrides(), NOW)] == [song.id]  # the computer's rule unchanged
+    assert yf.UNHEARD_PREFIX in _PER_SONG_KV

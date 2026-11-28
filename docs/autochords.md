@@ -40,10 +40,11 @@ More on this: [the sites caracole reads](sources.md).
 
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
-When lyrics arrive after the sheet was made, or become other words, the sheet is laid out again over them in seconds
-from what was heard, without listening to the song again; the same words retimed (other times on a sheet already
-timed) change nothing. A sheet made before caracole kept what was heard is made again by the models instead, as
-before, and one made before caracole kept track of its words isn't made again for other words.
+When lyrics arrive after the sheet was made, become other words, or come timed otherwise (another record of the same
+words picked for your cut), the sheet is laid out again over them in seconds from what was heard, without listening to
+the song again. A sheet made before caracole kept what was heard is made again by the models instead, as before (for
+the same words retimed, only when you pick them), and one made before caracole kept track of its words isn't made
+again for other words.
 
 When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
 **Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.
@@ -125,6 +126,9 @@ It won't start below 15 % of battery unless the phone is charging, and it waits 
 never leaves the phone: no audio is sent anywhere to make the sheet, and the file stays in the app's own storage, never
 synced. The sheet you sync names the file, its full path included, and goes only to your own other caracole, which
 keeps it, unless it hears the words itself where every lyrics site missed (above).
+
+On an arm64 phone the app also makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the same
+models: the lyrics sites first, then the chords ([the phone](phone.md#a-sheet-from-a-youtube-video)).
 
 ## The models for the phone
 

@@ -54,6 +54,15 @@ data class Outcome(val tone: String, val word: String, val reason: String = "", 
  * each not skipped, as a sync's are drawn.
  */
 object Outcomes {
+    /** A lookup's word for a song no site has a sheet of (outcome.py's _not_found). */
+    const val NOT_ON_THE_SITES = "Not on the sites"
+
+    /** The phone's own words for its yt-dlp out of date (the phone-youtube design's §7; core.youtube's Outdated), which
+     * a YouTube sheet's audio stage, so its outcome, Settings' row and the alert say; the computer's outcome.py has
+     * none. */
+    fun outdated(version: String): String =
+        "YouTube changed what yt-dlp $version reads: caracole's next release brings a fix"
+
     /** A lookup's steps (get.py's STAGES), each a name and the stages it stands for. */
     val LOOKUP_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Match" to listOf("match"), "Sheet" to listOf("sheet"), "PDF" to listOf("pdf"),
@@ -489,7 +498,7 @@ object Outcomes {
         val search = if (unmatched && songId != null) Action("Search the index", href = "/review?song=$songId")
                      else null
         if (job.stages.any { it.name == "gtptabs" && it.state == Job.DONE && it.detail == GTPTABS_KEPT }) {
-            return Outcome("missing", "Not on the sites", joined(head, "Got a Guitar Pro file from gtptabs"),
+            return Outcome("missing", NOT_ON_THE_SITES, joined(head, "Got a Guitar Pro file from gtptabs"),
                            inLibrary(songId), search)
         }
         val where = facts?.elsewhere
@@ -497,11 +506,11 @@ object Outcomes {
             val (source, url) = where
             val fields = listOf("song" to songId.toString(), "identity" to JobCommands.songKeyOf(job.key)) +
                 if (source == "lacuerda") listOf("lacuerda" to url) else emptyList()
-            return Outcome("missing", "Not on the sites", joined(head, ELSEWHERE.getValue(source)),
+            return Outcome("missing", NOT_ON_THE_SITES, joined(head, ELSEWHERE.getValue(source)),
                            Action("Fetch from there", post = "/lookup", fields = fields), search)
         }
         val named = job.job.display.ifEmpty { job.job.title }
-        return Outcome("missing", "Not on the sites", sentence(head),
+        return Outcome("missing", NOT_ON_THE_SITES, sentence(head),
                        search ?: Action("Ask by name", href = "/#" + PyUrl.urlencode(listOf("q" to named))))
     }
 

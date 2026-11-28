@@ -88,7 +88,10 @@ import kotlin.concurrent.thread
  * - [audioRoutes]: audio_routes.jsonl, a sheet from an audio file's routes over each scene (AudioRoutesReplay);
  * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names;
  * - [security]: security.jsonl, security.py's host, origin, own-page and token checks, and Python's `str.isdigit` and
- *   `str.isspace` over every code point (SecurityTest's).
+ *   `str.isspace` over every code point (SecurityTest's);
+ * - [lyricsRoutes]: lyrics_routes.jsonl, a song's lyrics looked up under a name typed (LyricsRoutesReplay);
+ * - [youtubeRoutes]: youtube_routes.jsonl, a sheet from a YouTube video, a pasted video's panel and its thumbnail
+ *   (YouTubeRoutes, and LibraryRoutes' `POST /request` with `youtube`).
  *
  * Each phone is a database of its own in a temporary folder. (job_views.jsonl and library_page.json are lanes
  * job-views' and requests-feed's.)
@@ -107,10 +110,14 @@ object WebReplay : AreaReplay {
         downloads(misses)
         security(misses)
         lyricsRoutes(misses)
+        youtubeRoutes(misses)
     }
 
     /** lyrics_routes.jsonl: the phone's LyricsRoutes over each scene (LyricsRoutesReplay). */
     fun lyricsRoutes(misses: Misses) = LyricsRoutesReplay.replay(misses)
+
+    /** youtube_routes.jsonl: a sheet from a YouTube video and a pasted video's panel (YouTubeRoutesReplay). */
+    fun youtubeRoutes(misses: Misses) = YouTubeRoutesReplay.replay(misses)
 
     // --- api_search.jsonl -------------------------------------------------------------------------------------------
 

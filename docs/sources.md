@@ -24,6 +24,10 @@ in caracole.toml.
 
 - **YouTube.** The optional chords-from-audio add-on takes the audio of a few songs a night,
   against YouTube's robots.txt and terms. See [Audio from YouTube](usage.md#audio-from-youtube).
+  The app does the same on an arm64 phone, for a video you paste or share to it and by itself
+  for a song no site has, with its own copy of yt-dlp and on the same terms, counted on the phone
+  ([the phone](phone.md)). Turning YouTube
+  off on the computer turns it off on the phone at the next sync.
 - **harptabs.com, gametabs.net and AZLyrics.** Their terms forbid bots. caracole still keeps a
   tab or a song's lyrics from them, only for songs on your list, and follows their robots.txt.
 - **Links shared to the phone.** Spotify, TIDAL and YouTube forbid automated access. When you

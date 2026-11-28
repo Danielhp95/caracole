@@ -1,3 +1,8 @@
+AntiFeatures:
+  NonFreeNet:
+    en-US: Takes a song's audio from YouTube (with yt-dlp) when you ask for a
+      sheet from a video, or by itself where no sheet site has the song.
+
 Categories:
   - Multimedia
   - Reading
@@ -27,6 +32,11 @@ Description: |-
     computer. It needs Android 13, an arm64 phone and 6 GB of memory, and
     downloads its models once, at a tap (about 55 MB, from caracole's GitHub
     release and the chord model's authors' repository).
+  * A sheet from a YouTube video: paste or share a video and the phone takes
+    its audio with its own yt-dlp and makes the song's sheet from it. It also
+    does so by itself, on Wi-Fi, for a song no sheet site has (a setting turns
+    that off). Taking audio from YouTube goes against YouTube's terms. It needs
+    the chord models and an arm64 phone.
 
   It needs a computer running caracole serve to sync from:
   https://github.com/Danielhp95/caracole

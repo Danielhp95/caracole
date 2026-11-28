@@ -55,6 +55,10 @@ import java.util.logging.Logger
 class LocalServer(val app: App) : AutoCloseable {
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private var port = 0
+    private val requests = java.util.concurrent.atomic.AtomicLong()
+
+    /** How many requests it has been sent since it started (the debug build's YouTube bench reads it: `idle`). */
+    val served: Long get() = requests.get()
 
     /** Listens on [preferred], else on an ephemeral port; the port. */
     fun start(preferred: Int = 8738): Int {
@@ -88,6 +92,7 @@ class LocalServer(val app: App) : AutoCloseable {
         val server = CoroutineScope(BIND_FAILED).embeddedServer(CIO, port = port, host = HOST,
                                                                 parentCoroutineContext = BIND_FAILED) {
             intercept(ApplicationCallPipeline.Call) {
+                requests.incrementAndGet()
                 val method = call.request.httpMethod.value
                 val target = call.request.uri
                 val headers = LinkedHashMap<String, String>()

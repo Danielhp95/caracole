@@ -23,12 +23,39 @@
 #   hearing of the same file: models.jsonl's "hearing" records): long.wav's first 20 s, the right channel 0.6 of the
 #   left, as LAME VBR (-q:a 6) at 44.1 kHz stereo and as AAC-LC at 96 kb/s and 48 kHz stereo, the forms most of the
 #   owner's own files take.
+# - decode-frag.m4a and decode-dash.m4a, the fragmented MP4 yt-dlp leaves on the phone, which has no FFmpeg to remux it
+#   ("writing DASH m4a"): decode-frag.m4a is decode.m4a's very AAC frames (-c copy) as fragmented MP4 (an empty moov,
+#   its samples in a moof); decode-dash.m4a the clip as YouTube's itag 140 is coded, AAC-LC at 128 kb/s and 44.1 kHz
+#   stereo (the right channel 0.6 of the left), as a DASH-style fragmented MP4: a dash brand, a global sidx, a moof and
+#   an mdat a second. FFmpeg writes no edit list in either: the encoder's priming is in no box (README.md). Beside
+#   each, its remux as the computer's yt-dlp makes it (FixupM4a: -map 0 -dn -ignore_unknown -c copy -f mp4),
+#   decode-frag-remux.m4a and decode-dash-remux.m4a, against which tests/test_conformance_autochords_models.py checks
+#   its record. Written on 2026-11-27 by `encode.sh fragmented`, which writes these four alone, with ffmpeg 9.0.1
+#   (which writes decode.m4a byte for byte as it is).
 set -euo pipefail
 cd "$(dirname "$0")"
 plain=(-map_metadata -1 -fflags +bitexact -flags:a +bitexact)
 ff() { ffmpeg -v error -y "$@"; }
 clip=(-t 6 -i steady.wav)
 stereo="pan=stereo|c0=c0|c1=0.6*c0"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+fragmented() {
+  local frag=(-movflags frag_keyframe+empty_moov+default_base_moof)
+  local dash=(-movflags dash+global_sidx+frag_keyframe+empty_moov+default_base_moof -frag_duration 1000000)
+  ff -i decode.m4a -c copy "${plain[@]}" "${frag[@]}" decode-frag.m4a
+  ff "${clip[@]}" "${plain[@]}" -af "$stereo" -ar 44100 -c:a aac -aac_pns 0 -b:a 128k "$work/itag140.m4a"
+  ff -i "$work/itag140.m4a" -c copy "${plain[@]}" "${dash[@]}" decode-dash.m4a
+  local name
+  for name in decode-frag decode-dash; do
+    ff -i "$name.m4a" -map 0 -dn -ignore_unknown -c copy "${plain[@]}" -f mp4 "$name-remux.m4a"
+  done
+}
+if [ "${1:-}" = fragmented ]; then
+  fragmented
+  exit
+fi
 
 ff "${clip[@]}" "${plain[@]}" -id3v2_version 0 -c:a libmp3lame -q:a 4 decode.mp3
 ff -f lavfi -i "anoisesrc=d=0.05:c=white:a=1.0:r=22050:s=1" "${clip[@]}" \
@@ -36,8 +63,6 @@ ff -f lavfi -i "anoisesrc=d=0.05:c=white:a=1.0:r=22050:s=1" "${clip[@]}" \
   -c:a libmp3lame -q:a 9 -write_xing 0 decode-headerless.mp3
 ff "${clip[@]}" "${plain[@]}" -c:a aac -aac_pns 0 -b:a 64k decode.m4a
 ff -t 3 -i steady.wav "${plain[@]}" -ar 11025 -c:a aac -aac_pns 0 -b:a 32k decode-11k.m4a
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
 ff -t 3 -i steady.wav "$work/clip.wav"
 lame --quiet -V 4 "$work/clip.wav" decode-lame.mp3
 ff "${clip[@]}" "${plain[@]}" -c:a libvorbis -q:a 4 decode.ogg
@@ -48,3 +73,4 @@ ff -t 2 -i steady.wav "${plain[@]}" -ar 44100 -c:a pcm_s24be decode.aiff
 ff -t 1.5 -i steady.wav "${plain[@]}" -ar 44100 -sample_fmt s32 -c:a flac decode-24.flac
 ff -t 20 -i long.wav "${plain[@]}" -af "$stereo" -ar 44100 -id3v2_version 0 -c:a libmp3lame -q:a 6 hearing.mp3
 ff -t 20 -i long.wav "${plain[@]}" -af "$stereo" -ar 48000 -c:a aac -aac_pns 0 -b:a 96k hearing.m4a
+fragmented

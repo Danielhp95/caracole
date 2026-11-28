@@ -49,14 +49,17 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
   ``variant`` (``_VARIANT``, ``{variant}`` title_variant's word), the words (``decoration``, ``cjk_decoration`` as
   compact(slug_key) makes them, ``own_channel``), ``cjk_width``, the lengths (seconds) and ``exact`` and ``alone``,
   and ``key``, in words, the order of the videos that fit;
-- ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``) and ``give_up_after`` (``GIVE_UP_AFTER``);
-- ``search``: youtube_search.py's ``searches_per_hour``, ``asked_for_days`` (``ASKED_FOR``, the 30 days),
-  ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
+- ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``), ``give_up_after`` (``GIVE_UP_AFTER``),
+  ``audio_folder`` (``AUDIO_FOLDER``, the downloads' folder under the cache) and ``part_prefix`` (``_PART_PREFIX``, a
+  download's own folder there until its file is in place);
+- ``search``: youtube_search.py's ``searches_per_hour``, ``results`` (``RESULTS``, the count of a search's suggested
+  video, ``ytsearch1:``; ``search_results`` above is a sheet's search's), ``asked_for_days`` (``ASKED_FOR``, the 30
+  days), ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
 - ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
   under one of ``suffixes``, on ``port`` by CONNECT; ``apart``, allowed and reported apart; ``refused``, by name in
   every mode; ``refusal``, a run's error when the gate refused a host (``{host}``), read from its log first;
-  ``stopped``, the name its log lists once it stopped accepting by a bug of its own, and ``stopped_said``, a run's
-  error then, read from its log first too;
+  ``stopped``, the name its log lists once it stopped accepting by a bug of its own (``malformed`` and ``other_hosts``
+  its other two names that are no host's), and ``stopped_said``, a run's error then, read from its log first too;
 - ``runner``: ``YtDlp``'s words and folder: ``cache_folder`` (``CACHE_FOLDER``, under the cache folder given),
   ``budget_spent`` (``{budget}``), ``blocked_earlier``, ``unavailable_said`` (``{reason}``), ``timed_out``
   (``{timeout:g}``, Python's ``format(timeout, "g")``), ``said_nothing`` (a failed run's reason when stderr has no
@@ -109,12 +112,15 @@ returned (a search's ids, a video's or a download's ``[id, title, channel, durat
 
 from __future__ import annotations
 
+import base64
 import dataclasses
+import hashlib
 import json
 import random
 import re
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from helpers.corpus import DATA, VECTORS, check, jsonl
@@ -188,7 +194,15 @@ def _cooling_when() -> str:
     return when
 
 
+VIDEO_CMD_WORDS = ("NOT_A_VIDEO", "ASKING", "SEARCHED_VIDEO", "WONT_GIVE", "NOT_SEARCHED", "TRY_LATER", "TURNED_BACK",
+                   "NO_RUNS", "YTDLP_FAILED", "VIDEO_DONE", "RUNS_ALERT", "THUMB_OFF", "THUMB_COOLING", "THUMB_KEPT",
+                   "THUMB_NONE", "THUMB_BLOCKED", "THUMB_SPENT", "THUMB_FAILED", "THUMBS_ALERT")
+SEARCH_CMD_WORDS = ("QUOTED", "NO_WORD", "NO_SHEETS_HERE", "NOTHING_TO_SEARCH", "SEARCHED", "NONE_LATELY", "NONE_NOW")
+
+
 def youtube_json() -> str:
+    from caracole.commands import youtube as youtube_cmd
+
     data = {
         "args": {"base": list(youtube._BASE_ARGS), "search": list(youtube.SEARCH_ARGS),
                  "video": list(youtube.VIDEO_ARGS), "download": list(youtube._DOWNLOAD_ARGS),
@@ -230,7 +244,8 @@ def youtube_json() -> str:
         "audio_format": youtube.AUDIO_FORMAT,
         "phone_format": youtube.PHONE_FORMAT,
         "fetch": {"recheck_after_days": youtube_fetch.RECHECK_AFTER.days,
-                  "give_up_after": youtube_fetch.GIVE_UP_AFTER},
+                  "give_up_after": youtube_fetch.GIVE_UP_AFTER, "audio_folder": youtube_fetch.AUDIO_FOLDER,
+                  "part_prefix": youtube_fetch._PART_PREFIX},
         "answers": {"provider": youtube.PROVIDER, "live_statuses": list(youtube.LIVE_STATUSES),
                     "shorts_path": youtube.SHORTS_PATH, "search_not_json": youtube.SEARCH_NOT_JSON,
                     "video_not_json": youtube.VIDEO_NOT_JSON, "no_such_video": youtube.NO_SUCH_VIDEO},
@@ -253,6 +268,7 @@ def youtube_json() -> str:
             "key": CHOOSE_KEY,
         },
         "search": {"searches_per_hour": youtube_search.SEARCHES_PER_HOUR,
+                   "results": youtube_search.RESULTS,
                    "asked_for_days": youtube_search.ASKED_FOR.days,
                    "failed_for_seconds": int(youtube_search.FAILED_FOR.total_seconds()),
                    "failures_pause": youtube_search.FAILURES_PAUSE,
@@ -265,10 +281,17 @@ def youtube_json() -> str:
                    "thumb_route": youtube_search.THUMB_ROUTE, "strong": STRONG, "order": GATE_ORDER,
                    "on_screen": ON_SCREEN},
         "record": {"prefix": youtube_fetch.RECORD_PREFIX, "fields": RECORD_FIELDS, "rule": RECORD_RULE},
+        "thumb": {"provider": youtube_search.THUMBS_PROVIDER, "url": youtube_search.THUMB_URL,
+                  "folder": youtube_search.THUMBS, "name": youtube_search.THUMB_NAME,
+                  "part": youtube_search.THUMB_PART, "max_bytes": youtube_search.MAX_BYTES,
+                  "max_side": youtube_search.MAX_SIDE, "frames": list(youtube_search.FRAMES)},
+        "video_cmd": {name.lower(): getattr(youtube_cmd, name) for name in VIDEO_CMD_WORDS},
+        "search_cmd": {name.lower(): getattr(youtube_cmd, name) for name in SEARCH_CMD_WORDS},
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
                  "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal,
-                 "stopped": youtube.PHONE_GATE.stopped, "stopped_said": youtube.PHONE_GATE.stopped_said},
+                 "stopped": youtube.PHONE_GATE.stopped, "stopped_said": youtube.PHONE_GATE.stopped_said,
+                 "malformed": youtube.PHONE_GATE.malformed, "other_hosts": youtube.PHONE_GATE.other_hosts},
         "runner": {"cache_folder": youtube.CACHE_FOLDER, "budget_spent": youtube.BUDGET_SPENT,
                    "blocked_earlier": youtube.BLOCKED_EARLIER, "unavailable_said": youtube.UNAVAILABLE_SAID,
                    "timed_out": youtube.TIMED_OUT, "said_nothing": youtube.SAID_NOTHING,
@@ -528,6 +551,14 @@ EDGES = [
     "  WARNING:  [youtube] n challenge solving failed\n" + NO_FORMAT,
 ]
 OK = [VERBOSE, "", f"WARNING: [youtube] {ID}: n challenge solving failed: Some formats may be missing."]
+# What the owner's phone printed in Gate Y0's sessions (2026-11-27): every download's warning (no FFmpeg there), never a
+# failure, nor what makes a pass-over out of date; and a search a lossy Wi-Fi cut in its TLS handshake, an error that
+# is neither a block nor out of date (the cause's repr, which the session's report elided, written as yt-dlp's).
+DASH = (f"WARNING: {ID}: writing DASH m4a. Only some players support this container. Install ffmpeg to fix this "
+        "automatically")
+HANDSHAKE = ("ERROR: Unable to download API page: _ssl.c:1015: The handshake operation timed out (caused by "
+             "TransportError('_ssl.c:1015: The handshake operation timed out'))")
+SEEN = [HANDSHAKE, f"{DASH}\n{HANDSHAKE}", f"{DASH}\n{NO_FORMAT}"]
 
 
 def test_the_classify_corpus():
@@ -538,6 +569,10 @@ def test_the_classify_corpus():
         records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": PROVISIONAL} for s in texts]
     records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": None} for s in EDGES]
     records += [{"stderr": s, "exit": 0, "class": "ok", "provisional": PROVISIONAL if s else None} for s in OK]
+    records += [{"stderr": s, "exit": 1, "class": youtube.classify(s), "provisional": None} for s in SEEN]
+    records += [{"stderr": DASH, "exit": 0, "class": "ok", "provisional": None}]
+    assert [youtube.classify(s) for s in SEEN] == ["error", "error", "pass_over"]
+    assert youtube.classify(DASH) == "error"  # read only for a run that failed: an ok run is ok whatever it warns
     assert all(r["class"] == "outdated" for r in records[len(COMPUTERS):len(COMPUTERS) + len(SOLVER_BROKE)])
     assert {youtube.classify(s) for s in PASSED_OVER} == {"pass_over"}
     assert {youtube.classify(s) for s in GATE} == {"error"}
@@ -1317,3 +1352,628 @@ def test_the_record_corpus(tmp_path):
         records.append({"song": n, "stored": text, "saved": db.kv_get(conn, key)})
     conn.close()
     check(VECTORS / "youtube" / "record.jsonl", jsonl(records, corpus="youtube/record", made_by=MADE_BY))
+
+
+# --- video_cmd.jsonl ----------------------------------------------------------------------------------------------
+#
+# ``caracole youtube --video=URL|ID --progress`` (commands/youtube.py ``_video`` and ``_thumbnail``) over FakeYtDlp and
+# a fake i.ytimg.com (httpx.MockTransport for provider ``ytimg``), a scene a record: ``kw`` the command's ``link``,
+# whether ``youtube`` and ``ytimg`` are on, the kv texts and ``events`` (``[run, at, provider]``) before, FakeYtDlp's
+# answer for the video (``video_id``; ``video``: its fields, or ``stderr`` and ``exit``; null: never asked), the image host's
+# (``thumb``: ``status``, ``base64``; null: never asked) and a thumbnail kept before (``kept``, its base64); ``out``
+# its ``exit``, its plain ``lines`` and its ``progress`` events (``[stage, state, detail]``), the ``error`` of an exit
+# 2, each yt-dlp run's ``target``, the image host's ``asked`` addresses, the kv texts it changed (null: deleted), its
+# ``events`` (``[provider, run, url, status, decision]``), the thumbnail kept after (its SHA-256, or null) and the
+# ``alerts`` (the providers whose block it told). Apart: kv ``VIDEO_APART`` and the events' times. Then ``checked_jpeg`` records (``fn``): synthetic heads,
+# each its ``base64`` and the ``zeros`` after it, and whether it is ``kept``.
+
+PASTED_ID = "lzN7Thn3FV4"
+TRACKED = f"https://www.youtube.com/watch?v={PASTED_ID}&pp=ygUQdmlraW5nb3MgdmVnYW5vcw%3D%3D"
+VIKINGOS = {"title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu", "duration": 222}
+JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
+JPEG_OK = {"status": 200, "base64": base64.b64encode(JPEG).decode("ascii")}
+VKEY = youtube_search.video_key(PASTED_ID)
+# Compared apart: when a request went (the phone's runner keeps YouTube's there too), and the key rules a database is
+# at, which the computer's first open of it writes (songs.ensure_current_keys).
+VIDEO_APART = ("http:last_request:", "songs:key_version")
+
+
+def _video_kv(**ago) -> dict:
+    return {youtube_search.KV_PREFIX + VKEY: json.dumps(
+        {"at": _at(**ago), "video": {"id": PASTED_ID, "url": watch_url(PASTED_ID), **VIKINGOS}, "thumb": True},
+        ensure_ascii=False)}
+
+
+# (case, link, youtube on, ytimg on, kv, events, the video's answer, the thumbnail's answer, a thumbnail kept, cooling)
+VIDEO_SCENES = [
+    ("a pasted link with tracking: the video read, its thumbnail kept", TRACKED, True, True, {}, [], VIKINGOS,
+     JPEG_OK, None, None),
+    ("youtu.be's link", f"https://youtu.be/{PASTED_ID}?si=abc", True, True, {}, [], VIKINGOS, JPEG_OK, None, None),
+    ("the id alone, a title of other scripts", PASTED_ID, True, True, {}, [],
+     {"title": "宋冬野 - 安和桥 (Live) «Café»", "channel": "宋冬野", "duration": 240.5}, JPEG_OK, None, None),
+    ("read this month: nothing asked", PASTED_ID, True, True, _video_kv(days=3), [], None, None, None, None),
+    ("read this month as none: nothing asked", PASTED_ID, True, True,
+     {youtube_search.KV_PREFIX + VKEY: json.dumps({"at": _at(days=2), "video": None,
+                                                   "unavailable": "[youtube] x: Private video"})}, [], None, None,
+     None, None),
+    ("read 31 days ago: read again", PASTED_ID, True, True, _video_kv(days=31), [], VIKINGOS, JPEG_OK, None, None),
+    ("a private video: kept as none, no thumbnail", PASTED_ID, True, True, {}, [],
+     {"stderr": f"ERROR: [youtube] {PASTED_ID}: Private video. Sign in if you've been granted access", "exit": 1},
+     None, None, None),
+    ("a block: the cooldown recorded, one alert, nothing kept", TRACKED, True, True, {}, [],
+     {"stderr": "ERROR: [youtube] Sign in to confirm you’re not a bot.", "exit": 1}, None, None, None),
+    ("an error: remembered for the hour", PASTED_ID, True, True, {}, [],
+     {"stderr": f"ERROR: [youtube] {PASTED_ID}: fragment 1 not found, unable to continue", "exit": 1}, None, None,
+     None),
+    ("an earlier failure of it forgotten once read", PASTED_ID, True, True,
+     _failed(**{"other": {"at": _at(minutes=5), "error": "x"}, VKEY: {"at": _at(minutes=90), "error": "old"}}), [],
+     VIKINGOS, JPEG_OK, None, None),
+    ("YouTube cooling down: not read", PASTED_ID, True, True, {}, [], None, None, None, {"hours": 1}),
+    ("the hour's 10 spent: not read", PASTED_ID, True, True, {}, _runs(10), None, None, None, None),
+    ("failed within the hour: not read", PASTED_ID, True, True,
+     _failed(**{VKEY: {"at": _at(minutes=10), "error": "boom"}}), [], None, None, None, None),
+    ("YouTube off: not read, in the computer's words", PASTED_ID, False, True, {}, [], None, None, None, None),
+    ("the image host off: no thumbnail asked", PASTED_ID, True, False, {}, [], VIKINGOS, None, None, None),
+    ("the image host cooling: no thumbnail asked", PASTED_ID, True, True, {}, [], VIKINGOS, None, None, "ytimg"),
+    ("no thumbnail there (404)", PASTED_ID, True, True, {}, [], VIKINGOS, {"status": 404, "base64": ""}, None, None),
+    ("a thumbnail that isn't a JPEG", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 200, "base64": base64.b64encode(b"<html>not an image</html>").decode("ascii")}, None, None),
+    ("the image host blocking (403): its own cooldown and alert", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 403, "base64": ""}, None, None),
+    ("the image host failing (500): no thumbnail, an error", PASTED_ID, True, True, {}, [], VIKINGOS,
+     {"status": 500, "base64": ""}, None, None),
+    ("a thumbnail kept already: nothing asked of the image host", PASTED_ID, True, True, {}, [], VIKINGOS, None,
+     JPEG_OK["base64"], None),
+    ("not a video's link: exit 2", "https://www.youtube.com/@nickcani", True, True, {}, [], None, None, None, None),
+]
+
+
+def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
+    case, link, yt_on, img_on, kv, events, answer, thumb, kept, cooling = scene
+
+    def plan(fake):
+        if answer is not None:
+            fake.video(PASTED_ID, **{"title": "", "channel": "", "duration": 0, **answer})
+
+    out, seeded = _command(tmp_path / f"video-{n}", monkeypatch, ["--video", link], plan, PASTED_ID, yt_on, img_on, kv,
+                           events, thumb, kept, cooling)
+    out["error"] = None
+    if out["exit"] == 2:
+        import caracole.commands.youtube as cmd
+        out["error"] = cmd.NOT_A_VIDEO.format(link=repr(link))
+    out = {k: out[k] for k in ("exit", "lines", "progress", "error", "runs", "asked", "kv", "events", "thumb",
+                               "alerts")}
+    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kw": {"link": link, "video_id": PASTED_ID, "youtube": yt_on, "ytimg": img_on,
+                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
+                   "events": events, "video": answer, "thumb": thumb, "kept": kept},
+            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+
+
+def _command(root, monkeypatch, args: list[str], plan, thumb_id: str, yt_on: bool, img_on: bool, kv: dict,
+             events: list, thumb, kept, cooling) -> tuple[dict, dict]:
+    """``caracole youtube ARGS --progress`` over FakeYtDlp (``plan`` its answers) and a fake i.ytimg.com, recorded:
+    its ``out`` (the module's comment over the video's records) and the kv texts seeded before it."""
+    import httpx
+    from typer.testing import CliRunner
+
+    import caracole.commands.youtube as cmd
+    from caracole.cli import build_app
+    from caracole.commands import _common
+    from caracole.get import read_progress_line
+
+    fake = FakeYtDlp(root / "bin")
+    plan(fake)
+    models = root / "models"
+    models.mkdir(parents=True)
+    for name in ("btc.pt", "beat.ckpt"):
+        (models / name).write_bytes(b"m")
+    lines = [f'library_dir = "{root / "lib"}"', f'music_dir = "{root / "music"}"', f'state_dir = "{root / "state"}"',
+             f'cache_dir = "{root / "cache"}"', f'ytdlp_bin = "{fake.bin}"', "[providers.youtube]", "delay = [0, 0]",
+             f"enabled = {'true' if yt_on else 'false'}", "[providers.ytimg]", f"enabled = {'true' if img_on else 'false'}",
+             "[autochords]", f'btc_weights = "{models / "btc.pt"}"', f'beat_checkpoint = "{models / "beat.ckpt"}"']
+    config = root / "caracole.toml"
+    config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "state").mkdir()
+    conn = db.connect(root / "state" / "caracole.sqlite")
+    for k, v in kv.items():
+        db.kv_set(conn, k, v)
+    for run, at, provider in events:
+        conn.execute("INSERT INTO events (run, at, provider, url, status, decision, message) "
+                     "VALUES (?, ?, ?, ?, NULL, 'ok', NULL)", (run, at, provider, watch_url(PASTED_ID)))
+    if cooling is not None:
+        provider, ago = ("ytimg", {"hours": 1}) if cooling == "ytimg" else ("youtube", cooling)
+        from datetime import timedelta
+        health.record_block(conn, provider, NOW - timedelta(**ago), "blocked")
+    seeded = dict(conn.execute("SELECT key, value FROM kv").fetchall())
+    before = dict(seeded)
+    last_event = conn.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()[0]
+    conn.close()
+    if kept is not None:
+        thumbs = root / "cache" / youtube_search.THUMBS
+        thumbs.mkdir(parents=True)
+        (thumbs / f"{thumb_id}.jpg").write_bytes(base64.b64decode(kept))
+    asked, alerts = [], []
+
+    def handler(request):
+        asked.append(str(request.url))
+        if thumb is None:
+            pytest.fail(f"the image host was asked {request.url}")
+        return httpx.Response(thumb["status"], content=base64.b64decode(thumb["base64"]),
+                              headers={"content-type": "image/jpeg"})
+
+    def transport(provider):
+        assert provider == "ytimg", provider
+        return httpx.MockTransport(handler)
+
+    monkeypatch.setattr(youtube_fetch, "autochords_missing", lambda: [])
+    monkeypatch.setattr(_common, "transport_for", transport)
+    monkeypatch.setattr(_common, "sleep", lambda s: None)
+    monkeypatch.setattr(_common, "alert_block", lambda cfg, provider, message, **kw: alerts.append(provider))
+    monkeypatch.setattr(cmd, "utcnow", lambda: NOW)
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "youtube", *args, "--progress"])
+    conn = db.connect(root / "state" / "caracole.sqlite")
+    after = dict(conn.execute("SELECT key, value FROM kv").fetchall())
+    new_events = [list(r) for r in conn.execute("SELECT provider, run, url, status, decision FROM events WHERE id > ? "
+                                                "ORDER BY id", (last_event,))]
+    conn.close()
+    plain, progress = [], []
+    for line in result.output.splitlines():
+        event = read_progress_line(line)
+        if event is not None:
+            progress.append([event["stage"], event["state"], event["detail"]])
+        elif result.exit_code == 0:
+            plain.append(line)
+    kept_after = root / "cache" / youtube_search.THUMBS / f"{thumb_id}.jpg"
+    changed = {k: after.get(k) for k in sorted(set(before) | set(after))
+               if before.get(k) != after.get(k) and not k.startswith(VIDEO_APART)}
+    out = {"exit": result.exit_code, "lines": plain, "progress": progress,
+           "runs": [argv[-1] for argv in fake.argvs()], "asked": asked, "kv": changed, "events": new_events,
+           "thumb": hashlib.sha256(kept_after.read_bytes()).hexdigest() if kept_after.is_file() else None,
+           "alerts": alerts}
+    assert result.exit_code in (0, 2), result.output
+    return out, seeded
+
+
+def _jpeg(*segments: bytes, scan: bytes = b"\x12\x34\xff\xd9") -> bytes:
+    return b"\xff\xd8" + b"".join(segments) + b"\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00" + scan
+
+
+def _sof(marker: int = 0xC0, height: int = 360, width: int = 480, length: int = 11) -> bytes:
+    import struct
+    body = struct.pack(">BHHB", 8, height, width, 1) + b"\x01\x11\x00"
+    return bytes([0xFF, marker]) + struct.pack(">H", length) + body[:length - 2].ljust(length - 2, b"\x00")
+
+
+APP0 = b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+JPEG_HEADS = [
+    (JPEG, 0), (JPEG, 64), (JPEG, youtube_search.MAX_BYTES - len(JPEG)), (JPEG, youtube_search.MAX_BYTES - len(JPEG) + 1),
+    (b"", 0), (b"\xff\xd8", 0), (b"\xff\xd8\xff", 0), (b"\xff\xd8\xff\xd9", 0), (b"\x89PNG\r\n\x1a\n", 0),
+    (_jpeg(APP0, _sof()), 0), (_jpeg(_sof(0xC2)), 0), (_jpeg(_sof(0xC4)), 0), (_jpeg(_sof(0xCC)), 0),
+    (_jpeg(_sof(width=0)), 0), (_jpeg(_sof(height=0)), 0), (_jpeg(_sof(width=2048, height=2048)), 0),
+    (_jpeg(_sof(width=2049)), 0), (_jpeg(_sof(height=2049)), 0), (_jpeg(_sof(length=7)), 0),
+    (_jpeg(_sof(length=6)), 0), (_jpeg(_sof(length=2)), 0), (_jpeg(b"\xff\xe1\x00\x01", _sof()), 0),
+    (_jpeg(APP0), 0), (_jpeg(_sof(), scan=b"\x12\x34"), 0), (_jpeg(_sof(), scan=b"\xff\xd9\x00\x00"), 0),
+    (_jpeg(_sof(), scan=b"\xff\xd9\x01"), 0), (_jpeg(b"\xff\xff\xff", _sof()), 0), (_jpeg(b"\x00", _sof()), 0),
+    (_jpeg(b"\xff\xd0", _sof()), 0), (_jpeg(b"\xff\x01", _sof()), 0), (_jpeg(b"\xff\xd8", _sof()), 0),
+    (_jpeg(_sof(), _sof(width=4000)), 0), (_jpeg(_sof(width=4000), _sof()), 0),
+    (b"\xff\xd8" + _sof() + b"\xff\xda\x00\x40", 0), (b"\xff\xd8\xff\xe0\x00\x10JFIF", 0),
+]
+
+
+def _seeded_jpegs() -> list[bytes]:
+    rng = random.Random(20261127)
+    out = []
+    for _ in range(160):
+        data = bytearray(rng.choice([JPEG, _jpeg(APP0, _sof()), _jpeg(_sof(0xC2, 1, 1))]))
+        for _ in range(rng.randint(1, 3)):
+            kind = rng.random()
+            i = rng.randrange(len(data))
+            if kind < 0.5:
+                data[i] = rng.choice([0x00, 0xFF, 0xD8, 0xD9, 0xDA, 0xC0, rng.randrange(256)])
+            elif kind < 0.75:
+                del data[i]
+            else:
+                data.insert(i, rng.randrange(256))
+        out.append(bytes(data))
+    return out
+
+
+def test_the_video_command_corpus(tmp_path, monkeypatch):
+    records = [_video_record(tmp_path, monkeypatch, n, scene) for n, scene in enumerate(VIDEO_SCENES)]
+    heads = [(data, zeros) for data, zeros in JPEG_HEADS] + [(d, 0) for d in _seeded_jpegs()]
+    for data, zeros in heads:
+        whole = data + b"\x00" * zeros
+        records.append({"fn": "checked_jpeg", "base64": base64.b64encode(data).decode("ascii"), "zeros": zeros,
+                        "kept": youtube_search.checked_jpeg(whole) is not None})
+    check(VECTORS / "youtube" / "video_cmd.jsonl", jsonl(records, corpus="youtube/video_cmd", made_by=MADE_BY))
+
+
+def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
+    by = {s[0].split(":")[0]: _video_record(tmp_path, monkeypatch, n, s) for n, s in enumerate(VIDEO_SCENES)}
+    first = by["a pasted link with tracking"]["out"]
+    assert first["runs"] == [watch_url(PASTED_ID)] and first["asked"] == [youtube_search.THUMB_URL.format(id=PASTED_ID)]
+    assert first["lines"] == [f"Searched: YouTube video {PASTED_ID}: {VIKINGOS['title']} ({VIKINGOS['channel']})."]
+    assert [p[:2] for p in first["progress"]] == [["video", "running"], ["video", "done"], ["thumbnail", "running"],
+                                                  ["thumbnail", "done"]]
+    assert first["thumb"] == hashlib.sha256(JPEG).hexdigest() and first["alerts"] == []
+    for case in ("read this month", "read this month as none", "YouTube cooling down", "the hour's 10 spent",
+                 "failed within the hour", "YouTube off"):
+        assert by[case]["out"]["runs"] == [], case
+    assert by["YouTube off"]["out"]["lines"] == ["Not searched: YouTube is off. Try again later."]
+    assert by["a block"]["out"]["alerts"] == ["youtube"] and json.loads(by["a block"]["out"]["kv"]["provider:youtube"])
+    assert by["the image host blocking (403)"]["out"]["alerts"] == ["ytimg"]
+    assert by["a thumbnail kept already"]["out"]["asked"] == []
+    assert by["not a video's link"]["out"]["exit"] == 2 and by["not a video's link"]["out"]["runs"] == []
+    assert VKEY in json.loads(by["an error"]["out"]["kv"][youtube_search.FAILED_KEY])
+
+
+# --- due.jsonl ----------------------------------------------------------------------------------------------------
+#
+# youtube_fetch.py's ``phone_due``: the songs a phone takes the audio of from YouTube by itself, over a fixture library a
+# record (helpers.corpus's ``dump_fixture``, no library file: the rule reads the ``files`` table alone), with
+# ``overrides`` (``ignore``'s keys, ``youtube``'s video ids or null for "none") and ``now``: ``due`` on a phone with no
+# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id. kv
+# ``youtube-unheard:<id>`` in a scene's fixture is the phone's note of a video it couldn't hear.
+
+DUE_NOW = NOW
+DUE_PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id, an auto sheet's maker
+DUE_VIDEO, DUE_PASTE = "XFkzRNyygfk", "oNOFfl3Hx3s"
+
+
+def _due_db(tmp_path, n: int):
+    from types import SimpleNamespace
+
+    root = tmp_path / f"due-{n}"
+    conn = db.connect(root / "caracole.sqlite")
+    fixed = Path("/home/owner/caracole")  # the paths a song's audio names: the record's, whatever the test's folder
+    return conn, SimpleNamespace(library_dir=root / "lib", music_dir=fixed / "Music", state_dir=fixed / "state",
+                                 cache_dir=fixed / "cache")
+
+
+def _due_song(conn, title: str, day: int, *, artist: str = "Radiohead", **cols):
+    from caracole.songs import get_song, update_song, upsert_song
+
+    song_id, _ = upsert_song(conn, artists=[artist], title=title, album=None, duration_ms=239000, isrc=None,
+                             source="wanted", source_id=f"{artist}/{title}",
+                             added_at=f"2026-11-{day:02d}T00:00:00Z")
+    update_song(conn, song_id, **{"match_decision": "not_found", **cols})
+    return get_song(conn, song_id)
+
+
+def _due_sheet(conn, cfg, song, name: str, raw: dict) -> None:
+    from caracole.library import keep_file
+    from caracole.songs import update_song
+    from caracole.versions import upsert_version
+
+    auto = name == "sheet (auto).txt"
+    v = upsert_version(conn, provider="auto" if auto else "ug", tab_id=str(1000 + song.id), song_id=song.id,
+                       slot="sheet", kind="auto" if auto else "chords", rating=0, votes=0, version=1, label=None,
+                       url="x", raw=raw, now="2026-11-01T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name=name, data=b"[C]x", rank=1)
+    update_song(conn, song.id, status="found", match_decision="accept" if not auto else song.match_decision,
+                ug_checked_at="2026-11-01T00:00:00Z")
+
+
+def _due_kv(conn, key: str, value) -> None:
+    db.kv_set_json(conn, key, value)
+
+
+def _due_record(conn, song_id: int, **fields) -> None:
+    _due_kv(conn, f"{youtube_fetch.RECORD_PREFIX}{song_id}", fields)
+
+
+def _due_noted(conn, song) -> None:
+    _due_kv(conn, f"{youtube_fetch.WANTED_PREFIX}{song.id}", _at(days=1))
+
+
+def _every_kind(conn, cfg) -> tuple[dict, dict]:
+    """A library of every kind of song the rule weighs, and its overrides."""
+    from caracole.songs import update_song
+
+    s = {}
+    for day, (name, cols) in enumerate([
+        ("noted", {}), ("not noted", {}), ("noted, its last try failed", {}), ("its last try failed", {}),
+        ("noted, older", {}), ("found nothing 3 days ago", {}), ("found nothing 31 days ago", {}),
+        ("a video pasted", {}), ("pasted, found nothing lately", {}), ("declined", {}), ("pasted, unusable", {}),
+        ("YouTube's audio kept, a new paste", {}), ("YouTube's audio kept", {}), ("an upload", {}),
+        ("a purchase", {}), ("not matched yet", {"match_decision": None}),
+        ("in review", {"match_decision": "review"}), ("matched, not fetched yet", {"match_decision": "accept"}),
+        ("a human sheet", {}), ("an auto sheet the computer made", {}), ("an auto sheet the phone made", {}),
+        ("noted, with an auto sheet", {}), ("ignored", {}), ("ignored by overrides.toml", {}),
+        ("ignored song", {"status": "ignored"}),
+    ]):
+        s[name] = _due_song(conn, name.title(), 28 - day, **cols)
+    for name in ("noted", "noted, its last try failed", "noted, older", "noted, with an auto sheet"):
+        _due_noted(conn, s[name])
+    for name in ("noted, its last try failed", "its last try failed"):
+        _due_record(conn, s[name].id, error="ERROR: HTTP Error 502: Bad Gateway", error_at=_at(days=1))
+    _due_record(conn, s["found nothing 3 days ago"].id, missing_at=_at(days=3), query="x")
+    _due_record(conn, s["found nothing 31 days ago"].id, missing_at=_at(days=31), query="x")
+    _due_record(conn, s["pasted, found nothing lately"].id, missing_at=_at(days=3), query="x")
+    _due_record(conn, s["pasted, unusable"].id, unusable=DUE_PASTE, unusable_reason="Private video")
+    for name in ("YouTube's audio kept, a new paste", "YouTube's audio kept"):
+        path = str(cfg.cache_dir / "youtube" / f"{s[name].id}-{DUE_VIDEO}.m4a")
+        update_song(conn, s[name].id, audio_path=path, audio_mtime=1.0)
+        _due_record(conn, s[name].id, video={"id": DUE_VIDEO, "url": watch_url(DUE_VIDEO)}, source="search",
+                    audio=path, downloaded_at=_at(days=2))
+    update_song(conn, s["an upload"].id, audio_path=str(cfg.state_dir / "audio" / f"{s['an upload'].id}-ab.mp3"),
+                audio_mtime=1.0)
+    update_song(conn, s["a purchase"].id, audio_path=str(cfg.music_dir / "Radiohead - A Purchase.flac"),
+                audio_mtime=1.0)
+    _due_sheet(conn, cfg, s["a human sheet"], "sheet.txt", {})
+    _due_sheet(conn, cfg, s["an auto sheet the computer made"], "sheet (auto).txt", {"lyrics": "none"})
+    _due_sheet(conn, cfg, s["an auto sheet the phone made"], "sheet (auto).txt",
+               {"lyrics": "none", "made_on": "phone", "made_by": DUE_PHONE})
+    _due_sheet(conn, cfg, s["noted, with an auto sheet"], "sheet (auto).txt", {"lyrics": "none"})
+    overrides = {"ignore": [s["ignored by overrides.toml"].key],
+                 "youtube": {s["a video pasted"].key: DUE_PASTE, s["pasted, found nothing lately"].key: DUE_PASTE,
+                             s["declined"].key: None, s["pasted, unusable"].key: DUE_PASTE,
+                             s["YouTube's audio kept, a new paste"].key: DUE_PASTE},
+                 "lacuerda": {}}
+    update_song(conn, s["ignored"].id, status="ignored")
+    return s, overrides
+
+
+def _partial_index(conn, cfg) -> tuple[dict, dict]:
+    """UG's index read part-way: a song it lacks may be in the sitemaps not read yet, so none is settled."""
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                 "VALUES (1, 'oasis', 'wonderwall', 'chords', 's1', '2026-11-01T00:00:00Z', 'tab/oasis/wonderwall')")
+    s = {"not on UG, the index partial": _due_song(conn, "Not On Ug", 10),
+         "on UG, fetched, no sheet": _due_song(conn, "Fetched", 9, match_decision="accept",
+                                               ug_checked_at="2026-11-20T00:00:00Z", ug_dirty=False),
+         "on UG, its fetch due again": _due_song(conn, "Dirty", 8, match_decision="accept",
+                                                 ug_checked_at="2026-11-20T00:00:00Z", ug_dirty=True)}
+    _due_noted(conn, s["not on UG, the index partial"])
+    return s, {"ignore": [], "youtube": {}, "lacuerda": {}}
+
+
+def _complete_index(conn, cfg) -> tuple[dict, dict]:
+    s, o = _partial_index(conn, cfg)
+    db.kv_set(conn, "ug:index:built_at", "2026-11-01T00:00:00Z")
+    return {k.replace("partial", "complete"): v for k, v in s.items()}, o
+
+
+def _lacuerda(conn, cfg) -> tuple[dict, dict]:
+    """LaCuerda still to ask for a song that looks Spanish; asked already for another."""
+    s = {"LaCuerda not asked yet": _due_song(conn, "De Música Ligera", 10, artist="Soda Stereo"),
+         "LaCuerda asked": _due_song(conn, "Persiana Americana", 9, artist="Soda Stereo",
+                                     lacuerda_checked_at="2026-11-20T00:00:00Z")}
+    for song in s.values():
+        _due_noted(conn, song)
+    return s, {"ignore": [], "youtube": {}, "lacuerda": {}}
+
+
+def _ug_and_lacuerda_checks(conn, cfg) -> tuple[dict, dict]:
+    """The rest of what keeps a song waiting for the sites (todo.songs_to_buy): a pick on LaCuerda not asked for yet,
+    an artist's UG page due again (ug/fetch.py ``fetch_due``), and a pinned match; UG's index read whole."""
+    from caracole.ug.lookup import remember_artist_url
+
+    db.kv_set(conn, "ug:index:built_at", "2026-11-01T00:00:00Z")
+    fetched = {"ug_checked_at": "2026-11-20T00:00:00Z", "ug_dirty": False}
+    s = {"pinned, fetched": _due_song(conn, "Pinned", 20, match_decision="pinned", **fetched),
+         "a LaCuerda pick not asked yet": _due_song(conn, "Picked", 19, match_decision="accept", **fetched),
+         "a LaCuerda pick asked": _due_song(conn, "Picked And Asked", 18, match_decision="accept",
+                                            lacuerda_checked_at="2026-11-21T00:00:00Z", **fetched),
+         "its artist's page due again": _due_song(conn, "Page Due", 17, match_decision="accept",
+                                                  match_step="artist_page", **fetched),
+         "its artist's page read lately": _due_song(conn, "Page Lately", 16, match_decision="accept",
+                                                    match_step="artist_page", **fetched),
+         "not found, its artist's page due": _due_song(conn, "Page Never Read", 15, artist="Blur"),
+         "not found, no artist page known": _due_song(conn, "No Page", 14, artist="Pulp")}
+    db.kv_set(conn, f"ug:artist_page_checked:{s["its artist's page due again"].id}", _at(days=31))
+    db.kv_set(conn, f"ug:artist_page_checked:{s["its artist's page read lately"].id}", _at(days=3))
+    remember_artist_url(conn, "blur", "https://www.ultimate-guitar.com/artist/blur_1")
+    for song in s.values():
+        _due_noted(conn, song)
+    picks = {s[name].key: {"artist": "radiohead", "song": name.split()[1], "version": None}
+             for name in ("a LaCuerda pick not asked yet", "a LaCuerda pick asked")}
+    return s, {"ignore": [], "youtube": {}, "lacuerda": picks}
+
+
+def _nothing(conn, cfg) -> tuple[dict, dict]:
+    return {}, {"ignore": [], "youtube": {}, "lacuerda": {}}
+
+
+def _unheard(conn, cfg) -> tuple[dict, dict]:
+    """The phone couldn't hear the audio of the video a song would take (kv youtube-unheard:<id>, its sheet job's note
+    once its chords stage couldn't read the download): passed over for that video within 30 days."""
+    names = ["its pick unheard lately", "its pick unheard 31 days ago", "another pick since",
+             "pasted, unheard lately", "another pasted since", "a note that is a list"]
+    s = {name: _due_song(conn, name.title(), 20 - n) for n, name in enumerate(names)}
+    for song in s.values():
+        _due_noted(conn, song)
+        _due_record(conn, song.id, video={"id": DUE_VIDEO, "url": watch_url(DUE_VIDEO)}, source="search",
+                    downloaded_at=_at(days=5))
+
+    def note(name: str, video: str, **ago) -> None:
+        _due_kv(conn, f"{youtube_fetch.UNHEARD_PREFIX}{s[name].id}",
+                {"video": video, "at": _at(**ago), "error": "audio the phone can't read: its fragments can't be read"})
+
+    note("its pick unheard lately", DUE_VIDEO, days=4)
+    note("its pick unheard 31 days ago", DUE_VIDEO, days=31)
+    note("another pick since", DUE_PASTE, days=4)
+    note("pasted, unheard lately", DUE_PASTE, days=4)
+    note("another pasted since", DUE_VIDEO, days=4)
+    _due_kv(conn, f"{youtube_fetch.UNHEARD_PREFIX}{s['a note that is a list'].id}", [DUE_VIDEO])
+    pasted = {s[name].key: DUE_PASTE for name in ("pasted, unheard lately", "another pasted since")}
+    return s, {"ignore": [], "youtube": pasted, "lacuerda": {}}
+
+
+DUE_SCENES = [("every kind of song", _every_kind), ("UG's index read part-way", _partial_index),
+              ("UG's index read whole", _complete_index), ("LaCuerda still to ask", _lacuerda),
+              ("UG's and LaCuerda's other checks", _ug_and_lacuerda_checks), ("an empty library", _nothing),
+              ("a video the phone couldn't hear", _unheard)]
+
+
+def _due_out(tmp_path, n: int, case: str, build) -> tuple[dict, dict]:
+    """A scene's record, and its songs by name."""
+    from helpers.corpus import dump_fixture
+
+    from caracole.overrides import LaCuerdaPick, Overrides
+
+    conn, cfg = _due_db(tmp_path, n)
+    songs, given = build(conn, cfg)
+    conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", ("2026-11-01T00:00:00Z",) * 2)  # not the clock's
+    conn.execute("UPDATE files SET created_at = ?", ("2026-11-01T00:00:00Z",))
+    overrides = Overrides(ignore=frozenset(given["ignore"]), youtube=given["youtube"],
+                          lacuerda={k: LaCuerdaPick(**v) for k, v in given["lacuerda"].items()})
+    due = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=False)]
+    paired = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=True)]
+    computer = [s.id for s in youtube_fetch.songs_for_youtube(conn, overrides, DUE_NOW)]
+    record = {"case": case, "now": DUE_NOW.strftime("%Y-%m-%dT%H:%M:%SZ"), "overrides": given,
+              "songs": {str(song.id): name for name, song in songs.items()}, "fixture": dump_fixture(conn),
+              "due": due, "paired": paired}
+    conn.close()
+    return record, {"songs": songs, "computer": computer}
+
+
+def test_the_due_corpus(tmp_path):
+    records = [_due_out(tmp_path, n, case, build)[0] for n, (case, build) in enumerate(DUE_SCENES)]
+    check(VECTORS / "youtube" / "due.jsonl", jsonl(records, corpus="youtube/due", made_by=MADE_BY))
+
+
+def test_the_due_cases_come_to_what_they_say(tmp_path):
+    by = {}
+    for n, (case, build) in enumerate(DUE_SCENES):
+        record, seen = _due_out(tmp_path, n, case, build)
+        assert set(record["due"]) <= set(seen["computer"]) and set(record["paired"]) <= set(record["due"]), case
+        by[case] = {**record, "names": [record["songs"][str(i)] for i in record["due"]],
+                    "paired_names": [record["songs"][str(i)] for i in record["paired"]]}
+    every = by["every kind of song"]
+    assert every["names"] == ["noted", "noted, older", "not noted", "found nothing 31 days ago", "a video pasted",
+                              "pasted, found nothing lately", "noted, its last try failed", "its last try failed"]
+    assert every["paired_names"] == ["noted", "noted, older", "noted, its last try failed"]
+    assert by["UG's index read part-way"]["names"] == ["on UG, fetched, no sheet"]  # a song UG lacks may come yet
+    assert by["UG's index read whole"]["names"] == ["not on UG, the index complete", "on UG, fetched, no sheet"]
+    assert by["UG's index read whole"]["paired_names"] == ["not on UG, the index complete"]
+    assert by["LaCuerda still to ask"]["names"] == ["LaCuerda asked"]
+    assert by["UG's and LaCuerda's other checks"]["names"] == [
+        "pinned, fetched", "a LaCuerda pick asked", "its artist's page read lately", "not found, no artist page known"]
+    assert by["an empty library"]["due"] == [] and by["an empty library"]["fixture"]
+    unheard = by["a video the phone couldn't hear"]
+    assert unheard["names"] == ["its pick unheard 31 days ago", "another pick since", "another pasted since",
+                                "a note that is a list"]
+    assert unheard["paired_names"] == unheard["names"]
+
+
+# --- search_cmd.jsonl ---------------------------------------------------------------------------------------------
+#
+# ``caracole youtube --search=QUERY --progress`` (commands/youtube.py ``_search`` and ``_thumbnail``) as video_cmd.jsonl
+# records ``--video``, a scene a record: ``kw`` the command's ``query``, the video's ``video_id`` (its thumbnail's),
+# whether ``youtube`` and ``ytimg`` are on, ``problem`` (youtube_fetch.route_problem's reason this caracole makes no
+# sheet from a video, null for none: the phone's is its own, so the record names it), the kv texts and ``events`` before,
+# FakeYtDlp's answer for the search (``search``: its ``entries``, or ``stderr`` and ``exit``; null: never asked), the
+# image host's (``thumb``) and a thumbnail kept before (``kept``); ``out`` as video_cmd.jsonl's.
+
+SEARCHED_KV = youtube_search.KV_PREFIX + QK
+
+
+def _search_kv(video, *, thumb=True, **ago) -> dict:
+    return {SEARCHED_KV: json.dumps({"at": _at(**ago), "query": Q, "video": video, "thumb": thumb},
+                                    ensure_ascii=False)}
+
+
+CREEP_ENTRY = entry(ID, "Radiohead - Creep", "Radiohead", 239)
+BLOCKED = {"stderr": "ERROR: [youtube] Sign in to confirm you’re not a bot.", "exit": 1}
+BOOM = {"stderr": "ERROR: Unable to download API page: HTTP Error 500: Internal Server Error", "exit": 1}
+OFF = "turned off ([providers.youtube] enabled = false)"
+
+# (case, query, youtube on, ytimg on, problem, kv, events, the search's answer, the thumbnail's, a thumbnail kept, cooling)
+SEARCH_SCENES = [
+    ("a query searched: its first video, its thumbnail kept", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("a query of other scripts", "宋冬野 安和桥", True, True, None, {}, [],
+     {"entries": [entry(ID, "宋冬野 - 安和桥 (Live) «Café»", "宋冬野", 240.5)]}, JPEG_OK, None, None),
+    ("a query that reads as placeholders", "{title} {url} Creep", True, True, None, {}, [],
+     {"entries": [entry(ID, "{query} – a title", "{channel}", 200)]}, JPEG_OK, None, None),
+    ("its first video a live stream: none found", Q, True, True, None, {}, [],
+     {"entries": [entry(ID, "Radiohead live now", "Radiohead", None, live_status="is_live")]}, None, None, None),
+    ("no video: none found", Q, True, True, None, {}, [], {"entries": []}, None, None, None),
+    ("searched this month: nothing asked", Q, True, True, None, _search_kv(FOUND, days=3), [], None, None, None,
+     None),
+    ("searched this month as none: nothing asked", Q, True, True, None, _search_kv(None, thumb=False, days=2), [],
+     None, None, None, None),
+    ("searched 31 days ago: searched again", Q, True, True, None, _search_kv(FOUND, days=31), [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("a block: the cooldown recorded, one alert, nothing kept", Q, True, True, None, {}, [], BLOCKED, None, None,
+     None),
+    ("an error: remembered for the hour", Q, True, True, None, {}, [], BOOM, None, None, None),
+    ("an earlier failure of it forgotten once searched", Q, True, True, None,
+     _failed(**{"other": {"at": _at(minutes=5), "error": "x"}, QK: {"at": _at(minutes=90), "error": "old"}}), [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("YouTube cooling down: not searched", Q, True, True, None, {}, [], None, None, None, {"hours": 1}),
+    ("the hour's 10 spent, pasted videos' reads among them: not searched", Q, True, True, None, {},
+     _runs(6) + _runs(4, run=youtube_search.RUN + youtube_search.VIDEO_KEY), None, None, None, None),
+    ("9 of the hour's spent: searched", Q, True, True, None, {}, _runs(9), {"entries": [CREEP_ENTRY]}, JPEG_OK, None,
+     None),
+    ("failed within the hour: not searched", Q, True, True, None,
+     _failed(**{QK: {"at": _at(minutes=10), "error": "boom"}}), [], None, None, None, None),
+    ("three failed this hour: not searched", Q, True, True, None,
+     _failed(**{f"q{i}": {"at": _at(minutes=10), "error": "x"} for i in range(3)}), [], None, None, None, None),
+    ("YouTube off: not searched", Q, False, True, OFF, {}, [], None, None, None, None),
+    ("no sheet from a video here: not searched", Q, True, True, "yt-dlp isn't there (yt-dlp)", {}, [], None, None,
+     None, None),
+    ("no word to search for", "!!! ...", True, True, None, {}, [], None, None, None, None),
+    ("the image host off: no thumbnail asked", Q, True, False, None, {}, [], {"entries": [CREEP_ENTRY]}, None, None,
+     None),
+    ("the image host cooling: no thumbnail asked", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]}, None,
+     None, "ytimg"),
+    ("no thumbnail there (404)", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]},
+     {"status": 404, "base64": ""}, None, None),
+    ("the image host blocking (403): its own cooldown and alert", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, {"status": 403, "base64": ""}, None, None),
+    ("the image host failing (500)", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]},
+     {"status": 500, "base64": ""}, None, None),
+    ("a thumbnail kept already: nothing asked of the image host", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, None, JPEG_OK["base64"], None),
+]
+
+
+def _search_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
+    case, query, yt_on, img_on, problem, kv, events, answer, thumb, kept, cooling = scene
+
+    def plan(fake):
+        if answer is not None:
+            fake.search(" ".join(query.split()), *answer.get("entries", []),
+                        **{k: v for k, v in answer.items() if k != "entries"})
+
+    if problem is not None and yt_on:
+        monkeypatch.setattr(youtube_fetch, "route_problem", lambda cfg: problem)
+    out, seeded = _command(tmp_path / f"search-{n}", monkeypatch, [f"--search={query}"], plan, ID, yt_on, img_on, kv,
+                           events, thumb, kept, cooling)
+    monkeypatch.undo()
+    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kw": {"query": query, "video_id": ID, "youtube": yt_on, "ytimg": img_on, "problem": problem,
+                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
+                   "events": events, "search": answer, "thumb": thumb, "kept": kept},
+            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+
+
+def _search_records(tmp_path, monkeypatch) -> list[dict]:
+    return [_search_record(tmp_path, monkeypatch, n, scene) for n, scene in enumerate(SEARCH_SCENES)]
+
+
+def test_the_search_command_corpus(tmp_path, monkeypatch):
+    check(VECTORS / "youtube" / "search_cmd.jsonl",
+          jsonl(_search_records(tmp_path, monkeypatch), corpus="youtube/search_cmd", made_by=MADE_BY))
+
+
+def test_the_search_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
+    by = {r["case"].split(":")[0]: r["out"] for r in _search_records(tmp_path, monkeypatch)}
+    first = by["a query searched"]
+    assert first["runs"] == [youtube.SEARCH_PREFIX.format(n=1) + Q]
+    assert first["asked"] == [youtube_search.THUMB_URL.format(id=ID)] and first["alerts"] == []
+    assert first["lines"] == [f"Searched: YouTube's first video for “{Q}”: Radiohead - Creep (Radiohead), {watch_url(ID)}."]
+    assert json.loads(first["kv"][SEARCHED_KV])["thumb"] is True
+    for case in ("searched this month", "searched this month as none", "YouTube cooling down",
+                 "the hour's 10 spent, pasted videos' reads among them", "failed within the hour",
+                 "three failed this hour", "YouTube off", "no sheet from a video here", "no word to search for"):
+        assert by[case]["runs"] == [], case
+    assert len(by["9 of the hour's spent"]["runs"]) == 1
+    assert by["a block"]["alerts"] == ["youtube"] and SEARCHED_KV not in by["a block"]["kv"]
+    assert QK in json.loads(by["an error"]["kv"][youtube_search.FAILED_KEY])
+    assert json.loads(by["its first video a live stream"]["kv"][SEARCHED_KV])["video"] is None
+    assert by["the image host blocking (403)"]["alerts"] == ["ytimg"]
+    assert by["a thumbnail kept already"]["asked"] == []

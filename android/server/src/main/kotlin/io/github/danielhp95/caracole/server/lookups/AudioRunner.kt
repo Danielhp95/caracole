@@ -1,8 +1,6 @@
 package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.index.Stamps
-import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.OverrideUrls
@@ -12,14 +10,13 @@ import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.lookup.Lookup
-import io.github.danielhp95.caracole.core.lookup.LookupRequest
 import io.github.danielhp95.caracole.core.lookup.LookupWords
-import io.github.danielhp95.caracole.core.lookup.Progress
 import io.github.danielhp95.caracole.core.lookup.SiteStages
-import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyFormat
+import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.Video
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.http.caracoleResource
 import io.github.danielhp95.caracole.server.jobs.CommandExit
@@ -28,6 +25,7 @@ import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.page.LibraryPage
 import io.github.danielhp95.caracole.viewer.autochords.AudioUnreadable
+import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.ChordsUnavailable
 import io.github.danielhp95.caracole.viewer.autochords.Heard
@@ -44,7 +42,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.CancellationException
 
 /**
@@ -142,195 +139,21 @@ class AudioRunner(
 
     private class Given(val album: String?, val duration: Double)
 
-    /** One run of the job: its stages, as audio_sheet.py's `_AudioSheet`. */
+    /** One run of the job: its stages, as audio_sheet.py's `_AudioSheet` (StagedSheet's, with the audio stage the
+     * upload's keep). */
     private class Job(
-        val parts: PhoneParts, val store: AudioStore, val chords: ChordModels, val context: JobContext,
-        val upload: String, val artist: String, val title: String, val given: Given,
-        val names: () -> Map<String, String>, val readOverrides: (Db) -> Overrides, val stages: SiteStages,
-        val hold: (() -> Heard) -> Heard, val problem: () -> String?,
-    ) {
-        private val started = parts.pacing.monotonic()
-        private val now = parts.pacing.clock().truncatedTo(ChronoUnit.SECONDS)
-        private val stamp = Stamps.of(now)
-        private val display = "$artist - $title"
-        private val states = LinkedHashMap<String, String>()
-        private val told = HashMap<String, String>()
-        private val requests = LinkedHashMap<String, Int>()
-        private var files: Map<String, String> = emptyMap()
-        private var refused: String? = null
-        private var failed: String? = null
-        private var bug: String? = null
-        private lateinit var overrides: Overrides
-        private var song: SongRow? = null
-        private var kept: File? = null  // the file the audio stage kept as the song's audio
-        private var sheetKept = false  // the chords stage left the song a sheet of this audio, whatever it said after
-        private var keptLength: Double? = null
+        parts: PhoneParts, val store: AudioStore, chords: ChordModels, context: JobContext, val upload: String,
+        artist: String, title: String, val given: Given, names: () -> Map<String, String>,
+        readOverrides: (Db) -> Overrides, stages: SiteStages, hold: (() -> Heard) -> Heard, problem: () -> String?,
+    ) : StagedSheet(parts, chords, context, artist, title, names, readOverrides, stages, hold, problem) {
+        override val stageNames: List<String> get() = STAGES.map { it.first }
+        override val album: String? get() = given.album
+        override val duration: Double? get() = given.duration
 
-        /** The job refused, said in the song stage, the stages not ended skipped (staged.py `_refuse`). */
-        private class Stop(message: String) : Exception(message)
-
-        fun run() {
-            report("song", "running")
-            try {
-                overrides = try {
-                    parts.database.read(readOverrides)
-                } catch (e: OverridesError) {
-                    throw Stop("Can't read overrides.toml: ${e.message}")
-                }
-                report("song", "done", parts.database.writeBlocking(::findSong))
-                for ((name, _) in STAGES.drop(1)) stage(name)
-            } catch (e: Stop) {
-                refuse(e.message.orEmpty())
-            }
-            end()
-        }
-
-        // --- reporting --------------------------------------------------------------------------------------------
-
-        private fun report(name: String, state: String, detail: String = "") {
-            if (context.isCancelled) throw CancellationException("the queue stopped")
-            states[name] = state
-            told[name] = detail
-            context.stage(name, state, detail)
-        }
-
-        /** What the running stage [name] is doing now, said once each time it changes (staged.py `_doing`). */
-        private fun doing(name: String, detail: String) {
-            if (states[name] == "running" && told[name] != detail) report(name, "running", detail)
-        }
-
-        private fun stage(name: String) {
-            report(name, "running")
-            val (state, detail) = try {
-                when (name) {
-                    "audio" -> audio()
-                    "lyrics" -> lyrics()
-                    "vocals" -> vocals()
-                    "words" -> "skipped" to Words.text("no_vocals")
-                    "chords" -> chords()
-                    "pdf" -> pdf()
-                    "pages" -> "done" to LookupWords.LIBRARY_PAGE
-                    else -> error("no stage $name")
-                }
-            } catch (e: Stop) {
-                throw e
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: VirtualMachineError) {
-                throw e
-            } catch (e: Exception) {  // a bug: said, and the stages after it go on as they can
-                val said = "${e::class.simpleName}: ${e.message.orEmpty()}"
-                bug = bug ?: "$name: $said"
-                "failed" to Words.text("bug").replace("{error}", said)
-            }
-            report(name, state, detail)
-            checkReadable()
-        }
-
-        /** A stage's end that waiting won't mend: the command exits 1. */
-        private fun fail(detail: String): Pair<String, String> {
-            failed = failed ?: detail
-            return "failed" to detail
-        }
-
-        private fun refuse(why: String) {
-            refused = why
-            report("song", "failed", why)
-            for ((name, _) in STAGES.drop(1)) {
-                if ((states[name] ?: "running") == "running") report(name, "skipped", "")
-            }
-        }
-
-        /** The command's last line, and its exit status (commands/_common.staged_end). */
-        private fun end() {
-            val stopped = refused ?: failed ?: bug?.let { "a bug in caracole ($it)" }
-            if (stopped != null) throw CommandExit(1, "${Words.text("refused")}: ${stopped.trimEnd('.')}.")
-            val sent = requests.filterValues { it != 0 }.entries
-                .joinToString(", ") { (p, n) -> "$n ${LookupWords.NAMES[p] ?: p} request" + if (n == 1) "" else "s" }
-            val seconds = io.github.danielhp95.caracole.core.py.PyFormat.fixed(parts.pacing.monotonic() - started, 1)
-            context.say("Done in $seconds s" + if (sent.isNotEmpty()) ": $sent." else ", asking nothing.")
-        }
-
-        /** The sheet said readable once the chords stage kept it (its info.json failing after or not), and again as its
-         * viewer comes (get.readable_files). */
-        private fun checkReadable() {
-            val song = song ?: return
-            if (!sheetKept) return
-            val readable = parts.database.read { db -> readableFiles(db, song) }
-            if (readable.isNotEmpty() && readable != files) {
-                files = readable
-                context.readable(readable, parts.pacing.monotonic() - started)
-            }
-        }
-
-        private fun readableFiles(db: Db, song: SongRow): Map<String, String> {
-            val kept = Kept.keptFiles(db, song.id).associateBy { it.name }
-            val sheet = Versions.SHEET_FILE_NAMES.firstNotNullOfOrNull { kept[it] } ?: return emptyMap()
-            val folder = parts.store.folderOf(song)
-            val base = sheet.path.substringBeforeLast('/', "")
-            val stem = sheet.name.substringBeforeLast('.')
-            val out = linkedMapOf("sheet" to sheet.path)
-            for ((name, file) in listOf("pdf" to "$stem.pdf", "viewer" to "$stem.html")) {
-                if (File(folder, file).isFile) out[name] = if (base.isEmpty()) file else "$base/$file"
-            }
-            return out
-        }
-
-        // --- the song ---------------------------------------------------------------------------------------------
-
-        /** youtube_sheet.py `_the_song` and audio_sheet.py `find_song`: the song found or added, then still ours. */
-        private fun findSong(db: Db): String {
-            parts.store.ensureCurrentKeys(db)
-            val key = Normalize.identityKey(artist, title)
-            if (key in overrides.ignore) throw Stop(Words.text("ignored").replace("{display}", display))
-            var said = Words.text("in_book")
-            val found = Songs.byKey(db, key) ?: run {
-                said = LookupWords.ADDED
-                val ms = given.duration.takeIf { it >= 1 }?.let { PyFormat.roundHalfEven(it * 1000) }
-                try {
-                    parts.store.add(db, artist, title, given.album, ms, now = stamp)
-                } catch (e: IllegalArgumentException) {
-                    throw Stop("Can't add this song: ${e.message}")
-                }
-            }
-            stillOurs(db, found)
-            song = found
-            context.song(found.id, found.display)
-            return said
-        }
-
-        /** The song read again; gone (removed, or merged into another), the job ends there (staged.py `_song_again`). */
-        private fun again(db: Db): SongRow {
-            val was = song!!
-            val now = Songs.byId(db, was.id)
-                ?: throw Stop(Words.text("left").replace("{display}", was.display).replace("{making}", Words.text("making")))
-            song = now
-            return now
-        }
-
-        /** audio_sheet.py `_still_ours` (`_unsheeted`): not ignored, with no human sheet; and, once the audio stage
-         * kept a file, the song's audio still that file (the design's §3.2). */
-        private fun stillOurs(db: Db, s: SongRow) {
-            notOurs(db, s, overrides)?.let { throw Stop(it) }
-            val kept = kept ?: return
-            if (s.audioPath != kept.path) throw Stop(AUDIO_CHANGED.replace("{display}", s.display))
-        }
-
-        /** The song and the overrides read again after the lookups went first (staged.py `_after_a_lookup`), then
-         * still ours. */
-        private fun readAgain(): SongRow = parts.database.writeBlocking { db ->
-            overrides = try {
-                readOverrides(db)
-            } catch (e: OverridesError) {
-                overrides
-            }
-            again(db).also { stillOurs(db, it) }
-        }
-
-        // --- the audio --------------------------------------------------------------------------------------------
+        override fun maker(db: Db, s: SongRow, audio: File): Maker = fileMaker(store, chords, names, db, s, audio)
 
         /** audio_sheet.py `audio`. */
-        private fun audio(): Pair<String, String> = parts.database.writeBlocking { db ->
+        override fun audio(): Pair<String, String> = parts.database.writeBlocking { db ->
             val current = again(db)
             val before = store.uploaded(current)
             val replaced = if (before != null) Words.text("given_before") else null
@@ -365,131 +188,6 @@ class AudioRunner(
                 .replace("{length}", JobCommands.formatDuration(PyFormat.roundHalfEven(found.second * 1000)))
             "done" to said + (replaced?.let { Words.text("replaces").replace("{replaced}", it) } ?: "")
         }
-
-        // --- the lyrics -------------------------------------------------------------------------------------------
-
-        /** The lookup's lyrics stage over the song, asked with the audio's length (lyrics_search.audio_length: the
-         * song's line's, else the file's, once the audio stage kept it). */
-        private fun lyrics(): Pair<String, String> {
-            val current = parts.database.writeBlocking { db -> again(db).also { stillOurs(db, it) } }
-            val length = current.durationMs?.let { it / 1000.0 } ?: keptLength?.takeIf { states["audio"] == "done" }
-            var end: Pair<String, String>? = null
-            val progress = object : Progress {
-                override fun stage(name: String, state: String, detail: String) {
-                    if (name != "lyrics") return
-                    if (state == "running") doing("lyrics", detail) else end = state to detail
-                }
-            }
-            val lookup = Lookup(parts.config(), parts.database, parts.store, parts.clients(), SongPages.NONE,
-                                io.github.danielhp95.caracole.core.lookup.SongbookPages.NONE, parts.alerts,
-                                LookupRequest(artist, title), progress, parts.pacing, stages, readOverrides)
-            val result = parts.database.writeBlocking { db -> lookup.lyrics(db, current.id, length) }
-            for ((p, n) in result.requests) requests[p] = (requests[p] ?: 0) + n
-            result.bug?.let { bug = bug ?: it }
-            parts.database.writeBlocking { db -> again(db) }
-            return end ?: ("skipped" to (result.refused ?: ""))
-        }
-
-        /** The phone hears no words: the vocals' skip in the offer's words where a site gave words or its verdict
-         * (SITES_ANSWERED), else the phone's reason (lyrics missing, or pending after a site's error, block or spent
-         * budget), as youtube_sheet.py's `_why_not_heard` orders them. */
-        private fun vocals(): Pair<String, String> {
-            if (states["audio"] != "done") return "skipped" to Words.text("no_audio")
-            val status = song!!.lyricsStatus
-            if (status in Words.sitesAnswered) {  // youtube_sheet.SITES_ANSWERED: said first, whatever the phone does
-                return "skipped" to Words.text("not_offered")
-                    .replace("{why}", Words.text("lyrics_are").replace("{status}", status))
-            }
-            return "skipped" to Words.text("not_here").replace("{reason}", Words.text("phone"))
-        }
-
-        // --- the chords -------------------------------------------------------------------------------------------
-
-        private fun chords(): Pair<String, String> {
-            if (states["audio"] != "done") return "skipped" to Words.text("no_audio")
-            context.yieldToQueued()  // the models take a minute: the lookups queued meanwhile go first
-            readAgain()
-            parts.database.writeBlocking { db -> upToDate(db) }?.let { return it }
-            val audio = kept ?: return fail(Words.text("no_audio"))
-            val heard = try {
-                // The models' files held while they hear (ModelsRunner.holding), asked about again under them: a
-                // remove after the job was queued fails it here, in the one answer's words.
-                hold {
-                    problem()?.let { throw ChordsUnavailable(it) }
-                    chords.hear(audio, { step -> doing("chords", step) }, { context.yieldToQueued() })
-                }
-            } catch (e: AudioUnreadable) {
-                return fail(UNREADABLE + (e.message ?: e.javaClass.simpleName))
-            } catch (e: ChordsUnavailable) {
-                return fail(e.message ?: e.javaClass.simpleName)
-            }
-            context.yieldToQueued()
-            readAgain()
-            doing("chords", Words.steps[3])
-            return try {
-                parts.database.writeBlocking { db -> keepSheet(db, heard, audio) }
-            } catch (e: Stop) {
-                throw e
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {  // a bug laying it out or keeping it: caracole's, never the file's
-                fail(Words.text("bug").replace("{error}", "${e::class.simpleName}: ${e.message.orEmpty()}"))
-            } finally {
-                // What the models kept to go on from goes once the sheet is kept, never before: a keep that failed
-                // leaves it, for Try again to lay the sheet out with no hearing. A job refused after a whole hearing
-                // (`stillOurs`: the song got a human sheet meanwhile) keeps no sheet and never calls `forget`: the
-                // folder waits for the day-old sweep, and MlChordModels' entry of it stays for the process's life.
-                if (sheetKept) chords.forget(audio)
-            }
-        }
-
-        /** The sheet already made of this audio here: up to date, or laid out again over its words where they changed
-         * (Relay.onto); null where the models are to hear it (no auto sheet, one of other audio, one another caracole
-         * made: the job is the owner's ask, this side its maker). */
-        private fun upToDate(db: Db): Pair<String, String>? {
-            val s = again(db)
-            val auto = Kept.keptFiles(db, s.id).firstOrNull { it.name == Versions.SHEET_FILE_NAMES[1] } ?: return null
-            val version = Versions.get(db, auto.versionId) ?: return null
-            if (s.autochordsMtime == null || s.autochordsMtime != s.audioMtime || Relay.madeElsewhere(db, version.raw)) {
-                return null
-            }
-            if (Relay.due(s, version.raw, Relay.notedOf(db, s, version.raw)) == null) {
-                sheetKept = true
-                return "done" to Words.text("up_to_date").replace("{held}", holds(version.raw))
-            }
-            val relaid = Relay.onto(db, parts.store.libraryDir, overrides, listOf(s.id))
-            relaid.failed[s.id]?.let { return fail(Words.text("relay_failed")) }
-            val now = Kept.keptFiles(db, s.id).first { it.name == Versions.SHEET_FILE_NAMES[1] }
-            sheetKept = true
-            return "done" to holds(Versions.get(db, now.versionId)!!.raw)
-        }
-
-        /** run.py's `_generate` past the models and `_keep`: the sheet laid out from what was heard, over the song's
-         * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
-         * `autochords_mtime` last; the chords stage's end. */
-        private fun keepSheet(db: Db, heard: Heard, audio: File): Pair<String, String> {
-            val s = again(db)
-            stillOurs(db, s)
-            val (ended, info) = keepAutoSheet(parts, store, chords, names, db, s, heard, audio, stamp)
-            // Kept only now, the song's `autochords_mtime` its audio's (keepAutoSheet's last write): a write before it
-            // that fails leaves the checkpoints (the chords stage's `finally`), for Try again, which finds no sheet of
-            // this audio yet.
-            sheetKept = true
-            again(db)
-            return info?.let { fail(it) } ?: ended
-        }
-
-        // --- the pages --------------------------------------------------------------------------------------------
-
-        private fun pdf(): Pair<String, String> {
-            if (!sheetKept) return "skipped" to Words.text("no_sheet")
-            if (parts.pages === SongPages.NONE) return "skipped" to LookupWords.NO_PDFS
-            val id = song!!.id
-            val stats = parts.database.writeBlocking { db -> parts.pages.render(db, listOf(id), null) }
-            val failed = stats.failed[id] ?: stats.failed.values.firstOrNull()
-            if (failed != null) return "failed" to failed
-            return "done" to if (stats.written > 0) LookupWords.PAGES_MADE else LookupWords.UP_TO_DATE
-        }
     }
 
     /** audio_sheet.py's, transcript.py's, youtube_sheet.py's, staged.py's and commands/audio.py's words and run.py's
@@ -519,20 +217,49 @@ class AudioRunner(
          * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
          * `autochords_mtime` last; the chords stage's end, and info.json's failure in [INFO_FAILED]'s words (the
          * sheet kept all the same). The audio job's and a lyrics pick's (LyricsPickJob) alike, every time [stamp],
-         * the job's own (its start's, as `autochords_pending(now=…)` is given the job's).
+         * the job's own (its start's, as `autochords_pending(now=…)` is given the job's). Its [maker] the phone with the
+         * file the owner gave; a YouTube sheet's (StagedSheet's keep) its own, with the sheet's credit line ([source])
+         * and the video ([video]) and the version's address ([url]).
          */
         internal fun keepAutoSheet(parts: PhoneParts, store: AudioStore, chords: ChordModels,
                                    names: () -> Map<String, String>, db: Db, s: SongRow, heard: Heard,
-                                   audio: File, stamp: String): Pair<Pair<String, String>, String?> {
+                                   audio: File, stamp: String): Pair<Pair<String, String>, String?> =
+            keepAutoSheet(parts, db, s, heard, stamp, fileMaker(store, chords, names, db, s, audio),
+                          "file://" + audio.absolutePath)
+
+        /** The maker of a sheet made here from an audio file the owner gave ([audio], the song's in [store]): this
+         * phone, its sync id, the models' names and runtime, the file's given name and its SHA-256's 16 digits. */
+        internal fun fileMaker(store: AudioStore, chords: ChordModels, names: () -> Map<String, String>, db: Db,
+                               s: SongRow, audio: File): Maker =
+            Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, store.givenName(db, s),
+                  sha16(audio))
+
+        /** The maker of a sheet made here from the audio this phone took from a YouTube video ([audio]): this phone,
+         * its sync id, the models' names and runtime, no given name, the file's SHA-256's 16 digits. The YouTube job's
+         * and a lyrics pick's over that audio alike. */
+        internal fun videoMaker(chords: ChordModels, names: () -> Map<String, String>, db: Db, audio: File): Maker =
+            Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, null, sha16(audio))
+
+        /** [keepAutoSheet] of the audio this phone took from [video] (YouTubeAudio.youtubeAudio), as run.py's
+         * `_generate` keeps a sheet of `youtube_audio`: the sheet's credit line (AutoSheet.youtubeCredit), the video
+         * as `raw["youtube"]` (Records.videoJson) and its address as the version's. A lyrics pick's keep
+         * (LyricsPickJob) over such audio. */
+        internal fun keepVideoSheet(parts: PhoneParts, chords: ChordModels, names: () -> Map<String, String>, db: Db,
+                                    s: SongRow, heard: Heard, audio: File, stamp: String,
+                                    video: Video): Pair<Pair<String, String>, String?> =
+            keepAutoSheet(parts, db, s, heard, stamp, videoMaker(chords, names, db, audio), video.url,
+                          AutoSheet.youtubeCredit(video.title, video.channel, video.id), Records.videoJson(video))
+
+        internal fun keepAutoSheet(parts: PhoneParts, db: Db, s: SongRow, heard: Heard, stamp: String, maker: Maker,
+                                   url: String, source: String? = null,
+                                   video: JsonObject? = null): Pair<Pair<String, String>, String?> {
             val lyrics = lyricsFromJson(s.lyricsJson)
-            val maker = Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime,
-                              store.givenName(db, s), sha16(audio))
-            val made = SheetHalf.make(s, lyrics, heard)
-            val raw = SheetHalf.raw(s, lyrics, made, maker = maker)
+            val made = SheetHalf.make(s, lyrics, heard, source = source)
+            val raw = SheetHalf.raw(s, lyrics, made, video = video, maker = maker)
             db.savepoint("audio_sheet") {
                 val current = autoVersionOf(db, s.id)
                 val versionId = Versions.upsert(db, PROVIDER, current ?: s.id.toString(), s.id, "sheet", "auto", 0.0, 0,
-                                                1, null, "file://" + audio.absolutePath, raw, stamp)
+                                                1, null, url, raw, stamp)
                 Kept.keepFile(db, parts.store, s, versionId, Versions.SHEET_FILE_NAMES[1],
                               made.text.toByteArray(Charsets.UTF_8), 1, stamp)
                 db.execute("DELETE FROM versions WHERE song_id = ? AND provider = ? AND id != ? AND NOT EXISTS " +
@@ -558,8 +285,8 @@ class AudioRunner(
         const val COMMAND = "audio"
         const val DATA = "caracole/library/audio_sheet.json"
         private val KNOWN = setOf("--upload", "--song", "--progress")
-        private const val PROVIDER = "auto"
-        private const val SYNC_ID = "sync:id"
+        private const val SYNC_ID = StagedSheet.SYNC_ID
+        private const val PROVIDER = StagedSheet.AUTO_PROVIDER
 
         /** sheet.Maker's side, an auto sheet's `raw["made_on"]` made here. */
         const val MADE_ON = "phone"

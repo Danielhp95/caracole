@@ -68,7 +68,7 @@ class YtDlpTest {
 
     private fun runner(db: Db, fake: FakeYtDlpProcess, budget: Int = 6, beforeRun: () -> String? = { null },
                        heard: MutableList<Event>? = null, lines: MutableList<String>? = null) =
-        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { YtDlpGate.keptOpen(opened) }, db, pacing, budget = budget,
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", { YtDlpGate.keptOpen(opened) }, YtDlp.Writes.of(db), pacing, budget = budget,
               runId = "youtube-test",
               beforeRun = beforeRun, onEvent = heard?.let { h -> { e: Event -> h += e } },
               onLine = { line -> lines?.add(line) })
@@ -173,6 +173,24 @@ class YtDlpTest {
         assertEquals(1, yt.requestsMade)
     }
 
+    /** The network asked again once the run's pauses are over, right before its process (Byoutube-5): a network that
+     * became metered while the run paused holds it back, with no process and no event, its day's slot given back. */
+    @Test
+    fun aNetworkThatBecameMeteredDuringTheRunsPauseHoldsItBackAndGivesItsSlotBack() = db { db ->
+        var from = Int.MAX_VALUE  // the pauses slept before the second run: metered once one more is slept
+        val fake = FakeYtDlpProcess.of(ok(), ok())
+        val yt = runner(db, fake, beforeRun = { if (slept.size > from) "waiting for Wi-Fi" else null })
+        yt.search("a")
+        from = slept.size
+        val e = assertFailsWith<RunHeldBack> { yt.search("b") }
+        assertEquals("youtube: ytsearch8:b: waiting for Wi-Fi", e.message)
+        assertTrue(slept.size > from, "the second run paused before it was held back")
+        assertEquals(1, fake.argvs.size, "no process for the run held back")
+        assertEquals(1, yt.requestsMade)
+        assertEquals(listOf("ok"), events(db).map { it[2] })
+        assertEquals(1, DayBudget.runs(db, started), "the held-back run's reservation given back")
+    }
+
     @Test
     fun theBudgetsEventIsWrittenOnce() = db { db ->
         val yt = runner(db, FakeYtDlpProcess.of(ok()), budget = 1)
@@ -217,7 +235,7 @@ class YtDlpTest {
     @Test
     fun aYtDlpThatCantStartIsAnErrorThatSpendsNothing() = db { db ->
         val yt = runner(db, FakeYtDlpProcess(listOf(Planned(ok(), notStarted = "no :youtube process"))))
-        assertEquals("youtube: ytsearch8:a: no :youtube process", assertFailsWith<ProviderError> { yt.search("a") }.message)
+        assertEquals("youtube: ytsearch8:a: no :youtube process", assertFailsWith<NotSent> { yt.search("a") }.message)
         assertEquals(0, yt.requestsMade)
         assertEquals(emptyList(), events(db))
     }
@@ -263,7 +281,7 @@ class YtDlpTest {
     }
 
     private fun freshRunner(db: Db, fake: FakeYtDlpProcess, gates: () -> YtDlpGate, budget: Int = 6) =
-        YtDlp(fake, policy, File(dir, "cache"), "/qjs", gates, db, pacing, budget = budget, runId = "youtube-test")
+        YtDlp(fake, policy, File(dir, "cache"), "/qjs", gates, YtDlp.Writes.of(db), pacing, budget = budget, runId = "youtube-test")
 
     /** Whether the gate is gone: its port refuses, and no thread of it is left. */
     private fun closed(opened: HostGate.Opened): Boolean {
@@ -291,7 +309,7 @@ class YtDlpTest {
         val yt = freshRunner(db, fake, gates)
         yt.search("ok")
         assertFailsWith<YouTubeData.Refused> { yt.search("a NUL \u0000 in it") }
-        assertFailsWith<ProviderError> { yt.search("broken") }
+        assertFailsWith<RunCutOff> { yt.search("broken") }  // started, then cut off: the phone's own, said so
         assertFailsWith<ProviderError> { yt.search("not started") }
         assertFailsWith<ProviderError> { yt.search("slow") }
         assertFailsWith<GateRefused> { yt.search("refused") }

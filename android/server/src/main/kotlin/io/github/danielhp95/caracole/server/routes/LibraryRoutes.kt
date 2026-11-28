@@ -38,7 +38,8 @@ import java.time.Instant
  *                     identity key, the LaCuerda song or version it picked (`lacuerda`) recorded under `[lacuerda]`
  *                     for the song, as `caracole add --lacuerda` records it; with `fetch` (Fetch now), looked up now
  *                     instead, `caracole get --progress`, which adds it (LookupForms.fetchNow: with that pick); with
- *                     `youtube`, refused (not on the phone yet)
+ *                     `youtube`, its sheet made from that video in place of a lookup ([youtube]: YouTubeRoutes'
+ *                     `sheetFromYoutube`; none given, refused, not on the phone yet)
  *     POST /remove    what removing a song takes ({removal: {song, key, display, brief, goes, stays, notes}}, its
  *                     data; the message page to a browser without the script); with `confirm` and the song's `key`,
  *                     the removal queued under `remove:<key>` (LibraryStore.remove: a tombstone, so the song stays
@@ -56,7 +57,8 @@ import java.time.Instant
  * asked for at once): its line then says tonight's run gets it (status.py's); the others it never reads. A full queue
  * is refused, 503, nothing written.
  */
-class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: SongCards, val database: Database) :
+class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: SongCards, val database: Database,
+                    private val youtube: ((Map<String, String>) -> Response)? = null) :
     RouteModule {
     override val routes: List<Route> = listOf(
         Route("POST", "/request", "a song for the library", post = PostAnswer { _, form -> request(form) }),
@@ -66,7 +68,9 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
     private fun request(form: Map<String, String>): Response {
         val named = SongForm.named(database, form)
         if (PyText.strip(named["youtube"].orEmpty()).isNotEmpty()) {
-            throw Refused(409, "Not on the phone yet", "A sheet from a YouTube video: not on the phone yet.")
+            // its sheet made from that video in place of a lookup (YouTubeRoutes.sheetFromYoutube)
+            return youtube?.invoke(named)
+                ?: throw Refused(409, "Not on the phone yet", "A sheet from a YouTube video: not on the phone yet.")
         }
         val lacuerda = LookupForms.lacuerdaField(named)
         val song = SongForm.song(named, picks = false)

@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
  * the mode allows one) to the hosts its [mode] and [rule] allow and to no other, and logs each host asked for: its
  * connects, the bytes each way, the refusals. It is a check and a measurement: only the argv routes yt-dlp through it.
  *
- * - [Mode.LOOPBACK] (tests and instrumentation): `127.0.0.1` and `10.0.2.2` alone, any port, CONNECT and GET; nothing
- *   is looked up, the rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed;
+ * - [Mode.LOOPBACK] (tests and instrumentation): [loopbackHosts] alone (`127.0.0.1` and `10.0.2.2`, [LOOPBACK_NAMES];
+ *   the kill check's gate [KILL_CHECK_HOSTS], 127.0.0.1 alone), any port, CONNECT and GET; nothing is looked up, the
+ *   rule unused. [Mode.NETWORK]: the [rule], each name looked up by [resolver] only once allowed;
  *   under YOUTUBE a name that resolves to an address that isn't public ([isPublic]) is refused, and the socket is
  *   connected ([connector]) to the very address checked.
  * - `jnn-pa.googleapis.com` (and any name under it) is refused in every mode and by every rule.
@@ -39,7 +40,14 @@ import java.util.concurrent.atomic.AtomicLong
  *   tunnel or a relay in which nothing moves either way for [idleTimeoutMs] (a read or a write, both pumps stuck in
  *   writes too) is closed.
  * - A relayed answer's head is checked as a request's is: a control character but a tab, or a bare CR, is 502.
- * - The gate reads no property: the main process passes the mode ([Mode.of] `caracole.network`'s value).
+ * - The gate never takes its mode from a property: the main process passes it ([Mode.of] `caracole.network`'s value).
+ *   The property is a guard alone: while it is `loopback` (every test, JVM or device), a [Mode.NETWORK] gate, of any
+ *   rule, OBSERVE's too, is refused ([NETWORK_UNDER_LOOPBACK]) unless it names a resolver and a connector of its own
+ *   (a test's, which reach loopback or nothing), never [Resolver.SYSTEM] or [Connector.DIRECT]. Those two are
+ *   compared by identity: a guard against accidents, never against a caller that means to pass it (a lambda that
+ *   wraps [Resolver.SYSTEM] passes).
+ * - The gates this process has open, by port and user ([isOpen]): a client hands yt-dlp no `--proxy` of a gate-shaped
+ *   address that isn't one of them (another app's proxy on 127.0.0.1 never takes yt-dlp's traffic).
  * - The secret is kept as a digest; only [Opened.proxyArg] holds it, and no `toString`, log or message here names it.
  */
 class HostGate(
@@ -51,7 +59,23 @@ class HostGate(
     private val idleTimeoutMs: Int = IDLE_TIMEOUT_MS,
     private val headTimeoutMs: Int = HEAD_TIMEOUT_MS,
     private val connector: Connector = Connector.DIRECT,
+    private val loopbackHosts: List<String> = LOOPBACK_NAMES,
 ) : Closeable {
+    init {
+        require(loopbackHosts.isNotEmpty() && loopbackHosts.all { it in LOOPBACK_NAMES }) {
+            "a gate's loopback hosts are some of ${LOOPBACK_NAMES.joinToString(", ")}"
+        }
+        if (mode == Mode.NETWORK && System.getProperty(io.github.danielhp95.caracole.core.http.RealTransport.NETWORK) ==
+            LOOPBACK_PROPERTY) {
+            require(resolver !== Resolver.SYSTEM && connector !== Connector.DIRECT) { NETWORK_UNDER_LOOPBACK }
+        }
+    }
+
+    /** The bytes of the hosts a [Mode.LOOPBACK] gate allows, and why another is refused. */
+    private val loopbackAddresses = loopbackHosts.map { LOOPBACK_HOSTS[LOOPBACK_NAMES.indexOf(it)] }
+    private val whyNotLoopback =
+        if (loopbackHosts == LOOPBACK_NAMES) WHY_NOT_LOOPBACK else "not " + loopbackHosts.joinToString(" or ")
+
     enum class Mode {
         LOOPBACK, NETWORK;
 
@@ -63,8 +87,9 @@ class HostGate(
 
     /**
      * Which hosts a [Mode.NETWORK] gate allows: [YOUTUBE] (the design's §3.3 list, CONNECT on 443 alone) or [OBSERVE]
-     * (the bench's, set by a button press alone: every host and port, CONNECT and GET, logged). Names are compared
-     * lowercased as ASCII with no trailing dot; an IP literal never matches a name. The names, the suffixes, the port,
+     * (the bench's, set by a button press alone: every host and port, CONNECT and GET, logged, but no address that
+     * isn't public, a name's or a literal's). Names are compared lowercased as ASCII with no trailing dot; an IP literal
+     * never matches a name. The names, the suffixes, the port,
      * the hosts reported apart and those refused by name are youtube.py's PHONE_GATE (youtube.json's `gate`).
      */
     class HostRule private constructor(
@@ -176,6 +201,8 @@ class HostGate(
     private var server: ServerSocket? = null
     private var acceptor: Thread? = null
     private var expected: ByteArray? = null
+    /** This gate's key in [OPEN] while it is started and not closed. */
+    private var registered: String? = null
 
     /** A test's seam: run first on each connection's thread (a handler that throws stands for a bug there). */
     @Volatile internal var beforeServing: (() -> Unit)? = null
@@ -196,6 +223,7 @@ class HostGate(
         val socket = ServerSocket(0, 50, LOOPBACK_ADDRESS)
         server = socket
         val port = socket.localPort
+        registered = key(port, user).also { OPEN += it }
         acceptor = spawn("caracole-gate-$port-accept") {
             try {
                 accept(socket)
@@ -204,7 +232,7 @@ class HostGate(
                 throw t // ends this thread alone (spawn), said nowhere
             }
         }!!
-        return Opened(port, "http://$user:$secret@127.0.0.1:$port", this)
+        return Opened(port, "$PROXY_SCHEME://$user:$secret@$PROXY_HOST:$port", this)
     }
 
     /** Each host asked for, in the order first asked; at most [LOG_HOSTS] names, the rest under [OTHER_HOSTS]. */
@@ -223,6 +251,7 @@ class HostGate(
         val toJoin: List<Thread>
         synchronized(this) {
             closed = true
+            registered?.let { OPEN -= it }
             try {
                 server?.close()
             } catch (_: IOException) {
@@ -444,8 +473,10 @@ class HostGate(
         val why = when {
             HostRule.refusedByName(at.key) -> WHY_BY_NAME
             mode == Mode.LOOPBACK ->
-                if (at.address != null && LOOPBACK_HOSTS.any { it.contentEquals(at.address) }) null else WHY_NOT_LOOPBACK
-            at.address != null -> if (rule === HostRule.OBSERVE) null else WHY_LITERAL
+                if (at.address != null && loopbackAddresses.any { it.contentEquals(at.address) }) null else whyNotLoopback
+            at.address != null ->
+                if (rule !== HostRule.OBSERVE) WHY_LITERAL
+                else if (isPublic(InetAddress.getByAddress(at.address))) null else WHY_NOT_PUBLIC
             else -> if (rule.allows(at.key, at.port, connect)) null else WHY_OFF_RULE
         }
         if (why != null) throw Refusal(403, at.key, why)
@@ -453,9 +484,10 @@ class HostGate(
     }
 
     /**
-     * The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). Under any
-     * rule but OBSERVE a name that resolves to an address that isn't public ([isPublic]) is refused, every address
-     * checked; the socket is connected to the very address checked, never looked up again.
+     * The upstream, connected: an IP literal as given, a name through [resolver] (in [Mode.NETWORK] alone). Under
+     * every rule, OBSERVE's too, a name that resolves to an address that isn't public ([isPublic]) is refused, every
+     * address checked (an observed session reaches no LAN or local service either); the socket is connected to the very
+     * address checked, never looked up again.
      */
     private fun open(at: Authority): Socket {
         val addresses = if (at.address != null) {
@@ -467,12 +499,10 @@ class HostGate(
             } catch (_: IOException) {
                 throw Refusal(502, null)
             }
-            if (rule !== HostRule.OBSERVE) {
-                for (address in resolved) {
-                    val ip = address.address
-                    if (ip == null || !isPublic(ip)) {
-                        throw Refusal(403, at.key, "resolves to ${ip?.hostAddress ?: "an unresolved address"}, not a public address")
-                    }
+            for (address in resolved) {
+                val ip = address.address
+                if (ip == null || !isPublic(ip)) {
+                    throw Refusal(403, at.key, "resolves to ${ip?.hostAddress ?: "an unresolved address"}, not a public address")
                 }
             }
             resolved
@@ -626,8 +656,9 @@ class HostGate(
         const val HEAD_MAX = 16 * 1024
         /** Hosts named in the log at most; any other is counted under [OTHER_HOSTS]. */
         const val LOG_HOSTS = 256
-        const val OTHER_HOSTS = "(other hosts)"
-        const val MALFORMED = "(malformed)"
+        /** The log's names that are no host's: youtube.json's `gate.other_hosts` and `gate.malformed`. */
+        val OTHER_HOSTS: String by lazy { YouTubeData.read().text("other_hosts", YouTubeData.read().gate) }
+        val MALFORMED: String by lazy { YouTubeData.read().text("malformed", YouTubeData.read().gate) }
         /** Listed once the acceptor stopped by a bug of the gate's own: youtube.json's `gate.stopped`. */
         val STOPPED: String by lazy { YouTubeData.read().text("stopped", YouTubeData.read().gate) }
 
@@ -636,8 +667,55 @@ class HostGate(
         const val WHY_OFF_RULE = "off the rule"
         const val WHY_NOT_LOOPBACK = "not 127.0.0.1 or 10.0.2.2"
         const val WHY_LITERAL = "an IP literal"
+        const val WHY_NOT_PUBLIC = "an IP literal that isn't a public address"
         const val WHY_MALFORMED = "malformed"
         const val WHY_METHOD = "not CONNECT or GET"
+
+        /** The scheme and host of every [Opened.proxyArg]: the gate listens on 127.0.0.1 alone. */
+        const val PROXY_SCHEME = "http"
+        const val PROXY_HOST = "127.0.0.1"
+
+        /** The hosts a [Mode.LOOPBACK] gate allows, as a target names them (LOOPBACK_HOSTS's bytes). */
+        val LOOPBACK_NAMES: List<String> = listOf("127.0.0.1", "10.0.2.2")
+
+        /** The kill check's gate's hosts (on the owner's phone too): 127.0.0.1 alone, never 10.0.2.2, the emulator's
+         * host, which is a routable private address on some real networks. */
+        val KILL_CHECK_HOSTS: List<String> = listOf("127.0.0.1")
+
+        /** [Opened.proxyArg]'s shape, a Python regex matched whole (`re.fullmatch`): the gate's scheme, a user and a
+         * secret of [TOKEN_BYTES] random bytes in lowercase hex each, its host and a port. What `:youtube`'s glue holds
+         * a `--proxy` to. */
+        val PROXY_PATTERN: String = "$PROXY_SCHEME://[0-9a-f]{${2 * TOKEN_BYTES}}:[0-9a-f]{${2 * TOKEN_BYTES}}@" +
+            PROXY_HOST.replace(".", "\\.") + ":[0-9]{1,5}"
+
+        /** The user's and the secret's random bytes. */
+        const val TOKEN_BYTES = 16
+
+        /** `caracole.network`'s value under every test runner and Gradle test task. */
+        const val LOOPBACK_PROPERTY = "loopback"
+
+        /** Why a [Mode.NETWORK] gate isn't made while `caracole.network` is `loopback`. */
+        const val NETWORK_UNDER_LOOPBACK = "no gate to the network while caracole.network is loopback (a test's gate " +
+            "names a resolver and a connector of its own)"
+
+        /** The open gates of this process, each by its port and user: started, not yet closed. */
+        private val OPEN: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+        private fun key(port: Int, user: String) = "$port:$user"
+
+        /** Whether [port] and [user] are those of a gate of this process that is open now. */
+        fun isOpen(port: Int, user: String): Boolean = key(port, user) in OPEN
+
+        /** [proxy]'s port and user, for an address of [PROXY_PATTERN]'s shape whole; else null. */
+        fun portAndUser(proxy: String): Pair<Int, String>? {
+            if (!Regex(PROXY_PATTERN).matches(proxy)) return null
+            val port = proxy.substringAfterLast(':').toIntOrNull() ?: return null
+            return port to proxy.substringAfter("://").substringBefore(':')
+        }
+
+        /** Whether [proxy] is the `--proxy` of a gate of this process that is open now ([Opened.proxyArg]'s shape, its
+         * port and user an open gate's). The secret isn't compared: a gate keeps only its digest. */
+        fun isOpen(proxy: String): Boolean = portAndUser(proxy)?.let { (port, user) -> isOpen(port, user) } ?: false
 
         /**
          * Whether [ip] is a public address: not loopback, any-local, link-local, site-local or multicast (the JDK's
@@ -677,7 +755,7 @@ class HostGate(
         private val random = SecureRandom()
 
         private fun token(): String {
-            val bytes = ByteArray(16)
+            val bytes = ByteArray(TOKEN_BYTES)
             random.nextBytes(bytes)
             return buildString { for (b in bytes) append(HEX[(b.toInt() shr 4) and 15]).append(HEX[b.toInt() and 15]) }
         }

@@ -209,6 +209,47 @@ class AudioSharePageTest {
         assertFalse("action=\"/audio\"" in html)
     }
 
+    @Test fun `back on the page once its sheet's job kept the file, it is its song's audio, never gone`() {
+        val app = phone()
+        val up = shared()
+        // Make sheet, as the WebView posts the form: the Journal's line of the job is where it goes.
+        val answer = app.post("/audio", listOf("upload" to up.id, "artist" to "Calla Lake", "title" to "River Road"))
+        assertEquals(303, answer.status, answer.text)
+        val journal = assertNotNull(answer.header("Location"))
+        assertTrue(journal.startsWith("/#tab=requests&job="), journal)
+
+        // The audio job's song and audio stages (AudioRunner): the song added, the staged upload kept as its audio.
+        app.database.writeBlocking { db ->
+            val song = store.add(db, "Calla Lake", "River Road", now = "2026-11-27T00:00:00Z")
+            audio.store.keep(db, song, audio.store.staged(up.id))
+        }
+        assertEquals(true, audio.store.marked(up.id)?.done, "the upload is its song's audio now")
+
+        // Back from the Journal: the WebView loads the share's page again.
+        val html = page(app.get("/share/audio?upload=${up.id}"))
+        assertFalse(AudioStore.WORDS.getValue("gone") in html, html)
+        assertTrue("<p class=\"lede\"><strong>Calla Lake - River Road</strong></p>" in html, html)
+        assertTrue(AudioSharePage.KEPT.replace("{song}", "Calla Lake - River Road") in html, html)
+        assertTrue("<a class=\"btn primary\" href=\"${journal.replace("&", "&amp;")}\">Open the Journal</a>" in html, html)
+        assertTrue("<a class=\"btn\" href=\"/share/cancel\">Done</a>" in html, html)
+        assertFalse("action=\"/audio\"" in html, "no Make sheet of a file kept")
+        assertFalse("action=\"${AudioSharePage.CANCEL}\"" in html, "no drop of a file kept")
+    }
+
+    @Test fun `a kept file its song no longer has as its audio is gone in the store's words`() {
+        val app = phone()
+        val up = shared()
+        app.database.writeBlocking { db ->
+            val song = store.add(db, "Calla Lake", "River Road", now = "2026-11-27T00:00:00Z")
+            audio.store.keep(db, song, audio.store.staged(up.id))
+            Versions.updateSong(db, song.id, mapOf("audio_path" to "/music/river.mp3"),  // another audio since
+                                "2026-11-27T00:00:00Z")
+        }
+        val html = page(app.get("/share/audio?upload=${up.id}"))
+        assertTrue(AudioStore.WORDS.getValue("gone") in html, html)
+        assertFalse(AudioSharePage.KEPT.replace("{song}", "Calla Lake - River Road") in html, html)
+    }
+
     @Test fun `the page names the audio the file replaces, in the computer's dialog's words`() {
         val app = phone()
         val song = song("Calla Lake", "River Road")

@@ -307,32 +307,58 @@ class MlChordModels(
             }
         }
 
-        /** The turn of [file]'s lock, taken (closed to give it back), or null while another holds it: another process
-         * (an flock, which its end gives back), or another hearing of this process. */
+        /** The turns this process holds, by their lock file's canonical path ([turn]); guarded by itself. */
+        private val held = HashSet<String>()
+
+        /** The turn of [file]'s lock, taken (closed to give it back; closed again, nothing), or null while another
+         * holds it: another process, or another hearing of this one. The lock is a POSIX record lock
+         * (`FileChannel.tryLock`, `fcntl`), not an flock: it is the process's, and ANY close of the file by this
+         * process gives it back, so a turn this process holds already ([held]) is refused before the file is opened
+         * again, and a refused channel is closed only where this process holds no lock on the file to lose. */
         internal fun turn(file: File): AutoCloseable? {
-            val channel = try {
-                file.parentFile?.mkdirs()
-                RandomAccessFile(file, "rw").channel
-            } catch (e: IOException) {
-                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
-            }
-            val lock = try {
-                channel.tryLock()
-            } catch (e: OverlappingFileLockException) {
-                null
-            } catch (e: IOException) {
-                channel.close()
-                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
-            }
-            if (lock == null) {
-                channel.close()
-                return null
-            }
-            return AutoCloseable {
-                try {
-                    lock.release()
-                } finally {
+            synchronized(held) {
+                val key = try {
+                    file.parentFile?.mkdirs()
+                    file.canonicalPath
+                } catch (e: IOException) {
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                if (key in held) return null
+                val channel = try {
+                    RandomAccessFile(file, "rw").channel
+                } catch (e: IOException) {
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                val lock = try {
+                    channel.tryLock()
+                } catch (e: OverlappingFileLockException) {
+                    // Something of this process locks the file outside turn (nothing does): refused, and the channel
+                    // left open, as closing it would give that lock back.
+                    return null
+                } catch (e: IOException) {
                     channel.close()
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                if (lock == null) {
+                    channel.close()  // another process holds it: this one holds no lock on the file to lose
+                    return null
+                }
+                held += key
+                var closed = false
+                return AutoCloseable {
+                    synchronized(held) {
+                        if (closed) return@AutoCloseable
+                        closed = true
+                        try {
+                            lock.release()
+                        } finally {
+                            try {
+                                channel.close()
+                            } finally {
+                                held -= key
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -340,11 +366,13 @@ class MlChordModels(
         private const val CANT_TAKE_TURN = "the chord models' turn can't be taken"
 
         /** The phone's reasons not to hear here (the design's §8.1), the first that holds: Android before 13 (API 33),
-         * no processor the app carries the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
-         * release), under [LEAST_MEMORY] of memory; null for none. */
+         * a primary ABI ([abis]' first, Build.SUPPORTED_ABIS', the one Android installs the APK's native libraries
+         * for) the app doesn't carry the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
+         * release; an x86_64 phone that translates arm64 runs the release's x86_64 libraries, which hold none: the
+         * app's PhoneYouTube.carries is the same rule), under [LEAST_MEMORY] of memory; null for none. */
         fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>, carried: Set<String> = ABIS): String? = when {
             sdk < LEAST_SDK -> "chords from audio need Android 13 or later"
-            abis.none { it in carried } -> "no chord models for this phone's processor"
+            abis.firstOrNull() !in carried -> "no chord models for this phone's processor"
             totalMem < LEAST_MEMORY -> "chords from audio need 6 GB of memory or more"
             else -> null
         }

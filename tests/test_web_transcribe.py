@@ -211,7 +211,7 @@ def test_the_page_reads_the_offer_again_as_the_served_page_has_it(able, queue, c
     assert dict(response.headers)["Content-Type"] == "application/json; charset=utf-8"
     assert dict(response.headers)["Cache-Control"] == "no-store"
     assert answer(response) == {"ok": True, "why": None, "songs": [], "nothing": [], "unsung": [], "transcribed": [],
-                                "time": "up to half an hour"}
+                                "time": "up to half an hour", "hears": True}
     update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-11-21T00:00:00Z")  # every site missed it
     assert answer(offers(app))["songs"] == [song.id]
     html = build_library_page(conn, able, Overrides(), datetime.now(UTC), controls=WebControls(csrf="tok"))
@@ -227,7 +227,7 @@ def test_where_it_cant_run_the_offer_says_why_and_offers_no_song(cfg, queue, con
     youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
     monkeypatch.setattr(yf, "transcribe_problem", lambda cfg: "built without Whisper")
     assert answer(offers(app_for(cfg, queue))) == {"ok": False, "why": "Whisper isn't installed", "songs": [],
-                                                   "nothing": [], "unsung": [], "transcribed": [], "time": ""}
+                                                   "nothing": [], "unsung": [], "transcribed": [], "time": "", "hears": False}
 
 
 def test_the_offer_is_read_by_the_pages_script_alone(able, queue, conn):
@@ -313,7 +313,7 @@ def test_the_offer_names_the_songs_heard_to_have_nothing_and_those_transcribed(a
     youtube_song(conn, tmp_path, "Radiohead", "Creep", lyrics_status="found")  # a site's lyrics: none of the three
     assert answer(offers(app_for(able, queue))) == {
         "ok": True, "why": None, "songs": [offered_now.id], "nothing": [nothing.id], "unsung": [marked.id],
-        "transcribed": [transcribed.id], "time": "up to half an hour"}
+        "transcribed": [transcribed.id], "time": "up to half an hour", "hears": True}
 
 
 def test_whisper_cant_read_its_audio_says_what_to_do_and_force_tries_it_again(able, queue, conn, tmp_path):

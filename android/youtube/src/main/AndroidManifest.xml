@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- yt-dlp's process and the gate's door (the phone-youtube design's §3.2 and §3.3), the debug build's alone with this
+     module. YtDlpService runs one yt-dlp run in a process of its own, ":youtube", then kills it; GateService, in the
+     app's main process (no android:process), gives another process of the app a HostGate there. Neither is exported:
+     no other app binds them. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The gate's sockets and yt-dlp's (the app has it already; the module's own test APK has it from here). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <service
+            android:name=".YtDlpService"
+            android:exported="false"
+            android:process=":youtube" />
+        <service
+            android:name=".GateService"
+            android:exported="false" />
+    </application>
+</manifest>

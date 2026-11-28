@@ -112,6 +112,111 @@ class JobQueueTest {
         assertTrue(queue.submit(spec("oasis/wonderwall")).second)  // over: the next is a job of its own
     }
 
+    /** An automatic job (nobody asked for it now) that still waits is asked for now once a request asked for now is
+     * answered by it; one that runs stays as it began. */
+    @Test fun anAutomaticJobThatWaitsIsAskedForNowOnceARequestAskedForNowIsAnsweredByIt() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("blur/song 2") { gate.await() })
+        runCurrent()
+        val seen = mutableListOf<Boolean>()
+        val auto = queue.submit(spec("oasis/wonderwall").copy(automatic = true, run = { seen += it.automatic })).first
+        assertTrue(queue.job(auto.id)!!.spec.automatic)
+        val (same, new) = queue.submit(spec("oasis/wonderwall"))
+        assertFalse(new)
+        assertEquals(auto.id, same.id)
+        assertFalse(queue.job(auto.id)!!.spec.automatic)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf(false), seen)
+    }
+
+    /** The join path (web/jobs.py's _join): a request asked for now that joins a waiting automatic job's commands
+     * makes it asked for now. */
+    @Test fun anAskedNowRequestThatJoinsAWaitingAutomaticJobMakesItAskedForNow() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("blur/song 2") { gate.await() })
+        runCurrent()
+        val sheet = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", "oasis/wonderwall", "song", emptyList(),
+                                        commands = sheet, automatic = true)).first
+        val (joined, new) = queue.submit(JobSpec("Get Oasis - Wonderwall", "oasis/wonderwall", "song", emptyList(),
+                                                 commands = JobCommands.lookupSteps("Oasis", "Wonderwall"), fetching = true))
+        assertFalse(new)
+        assertEquals(auto.id, joined.id)
+        assertTrue(queue.job(auto.id)!!.steps.size > 1, "joined: ${queue.job(auto.id)!!.steps.map { it.args }}")
+        assertFalse(queue.job(auto.id)!!.spec.automatic)
+        gate.complete(Unit)
+    }
+
+    /** Try again of an automatic job is the owner's: asked for now. */
+    @Test fun tryAgainOfAnAutomaticJobIsAskedForNow() = runTest {
+        val queue = queue()
+        val sheet = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", "youtube:oasis/wonderwall", "song",
+                                        emptyList(), commands = sheet, automatic = true)).first
+        queue.await(auto.id)
+        val again = queue.again(auto.id)
+        assertFalse(queue.job(again.id)!!.spec.automatic)
+    }
+
+    /** Byoutube-2: a sheet from a video the owner gave is made from that video. A job of the song's that makes its
+     * sheet from YouTube with no video named (the automatic pass's, YouTubeAuto.spec) and still waits takes the
+     * request's command in place of its own, asked for now: one job, the owner's video. */
+    @Test fun aVideoGivenWhileTheSongsAutomaticJobWaitsTakesItsPlace() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("blur/song 2") { gate.await() })
+        runCurrent()
+        val key = JobCommands.YOUTUBE_SHEET + "oasis/wonderwall"
+        val unnamed = listOf(Command("Making the sheet",
+                                     listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", key, "song", emptyList(),
+                                        commands = unnamed, automatic = true)).first
+        val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        val pasted = JobCommands.youtubeSheetSteps("Oasis - Wonderwall", url)
+        val (same, new) = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", key, "song", emptyList(),
+                                               commands = pasted))
+        assertFalse(new)
+        assertEquals(auto.id, same.id)
+        val job = queue.job(auto.id)!!
+        assertEquals(pasted.map { it.args }, job.steps.map { it.args }, "the owner's video is the job's command")
+        assertEquals(pasted.map { it.args }, job.spec.commands.map { it.args })
+        assertFalse(job.spec.automatic, "asked for now")
+        assertEquals(url, JobCommands.video(job.steps.map { it.args }))
+        gate.complete(Unit)
+    }
+
+    /** Byoutube-2: while the song's automatic job runs (its command names no video), a video the owner gives is no
+     * request it answers: it queues behind it as a job of its own, which a second paste of it is answered by. */
+    @Test fun aVideoGivenWhileTheSongsAutomaticJobRunsQueuesBehindIt() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        val key = JobCommands.YOUTUBE_SHEET + "oasis/wonderwall"
+        val unnamed = listOf(Command("Making the sheet",
+                                     listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", key, "song", emptyList(),
+                                        commands = unnamed, automatic = true, run = { gate.await() })).first
+        runCurrent()
+        assertEquals(Job.RUNNING, queue.job(auto.id)!!.state)
+        val url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        val pasted = JobCommands.youtubeSheetSteps("Oasis - Wonderwall", url)
+        val (mine, new) = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", key, "song", emptyList(),
+                                               commands = pasted))
+        assertTrue(new, "a job of its own, behind the automatic one")
+        assertTrue(mine.id != auto.id)
+        assertEquals(Job.QUEUED, mine.state)
+        assertEquals(pasted.map { it.args }, mine.steps.map { it.args })
+        assertFalse(mine.spec.automatic)
+        assertTrue(queue.job(auto.id)!!.spec.automatic, "the running job's spec never changes")
+        // The same video pasted again (another tab): the owner's job is its answer, never the automatic one.
+        val (again, newAgain) = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", key, "song",
+                                                     emptyList(), commands = pasted))
+        assertFalse(newAgain)
+        assertEquals(mine.id, again.id)
+    }
+
     @Test fun aFullQueueTakesNoNewJobButAJobThatJoinsNeedsNoRoom() = runTest {
         val queue = queue(limit = 2)
         val gate = CompletableDeferred<Unit>()

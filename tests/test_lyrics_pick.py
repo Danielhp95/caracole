@@ -21,6 +21,7 @@ from helpers.rendered import fake_chordpro
 from test_youtube_sheet import Heard, Recognizer, beats, wav
 
 from caracole import youtube_fetch
+from caracole.autochords.sheet import relay
 from caracole.autochords.transcript import (
     PICKED_NONE,
     Transcript,
@@ -43,6 +44,8 @@ SONG = ("Nick Cani", "Vikingos veganos (Video Oficial)")
 NAME = ("Nick Cani", "Vikingos veganos")
 SYNCED = "[00:00.50]Somos vikingos de prueba\n[00:05.20]comemos lechuga de prueba\n"
 OTHER = "[00:00.50]Otras palabras\n[00:05.20]nada que ver\n"
+# The same words as SYNCED, the second line sung three seconds earlier: another cut's timing of one text.
+RETIMED = "[00:00.50]Somos vikingos de prueba\n[00:02.20]comemos lechuga de prueba\n"
 
 
 def lrc(lrclib_id=77, *, synced=SYNCED, plain=None, duration=10.0, album="Pruebas", instrumental=False) -> dict:
@@ -396,6 +399,35 @@ def test_a_pick_after_the_audio_changed_has_the_models_hear_the_new_audio(cfg, c
     assert recognizer.calls == [other] and auto_raw(conn, song)["audio"] == str(other)
 
 
+@pytest.mark.parametrize("kept", [True, False], ids=["heard kept", "made before"])
+def test_a_pick_of_the_same_words_timed_otherwise_lays_the_sheet_over_the_new_timing(cfg, conn, song, sites, here,
+                                                                                      kept):
+    # LRCLIB holds one text under several records, timed for different cuts: the one picked for your cut is the timing
+    # the chords go over, laid out again from what was heard (no model), or by the models for a sheet made before.
+    auto_sheet_of(cfg, conn, song)
+    sites.lrclib.search = [lrc(77), lrc(78, synced=RETIMED, album="Otro corte")]
+    searched(cfg, conn, song, sites)
+    first, _ = pick(cfg, record="lrclib:77")
+    assert first.ok and auto_raw(conn, song)["lyrics"] == "synced"
+    over_77 = sheet_text(cfg, song)
+    if not kept:
+        before_heard(conn, song)
+    heard_before = auto_raw(conn, song).get("heard")
+    recognizer = Recognizer()
+    result, heard = pick(cfg, record="lrclib:78", recognizer=recognizer)
+    assert result.ok, result
+    now = get_song(conn, song.id)
+    assert song_lyrics(now).synced.strip() == RETIMED.strip()  # the picked record is the song's lyrics now
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert bool(recognizer.calls) is not kept
+    if kept:  # what the sheet is, laid out from what was heard over the lyrics the song has now (no model)
+        wanted = relay(now, {**auto_raw(conn, song), "heard": heard_before}).text
+        assert wanted != over_77
+        assert sheet_text(cfg, song) == wanted
+    else:
+        assert sheet_text(cfg, song) != over_77  # the models made it again over them
+
+
 def test_a_keyless_auto_sheet_is_made_due_by_a_pick_of_other_words(cfg, conn, song, sites, monkeypatch):
     # A sheet made before its version kept the words' key (D1) would keep its old words for good.
     from caracole.autochords.run import autochords_pending
@@ -561,12 +593,15 @@ def test_a_dead_record_cleared_has_every_site_asked_under_the_songs_own_name_bef
 
     # The next nightly pass asks the three at once, under the song's own name, and only then is it offered.
     picks = overrides.lyrics
-    lrclib = fetch_pending_lyrics(conn, sites_client(cfg, conn, "lrclib"), cfg.library_dir, NOW, picks=picks)
+    with sites_client(cfg, conn, "lrclib") as client:  # each client holds caracole's lock until closed
+        lrclib = fetch_pending_lyrics(conn, client, cfg.library_dir, NOW, picks=picks)
     assert lrclib.missing == 1
     assert why_not_offered(conn, cfg, get_song(conn, song.id), overrides) == "megalobiz hasn't been asked"
-    megalobiz_lyrics(conn, sites_client(cfg, conn, "megalobiz"), cfg.library_dir, NOW, picks=picks)
+    with sites_client(cfg, conn, "megalobiz") as client:
+        megalobiz_lyrics(conn, client, cfg.library_dir, NOW, picks=picks)
     assert why_not_offered(conn, cfg, get_song(conn, song.id), overrides) == "azlyrics hasn't been asked"
-    azlyrics_lyrics(conn, sites_client(cfg, conn, "azlyrics"), cfg.library_dir, NOW, lyrics=picks)
+    with sites_client(cfg, conn, "azlyrics") as client:
+        azlyrics_lyrics(conn, client, cfg.library_dir, NOW, lyrics=picks)
     assert [e for e, _ in sites.megalobiz.requests] == ["search"]
     assert sites.megalobiz.requests[0][1]["artist"] == SONG[0]  # the song's own name: no [lyrics] holds
     assert sites.azlyrics.requests == ["/n/nickcani.html"]  # its artist's page, under the song's own name

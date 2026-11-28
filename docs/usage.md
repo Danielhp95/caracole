@@ -1016,7 +1016,7 @@ within its 7 days. LRCLIB's record comes from the search's own answer in the cac
 The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. An auto sheet that
 keeps what was heard is laid out again over the new words at once, with no model, whether
 auto-chords is installed or not; one another caracole made never goes to the models here (with the
-same words as before, nothing is laid out again). Any other song with its audio gets its auto sheet
+same words timed as before, nothing is laid out again). Any other song with its audio gets its auto sheet
 made, or made again, over the new words at once where auto-chords is installed; otherwise tonight's
 run makes it (a chart already made takes the words as plain lyrics meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
 
@@ -1455,15 +1455,14 @@ An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as
 for the chords, `caracole audio` and the lyrics sites alike; one libsndfile reads only in part is
 read through FFmpeg, with a warning naming the file. The first `caracole autochords` over every
 song after this came in (the nightly one; never a sheet made for one song) makes again, once, what
-was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it; if
-it was read short, words heard from the part read are dropped and the song is offered them again
-(your own "it isn't sung" stays). Each song is a warning
-(`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`), the run's last
-line names them (`…; remeasured 2 whose MP3 names no length, made again: …`), and so does the to-do
-page, under "Made again: MP3s that name no length", until the next run. Where wanted.txt holds a
-line exactly as caracole writes one with the guessed length (`caracole audio`'s, or one you typed
-the very same), its length is corrected, and lyrics not found are asked for again with it; the
-song is then given to your phone at the next sync. A song with a human sheet is left alone.
+was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it (not
+one another caracole made, which wasn't heard from your file); if it was read short, words heard from the part read are
+dropped and the song is offered them again (your own "it isn't sung" stays). Each song is a warning (`Artist - Title:
+its MP3 is 7:20 long, not the 3:56 its length was guessed at …`), the run's last line names them (`…; remeasured 2 whose
+MP3 names no length, made again: …`), and so does the to-do page, under "Made again: MP3s that name no length", until
+the next run. Where wanted.txt holds a line exactly as caracole writes one with the guessed length (`caracole audio`'s,
+or one you typed the very same), its length is corrected, and lyrics not found are asked for again with it; the song is
+then given to your phone at the next sync. A song with a human sheet is left alone.
 
 A song takes minutes, so it logs a line before each, `Working out the chords of Artist - Title
 (3 of 12)…`, and one after: `Artist - Title: auto sheet written (synced lyrics)`.
@@ -1743,6 +1742,10 @@ caracole keeps to these terms:
 - It takes audio only for a song with no human sheet: those the buy list would list, or one you
   name with its video. A purchase in Music/ comes first, and a human sheet found later replaces
   the auto sheet.
+- It takes none for a song whose auto sheet another caracole (the phone) made, since the nightly
+  run never makes that sheet again; unless the sheet is chords alone, no lyrics site has the
+  words, and words heard here would replace it. By hand, `caracole youtube --song` refuses
+  it too; `--sheet` makes its sheet here.
 - It runs yt-dlp only where auto-chords can make chords of the audio. A caracole without
   auto-chords (the default package) or its model files runs none, and the to-do page says why.
 - A night's budget is 50 yt-dlp runs (a search or a download each), one at a time, 3.75–7.5
@@ -2986,7 +2989,9 @@ with no purchase linked has the same in its card, **From a YouTube video**, whos
 replaces any YouTube audio it had.
 
 The line shows a bar of steps: Song, Audio (YouTube), Lyrics, Words, Chords and PDF. Words is the lyrics
-heard from the audio, only when no lyrics site has them. The audio and the
+heard from the audio, only when no lyrics site has them and only where this caracole transcribes (the form's
+line says which: "its lyrics heard from it when no site has them", else "its lyrics from the lyrics sites"). The
+audio and the
 chords say what they are doing ("Chords · 4 of 5 · finding the beats"). When it is Ready,
 the title opens `sheet (auto).html` and the Journal says what the sheet holds ("Chords over the
 lyrics.", "Chords only, no lyrics."), or why the lyrics wait. If the words couldn't be heard here
@@ -3017,8 +3022,9 @@ for a song you have, with what the file will replace. Correct the names if they 
 song keeps its own) and press **Make sheet**: a line under the bar, or the song's own line, says how
 it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
 file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
-and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
-file on disk has no +.
+and the dialog says so. Its line says the lyrics come from the lyrics sites, and are heard from the file where
+none has them only where this caracole transcribes and `[autochords] transcribe` is on. A file dropped anywhere else on
+the page is never opened in its place. The file on disk has no +.
 
 The file goes up in one
 request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's

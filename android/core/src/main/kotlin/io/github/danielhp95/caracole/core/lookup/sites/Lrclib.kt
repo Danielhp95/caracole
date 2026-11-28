@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.lookup.sites
 
+import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
 import io.github.danielhp95.caracole.core.library.PassStats
 import io.github.danielhp95.caracole.core.library.Songs
@@ -92,13 +93,15 @@ internal object LyricsStages {
             "No more asks until ${until(asked.state.cooldownUntil)}. Nothing marked not on the sites.")
         is Asked.Spent -> {
             val p = ctx.config.provider(provider)
+            // bulk work's client (an automatic YouTube job's lyrics): the limit it met, in the phone's own words
             val spent = when {
+                asked.bulk -> LookupWords.bulkSpent(provider, p, asked.day)
                 asked.keptForSheets -> "half this hour's ${p.lookupPerHour} asks of ${name(provider)} are spent; the rest " +
                     "is kept for sheets"
                 asked.hour -> "no more asks of ${name(provider)} this hour (${p.lookupPerHour} spent)"
                 else -> "this fetch's ${p.lookupRequests} asks of ${name(provider)} are spent"
             }
-            StageEnd("skipped", "$spent; tonight's run does the rest")
+            StageEnd("skipped", if (asked.bulk) spent else "$spent; tonight's run does the rest")
         }
         is Asked.Failed -> StageEnd("failed", "${name(asked.error.provider)} failed (${asked.error.message}); tried " +
             "again tonight")

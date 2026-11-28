@@ -874,6 +874,9 @@ SHEET_VIDEO = {"id": "lzN7Thn3FV4", "title": "Longships  (Official Audio)", "cha
                "duration": 46.0}
 PURCHASE = "Audio from a purchase: Nobody - River Road.m4a"
 SYNCED_FOUR = "[00:00.50]Walking down the river road\n[00:05.20]Singing to the morning light\n"
+# SYNCED_FOUR's words, the second line sung three seconds earlier: another cut's timing of one text (relay_due's
+# "its timed lyrics are others now")
+SYNCED_RETIMED = "[00:00.50]Walking down the river road\n[00:02.20]Singing to the morning light\n"
 WORDS_FOUR = "[00:00.00]<00:00.00>Walking <00:00.60>down <00:01.20>the <00:03.00>river <00:03.60>road\n"
 CHINESE_FOUR = "[00:00.50]我们一起走在河边的路上\n[00:05.20]唱着早晨的歌\n"
 ASTRAL_FOUR = ("[00:00.50]\U0001d401\U0001d428\U0001d425\U0001d41d \U00020000\U00020001 \U0001f600 road\n"
@@ -1176,6 +1179,11 @@ def _relay_records() -> list[dict]:
     out.append(_relay_case(song("plain"), raw("none", silent=True, said=True)))
     out.append(_relay_case(song("chinese"), raw("chinese", columns=False)))
     out.append(_relay_case(song("synced"), raw("synced", columns=False)))
+    # a timed sheet over the same words timed otherwise (a record picked for another cut): laid out again over the
+    # song's timing now; over them untimed: up to date, as before
+    retimed = _song(lyrics_status="found", lyrics_json=_lyrics("", SYNCED_RETIMED, duration=10.0))
+    out.append(_relay_case(retimed, raw("synced")))
+    out.append(_relay_case(song("plain_same"), raw("synced")))
     credit = merge.youtube_credit(SHEET_VIDEO["title"], SHEET_VIDEO["channel"], SHEET_VIDEO["id"])
     out.append(_relay_case(song("synced", audio_path=None),
                            raw("none", video=SHEET_VIDEO, source=credit, maker=PHONE_MAKER)))

@@ -35,6 +35,7 @@ internal object PhoneChords {
     private fun work(stateDir: File) = File(stateDir, "cache/autochords")
 
     /** The ABIs this APK carries the chord models' libraries of: arm64-v8a alone in the release, both in a debug build
-     * (app/build.gradle.kts), so an x86_64 phone's release says "no chord models for this phone's processor". */
+     * (app/build.gradle.kts), so an x86_64 phone's release, one that translates arm64 too (its primary ABI's
+     * libraries are the ones installed), says "no chord models for this phone's processor". */
     private val ABIS: Set<String> = BuildConfig.ML_ABIS.split(",").toSet()
 }

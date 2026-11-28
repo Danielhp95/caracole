@@ -339,6 +339,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":null,"fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -640,6 +656,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"ug","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -939,6 +971,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"by_word","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1222,6 +1270,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"titles","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1515,6 +1579,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"sites","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -1812,6 +1892,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"lacuerda","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2073,6 +2169,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Hyperfanes","Somos vikingos veganos"]}
+{"args":["creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2345,6 +2457,22 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
@@ -2602,3 +2730,19 @@
 {"args":["《孤勇者》 Cover by 某某"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["某某","孤勇者"]}
 {"args":["《孤勇者》 Piano Cover by Jane"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Jane","孤勇者"]}
 {"args":["「Title」 Cover Me Band"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"channel":null},"out":["Cover Me Band","Title"]}
+{"args":["silvana estrada que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema by silvana estrada"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","creep"]}
+{"args":["que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":["Silvana Estrada","que problema"]}
+{"args":["que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Tregua","Silvana Estrada"]},"out":null}
+{"args":["vikingos veganos"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["Somos vikingos veganos"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":null}
+{"args":["creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["",""]},"out":null}
+{"args":["creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Creep",""]},"out":null}
+{"args":["creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["","Radiohead"]},"out":null}
+{"args":["!!"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada — Qué Problema (Visualizer)","Silvana Estrada"]},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Somos vikingos veganos - Hyperfanes","kintanedu"]},"out":["Radiohead","Creep"]}
+{"args":["CREEP!"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Creep","Radiohead - Topic"]},"out":["Radiohead","CREEP!"]}
+{"args":["安和桥"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["宋冬野 - 安和桥","宋冬野"]},"out":["宋冬野","安和桥"]}
+{"args":["lemon"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["MV「Lemon」","米津玄師"]},"out":["米津玄師","lemon"]}
+{"args":["Que Problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{"video":["Silvana Estrada - Qué Problema","kintanedu"]},"out":["Silvana Estrada","Que Problema"]}

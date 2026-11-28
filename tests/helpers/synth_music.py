@@ -234,6 +234,30 @@ is; tests/test_conformance_autochords_models.py writes the computer's decode of 
 gate's files, `hearing.mp3` (44.1 kHz stereo MP3) and `hearing.m4a` (48 kHz stereo AAC), are long.wav's first 20 s
 encoded the same way; it writes the computer's whole hearing of each into models.jsonl.
 
+Two of them are fragmented MP4, as yt-dlp leaves YouTube's m4a on the phone, which has no FFmpeg to remux it ("writing
+DASH m4a"); FFmpeg 9.0.1 wrote them, a box dump of each:
+
+- `decode-frag.m4a` (54,945 bytes): decode.m4a's very AAC frames (22,050 Hz mono, 64 kb/s) by `-movflags
+  frag_keyframe+empty_moov+default_base_moof`: `ftyp` (M4A; iso6, iso5); an empty `moov` (`mvhd` and `mdhd` of
+  duration 0; `stts`, `stsc`, `stsz` and `stco` of no entry; `mvex`/`trex`); one `moof` (`tfdt` 0, a `trun` of 131
+  samples, each one's duration and size) and its `mdat`; `mfra`.
+- `decode-dash.m4a` (98,838 bytes): the clip as YouTube's itag 140 is coded, AAC-LC at 128 kb/s and 44.1 kHz stereo,
+  by `-movflags dash+global_sidx+frag_keyframe+empty_moov+default_base_moof -frag_duration 1000000`: `ftyp` (M4A;
+  iso6, iso5, dash); the same empty `moov`; a global `sidx` (6 references); six `moof`s (a default duration of 1,024
+  in each `tfhd`; `tfdt` 0, 45,056, …; 44 samples each, the last 40 with their own durations) and their `mdat`s;
+  `mfra`. The closer stand-in for YouTube's: its brand, its `sidx` and its many fragments (what boxes YouTube's own
+  file holds beyond those, an edit list or none, no file here shows).
+
+Neither has an edit list (FFmpeg writes none in a fragmented file, `-use_editlist 1` or not), an iTunSMPB or an
+`sgpd`/`sbgp` roll: the encoder's priming, 1,024 samples, is in no box. So FFmpeg decodes it, the fragmented file read
+whole is its last frame's padding longer than its samples' durations say, and mutagen states no length of it. The
+computer never holds such a file: its yt-dlp remuxes it (FixupM4a, `ffmpeg -c copy -f mp4`), whose `elst` starts at 0,
+whose `mdhd` is the fragments' length (133,324 and 265,624 samples), and whose decode is the fragmented file's ended
+there: encode.sh writes each remux beside it (`decode-frag-remux.m4a`, `decode-dash-remux.m4a`), and the generator
+checks both against it. decode.jsonl's records of them are that decode and that length (`fragmented`). Against the
+plain file of the same frames (decode.m4a, and the itag 140 clip as a plain MP4), whose edit list trims the priming,
+those samples are the plain decode's 1,024 samples later.
+
 Regenerate them (never by hand) in two halves: the clips and this README in the default shell,
 `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_autochords_models.py`; then, after any
 clip changes, the models' outputs over them in the auto-chords shell,

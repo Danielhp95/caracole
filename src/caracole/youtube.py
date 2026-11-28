@@ -572,7 +572,9 @@ class PhoneGate:
       gate's log before stderr is read: never a block, never unavailable, never retried;
     - ``stopped``: the name the gate's log lists when it stopped accepting connections by a bug of its own (no host
       ever has it: a host is a lowercased name or address), and ``stopped_said`` the words of a run that met it, an
-      error decided from the gate's log before stderr is read, as a refusal is.
+      error decided from the gate's log before stderr is read, as a refusal is;
+    - ``malformed``: the name its log lists the requests it couldn't read under (no host, a bad method or target), and
+      ``other_hosts`` the one it counts every host under once it has named as many as it keeps (no host has either).
     """
 
     names: tuple[str, ...] = ("youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com",
@@ -584,6 +586,8 @@ class PhoneGate:
     refusal: str = "yt-dlp asked for {host}, which caracole doesn't allow"
     stopped: str = "(the gate stopped)"
     stopped_said: str = "caracole's gate stopped taking yt-dlp's connections"
+    malformed: str = "(malformed)"
+    other_hosts: str = "(other hosts)"
 
 
 PHONE_GATE = PhoneGate()

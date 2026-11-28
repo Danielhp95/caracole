@@ -119,6 +119,20 @@ HAS_SHEET = "{display} already has a sheet"  # its refusal of a song with a huma
 IN_BOOK = "in the book"  # the song stage's end for a song the library has
 NOT_OFFERED = "not transcribed: {why}"  # the vocals' skip in the offer's words (transcript.py ``why_not_offered``)
 NOT_HERE = "not transcribed here: {reason}"  # the vocals' skip where this caracole can't transcribe
+OWN_AUDIO = "{display} has its own audio (bought or given); auto-chords uses that"  # the song stage's refusal so
+DECLINED = '[youtube] says "none" for {display}: give it a video'  # its refusal with no video given
+CANT_NOTE = "couldn't note the video in overrides.toml: {error}"  # its refusal of a video overrides.toml won't take
+NOTED = "; noted under [youtube]: {url}"  # after its end, once the video given is noted
+# The audio stage's words: its running details, then its ends.
+DOWNLOADING = "downloading the video's audio"
+LOOKING = "looking for a video on YouTube"
+AUDIO_ALREADY = "has the audio of {url} already"
+TURNED_BACK = "YouTube turned us back; waiting until {until}"  # ``until`` as COOLING_WHEN shows it, else COOLING_LATER
+NO_RUNS_LEFT = "no YouTube runs left ({budget} spent); try again later"
+DOWNLOADED = "downloaded {named}, {url}"  # ``named``: the video's title (channel), else its title or id
+NO_VIDEO_FITS = "no video fits; give it one"
+CANT_DOWNLOAD = "can't download this video; try another"
+DOWNLOAD_FAILED = "download failed; try again later"
 
 
 @dataclass(frozen=True)
@@ -227,14 +241,14 @@ class _Sheet(HearsWords, StagedRun):
         song, said = self._the_song()
         self._still_ours(song)
         if req.url is None and song.key in self.overrides.youtube and self.overrides.youtube[song.key] is None:
-            raise _Stop(f'[youtube] says "none" for {song.display}: give it a video')
+            raise _Stop(DECLINED.format(display=song.display))
         if req.url is not None:
             try:
                 add_youtube(self.cfg.overrides_file, song.display, req.url)
                 self.overrides = load_overrides(self.cfg.overrides_file)
             except OverridesError as e:
-                raise _Stop(f"couldn't note the video in overrides.toml: {e}") from e
-            said += f"; noted under [youtube]: {watch_url(self.overrides.youtube.get(song.key) or '')}"
+                raise _Stop(CANT_NOTE.format(error=e)) from e
+            said += NOTED.format(url=watch_url(self.overrides.youtube.get(song.key) or ''))
         self.song = song
         self.result.song_id, self.result.display = song.id, song.display
         self.progress.song(song.id, song.display)
@@ -249,7 +263,7 @@ class _Sheet(HearsWords, StagedRun):
 
         self._unsheeted(song)
         if song.audio_path and youtube_audio(self.conn, song) is None:
-            raise _Stop(f"{song.display} has its own audio (bought or given); auto-chords uses that")
+            raise _Stop(OWN_AUDIO.format(display=song.display))
 
     def _unsheeted(self, song: Any) -> None:
         """The song not ignored and with no human sheet, else the sheet ends there (``_Stop``)."""
@@ -277,26 +291,25 @@ class _Sheet(HearsWords, StagedRun):
         video = youtube_audio(self.conn, self.song)
         pasted = self.overrides.youtube.get(self.song.key)
         if video is not None and (not pasted or pasted == video.id):
-            return "done", f"has the audio of {video.url} already"
+            return "done", AUDIO_ALREADY.format(url=video.url)
         if is_cooling(self.conn, PROVIDER, self.now):
             until = get_state(self.conn, PROVIDER).cooldown_until
             when = until.strftime(COOLING_WHEN) if until else COOLING_LATER
             return "skipped", COOLING_SAID.format(when=when)
-        downloading = "downloading the video's audio"
-        self._doing("audio", downloading if pasted else "looking for a video on YouTube")
+        self._doing("audio", DOWNLOADING if pasted else LOOKING)
         heard: list[tuple[str, Record]] = []
         runner = make_youtube(self.cfg, self.conn, self.run_id)
         try:
             stats = youtube_pass(self.conn, runner, self.cfg, self.now, overrides=self.overrides, songs=[self.song],
                                  on_song=lambda song, outcome, record: heard.append((outcome, record)),
-                                 on_download=lambda song, video: self._doing("audio", downloading))
+                                 on_download=lambda song, video: self._doing("audio", DOWNLOADING))
         except ProviderBlocked as e:
             state = record_block(self.conn, PROVIDER, self.now, str(e))
-            until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
+            until = state.cooldown_until.strftime(COOLING_WHEN) if state.cooldown_until else COOLING_LATER
             message = (f"{e}\nNo more yt-dlp runs until {until} (block #{state.strikes}). Nothing was marked "
                        "missing.")
             alert_block(self.cfg, PROVIDER, message, strikes=state.strikes)
-            return "skipped", f"YouTube turned us back; waiting until {until}"
+            return "skipped", TURNED_BACK.format(until=until)
         finally:
             self.result.requests[PROVIDER] = runner.requests_made
             runner.close()
@@ -305,19 +318,17 @@ class _Sheet(HearsWords, StagedRun):
         self._song_again()
         if stats.budget_exhausted or not heard:
             budget = self.cfg.provider(PROVIDER).budget
-            return "skipped", f"no YouTube runs left ({budget} spent); try again later"
+            return "skipped", NO_RUNS_LEFT.format(budget=budget)
         outcome, record = heard[-1]
         got = record.video
         if outcome == DOWNLOADED_NOW and got is not None:
             named = f"{got.title} ({got.channel})" if got.channel else got.title or got.id
-            return "done", f"downloaded {named}, {got.url}"
+            return "done", DOWNLOADED.format(named=named, url=got.url)
         if outcome == MISSED:
-            return self._fail("no video fits; give it one")
-        if outcome == PASSED_OVER:
-            return self._fail("can't download this video; try another")
-        if outcome == GAVE_UP:
-            return self._fail("can't download this video; try another")
-        return "failed", "download failed; try again later"
+            return self._fail(NO_VIDEO_FITS)
+        if outcome in (PASSED_OVER, GAVE_UP):
+            return self._fail(CANT_DOWNLOAD)
+        return "failed", DOWNLOAD_FAILED
 
     def lyrics(self) -> tuple[str, str]:
         """LRCLIB's lyrics, then Megalobiz's timed ones where LRCLIB left the song without (megalobiz_fetch.py):

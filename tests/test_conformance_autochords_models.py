@@ -54,7 +54,8 @@ row-major; every number in a record a float32's value or an int, written as JSON
   and, of a lossy file, those samples as 16-bit, ``pcm16``; of a lossless one, the SHA-256 of soundfile's float32
   channels interleaved, ``interleaved_sha256``, which the phone's must equal, and soundfile's ``subtype``, a FLAC
   deeper than 16 bits its ``pcm16`` too), and its length by music.py ``read_audio`` (its frames counted for an MP3
-  that names none). Needs no model and no CPU's kernels.
+  that names none); of a fragmented MP4 (``fragmented``: yt-dlp's m4a on the phone), the decode and length of the
+  computer's remux of it (``DECODE_FRAGMENTED``). Needs no model and no CPU's kernels.
 - ``vectors/autochords/peaks.jsonl``, ``chunks.jsonl`` and ``scores.jsonl``, of no model file (its own section, below):
   beat_this's minimal postprocessor over seeded and hand-made logits; ``split_piece`` and ``aggregate_prediction`` of
   every piece of 0 to 4,000 frames, a table deflated; mir_eval's WCSR (``mir_eval_wcsr``) and beat F-measure
@@ -677,7 +678,8 @@ def test_soxr_vectors():
 # The decode gate's files (tests/fixtures/autochords/encode.sh), each the format audio_store.py ``sniff`` names it.
 DECODE_FILES = (("decode.mp3", "MP3"), ("decode-lame.mp3", "MP3"), ("decode-headerless.mp3", "MP3"),
                 ("decode.m4a", "M4A"), ("decode-11k.m4a", "M4A"), ("decode.ogg", "Ogg"), ("decode-opus.ogg", "Ogg"),
-                ("decode.flac", "FLAC"), ("decode-24.flac", "FLAC"), ("decode.wav", "WAV"), ("decode.aiff", "AIFF"))
+                ("decode.flac", "FLAC"), ("decode-24.flac", "FLAC"), ("decode.wav", "WAV"), ("decode.aiff", "AIFF"),
+                ("decode-frag.m4a", "M4A"), ("decode-dash.m4a", "M4A"))
 # The design's B1 decode gate: no sample offset (by cross-correlation within ``offset_search`` samples either way,
 # over ``offset_window`` samples), an SNR of ``snr_db_min`` or more against the computer's decode at the file's rate,
 # and of ``snr_second_db_min`` over each whole second of it. The length the phone states held to music.py
@@ -689,6 +691,95 @@ DECODE_FILES = (("decode.mp3", "MP3"), ("decode-lame.mp3", "MP3"), ("decode-head
 DECODE_GATES = {"offset": 0, "offset_search": 2048, "offset_window": 22050, "snr_db_min": 60.0,
                 "snr_second_db_min": 60.0, "length_within_samples": 2, "decoded_within_samples": 0}
 _LOSSLESS = ("FLAC", "WAV", "AIFF")
+# A fragmented MP4 (an ``mvex`` in its ``moov``, its samples in ``moof``s: yt-dlp's m4a on the phone, which has no
+# FFmpeg to remux it) is never one the computer holds: its yt-dlp remuxes it (FixupM4a, ``ffmpeg -c copy -f mp4``)
+# before anything reads it. Its record is the computer's audio as it would hold it: the remux's length (its ``mdhd``,
+# which FFmpeg writes from the fragments' sample durations: ``_fragments_length``) and the remux's decode, which is
+# FFmpeg's decode of the fragmented file ended at that length; ``decode_records`` checks both against the remux
+# encode.sh writes beside each (``<name>-remux.m4a``). The fragmented file read whole is the last frame's padding
+# longer, and mutagen states no length of it.
+DECODE_FRAGMENTED = ("the computer's audio as its yt-dlp would hold it, remuxed (FixupM4a, ffmpeg -c copy -f mp4): "
+                     "FFmpeg's decode ended at the fragments' length (their trun sample durations, from the tfdt), "
+                     "which is also the length stated; no edit list, so the encoder's priming is kept")
+
+
+def _fragments_length(path) -> tuple[int, int] | None:
+    """A fragmented MP4's sound track's length as FFmpeg's remux of it writes its ``mdhd``: its timescale, and from its
+    first fragment's decode time (``tfdt``, else 0) to its last sample's end, each sample's duration its ``trun``'s,
+    else its ``tfhd``'s default, else its ``trex``'s; None for an MP4 with no ``mvex``."""
+    import struct
+
+    data = Path(path).read_bytes()
+
+    def boxes(at: int, end: int):
+        while at + 8 <= end:
+            size, name = struct.unpack(">I4s", data[at:at + 8])
+            head = 8
+            if size == 1:
+                size, head = struct.unpack(">Q", data[at + 8:at + 16])[0], 16
+            elif size == 0:
+                size = end - at
+            yield name, at + head, at + size
+            at += size
+
+    top = {name: (b, e) for name, b, e in boxes(0, len(data)) if name == b"moov"}
+    if b"moov" not in top:
+        return None
+    moov = dict((name, (b, e)) for name, b, e in boxes(*top[b"moov"]) if name in (b"mvex",))
+    if b"mvex" not in moov:
+        return None
+    trex = {}
+    for name, b, _ in boxes(*moov[b"mvex"]):
+        if name == b"trex":
+            track, _, duration = struct.unpack(">III", data[b + 4:b + 16])
+            trex[track] = duration
+    sound = None
+    for name, b, e in boxes(*top[b"moov"]):
+        if name != b"trak":
+            continue
+        kids = {n: (kb, ke) for n, kb, ke in boxes(b, e)}
+        mdia = {n: (kb, ke) for n, kb, ke in boxes(*kids[b"mdia"])}
+        hdlr = mdia[b"hdlr"][0]
+        if data[hdlr + 8:hdlr + 12] == b"soun":
+            tkhd, mdhd = kids[b"tkhd"][0], mdia[b"mdhd"][0]
+            track = struct.unpack(">I", data[tkhd + (20 if data[tkhd] == 1 else 12):][:4])[0]
+            timescale = struct.unpack(">I", data[mdhd + (20 if data[mdhd] == 1 else 12):][:4])[0]
+            sound = track, timescale
+            break
+    assert sound is not None, path
+    track, timescale = sound
+    first = end = None
+    for name, b, e in boxes(0, len(data)):
+        if name != b"moof":
+            continue
+        for traf, tb, te in boxes(b, e):
+            if traf != b"traf":
+                continue
+            parts = list(boxes(tb, te))
+            tfhd = next(pb for n, pb, _ in parts if n == b"tfhd")
+            flags = int.from_bytes(data[tfhd + 1:tfhd + 4], "big")
+            if struct.unpack(">I", data[tfhd + 4:tfhd + 8])[0] != track:
+                continue
+            at = tfhd + 8 + (8 if flags & 0x01 else 0) + (4 if flags & 0x02 else 0)
+            default = struct.unpack(">I", data[at:at + 4])[0] if flags & 0x08 else trex.get(track, 0)
+            for n, pb, _ in parts:
+                if n == b"tfdt":  # a fragment's decode time; one with none goes on from the one before
+                    wide = data[pb] == 1
+                    end = struct.unpack(">Q" if wide else ">I", data[pb + 4:pb + (12 if wide else 8)])[0]
+                    first = end if first is None else first
+            if first is None:
+                first = end = 0
+            for n, pb, _ in parts:
+                if n != b"trun":
+                    continue
+                tflags = int.from_bytes(data[pb + 1:pb + 4], "big")
+                count = struct.unpack(">I", data[pb + 4:pb + 8])[0]
+                at = pb + 8 + (4 if tflags & 0x01 else 0) + (4 if tflags & 0x04 else 0)
+                fields = sum(4 for bit in (0x100, 0x200, 0x400, 0x800) if tflags & bit)
+                for i in range(count):
+                    end += struct.unpack(">I", data[at:at + 4])[0] if tflags & 0x100 else default
+                    at += fields
+    return timescale, end - first
 
 
 def _sha256(a) -> str:
@@ -728,6 +819,7 @@ def decode_records() -> list[dict]:
         "kind": "meta", "gates": DECODE_GATES,
         "samples": "pcm16: round(y * 32768), clipped to int16, of load_mono's float32 y, each less the one before, "
                    "deflated (zlib); *_sha256: SHA-256 of little-endian float32 samples",
+        "fragmented": DECODE_FRAGMENTED,
         "libraries": {"numpy": np.__version__, "soundfile": soundfile.__version__,
                       "libsndfile": soundfile.__libsndfile_version__, "librosa": librosa.__version__,
                       "torchaudio": torchaudio.__version__, "mutagen": mutagen.version_string},
@@ -749,9 +841,20 @@ def decode_records() -> list[dict]:
         finally:
             audio._ffmpeg = ffmpeg
         assert y.dtype == np.float32
+        duration = read_audio(path).duration_s
+        fragments = _fragments_length(path) if form == "M4A" else None
+        if fragments is not None:  # the computer's audio as its yt-dlp would hold it, remuxed (DECODE_FRAGMENTED)
+            timescale, length = fragments
+            assert timescale == rate and len(y) >= length, (name, timescale, rate, len(y), length)
+            y, duration = y[:length], length / timescale
+            remux = path.with_name(path.stem + "-remux.m4a")  # the computer's copy of it: the ruling's premise
+            assert np.array_equal(audio.load_mono(remux, rate), y), name
+            assert read_audio(remux).duration_s == duration, name
         record = {"kind": "file", "file": fixture_ref(path), "format": form, "rate": rate, "channels": channels,
-                  "reader": read[-1] if read else "libsndfile", "frames": len(y),
-                  "duration": read_audio(path).duration_s, "mono_sha256": _sha256(y)}
+                  "reader": read[-1] if read else "libsndfile", "frames": len(y), "duration": duration,
+                  "mono_sha256": _sha256(y)}
+        if fragments is not None:
+            record["fragmented"] = True
         # Clipped to int16's range: the headerless MP3's burst of noise decodes past full scale in FFmpeg's floats,
         # and a 16-bit decoder clips it there too.
         pcm16 = _deltas(np.clip(np.round(y * 32768.0), -32768, 32767).astype(np.int16))

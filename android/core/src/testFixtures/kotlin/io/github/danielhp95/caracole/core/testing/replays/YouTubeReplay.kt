@@ -1,46 +1,50 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
-import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.http.Draws
+import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.LaCuerdaPick
+import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.search.ArtistHit
 import io.github.danielhp95.caracole.core.search.IndexFound
 import io.github.danielhp95.caracole.core.search.IndexHit
 import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.SiteArtist
 import io.github.danielhp95.caracole.core.search.SiteHit
-import io.github.danielhp95.caracole.core.youtube.Records
-import io.github.danielhp95.caracole.core.youtube.SearchGate
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.long
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.http.Draws
-import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.lookup.Pace
-import io.github.danielhp95.caracole.core.lookup.Pacing
+import io.github.danielhp95.caracole.core.testing.AreaReplay
+import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.youtube.FakeYtDlpProcess
+import io.github.danielhp95.caracole.core.youtube.AnswerError
+import io.github.danielhp95.caracole.core.youtube.Choose
+import io.github.danielhp95.caracole.core.youtube.Classify
 import io.github.danielhp95.caracole.core.youtube.Download
+import io.github.danielhp95.caracole.core.youtube.Due
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Ran
+import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.SearchGate
+import io.github.danielhp95.caracole.core.youtube.Thumbs
+import io.github.danielhp95.caracole.core.youtube.Video
+import io.github.danielhp95.caracole.core.youtube.Videos
+import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import io.github.danielhp95.caracole.core.youtube.YtDlp
 import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import java.io.File
 import java.nio.file.Files
 import java.time.Duration
 import java.time.Instant
-import io.github.danielhp95.caracole.core.testing.AreaReplay
-import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.core.testing.Misses
-import io.github.danielhp95.caracole.core.youtube.AnswerError
-import io.github.danielhp95.caracole.core.youtube.Choose
-import io.github.danielhp95.caracole.core.youtube.Classify
-import io.github.danielhp95.caracole.core.youtube.Video
-import io.github.danielhp95.caracole.core.youtube.Videos
-import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
@@ -50,6 +54,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 
 /**
  * youtube.py's phone half (tests/test_conformance_youtube.py), area `youtube`:
@@ -70,14 +75,19 @@ import kotlinx.serialization.json.jsonPrimitive
  * - gate.jsonl: SearchGate.gate (with its suggestion, /api/search's `youtube`) and videoGate over each scene's kv and
  *   events on a fresh database, YouTube on or off in the phone's settings; recordFailure's kv text byte for byte; and
  *   sheetOnScreen of each record's hits;
- * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte.
+ * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte;
+ * - due.jsonl: Due.songs over each scene's fixture library and overrides (`ignore`, `youtube`, `lacuerda`) at its
+ *   `now`, unpaired (`due`) and paired (`paired`), the songs' ids in Python's order;
+ * - video_cmd.jsonl's `checked_jpeg` records: Thumbs.checkedJpeg of each synthetic head (its command's records are
+ *   :server's YouTubeVideoReplay's).
  */
 object YouTubeReplay : AreaReplay {
     override val area = "youtube"
 
     override fun replay(misses: Misses) {
         val counts = mapOf("argv" to argv(misses), "classify" to classify(misses), "parse" to parse(misses),
-            "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses))
+            "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses),
+            "video_cmd" to jpegs(misses), "due" to due(misses))
         for ((name, n) in counts) misses.check(n > 0) { "youtube/$name.jsonl holds no record" }
     }
 
@@ -249,7 +259,7 @@ object YouTubeReplay : AreaReplay {
                         )
                     }
                     val fake = FakeYtDlpProcess(planned)
-                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, db, pacing,
+                    val yt = YtDlp(fake, ProviderPolicy(budget.toLong(), delay), cache, QJS, { YtDlpGate.keptOpen(opened) }, YtDlp.Writes.of(db), pacing,
                                    budget = budget, runId = "youtube-replay", timeouts = timeouts)
                     var made = 0
                     for (c in calls) {
@@ -421,6 +431,50 @@ object YouTubeReplay : AreaReplay {
                 misses.check(db.kvGet(Records.key(song)) == text(r, "saved")) {
                     "record $song ($stored): saved ${db.kvGet(Records.key(song))}, Python's ${text(r, "saved")}"
                 }
+            }
+        }
+        return n
+    }
+
+    /** due.jsonl: Due.songs of each scene, unpaired and paired, against Python's ids in order. */
+    private fun due(misses: Misses): Int {
+        var n = 0
+        for (r in records("due")) {
+            n++
+            val case = text(r, "case")!!
+            val o = r.getValue("overrides").jsonObject
+            val overrides = Overrides(
+                ignore = o.getValue("ignore").jsonArray.map { it.jsonPrimitive.content }.toSet(),
+                youtube = o.getValue("youtube").jsonObject.mapValues { (_, v) -> v.jsonPrimitive.contentOrNull },
+                lacuerda = o.getValue("lacuerda").jsonObject.mapValues { (_, v) ->
+                    val p = v.jsonObject
+                    LaCuerdaPick(text(p, "artist")!!, text(p, "song")!!, p["version"]?.jsonPrimitive?.intOrNull)
+                },
+            )
+            val now = Instant.parse(text(r, "now")!!)
+            PoliteDb.with { db ->
+                Fixtures.loadRecords(db, r.getValue("fixture").jsonArray.map { it.jsonObject }, name = case)
+                for ((key, paired) in listOf("due" to false, "paired" to true)) {
+                    val want = r.getValue(key).jsonArray.map { it.jsonPrimitive.long }
+                    val got = Due.songs(db, overrides, now, paired).map { it.id }
+                    misses.check(got == want) { "due $case, paired $paired: $got, Python's $want" }
+                }
+            }
+        }
+        return n
+    }
+
+    /** video_cmd.jsonl's `checked_jpeg` records (its command's records are :server's, YouTubeVideoReplay): Thumbs'
+     * reading of each head with its trailing zeros, kept or not as Python's. */
+    private fun jpegs(misses: Misses): Int {
+        var n = 0
+        for (r in records("video_cmd").filter { it["fn"]?.jsonPrimitive?.content == "checked_jpeg" }) {
+            n++
+            val data = java.util.Base64.getDecoder().decode(r.getValue("base64").jsonPrimitive.content) +
+                ByteArray(r.getValue("zeros").jsonPrimitive.int)
+            val kept = Thumbs.checkedJpeg(data) != null
+            misses.check(kept == r.getValue("kept").jsonPrimitive.boolean) {
+                "checked_jpeg of ${r["base64"]} and ${r["zeros"]} zeros: kept $kept, Python's ${r["kept"]}"
             }
         }
         return n
