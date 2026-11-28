@@ -383,9 +383,9 @@ def phone_due(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *, 
     """The songs a phone takes the audio of from YouTube by itself (its automatic pass), recorded for it: those of
     ``songs_for_youtube`` with no audio of their own (no upload, no YouTube audio kept: ``audio_path`` none) and no
     sheet at all, human or auto, whoever made it, none whose video's audio the phone couldn't hear in the last 30 days
-    (kv ``youtube-unheard:<id>``, until another video is given); on a ``paired`` phone (one that syncs with a computer) only those it
-    noted (kv ``youtube-wanted:<id>``, a lookup that ended "Not on the sites"), the rest being the computer's nightly
-    work. The noted first, then the rest, newest first in each; those whose last try failed after the others, the
+    (kv ``youtube-unheard:<id>``, until another video is given); on a ``paired`` phone (one that syncs with a
+    computer) only those it noted (kv ``youtube-wanted:<id>``, a lookup that ended "Not on the sites"), the rest
+    being the computer's nightly work. The noted first, then the rest, newest first in each; those whose last try failed after the others, the
     noted first among them."""
     due = []
     for song, failed in _due(conn, overrides, now):

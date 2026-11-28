@@ -87,8 +87,8 @@ import java.util.logging.Logger
  * - `song`: as [AudioRunner]'s (found or added), and refused where the song has audio of its own (an upload in
  *   [store], or an `audio_path` that isn't its `youtube:` record's: youtube_sheet.py `_still_ours`), or `[youtube]`
  *   says "none" with no video given; an automatic job (JobContext.automatic) also where the song keeps any sheet,
- *   read again at every stage ([HAS_SHEET]); the video given is written under `[youtube]` ([OverrideWriters.addYoutube]) and
- *   said ("; noted under [youtube]: URL").
+ * read again at every stage ([HAS_SHEET]); the video given is written under `[youtube]` ([OverrideWriters.addYoutube])
+ * and said ("; noted under [youtube]: URL").
  * - `audio`: [YouTubeAudio.sweep] first; the song's video's audio kept already, "has the audio of URL already";
  *   YouTube cooling down, skipped in the runner's words; else youtube_fetch.py's `_one` for this song through the app's
  *   yt-dlp ([engine], the runner [YtDlp]: its budget PhoneConfig's `youtube`, its pauses, one run at a time, a block
@@ -158,7 +158,8 @@ class YouTubeSheetRunner(
         private val folder = YouTubeAudio.folder(File(parts.stateDir, CACHE))
         private var video: Video? = null
         private var sheetOfVideo = false  // the song's auto sheet is of the video asked for, made here: no audio needed
-        private var heldBack: String? = null  // the run held back (an automatic job on a metered network): the job ends there
+        // the run held back (an automatic job on a metered network): the job ends there
+        private var heldBack: String? = null
 
         /** The song its request named, should the job add it (JobContext.adds: a sheet from a video asked for by
          * name), its album and length as wanted.txt's line keeps them on the computer: `_the_song(album=,
@@ -221,7 +222,8 @@ class YouTubeSheetRunner(
         }
 
         /** The video's download the phone couldn't hear, noted for the automatic pass (kv `youtube-unheard:<id>`,
-         * Due): once the sweep lets its audio go, the pass takes the song again only for another video, or 30 days on. */
+         * Due): once the sweep lets its audio go, the pass takes the song again only for another video, or 30 days on.
+         * */
         override fun unreadable(why: String) {
             val v = video ?: return
             val id = song?.id ?: return

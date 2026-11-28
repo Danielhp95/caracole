@@ -391,13 +391,13 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
     one-song card asks of its song alone.
   - `songs_for_youtube` passes over a song whose auto sheet another caracole made and no pass here would make again
     (`left_elsewhere`, autochords/run.py `left_as_made_elsewhere`: R3), unless it is chords alone, no site has the
-    words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing. `caracole youtube
-    --song` refuses such a song too (commands/youtube.py `_one_song`, `MADE_THERE`), pointing at `--sheet`.
+    words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing. `caracole
+    youtube --song` refuses such a song too (commands/youtube.py `_one_song`, `MADE_THERE`), pointing at `--sheet`.
   - `phone_due(conn, overrides, now, paired=)`: the songs a phone takes the audio of by itself (its automatic pass),
     within `songs_for_youtube`: no audio of their own, no sheet at all (either side's); none whose video's download the
     phone couldn't hear within 30 days (kv `youtube-unheard:<id>`, `UNHEARD_PREFIX`, until another video is given); on a
-    paired phone only those it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held by
-    vectors/youtube/due.jsonl (fixture libraries, tests/test_conformance_youtube.py), which core.youtube's port
+    paired phone only those it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held
+    by vectors/youtube/due.jsonl (fixture libraries, tests/test_conformance_youtube.py), which core.youtube's port
     replays.
 - youtube_sheet.py is no step but `caracole youtube --sheet`: one song's auto sheet from a video now.
   - Its stages song, audio, lyrics, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's
@@ -2203,15 +2203,14 @@ It is rows.js's, shared by both pages:
     `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
     the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces; its
     hint, and a card's entry's title, saying the words heard from the file only where `server.transcribe.hears` (never
-    the phone); Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
-    Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
-    purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
-    and posts its `songForm` in place (`song`, `identity`, `upload`; `form.audio-sheet`, a class the dialog shares,
-    whose box filter.css gives `dialog.audio-sheet` alone), its upload sent with the song so the dialog says
-    what that song's audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served
-    page never lets a drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a
-    link or text outside a field, is taken and nothing done; into a field a drop is the browser's.
-    test_web_page_audio.py.
+    the phone); Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel
+    or Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
+    purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit, and
+    posts its `songForm` in place (`song`, `identity`, `upload`; `form.audio-sheet`, a class the dialog shares, whose
+    box filter.css gives `dialog.audio-sheet` alone), its upload sent with the song so the dialog says what that song's
+    audio is; its transcription offers read again as after a YouTube sheet (`offerAfter`). The served page never lets a
+    drop load another page (library.js `keepDrops`): a file dropped where nothing takes it, or a link or text outside a
+    field, is taken and nothing done; into a field a drop is the browser's. test_web_page_audio.py.
 - **ug_link_routes.py** is a UG link pasted into the library page's box: `GET /api/ug/link` (ug/link.py `known`, no
   request and no lock: its state, the tab's names, its artist's page, `guess`, the library's `song`, `hits` as
   /api/search's `index` items) and `POST /ug/link` (`caracole ug --link --progress` queued under `jobs.UG_LINK`, among
@@ -2943,7 +2942,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (assemble, bundle, package, install) refuses there as the task graph is ready, before anything runs. The release carries the chord models' libraries for arm64-v8a alone (app/build.gradle.kts `releaseMlAbis`,
   `BuildConfig.ML_ABIS`; SQLite's for both): `MlChordModels.deviceProblem(carried=)` says "no chord models for this
   phone's processor" on an x86_64 phone, one that translates arm64 too (the primary ABI, `SUPPORTED_ABIS`' first, is
-  the one whose libraries are installed, as `PhoneYouTube.carries` asks); `checkApkSize` (after every release build) fails an APK over 100 MiB.
+  the one whose libraries are installed, as `PhoneYouTube.carries` asks); `checkApkSize` (after every release build)
+  fails an APK over 100 MiB.
   - The runtime: nix/onnxruntime-android.nix, with no network: nixpkgs' pin of the v1.27.1 source
     (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, cache.nixos.org's: github.com/microsoft/onnxruntime answers
     404), its CMake dependencies deps.txt's zips by SHA-256 in a local mirror; android/scripts/build-onnxruntime.sh's
@@ -3085,23 +3085,23 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     heat waited out, as before each chunk. `HeatRules` (Heat.kt, the design's §3.4 table over a
     `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom ≥ 0.85 or
     Battery Saver; severe waits before a stage (10 s polls, 5 minutes at most), the stage's step told again once it
-    is over; critical stops at the next window batch or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml` process, by its name
-    (`MODELS_PROCESS`, the app's `MlProcessTest` holding it to the manifest and `MlProtocol`). `PipelineCheckpointsTest`
-    (JVM, the graphs faked) holds the checkpoints; `PipelineTest` (`device-test.sh --ml`) hears each committed clip
-    and models.jsonl's `hearing` files (44.1 kHz stereo MP3, 48 kHz stereo AAC) through the process against
-    `gates.end_to_end` (WCSR of the Harte labels, beats and downbeats F after the 5 s trim; the clips' frames the
-    computer's argmax but at its margins, as many frames; each model's input the computer's length), kills `:ml`
-    mid-hearing (`ChordsUnavailable`, this process still answering, the next hearing from `chords.json`), and checks
-    every decode file's pcm length. `EndToEnd` is that gate as code (`Gates.of` a meta's `gates.end_to_end`, `Hearing`
-    a `hearing` record, `score`, where the frames part, `overAll`: every file passing each gate, each score's least
-    and its mean by length; `EndToEndTest` on the JVM). `ParityRunTest` (`device-test.sh --data DIR`: the folder's
-    files pushed to `/data/local/tmp/caracole-data`, removed however the run ends; skipped with no `-e data`) runs it
-    over songs outside the repository, the owner's, against autochords_reference's `--hearings`, each stage's time
-    (`Pipeline.STAGES`: decode, mixdown, resample, chords, beats, told by `hear`'s `timed`, `MlProtocol.STAGES` and
-    `STAGE_NANOS` in its DONE, `MlChordModels.lastStagesNanos`), `:ml`'s peak and its `RssAnon`/`RssFile` at the
-    highest RSS (`PEAK_ANON_KB`, `PEAK_FILE_KB`, `lastPeakSplitKb`), the platform's encoder delay and padding and the
-    decoder's trim; each song's copy and checkpoints removed in a `finally` and an `@After`, and the EXIT trap clears
-    `:ml`'s test APK's data after a `--data` run.
+    is over; critical stops at the next window batch or chunk; under 15 % and not charging refused. `Caracole.phone`
+    refuses to start in the `:ml` process, by its name (`MODELS_PROCESS`, the app's `MlProcessTest` holding it to the
+    manifest and `MlProtocol`). `PipelineCheckpointsTest` (JVM, the graphs faked) holds the checkpoints; `PipelineTest`
+    (`device-test.sh --ml`) hears each committed clip and models.jsonl's `hearing` files (44.1 kHz stereo MP3, 48 kHz
+    stereo AAC) through the process against `gates.end_to_end` (WCSR of the Harte labels, beats and downbeats F after
+    the 5 s trim; the clips' frames the computer's argmax but at its margins, as many frames; each model's input the
+    computer's length), kills `:ml` mid-hearing (`ChordsUnavailable`, this process still answering, the next hearing
+    from `chords.json`), and checks every decode file's pcm length. `EndToEnd` is that gate as code (`Gates.of` a meta's
+    `gates.end_to_end`, `Hearing` a `hearing` record, `score`, where the frames part, `overAll`: every file passing each
+    gate, each score's least and its mean by length; `EndToEndTest` on the JVM). `ParityRunTest` (`device-test.sh --data
+    DIR`: the folder's files pushed to `/data/local/tmp/caracole-data`, removed however the run ends; skipped with no
+    `-e data`) runs it over songs outside the repository, the owner's, against autochords_reference's `--hearings`, each
+    stage's time (`Pipeline.STAGES`: decode, mixdown, resample, chords, beats, told by `hear`'s `timed`,
+    `MlProtocol.STAGES` and `STAGE_NANOS` in its DONE, `MlChordModels.lastStagesNanos`), `:ml`'s peak and its
+    `RssAnon`/`RssFile` at the highest RSS (`PEAK_ANON_KB`, `PEAK_FILE_KB`, `lastPeakSplitKb`), the platform's encoder
+    delay and padding and the decoder's trim; each song's copy and checkpoints removed in a `finally` and an `@After`,
+    and the EXIT trap clears `:ml`'s test APK's data after a `--data` run.
 - `:autochords` (plain JVM, stage B1): the front ends of the chords from audio, `frontend.Soxr`, `Cqt` and `Mel`;
   `Pcm`, a WAV's or an AIFF's PCM read as libsndfile reads it as float32 (`format`, then `read` a block at a time; a
   header cut short or absurd `Pcm.Unreadable`), `PcmTest` holding it to decode.jsonl's lossless files sample for
@@ -3193,55 +3193,50 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     yt-dlp's own option parser (an alias as what it expands to), it must be one of youtube.json's `phone_argv`
     templates as that parser reads them (`GlueRules`: the templates, their placeholders and targets through
     `YouTubeData`, the searches' two counts, a sheet's `search_results` and a suggestion's `search.results`
-    (`search_counts`), the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from `HostGate`, and the run's own two folders, `RunFolders`, which the request names and the service checks: in the
-    app's storage, no link from there down): each option a template sets with its value or a value its placeholder's check
-    passes, every other at the parser's default; under LOOPBACK the
-    tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`, KillTest's one `--exec`). It kills
-    its process once unbound. `YtDlpClient(context, mode).run(argv, timeoutS, onLine, waiting, folders): Ran`
-    (`killed`, `timedOut`) binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one run at a time in the process and across
-    the app's processes (a `FileChannel` lock on `filesDir/youtube-run.lock` held for the whole run; one it can't take,
-    `YtDlpNotStarted` "another run is going", nothing killed or started), each run its own stop
+    (`search_counts`), the gate's `PROXY_PATTERN` and `LOOPBACK_NAMES` from `HostGate`, and the run's own two folders,
+    `RunFolders`, which the request names and the service checks: in the app's storage, no link from there down): each
+    option a template sets with its value or a value its placeholder's check passes, every other at the parser's
+    default; under LOOPBACK the tests' forms too (`_TEST_FORMS`: `--version`, `--no-check-certificates`, `-v`,
+    KillTest's one `--exec`). It kills its process once unbound. `YtDlpClient(context, mode).run(argv, timeoutS, onLine,
+    waiting, folders): Ran` (`killed`, `timedOut`) binds it `BIND_AUTO_CREATE | BIND_IMPORTANT`, one run at a time in
+    the process and across the app's processes (a `FileChannel` lock on `filesDir/youtube-run.lock` held for the whole
+    run; one it can't take, `YtDlpNotStarted` "another run is going", nothing killed or started), each run its own stop
     (`cancel()`, `close()`, a run still waiting its turn included), follows its stderr from `cacheDir/youtube-run/`,
     redacts every gate-shaped address (`PROXY_PATTERN`, whatever option spelled it) from every line, the tail and the
-    stdout (`Redact`), kills its pid on a stop (waiting for
-    STARTED, else finding `:youtube` by its name; Android then kills the process's cgroup, qjs with it: KillTest;
-    never a process-group kill, the uid's processes sharing zygote's), and waits until it is gone before the next;
-    `YtDlpStopped` for a process gone unasked, `YtDlpNotStarted` for none started, `Refused` in the glue's words.
-    `GateService`, in the main process, gives another process of the app a `HostGate` (`Mode.of(caracole.network)`
-    there, or a test's `modeOf` seam: a test never clears that property; rule YOUTUBE), its `proxyArg` and its log over
-    a Messenger (`GateService.Client`, each ask matched to its
-    answer); nothing it is asked throws on its thread; a client's gates close with its close or its process's death,
-    each gate's death recipient unlinked as it closes.
-    No argv, so no secret, is logged on either side. `YtDlpServiceTest`, `KillTest`, `GateServiceTest` and
-    `AcrossProcessesTest` (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the downloads through the gate, every refusal, the secret
-    in no logcat line, a stop of every kind that leaves no process of the uid but the main one.
-    The debug build's YouTube bench (android/README.md, "The YouTube bench"): `YouTubeBenchActivity` in `:ytbench`
-    (app/src/debug, never Python there), Settings' row by class name, one session a process, started by a tap alone on
-    the network (an intent's `go` under loopback only, never from Recents); its session `BenchRun` drives
-    `YtDlpClient` itself, not core's runner (stamped lines, process timings, PSS, an observing gate, loopback
-    targets), and holds the terms on the runner's records through the main process's `YouTubeBenchLedger`
-    (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under its budget, 50,
-    in 24 h by kv
-    `ytbench:runs` and `events` unless `DbLedger.DAY_CAP_LIFTED`, the owner's word of 2026-11-27 (Politeness), its
-    stamp kept; given back only for a run that never started), its `events` row
-    written in a `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop,
-    the gate's `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService
-    `OPEN_LOOPBACK`: LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the
-    day's runs spent; a line read less its quotes (`BenchRun.unquoted`), a search no video fits said with the artist
-    and title it looked for (`noFitWords`), no second search; its report `BenchReport.of`/`summary` (BenchReportTest,
-    YouTubeBenchTest: its `budget`'s `lifted` the switch's, a report without it held to the cap it kept, its `of`; its
-    `uid_counts` "loopback too", TrafficStats' uid bytes counting yt-dlp's loopback legs to the gate twice and the
-    gate's network leg once, about 3.1 x the gate's bytes), Gate Y0's verdict of the owner's reports `python -m
-    tests.helpers.ytbench_gate` (test_ytbench_gate.py: the controller's ruling of 2026-11-27, three songs on mobile data
-    with Start and a warm download, no observed session or second day needed, a session lost to the network counted
-    for nothing and a song the network failed listed for nothing, a block or a failing song holding the gate until a
-    later day's clean session on mobile data clears it (§3.8's trigger on Wi-Fi on two days uncleared), the warm
-    download one on mobile data, the uid's bytes explained by the gate's three legs over the idle sessions alone, a
-    session not idle set aside from them and named; its one shape tests/fixtures/ytbench/sample.json,
-    which BenchReportTest holds to `BenchReport.of`); an observing gate only for an
-    ask naming `:ytbench` and never under loopback (GateService
-    `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
-    request's `verbose` leave.
+    stdout (`Redact`), kills its pid on a stop (waiting for STARTED, else finding `:youtube` by its name; Android then
+    kills the process's cgroup, qjs with it: KillTest; never a process-group kill, the uid's processes sharing
+    zygote's), and waits until it is gone before the next; `YtDlpStopped` for a process gone unasked, `YtDlpNotStarted`
+    for none started, `Refused` in the glue's words. `GateService`, in the main process, gives another process of the
+    app a `HostGate` (`Mode.of(caracole.network)` there, or a test's `modeOf` seam: a test never clears that property;
+    rule YOUTUBE), its `proxyArg` and its log over a Messenger (`GateService.Client`, each ask matched to its answer);
+    nothing it is asked throws on its thread; a client's gates close with its close or its process's death, each gate's
+    death recipient unlinked as it closes. No argv, so no secret, is logged on either side. `YtDlpServiceTest`,
+    `KillTest`, `GateServiceTest` and `AcrossProcessesTest` (`device-test.sh --youtube`), `GlueRefusalTest` (JVM): the
+    downloads through the gate, every refusal, the secret in no logcat line, a stop of every kind that leaves no process
+    of the uid but the main one. The debug build's YouTube bench (android/README.md, "The YouTube bench"):
+    `YouTubeBenchActivity` in `:ytbench` (app/src/debug, never Python there), Settings' row by class name, one session a
+    process, started by a tap alone on the network (an intent's `go` under loopback only, never from Recents); its
+    session `BenchRun` drives `YtDlpClient` itself, not core's runner (stamped lines, process timings, PSS, an observing
+    gate, loopback targets), and holds the terms on the runner's records through the main process's `YouTubeBenchLedger`
+    (`DbLedger`): each run RESERVED before its gate opens (one write: provider on, no cooldown, under its budget, 50, in
+    24 h by kv `ytbench:runs` and `events` unless `DbLedger.DAY_CAP_LIFTED`, the owner's word of 2026-11-27
+    (Politeness), its stamp kept; given back only for a run that never started), its `events` row written in a
+    `finally`, Pace.pauseAfterLastRequest for the first pause, a block's strike and the session's stop, the gate's
+    `stopped` bucket an error; the kill check on a gate that reaches 127.0.0.1 alone (GateService `OPEN_LOOPBACK`:
+    LOOPBACK narrowed to HostGate's `KILL_CHECK_HOSTS`, never 10.0.2.2) on every phone, none of the day's runs spent; a
+    line read less its quotes (`BenchRun.unquoted`), a search no video fits said with the artist and title it looked for
+    (`noFitWords`), no second search; its report `BenchReport.of`/`summary` (BenchReportTest, YouTubeBenchTest: its
+    `budget`'s `lifted` the switch's, a report without it held to the cap it kept, its `of`; its `uid_counts` "loopback
+    too", TrafficStats' uid bytes counting yt-dlp's loopback legs to the gate twice and the gate's network leg once,
+    about 3.1 x the gate's bytes), Gate Y0's verdict of the owner's reports `python -m tests.helpers.ytbench_gate`
+    (test_ytbench_gate.py: the controller's ruling of 2026-11-27, three songs on mobile data with Start and a warm
+    download, no observed session or second day needed, a session lost to the network counted for nothing and a song the
+    network failed listed for nothing, a block or a failing song holding the gate until a later day's clean session on
+    mobile data clears it (§3.8's trigger on Wi-Fi on two days uncleared), the warm download one on mobile data, the
+    uid's bytes explained by the gate's three legs over the idle sessions alone, a session not idle set aside from them
+    and named; its one shape tests/fixtures/ytbench/sample.json, which BenchReportTest holds to `BenchReport.of`); an
+    observing gate only for an ask naming `:ytbench` and never under loopback (GateService `OPEN_OBSERVING`; HostGate's
+    OBSERVE reaches no address that isn't public), `-v` under the network only by the request's `verbose` leave.
   - The engine (Y1.5): `PhoneDeps.youtube: YouTubeEngine?` (core.youtube: `ready()`, `process()`, `gate()`, `qjs`,
     `cacheDir`), `:youtube`'s `YtDlpEngine` in both builds (`PhoneYouTube`, src/main), null on a phone whose primary
     ABI the APK carries no Python for (`BuildConfig.YOUTUBE_ABIS`: the release's arm64-v8a alone); a device test's process in its place while
@@ -3637,13 +3632,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   (`AudioRunner.keepAutoSheet`, the audio job's keep, at the job's stamp, audio the phone took from YouTube
   (`YouTubeAudio.youtubeAudio`) kept as the YouTube job keeps it (`AudioRunner.keepVideoSheet`: the video's credit,
   `raw.youtube`, its address) and let go after the pages (LyricsPickYouTubeAudioTest)), else skipped in
-  lyrics_pick.py's words, and where the phone hears no chords now in its own (lyrics_pick.py `PHONE_NOT_HERE`, `PHONE_NOT_DOWNLOADED`: no nightly
-  run makes it later); the record noted in the lyrics' savepoint, a failure to note it putting the files back; pdf and
-  pages PhoneRender's, which write info.json, so a picked record's `lyrics_from` follows at the pdf stage (a song with
-  no sheet: at its next render). tests/test_conformance_lyrics_pick.py writes vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest).
-  `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py `clear_pick`, no request; a lyric file that can't be
-  removed said in Python's `strerror`, a dangling link removed), then the song's pages; lyrics_pick.jsonl holds its
-  clears too (each site's record that gave the lyrics, one that didn't, none, a file that won't go).
+  lyrics_pick.py's words, and where the phone hears no chords now in its own (lyrics_pick.py `PHONE_NOT_HERE`,
+  `PHONE_NOT_DOWNLOADED`: no nightly run makes it later); the record noted in the lyrics' savepoint, a failure to note
+  it putting the files back; pdf and pages PhoneRender's, which write info.json, so a picked record's `lyrics_from`
+  follows at the pdf stage (a song with no sheet: at its next render). tests/test_conformance_lyrics_pick.py writes
+  vectors/lookup/lyrics_pick.jsonl (LyricsRunnerTest). `--clear` is `LyricsPickCommands.clearPick` (lyrics_pick.py
+  `clear_pick`, no request; a lyric file that can't be removed said in Python's `strerror`, a dangling link removed),
+  then the song's pages; lyrics_pick.jsonl holds its clears too (each site's record that gave the lyrics, one that
+  didn't, none, a file that won't go).
 - The card's lyrics panel on the phone (E31): server/routes' `LyricsRoutes` (`POST /lyrics/search`, `GET
   /api/lyrics/search`, `POST /lyrics/pick`, `POST /lyrics/clear`, web/lyrics_routes.py's answers and refusals, the
   audio's length by the phone's examiner), `server.lyricsSearch` true (LibraryPage.kt);
@@ -3748,13 +3744,13 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `YtDlp` (Y1.3), youtube.py's `YtDlp` over a `YtDlpProcess` (`Ran`; `NotStarted`, nothing sent): `budget` runs
     (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), asked
     before the run's reservation and again once its pauses are over, right before its process (its slot given back),
-    the pause after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
-    gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
-    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block; `gate.stopped`, the gate's acceptor
-    ended by a bug, an error in `gate.stopped_said`), then a timeout, the exit status and `Classify.of`:
-    `ProviderBlocked` (`Health.recordBlock` at the job's start, every later run refused with no process),
-    `VideoUnavailable`, `PassedOver` (a VideoUnavailable), `ExtractorOutdated` (no block); its events the computer's
-    for every run; the gate's user and secret in no event, kv, exception or line (`<proxy>` in their place);
+    the pause after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s,
+    the gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
+    gate's log first (`GateRefused`, `gate.refusal`'s words, never a block; `gate.stopped`, the gate's acceptor ended by
+    a bug, an error in `gate.stopped_said`), then a timeout, the exit status and `Classify.of`: `ProviderBlocked`
+    (`Health.recordBlock` at the job's start, every later run refused with no process), `VideoUnavailable`, `PassedOver`
+    (a VideoUnavailable), `ExtractorOutdated` (no block); its events the computer's for every run; the gate's user and
+    secret in no event, kv, exception or line (`<proxy>` in their place);
     - `YtDlpGate`, a gate a run (`gate: () -> YtDlpGate`), closed once the run's log is read, on every path;
       `YtDlpGate.keptOpen` for one gate a job, which the job closes;
     - a cooldown an earlier job recorded refuses each run before its gate (`ProviderBlocked` in youtube_sheet.py's
@@ -3773,16 +3769,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   - `Due` (Y3.3): youtube_fetch.py's `phone_due`, `songs(db, overrides, now, paired)`: `songs_for_youtube`'s songs
     (todo.songs_to_buy's rule, core.todo's `Todo.songsToBuy`, which the cards' buy links read too) with no
     `audio_path` and no sheet kept, human or auto, none whose video's download the phone couldn't hear within
-    `recheck_after_days` (kv `youtube-unheard:<id>`, `Due.UNHEARD_PREFIX`); on a paired phone the noted alone (kv `youtube-wanted:<id>`); the
-    noted first, failures last;
+    `recheck_after_days` (kv `youtube-unheard:<id>`, `Due.UNHEARD_PREFIX`); on a paired phone the noted alone (kv
+    `youtube-wanted:<id>`); the noted first, failures last;
   - `DayBudget` (Y3.3): the phone's day, `left(db, config, now)`, `PhoneConfig.provider("youtube").budget` less
     `runs`, every yt-dlp run of the last 24 hours (`events` of `youtube` decided ok, error or blocked: asked-now runs
     and the bench's too, a `budget` row none), which Settings' row and the bench's ledger count by; YtDlp's `budget`
     wins over its policy's, the caller's to give (an automatic job's the day's left);
   - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
     byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
-    song for its automatic pass, and `youtube-unheard:<song id>`, the video whose download it couldn't hear (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
-    `youtube-outdated` and `phone:youtube-auto` as they are now (OwnRecords);
+    song for its automatic pass, and `youtube-unheard:<song id>`, the video whose download it couldn't hear (songs.py
+    `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`, `youtube-outdated` and `phone:youtube-auto` as
+    they are now (OwnRecords);
   - `Thumbs` (Y2.4): youtube_search.py's thumbnail, youtube.json's `thumb` (provider `ytimg`, its address, folder,
     names, limits and frame markers): `fetch` one request through the caller's PoliteClient (robots' rules: `/sb/`
     closed), kept as `<cache>/youtube-thumbs/<id>.jpg` when `checkedJpeg` reads a JPEG, the record of its key said

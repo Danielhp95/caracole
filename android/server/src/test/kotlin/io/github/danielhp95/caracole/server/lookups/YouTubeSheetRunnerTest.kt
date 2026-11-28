@@ -472,7 +472,8 @@ class YouTubeSheetRunnerTest {
     /** Byoutube-4. An automatic job checks again, as it reads its song, that the song keeps no sheet (Due.songs' rule,
      * R1 as amended: "never for a song with any auto sheet"): one whose song got another caracole's auto sheet between
      * the pass's pick and the job's run (a sync's take queued before it) is refused in its song stage, no yt-dlp run,
-     * the sheet as it was. Here the sheet is made "elsewhere" by giving this side another id after a first job made it. */
+     * the sheet as it was. Here the sheet is made "elsewhere" by giving this side another id after a first job made it.
+     * */
     @Test fun anAutomaticJobTakesNoAudioForASongThatKeepsAnotherCaracolesAutoSheet() {
         val phone = phone()
         val ytdlp = Downloader()

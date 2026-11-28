@@ -97,9 +97,9 @@ data class Download(val path: File, val video: Video)
  *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
  *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no
  *   budget spent, no event), and is asked again once the run's pauses are over, right before its process (a run held
- *   back there gives its reserved slot back); then the run is reserved ([DayBudget.reserve], one write before its gate opens), so the
- *   day counts it whatever ends it, its slot given back ([DayBudget.release]) for a run that never started
- *   ([NotSent]);
+ * back there gives its reserved slot back); then the run is reserved ([DayBudget.reserve], one write before its gate
+ * opens), so the day counts it whatever ends it, its slot given back ([DayBudget.release]) for a run that never started
+ * ([NotSent]);
  * - before the first, the pause after the last run this side sent ([Pace.pauseAfterLastRequest], kv
  *   `http:last_request:youtube`); before each later one, `_pause`'s: a draw of [policy]'s delay from [rng], less the
  *   time since the last run ended on [clock]'s monotonic clock;

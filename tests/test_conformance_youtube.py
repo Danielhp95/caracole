@@ -1614,8 +1614,8 @@ def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
 # youtube_fetch.py's ``phone_due``: the songs a phone takes the audio of from YouTube by itself, over a fixture library a
 # record (helpers.corpus's ``dump_fixture``, no library file: the rule reads the ``files`` table alone), with
 # ``overrides`` (``ignore``'s keys, ``youtube``'s video ids or null for "none") and ``now``: ``due`` on a phone with no
-# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id. kv ``youtube-unheard:<id>`` in a scene's
-# fixture is the phone's note of a video it couldn't hear.
+# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id. kv
+# ``youtube-unheard:<id>`` in a scene's fixture is the phone's note of a video it couldn't hear.
 
 DUE_NOW = NOW
 DUE_PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id, an auto sheet's maker

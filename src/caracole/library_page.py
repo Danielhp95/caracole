@@ -1338,8 +1338,8 @@ _YOUTUBE_HINT_SITES = '<p class="hint">Sheet made from the video, its lyrics fro
 
 def _request_form(controls: WebControls | None, youtube_problem: str | None = None, hears: bool = False) -> str:
     """The request form, served: with its YouTube video field where this caracole makes a sheet from one, its line
-    saying where the lyrics come from (``hears``: a sheet from a video hears its words here), else a line that says why not
-    (``youtube_fetch.route_problem``); on the file, none."""
+    saying where the lyrics come from (``hears``: a sheet from a video hears its words here), else a line that says
+    why not (``youtube_fetch.route_problem``); on the file, none."""
     if controls is None:
         return ""
     if youtube_problem is None:

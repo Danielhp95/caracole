@@ -353,9 +353,10 @@ object JobCommands {
     fun sheetsFromYoutube(args: List<String>): Boolean = first(args) == "youtube" && "--sheet" in args
 
     /** The video a sheet from YouTube among [commands] was given (`youtube --sheet --url=<video>`), null for none. */
-    fun video(commands: List<List<String>>): String? = commands.filter(::sheetsFromYoutube).firstNotNullOfOrNull { args ->
-        options(args).firstOrNull { it.startsWith("--url=") }?.removePrefix("--url=")
-    }
+    fun video(commands: List<List<String>>): String? =
+        commands.filter(::sheetsFromYoutube).firstNotNullOfOrNull { args ->
+            options(args).firstOrNull { it.startsWith("--url=") }?.removePrefix("--url=")
+        }
 
     /** Whether [commands] make a sheet from YouTube with no video named: the phone's automatic pass's job
      * (YouTubeAuto.spec), or Try again of one. The computer queues none (every `youtube --sheet` of caracole serve's

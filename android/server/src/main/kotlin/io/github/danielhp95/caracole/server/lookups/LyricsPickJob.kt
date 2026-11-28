@@ -39,10 +39,10 @@ import java.util.concurrent.CancellationException
  *   it in its own words (lyrics_pick.py's PHONE_NOT_HERE and PHONE_NOT_DOWNLOADED, read from audio_sheet.json: it has no nightly
  *   run); a sheet up to date of the
  *   audio as it is, run.py's UP_TO_DATE with no model; else the phone's own audio heard by [chords] (the lookups
- *   queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]), or, where that audio is the phone's
- *   download of a YouTube video (YouTubeAudio.youtubeAudio, run.py's `youtube_audio`), as the YouTube job keeps one
- *   ([AudioRunner.keepVideoSheet]: the video credited, `raw.youtube`, its address), that audio let go after the pages
- *   (§5.4);
+ * queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]), or, where
+ * that audio is the phone's download of a YouTube video (YouTubeAudio.youtubeAudio, run.py's `youtube_audio`), as the
+ * YouTube job keeps one ([AudioRunner.keepVideoSheet]: the video credited, `raw.youtube`, its address), that audio let
+ * go after the pages (§5.4);
  * - `pdf` and `pages`: the song's pages (PhoneParts.pages, PhoneRender), get.py's words for a caracole that makes no
  *   PDF, [LookupWords.LIBRARY_PAGE].
  *
@@ -220,7 +220,9 @@ internal class LyricsPickJob(
         }
         context.yieldToQueued()  // the models take a minute: the lookups queued meanwhile go first
         parts.database.writeBlocking { db -> whyNoChords(db.also { again(it) }) }?.let { return "skipped" to it }
-        parts.database.writeBlocking { db -> upToDate(db)?.also { videoKept = youtubeAudioHeld(db) } }?.let { return it }
+        parts.database.writeBlocking { db ->
+            upToDate(db)?.also { videoKept = youtubeAudioHeld(db) }
+        }?.let { return it }
         val audio = File(song!!.audioPath!!)
         val heard = try {
             hold {

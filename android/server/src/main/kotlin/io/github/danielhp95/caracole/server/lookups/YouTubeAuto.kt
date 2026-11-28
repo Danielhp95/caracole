@@ -112,7 +112,8 @@ class YouTubeAuto(
         }
     }
 
-    private fun after(now: Instant, at: Instant): Duration = maxOf(Duration.between(now, at), Duration.ZERO) + AGAIN_SOON
+    private fun after(now: Instant, at: Instant): Duration =
+        maxOf(Duration.between(now, at), Duration.ZERO) + AGAIN_SOON
 
     /** Whether a song a lookup noted (kv `youtube-wanted:<id>`) is due now: Settings' switch turned back on asks for a
      * pass then (YouTubeWorker.switchedOn), as no daily pass takes it on a paired phone. */

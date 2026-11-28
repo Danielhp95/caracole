@@ -55,9 +55,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
- * Byoutube-6: a YouTube download the phone can't hear is noted (kv `youtube-unheard:<id>`), so that once the 3-day sweep
- * lets its audio go the automatic pass ([Due.songs]) never downloads the same video again; another video, or 30 days,
- * make the song due again, and a sheet kept forgets the note.
+ * Byoutube-6: a YouTube download the phone can't hear is noted (kv `youtube-unheard:<id>`), so that once the 3-day
+ * sweep lets its audio go the automatic pass ([Due.songs]) never downloads the same video again; another video, or 30
+ * days, make the song due again, and a sheet kept forgets the note.
  */
 class YouTubeUnheardTest {
     @get:Rule val tmp = TemporaryFolder()

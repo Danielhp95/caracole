@@ -60,9 +60,9 @@ _SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")  # what a line says
 _WANTED = "wanted"  # wanted.SOURCE: a line's source id is its identity key
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
 # gtptabs_fetch.py, youtube_fetch.py, lyrics_search.py; youtube-wanted: the phone's note of a song for its automatic
-# YouTube pass, and youtube-unheard: the video whose audio it couldn't hear, which the computer never writes), as "<prefix><song id>" or "<prefix><song id>:<more>"
-# ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
-# may give that id to the next new song.
+# YouTube pass, and youtube-unheard: the video whose audio it couldn't hear, which the computer never writes), as
+# "<prefix><song id>" or "<prefix><song id>:<more>" ("render:7:auto"). It goes with a song merged into another or
+# removed (delete_song_kv): SQLite may give that id to the next new song.
 _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
                 "lyrics:failed:", "megalobiz:checked:", "azlyrics:checked:",
                 "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "gametabs:checked:", "ireal:checked:",

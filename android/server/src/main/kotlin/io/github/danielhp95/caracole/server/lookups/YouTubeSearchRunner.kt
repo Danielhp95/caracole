@@ -31,10 +31,10 @@ import kotlinx.serialization.json.jsonPrimitive
  *   nothing asked; else not searched while YouTube cools down, the hour's 10 (shared with the pasted videos' reads)
  *   are spent, it or three searches failed within the hour, or, the phone's own, the network is metered ([metered]:
  *   the gate's `off`, [METERED]'s words: a suggestion goes on an unmetered network alone).
- * - One yt-dlp run ([YouTubeAsk.ask]: `ytsearch1:`, youtube.json's `search.results`, a budget of 1, its run named `youtube-search:<time>` so the hour's
- *   10 count it, the network checked again just before it ([METERED], a run held back: counted against nothing), the
- *   ladder of errors `--video`'s shares): its first video that isn't live, recorded under `youtube-search:<key>` with
- *   the query (or with none: nothing found), the key's failure of the hour forgotten.
+ * - One yt-dlp run ([YouTubeAsk.ask]: `ytsearch1:`, youtube.json's `search.results`, a budget of 1, its run named
+ * `youtube-search:<time>` so the hour's 10 count it, the network checked again just before it ([METERED], a run held
+ * back: counted against nothing), the ladder of errors `--video`'s shares): its first video that isn't live, recorded
+ * under `youtube-search:<key>` with the query (or with none: nothing found), the key's failure of the hour forgotten.
  * - The thumbnail, right after ([YouTubeAsk.thumbnail]), noted on the query's record.
  *
  * It exits 0 but for a caller that lets a phone with no yt-dlp through (exit 1, the sheet's words).

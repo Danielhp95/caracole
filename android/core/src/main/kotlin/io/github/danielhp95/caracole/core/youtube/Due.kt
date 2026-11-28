@@ -21,10 +21,10 @@ import java.time.Instant
  * `songs_for_youtube`'s songs (`_due`: wanted and settled on the sites, todo.songs_to_buy's rule, [Todo.songsToBuy];
  * not ignored; `[youtube]` not "none"; a video pasted that isn't the one found unusable, else no search of it that
  * found nothing in the last `fetch.recheck_after_days`), less those with audio of their own (`audio_path`: an upload,
- * YouTube's audio kept, a purchase) and those with any sheet kept, human or auto, whoever made it. Nor one whose video's download the phone couldn't hear within `recheck_after_days`
- * ([UNHEARD_PREFIX]), until another video is given. Of `_due`'s other
- * branches none can reach the phone's list: a song with YouTube's audio kept has an `audio_path`, and R3's
- * `left_elsewhere` weighs only a song that keeps an auto sheet.
+ * YouTube's audio kept, a purchase) and those with any sheet kept, human or auto, whoever made it. Nor one whose
+ * video's download the phone couldn't hear within `recheck_after_days` ([UNHEARD_PREFIX]), until another video is
+ * given. Of `_due`'s other branches none can reach the phone's list: a song with YouTube's audio kept has an
+ * `audio_path`, and R3's `left_elsewhere` weighs only a song that keeps an auto sheet.
  *
  * On a [paired] phone only the songs it noted (kv `youtube-wanted:<id>`, a lookup that ended "Not on the sites"): the
  * rest are the computer's nightly work. Order: the noted first, then the rest, newest first in each (Songs.list's);

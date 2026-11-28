@@ -10,13 +10,13 @@ import kotlinx.serialization.json.jsonObject
 /**
  * What the glue's `refusal` judges an argv by, as one JSON text, each part from its one source: the phone's argv
  * templates, their placeholders and the targets' rules (youtube.json's `phone_argv`, `placeholders`, `targets` and
- * `runner.cache_folder`, and `search_counts`, the counts the phone's searches ask for, a sheet's `search_results` and a suggestion's
- * `search.results`, through [YouTubeData]), the gate's
- * `--proxy` shape and the loopback hosts ([HostGate]'s constants), and what only this process knows: the [mode]
- * (LOOPBACK or NETWORK, the main process's, as the request said it), the app's [qjs], and this run's own two folders
- * ([folders], as the client named them and [YtDlpService] checked them: in the app's storage, no link), the only
- * ones its argv may name; and [verbose], the bench's leave for yt-dlp's `-v` under NETWORK too (its request's
- * `verbose`: the bench measures by `-v`'s lines, and the client redacts the gate's secret its proxy map prints).
+ * `runner.cache_folder`, and `search_counts`, the counts the phone's searches ask for, a sheet's `search_results` and a
+ * suggestion's `search.results`, through [YouTubeData]), the gate's `--proxy` shape and the loopback hosts
+ * ([HostGate]'s constants), and what only this process knows: the [mode] (LOOPBACK or NETWORK, the main process's, as
+ * the request said it), the app's [qjs], and this run's own two folders ([folders], as the client named them and
+ * [YtDlpService] checked them: in the app's storage, no link), the only ones its argv may name; and [verbose], the
+ * bench's leave for yt-dlp's `-v` under NETWORK too (its request's `verbose`: the bench measures by `-v`'s lines, and
+ * the client redacts the gate's secret its proxy map prints).
  */
 object GlueRules {
     /** The two modes a request names, [HostGate.Mode]'s, by name. */

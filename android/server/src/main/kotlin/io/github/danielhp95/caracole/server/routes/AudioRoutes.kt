@@ -233,8 +233,8 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
      * What the share's page shows ([AudioShareView]): with [uploadId], the staged upload (its name, format and
      * length), the names it gives (audio_sheet.names_of, [namesOf]), the library's song of them, its sheet now and
      * the audio the file replaces (the upload's answer's `song.audio`, [audioOf]), and whether its auto sheet has words heard on the computer (its version's `lyrics_source`, a transcript); with
-     * none, the file's [name] alone. Where no sheet is made here, why, in the routes' words; an upload its job kept as its
-     * song's audio, that song and the job's line ([keptView]); any other upload that isn't there, the store's words
+     * none, the file's [name] alone. Where no sheet is made here, why, in the routes' words; an upload its job kept as
+     * its song's audio, that song and the job's line ([keptView]); any other upload that isn't there, the store's words
      * of it.
      */
     internal fun shareView(uploadId: String?, name: String): AudioShareView {

@@ -161,9 +161,9 @@ class JobQueueTest {
         assertFalse(queue.job(again.id)!!.spec.automatic)
     }
 
-    /** Byoutube-2: a sheet from a video the owner gave is made from that video. A job of the song's that makes its sheet
-     * from YouTube with no video named (the automatic pass's, YouTubeAuto.spec) and still waits takes the request's
-     * command in place of its own, asked for now: one job, the owner's video. */
+    /** Byoutube-2: a sheet from a video the owner gave is made from that video. A job of the song's that makes its
+     * sheet from YouTube with no video named (the automatic pass's, YouTubeAuto.spec) and still waits takes the
+     * request's command in place of its own, asked for now: one job, the owner's video. */
     @Test fun aVideoGivenWhileTheSongsAutomaticJobWaitsTakesItsPlace() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()

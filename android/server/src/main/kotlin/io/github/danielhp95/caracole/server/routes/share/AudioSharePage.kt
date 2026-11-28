@@ -85,7 +85,8 @@ internal object AudioSharePage {
             append("<input type=\"hidden\" name=\"upload\" value=\"${esc(upload)}\">")
             append("<button class=\"btn\" type=\"submit\">Cancel</button></form>\n")
         } else if (kept != null && v.why == null) {
-            append("<p class=\"confirm\"><a class=\"btn primary\" href=\"${esc(v.journal ?: JOURNAL)}\">Open the Journal</a> ")
+            append("<p class=\"confirm\"><a class=\"btn primary\" href=\"${esc(v.journal ?: JOURNAL)}\">" +
+                       "Open the Journal</a> ")
             append("<a class=\"btn\" href=\"${SharePage.CANCEL}\">Done</a></p>\n")
         } else {
             append("<p class=\"confirm\"><a class=\"btn\" href=\"${SharePage.CANCEL}\">Cancel</a></p>\n")

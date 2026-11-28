@@ -73,8 +73,9 @@ class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             val ended = phone.youtubeAuto.pass()
             lastForTests = ended
             val again = withContext(Dispatchers.IO) { phone.youtubeAuto.again(ended) }
-            Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}, " +
-                "${ended.left} song(s) left" + (again?.let { ", another pass in ${it.toMinutes()} min" } ?: ""))
+            Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), " +
+                "stopped: ${ended.stopped}, ${ended.left} song(s) left" +
+                (again?.let { ", another pass in ${it.toMinutes()} min" } ?: ""))
             if (again != null) soonAgain(context, again)
             return Result.success()
         }
