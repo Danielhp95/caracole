@@ -1,3 +1,8 @@
+AntiFeatures:
+  NonFreeNet:
+    en-US: Takes a song's audio from YouTube (with yt-dlp) when you ask for a
+      sheet from a video, or by itself where no sheet site has the song.
+
 Categories:
   - Multimedia
   - Reading
