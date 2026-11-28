@@ -111,7 +111,7 @@ class AutomaticPaceTest {
     private val heard = Heard(1, 212.98, listOf(ChordSegment(0.0, 10.0, "Am")), (0..40).map { it * 0.5 },
                               (0..10).map { it * 2.0 })
 
-    private fun runner(phone: Phone): YouTubeSheetRunner {
+    private fun runner(phone: Phone, metered: () -> Boolean = { false }): YouTubeSheetRunner {
         val process = object : YtDlpProcess {
             override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit): Ran {
                 val file = File(argv[argv.indexOf("-o") + 1].replace("%(ext)s", "m4a"))
@@ -137,11 +137,11 @@ class AutomaticPaceTest {
         }
         return YouTubeSheetRunner(phone.parts, engine, models,
                                   AudioStore(phone.parts.stateDir, { _, _ -> AudioStore.Audio("M4A", 213.0, emptyMap()) }),
-                                  problem = { null }, chordsProblem = { null })
+                                  problem = { null }, chordsProblem = { null }, metered = metered)
     }
 
-    private fun run(phone: Phone, automatic: Boolean): Job = runBlocking {
-        phone.runners[YouTubeSheetRunner.COMMAND] = runner(phone)
+    private fun run(phone: Phone, automatic: Boolean, metered: () -> Boolean = { false }): Job = runBlocking {
+        phone.runners[YouTubeSheetRunner.COMMAND] = runner(phone, metered)
         val commands = listOf(Command("Making the sheet",
                                       listOf("youtube", "--sheet", "--progress", "--url=$url", "--song=$display")))
         val spec = JobSpec("Sheet from a YouTube video: $display", JobCommands.YOUTUBE_SHEET + "calla-lake/river-road",
@@ -219,5 +219,24 @@ class AutomaticPaceTest {
         assertTrue(events.isNotEmpty() && events.all { it.second.startsWith(Pace.LOOKUP_RUN) }, "$events")
         assertTrue(PhoneConfig.DEFAULTS.provider("lrclib").lookupDelay in phone.draws, "${phone.draws}")
         assertTrue(PhoneConfig.DEFAULTS.provider("lrclib").delay !in phone.draws, "${phone.draws}")
+    }
+
+    /** A metered network met before a run (the job queued on Wi-Fi): an automatic job sends nothing, its audio stage
+     * "waiting for Wi-Fi", nothing counted against the video or the song, no run reserved; asked for now, it goes. */
+    @Test fun aMeteredNetworkStopsAnAutomaticJobBeforeItsRunAndCountsNothing() {
+        val phone = phone()
+        val job = run(phone, automatic = true, metered = { true })
+        assertEquals(Job.FAILED to YouTubeSearchRunner.METERED,
+                     job.stages.first { it.name == "audio" }.let { it.state to it.detail })
+        phone.database.read { db ->
+            assertEquals(0L, db.one("SELECT COUNT(*) FROM events WHERE provider = 'youtube'") { it.long(0) })
+            val record = io.github.danielhp95.caracole.core.youtube.Records.load(db, 1)
+            assertEquals(null, record.error)
+            assertEquals(emptyMap(), record.failures)
+            assertEquals(0, io.github.danielhp95.caracole.core.youtube.DayBudget.runs(db, Instant.now()))
+        }
+        val asked = phone()
+        val now = run(asked, automatic = false, metered = { true })
+        assertEquals("done", now.stages.first { it.name == "audio" }.state, "${now.steps.single().output}")
     }
 }
