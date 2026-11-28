@@ -1612,7 +1612,8 @@ def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
 # youtube_fetch.py's ``phone_due``: the songs a phone takes the audio of from YouTube by itself, over a fixture library a
 # record (helpers.corpus's ``dump_fixture``, no library file: the rule reads the ``files`` table alone), with
 # ``overrides`` (``ignore``'s keys, ``youtube``'s video ids or null for "none") and ``now``: ``due`` on a phone with no
-# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id.
+# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id. kv ``youtube-unheard:<id>`` in a scene's
+# fixture is the phone's note of a video it couldn't hear.
 
 DUE_NOW = NOW
 DUE_PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id, an auto sheet's maker
@@ -1773,9 +1774,35 @@ def _nothing(conn, cfg) -> tuple[dict, dict]:
     return {}, {"ignore": [], "youtube": {}, "lacuerda": {}}
 
 
+def _unheard(conn, cfg) -> tuple[dict, dict]:
+    """The phone couldn't hear the audio of the video a song would take (kv youtube-unheard:<id>, its sheet job's note
+    once its chords stage couldn't read the download): passed over for that video within 30 days."""
+    names = ["its pick unheard lately", "its pick unheard 31 days ago", "another pick since",
+             "pasted, unheard lately", "another pasted since", "a note that is a list"]
+    s = {name: _due_song(conn, name.title(), 20 - n) for n, name in enumerate(names)}
+    for song in s.values():
+        _due_noted(conn, song)
+        _due_record(conn, song.id, video={"id": DUE_VIDEO, "url": watch_url(DUE_VIDEO)}, source="search",
+                    downloaded_at=_at(days=5))
+
+    def note(name: str, video: str, **ago) -> None:
+        _due_kv(conn, f"{youtube_fetch.UNHEARD_PREFIX}{s[name].id}",
+                {"video": video, "at": _at(**ago), "error": "audio the phone can't read: its fragments can't be read"})
+
+    note("its pick unheard lately", DUE_VIDEO, days=4)
+    note("its pick unheard 31 days ago", DUE_VIDEO, days=31)
+    note("another pick since", DUE_PASTE, days=4)
+    note("pasted, unheard lately", DUE_PASTE, days=4)
+    note("another pasted since", DUE_VIDEO, days=4)
+    _due_kv(conn, f"{youtube_fetch.UNHEARD_PREFIX}{s['a note that is a list'].id}", [DUE_VIDEO])
+    pasted = {s[name].key: DUE_PASTE for name in ("pasted, unheard lately", "another pasted since")}
+    return s, {"ignore": [], "youtube": pasted, "lacuerda": {}}
+
+
 DUE_SCENES = [("every kind of song", _every_kind), ("UG's index read part-way", _partial_index),
               ("UG's index read whole", _complete_index), ("LaCuerda still to ask", _lacuerda),
-              ("UG's and LaCuerda's other checks", _ug_and_lacuerda_checks), ("an empty library", _nothing)]
+              ("UG's and LaCuerda's other checks", _ug_and_lacuerda_checks), ("an empty library", _nothing),
+              ("a video the phone couldn't hear", _unheard)]
 
 
 def _due_out(tmp_path, n: int, case: str, build) -> tuple[dict, dict]:
@@ -1823,6 +1850,10 @@ def test_the_due_cases_come_to_what_they_say(tmp_path):
     assert by["UG's and LaCuerda's other checks"]["names"] == [
         "pinned, fetched", "a LaCuerda pick asked", "its artist's page read lately", "not found, no artist page known"]
     assert by["an empty library"]["due"] == [] and by["an empty library"]["fixture"]
+    unheard = by["a video the phone couldn't hear"]
+    assert unheard["names"] == ["its pick unheard 31 days ago", "another pick since", "another pasted since",
+                                "a note that is a list"]
+    assert unheard["paired_names"] == unheard["names"]
 
 
 # --- search_cmd.jsonl ---------------------------------------------------------------------------------------------
