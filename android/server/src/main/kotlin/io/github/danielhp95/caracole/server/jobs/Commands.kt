@@ -72,7 +72,7 @@ object JobCommands {
     /** `caracole lacuerda --search --progress`'s one stage. */
     val SEARCH_STAGES: List<Pair<String, String>> = listOf("search" to "Search LaCuerda")
 
-    /** `caracole youtube --search` and `--video`'s (caracole serve's alone: the phone never runs yt-dlp). */
+    /** `caracole youtube --search` and `--video`'s. */
     val YOUTUBE_SEARCH_STAGES: List<Pair<String, String>> = listOf("video" to "Search YouTube",
                                                                     "thumbnail" to "Thumbnail")
 
@@ -204,6 +204,11 @@ object JobCommands {
      * process for every stage (audio_sheet.py's STAGES); [upload] the staged upload's 16-hex id, never a path. */
     fun audioSheetSteps(display: String, upload: String): List<Command> =
         listOf(Command("Making the sheet", listOf("audio", "--progress", "--upload=$upload", "--song=$display")))
+
+    /** jobs.youtube_search_steps: YouTube's first video for a query, suggested beside the search's results, `caracole
+     * youtube --search=<query> --progress`, one yt-dlp run and its thumbnail. */
+    fun youtubeSearchSteps(query: String): List<Command> =
+        listOf(Command("Searching YouTube", listOf("youtube", "--search=$query", "--progress")))
 
     /** jobs.youtube_video_steps: a video pasted into the library page's search box read now, `caracole youtube
      * --video --progress`, one yt-dlp run with no download, and its thumbnail. */

@@ -24,6 +24,7 @@ import io.github.danielhp95.caracole.core.youtube.YtDlpGate
 import io.github.danielhp95.caracole.core.youtube.YtDlpProcess
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
+import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.lookups.YouTubeVideoRunner
 import io.github.danielhp95.caracole.server.page.MirrorPageData
@@ -76,6 +77,19 @@ object YouTubeVideoReplay : AreaReplay {
 
     /** The differences of [record] replayed, each "case: what differs". */
     fun one(record: JsonObject): List<String> {
+        val kw = record.getValue("kw").jsonObject
+        val id = kw.getValue("video_id").jsonPrimitive.content
+        val plan = JsonObject(mapOf("searches" to JsonObject(emptyMap()), "videos" to videos(id, kw["video"])))
+        return command(record, listOf("youtube", "--video", kw.getValue("link").jsonPrimitive.content, "--progress"),
+                       plan) { parts, engine -> YouTubeVideoRunner(parts, engine, routeWhy = { null }) }
+    }
+
+    /**
+     * The differences of a `caracole youtube` command's [record] (video_cmd.jsonl's shape, search_cmd.jsonl's too)
+     * replayed: [args] given to the runner [make] builds over the scene's phone, its yt-dlp FakeYtDlp's [answers].
+     */
+    fun command(record: JsonObject, args: List<String>, answers: JsonObject,
+                make: (PhoneParts, YouTubeEngine) -> CommandRunner): List<String> {
         val case = record.getValue("case").jsonPrimitive.content
         val found = ArrayList<String>()
         fun check(ok: Boolean, what: () -> String) {
@@ -85,8 +99,7 @@ object YouTubeVideoReplay : AreaReplay {
         val want = record.getValue("out").jsonObject
         val apart = record["apart"]?.jsonObject?.get("kv")?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
         val now = Instant.parse(record.getValue("now").jsonPrimitive.content)
-        val link = kw.getValue("link").jsonPrimitive.content
-        val dir = Files.createTempDirectory("caracole-youtube-video").toFile()
+        val dir = Files.createTempDirectory("caracole-youtube-command").toFile()
         val scope = CoroutineScope(SupervisorJob())
         try {
             val state = File(dir, "state").apply { mkdirs() }
@@ -133,8 +146,7 @@ object YouTubeVideoReplay : AreaReplay {
                 val parts = PhoneParts(database, lib, state, { config }, JobQueue(scope), MirrorPageData(null),
                                        { Clients(config, cache, { transport }, pacing) }, SongPages.NONE,
                                        SongbookPages.NONE, alerts, pacing, searchesLacuerda = false)
-                val plan = YouTubeSheetReplay.Plan(JsonObject(mapOf("searches" to JsonObject(emptyMap()),
-                                                                    "videos" to videos(id, kw["video"]))))
+                val plan = YouTubeSheetReplay.Plan(answers)
                 val engine = object : YouTubeEngine {
                     override fun ready(): String? = null
                     override fun process(): YtDlpProcess = plan
@@ -145,8 +157,7 @@ object YouTubeVideoReplay : AreaReplay {
                 val told = AudioSheetReplay.Told()
                 val (exit, error) = try {
                     runBlocking {
-                        YouTubeVideoRunner(parts, engine, routeWhy = { null })
-                            .run(listOf("youtube", "--video", link, "--progress"), told)
+                        make(parts, engine).run(args, told)
                     }
                     0 to null
                 } catch (e: CommandExit) {

@@ -1,32 +1,16 @@
 package io.github.danielhp95.caracole.server.lookups
 
-import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.http.BudgetExhausted
-import io.github.danielhp95.caracole.core.http.ProviderBlocked
-import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Stamps
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.OverrideUrls
-import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyStr
-import io.github.danielhp95.caracole.core.ug.UgLinks
-import io.github.danielhp95.caracole.core.lookup.Clients
-import io.github.danielhp95.caracole.core.youtube.ExtractorOutdated
-import io.github.danielhp95.caracole.core.youtube.GateRefused
-import io.github.danielhp95.caracole.core.youtube.NotSent
-import io.github.danielhp95.caracole.core.youtube.RunHeldBack
 import io.github.danielhp95.caracole.core.youtube.Records
 import io.github.danielhp95.caracole.core.youtube.SearchGate
-import io.github.danielhp95.caracole.core.youtube.Thumbs
 import io.github.danielhp95.caracole.core.youtube.Video
-import io.github.danielhp95.caracole.core.youtube.VideoUnavailable
 import io.github.danielhp95.caracole.core.youtube.Videos
 import io.github.danielhp95.caracole.core.youtube.YouTubeData
 import io.github.danielhp95.caracole.core.youtube.YouTubeEngine
-import io.github.danielhp95.caracole.core.youtube.YtDlp
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
@@ -35,12 +19,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.io.Closeable
-import java.io.File
 import java.time.Instant
-import java.util.concurrent.CancellationException
 
 /**
  * `caracole youtube --video=URL|ID [--progress]` on the phone (commands/youtube.py's `_video` and `_thumbnail`,
@@ -54,19 +33,10 @@ import java.util.concurrent.CancellationException
  *   YouTube won't give), said with nothing asked; else not read while YouTube is off (the computer's settings: its
  *   `off_why`, the computer's own words), this phone makes no sheet from a video ([routeWhy]), YouTube cools down, the
  *   hour's 10 (shared with the searches) are spent, or it failed within the hour.
- * - One yt-dlp run (the runner [YtDlp] over the engine's process, a budget of 1, its pauses, its run named
- *   `youtube-search:video:<id>:<time>` so the hour's 10 count it, its database a write a touch), the job's thread let
- *   free meanwhile ([YouTubeSheetRunner.Yielding]); the record kept under `youtube-search:video:<id>` (the video, or
- *   none with why YouTube won't give it), its failure of the hour forgotten. A block was recorded by the runner: the
- *   job sends its alert; a spent budget, a run never started ([NotSent], the bench's run going: counted against
- *   nothing), and the phone's own host problems (yt-dlp out of date, the gate's refusal, a run held back: said in
- *   their words, as YouTubeSheetRunner rules them, counted against neither the video nor the hour) and any other error (`Health.recordError`, and the failure that pauses it for the hour) are said, never
- *   a miss. A good run recorded as the computer's (`Health.answeredAny`).
- * - The thumbnail, right after: none while the image host (`ytimg`) is off or cools down; else one request through a
- *   PoliteClient of its own policy ([io.github.danielhp95.caracole.core.lookup.Clients.named], the same run, robots'
- *   rules, the cache forever; no write held while it goes, each event a write of its own), kept when a JPEG
- *   ([Thumbs.keep], then [Thumbs.note]); a block of its own recorded here (its cooldown, never YouTube's) and told
- *   outside any write; an error recorded; none is no failure.
+ * - One yt-dlp run ([YouTubeAsk.ask]: the runner, a budget of 1, its run named `youtube-search:video:<id>:<time>` so
+ *   the hour's 10 count it, the ladder of errors the search's shares); the record kept under
+ *   `youtube-search:video:<id>` (the video, or none with why YouTube won't give it), its failure of the hour forgotten.
+ * - The thumbnail, right after ([YouTubeAsk.thumbnail]).
  * - A caller that gives a [routeWhy] that lets a phone with no yt-dlp through is refused, exit 1, in the sheet's words.
  *
  * It exits 0 but for a link that is no video's. vectors/youtube/video_cmd.jsonl holds it to the computer's
@@ -91,20 +61,14 @@ class YouTubeVideoRunner(
         Job(context, progress, videoId).run()
     }
 
-    private inner class Job(val context: JobContext, val progress: Boolean, val videoId: String) {
+    private inner class Job(val context: JobContext, progress: Boolean, val videoId: String) {
         val key = SearchGate.videoKey(videoId)
-        val now: Instant = LookupJobs.now(parts)
+        val asking = YouTubeAsk(parts, context, progress, LookupJobs.now(parts))
+        val now: Instant = asking.now
         val stamp: String = Stamps.of(now)
 
-        fun say(stage: String, state: String, detail: String = "") {
-            if (context.isCancelled) throw CancellationException("the queue stopped")
-            if (progress) context.stage(stage, state, detail)
-        }
-
-        fun end(line: String, state: String = "skipped") {
-            say("video", state, line)
-            context.say(line)
-        }
+        fun say(stage: String, state: String, detail: String = "") = asking.say(stage, state, detail)
+        fun end(line: String, state: String = "skipped") = asking.end(line, state)
 
         fun run() {
             say("video", "running", words("asking"))
@@ -125,118 +89,32 @@ class YouTubeVideoRunner(
             val runId = SearchGate.run + key + ":" + stamp
             val found = read(engine, config.provider(YOUTUBE), runId) ?: return
             say("video", "done", fill("video_done", "title" to found.title, "channel" to found.channel))
-            thumbnail(runId)
+            asking.thumbnail(videoId, key, runId)
             context.say(searched(JsonPrimitive(found.title), JsonPrimitive(found.channel)))
         }
 
-        /** read_video through one yt-dlp run, its ends said; the video, or null once the job said why there is none. */
+        /** read_video through one yt-dlp run ([YouTubeAsk.ask]), its ends said: the video, or null once the job said
+         * why there is none (a video YouTube won't give kept as none, with why). */
         private fun read(engine: YouTubeEngine, policy: io.github.danielhp95.caracole.core.config.ProviderPolicy,
                          runId: String): Video? {
-            val process = engine.process()
-            val runner = YtDlp(YouTubeSheetRunner.Yielding(process, context), policy, engine.cacheDir, engine.qjs.path,
-                               engine::gate, writes, pacing(), budget = 1, runId = runId)
-            val video = try {
+            val asked = asking.ask(engine, policy, key, runId, unavailable = { e ->
+                parts.database.writeBlocking { db ->
+                    asking.keep(db, key, JsonObject(linkedMapOf("at" to JsonPrimitive(stamp), "video" to JsonNull,
+                        "unavailable" to JsonPrimitive(Py.slice(e.msg ?: e.message.orEmpty(), 0, YouTubeAsk.ERROR_CHARS)))))
+                }
+            }) { runner ->
                 val got = runner.video(videoId)
                 parts.database.writeBlocking { db ->
-                    keep(db, JsonObject(linkedMapOf("at" to JsonPrimitive(stamp), "video" to Records.videoJson(got),
-                                                    "thumb" to JsonPrimitive(false))))
+                    asking.keep(db, key, JsonObject(linkedMapOf("at" to JsonPrimitive(stamp), "video" to Records.videoJson(got),
+                                                                "thumb" to JsonPrimitive(false))))
                 }
                 got
-            } catch (e: ProviderBlocked) {  // the runner recorded it (one strike): its alert is the job's
-                val state = parts.database.read { db -> Health.state(db, YOUTUBE) }
-                val until = UgLinks.shown(state.cooldownUntil)
-                parts.alerts.blocked(YOUTUBE, state.cooldownUntil, fill("runs_alert", "error" to e.message.orEmpty(),
-                                                                         "until" to until, "strikes" to state.strikes.toString()))
-                end(words("not_searched") + fill("turned_back", "error" to e.message.orEmpty(), "until" to until))
-                return null
-            } catch (e: VideoUnavailable) {
-                parts.database.writeBlocking { db ->
-                    keep(db, JsonObject(linkedMapOf("at" to JsonPrimitive(stamp), "video" to JsonNull,
-                        "unavailable" to JsonPrimitive(Py.slice(e.msg ?: e.message.orEmpty(), 0, ERROR_CHARS)))))
-                }
-                null
-            } catch (e: BudgetExhausted) {
-                end(words("not_searched") + words("no_runs"))
-                return null
-            } catch (e: NotSent) {  // nothing reached yt-dlp: no error of the video's, nothing remembered
-                end(words("not_searched") + YouTubeSheetRunner.NOT_STARTED.replace("{why}", e.msg.orEmpty()) + ".")
-                return null
-            } catch (e: ProviderError) {
-                val why = e.msg ?: e.message.orEmpty()
-                if (e is ExtractorOutdated || e is GateRefused || e is RunHeldBack) {
-                    // the phone's own, a host's problem and never the video's (as YouTubeSheetRunner rules them):
-                    // said in their words, nothing recorded against the video or the hour
-                    end(words("not_searched") + why + ".")
-                    return null
-                }
-                parts.database.writeBlocking { db ->
-                    Health.recordError(db, YOUTUBE, now, e.message.orEmpty())
-                    SearchGate.recordFailure(db, key, now, why)
-                }
-                end(words("not_searched") + fill("ytdlp_failed", "error" to why))
-                return null
-            } finally {
-                (process as? Closeable)?.close()
+            } ?: return null
+            if (asked.value == null) {
+                val record = parts.database.read { db -> SearchGate.searched(db, key, now) }
+                end(wontGive(record?.get("unavailable")), "done")
             }
-            parts.database.writeBlocking { db ->
-                if (Health.answeredAny(db, runId, YOUTUBE, runner.requestsMade)) Health.recordOk(db, YOUTUBE, now)
-            }
-            if (video == null) {
-                val asked = parts.database.read { db -> SearchGate.searched(db, key, now) }
-                end(wontGive(asked?.get("unavailable")), "done")
-            }
-            return video
-        }
-
-        /** The record of the read (`youtube-search:video:<id>`), and its failure of the hour forgotten. */
-        private fun keep(db: Db, said: JsonObject) {
-            db.kvSetJson(SearchGate.kvKey(key), said)
-            SearchGate.forgetFailure(db, key, now)
-        }
-
-        /** `_thumbnail`: the video's thumbnail, right after its read, from YouTube's image host: its request in no
-         * write (its client's events each a write of their own), what came of it recorded after. */
-        private fun thumbnail(runId: String) {
-            val config = parts.config()
-            if (!config.provider(Thumbs.PROVIDER).enabled) {
-                say("thumbnail", "skipped", words("thumb_off"))
-                return
-            }
-            val cooling = parts.database.read { db ->
-                if (Health.isCooling(db, Thumbs.PROVIDER, now)) UgLinks.shown(Health.state(db, Thumbs.PROVIDER).cooldownUntil)
-                else null
-            }
-            if (cooling != null) {
-                say("thumbnail", "skipped", fill("thumb_cooling", "until" to cooling))
-                return
-            }
-            say("thumbnail", "running", "")
-            val thumbs = Thumbs(File(parts.stateDir, CACHE))
-            val client = parts.clients().named(writes, Thumbs.PROVIDER, runId)
-            try {
-                val kept = thumbs.keep(client, videoId)
-                if (kept) parts.database.writeBlocking { db -> thumbs.note(db, videoId, key, now) }
-                say("thumbnail", if (kept) "done" else "skipped", words(if (kept) "thumb_kept" else "thumb_none"))
-            } catch (e: ProviderBlocked) {
-                val state = parts.database.writeBlocking { db -> Health.recordBlock(db, Thumbs.PROVIDER, now, e.message.orEmpty()) }
-                val until = UgLinks.shown(state.cooldownUntil)
-                parts.alerts.blocked(Thumbs.PROVIDER, state.cooldownUntil, fill("thumbs_alert", "error" to e.message.orEmpty(),
-                                                                                 "until" to until, "strikes" to state.strikes.toString()))
-                say("thumbnail", "skipped", fill("thumb_blocked", "until" to until))
-                return
-            } catch (e: BudgetExhausted) {
-                say("thumbnail", "skipped", words("thumb_spent"))
-                return
-            } catch (e: ProviderError) {
-                parts.database.writeBlocking { db -> Health.recordError(db, Thumbs.PROVIDER, now, e.message.orEmpty()) }
-                say("thumbnail", "skipped", words("thumb_failed"))
-                return
-            } finally {
-                client.close()
-            }
-            parts.database.writeBlocking { db ->
-                if (Health.answeredAny(db, runId, Thumbs.PROVIDER, client.requestsMade)) Health.recordOk(db, Thumbs.PROVIDER, now)
-            }
+            return asked.value
         }
 
         private fun searched(title: JsonElement?, channel: JsonElement?): String =
@@ -244,49 +122,19 @@ class YouTubeVideoRunner(
 
         private fun wontGive(unavailable: JsonElement?): String =
             fill("wont_give", "id" to videoId, "unavailable" to str(unavailable))
-
-        /** The database for the runner and the image host's client, a write a touch: none held across a run, a
-         * request or a pause. */
-        private val writes = object : YtDlp.Writes, Clients.Writes {
-            override fun <T> use(block: (Db) -> T): T = parts.database.writeBlocking(block)
-        }
-
-        /** The job's pace, its sleeps a second at a time with the queued lookups let go first between them. */
-        private fun pacing(): Pacing {
-            val p = parts.pacing
-            return p.copy(sleep = { seconds ->
-                var left = seconds
-                while (left > 0) {
-                    val step = if (left < 1.0) left else 1.0
-                    p.sleep(step)
-                    left -= step
-                    if (context.isCancelled) throw CancellationException("the queue stopped")
-                    context.yieldToQueued()
-                }
-            })
-        }
     }
 
     companion object {
         const val COMMAND = "youtube"
         private const val YOUTUBE = "youtube"
         private const val AUTO = "auto"
-        private const val CACHE = "cache"
         private val KNOWN = setOf("--video", "--progress")
 
-        /** youtube_search.ERROR_CHARS, the data's `search.error_chars`. */
-        private val ERROR_CHARS: Int by lazy {
-            YouTubeData.read().json.getValue("search").jsonObject.getValue("error_chars").jsonPrimitive.content.toInt()
-        }
-
-        private val data: JsonObject by lazy { YouTubeData.read().json.getValue("video_cmd").jsonObject }
-
         /** One of commands/youtube.py's words for `--video` and its thumbnail (youtube.json's `video_cmd`). */
-        fun words(name: String): String = data.getValue(name).jsonPrimitive.content
+        fun words(name: String): String = YouTubeAsk.words(name)
 
         /** [name]'s words with each `{placeholder}` filled in one pass (str.format's, a value never read again). */
-        private fun fill(name: String, vararg values: Pair<String, String>): String =
-            YouTubeData.fillAll(words(name), mapOf(*values))
+        private fun fill(name: String, vararg values: Pair<String, String>): String = YouTubeAsk.fill(name, *values)
 
         /** Python's str() of a JSON value, "None" for none, as an f-string writes a `dict.get`. */
         private fun str(value: JsonElement?): String = Videos.shown(value)
@@ -296,8 +144,15 @@ class YouTubeVideoRunner(
     }
 }
 
-/** `caracole youtube` on the phone: `--video` [YouTubeVideoRunner]'s, every other line [YouTubeSheetRunner]'s. */
-class YouTubeRunners(private val sheet: CommandRunner, private val video: CommandRunner) : CommandRunner {
-    override suspend fun run(args: List<String>, context: JobContext) =
-        if (YouTubeVideoRunner.isVideo(args)) video.run(args, context) else sheet.run(args, context)
+/** `caracole youtube` on the phone: `--video` [YouTubeVideoRunner]'s, `--search` [YouTubeSearchRunner]'s (never both:
+ * exit 2, as the computer's), every other line [YouTubeSheetRunner]'s. */
+class YouTubeRunners(private val sheet: CommandRunner, private val video: CommandRunner,
+                     private val search: CommandRunner) : CommandRunner {
+    override suspend fun run(args: List<String>, context: JobContext) = when {
+        YouTubeVideoRunner.isVideo(args) && YouTubeSearchRunner.isSearch(args) ->
+            throw CommandExit(2, "Invalid value for --search/--video: --search and --video go alone")
+        YouTubeVideoRunner.isVideo(args) -> video.run(args, context)
+        YouTubeSearchRunner.isSearch(args) -> search.run(args, context)
+        else -> sheet.run(args, context)
+    }
 }

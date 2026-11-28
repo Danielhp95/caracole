@@ -583,6 +583,15 @@
   "thumb_failed": "no thumbnail",
   "thumbs_alert": "{error}\nNo more thumbnails until {until} (block #{strikes})."
  },
+ "search_cmd": {
+  "quoted": "“{query}”",
+  "no_word": "{query} has no word to search for.",
+  "no_sheets_here": "no YouTube sheets here ({problem}).",
+  "nothing_to_search": "nothing to search for",
+  "searched": "Searched: YouTube's first video for {query}: {title} ({channel}), {url}.",
+  "none_lately": "Nothing found: YouTube had no video for {query} lately.",
+  "none_now": "Nothing found: YouTube has no video for {query}."
+ },
  "gate": {
   "names": [
    "youtube.com",

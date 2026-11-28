@@ -11,10 +11,10 @@ Y2.5; ``WebReplay.youtubeRoutes``).
   Lake's with a human sheet, an ignored one, one with audio of its own, one whose audio is a video's (its
   ``youtube:`` record), one with a video pasted under ``[youtube]``; a video read this month with its thumbnail, a
   video YouTube wouldn't give, a thumbnail kept that is no JPEG. ``cooling``: YouTube cooling down after a block.
-  ``spent``: the hour's 10 searches and reads of YouTube spent (``events``). ``failed``: a video's read failed within
-  the hour.
-- ``{"fn": "POST /youtube" | "POST /request" | "POST /youtube/video", "scene", "case", "form": [[name, value], ...],
-  "json", "problem", "full", "twice", "out"}``: the form posted to a fresh queue that runs nothing (``full``: one that
+  ``spent``: the hour's 10 searches and reads of YouTube spent (``events``). ``failed``: a video's read and a query's
+  search failed within the hour.
+- ``{"fn": "POST /youtube" | "POST /request" | "POST /youtube/video" | "POST /youtube/search", "scene", "case",
+  "form": [[name, value], ...], "json", "problem", "full", "twice", "out"}``: the form posted to a fresh queue that runs nothing (``full``: one that
   holds no job; ``twice``: the same form posted once before, its job waiting, so the answer is that job's), asking for
   JSON (``json``) or not, with ``problem`` the reason this caracole makes no sheet from a video
   (``youtube_fetch.route_reason``'s, null for none: the phone's is its own, Phone.youtubeProblem, so the record names
@@ -28,6 +28,11 @@ Y2.5; ``WebReplay.youtubeRoutes``).
   ``pasted_video``'s answer (``order`` as above), or a refusal.
 - ``{"fn": "GET /youtube/thumb/", "scene", "case", "name", "out": {status, headers, sha256}}``: ``thumbnail``'s
   answer (its body's SHA-256), or its 404's ``body``.
+- ``{"fn": "GET /api/search", "scene", "case", "q", "problem", "out": {status, youtube, names, order}}``: what
+  /api/search says of YouTube's first video for ``q`` (``youtube``, search_routes._youtube_suggestion, caracole
+  serve's search of YouTube on) and the names it reads with that video (``names``), over the scene's library and the
+  queries searched this month (``SEARCHED``), the gate read at ``NOW``. ``POST /youtube/search`` records are the
+  posts' above (``search_youtube``).
 
 Regenerate with ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_youtube_routes.py``.
 """
@@ -42,6 +47,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator
 from unittest import mock
+from urllib.parse import urlencode
 
 import pytest
 from helpers.corpus import VECTORS, check, jsonl
@@ -65,10 +71,14 @@ JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
 WATCH = "https://www.youtube.com/watch?v={}"
 
 
+@contextmanager
 def _gate_at() -> Iterator[None]:
-    """youtube_search.video_gate read at ``NOW``, wherever a route reads it."""
-    real = youtube_search.video_gate
-    return mock.patch.object(youtube_search, "video_gate", lambda cfg, conn, vid, now: real(cfg, conn, vid, NOW))
+    """youtube_search.video_gate and gate read at ``NOW``, wherever a route reads them."""
+    video, query = youtube_search.video_gate, youtube_search.gate
+    with mock.patch.object(youtube_search, "video_gate", lambda cfg, conn, vid, now: video(cfg, conn, vid, NOW)), \
+            mock.patch.object(youtube_search, "gate",
+                              lambda cfg, conn, q, *, on_screen, now: query(cfg, conn, q, on_screen=on_screen, now=NOW)):
+        yield
 
 
 @contextmanager
@@ -132,11 +142,30 @@ def library(tmp: Path, scene: str = "library") -> tuple[World, dict[str, Any]]:
                         json.dumps({"at": "2026-11-26T10:00:00Z", "video": None,
                                     "unavailable": f"[youtube] {WONT}: Private video"}))):
         db.kv_set(w.conn, key, value)
+    for query, video, thumb in SEARCHED:
+        db.kv_set(w.conn, youtube_search.KV_PREFIX + youtube_search.query_key(query),
+                  json.dumps({"at": "2026-11-25T09:00:00Z", "query": query, "video": video, "thumb": thumb},
+                             ensure_ascii=False))
     thumbs = w.cfg.cache_dir / youtube_search.THUMBS
     thumbs.mkdir(parents=True)
     (thumbs / f"{READ}.jpg").write_bytes(JPEG)
     (thumbs / f"{NOT_JPEG}.jpg").write_bytes(b"<html>no</html>")
     return w, {t: s.id for t, s in songs.items()}
+
+
+def _video(vid: str, title: str, channel: str, duration: float | None = 222.0) -> dict[str, Any]:
+    return {"id": vid, "title": title, "channel": channel, "duration": duration, "url": WATCH.format(vid)}
+
+
+# The queries searched this month (a query, YouTube's first video for it or none, its thumbnail kept): /api/search's
+# ``youtube`` found or none, and ``names`` read with the video's title and channel.
+SEARCHED = [
+    ("silvana estrada que problema", _video(READ, "Silvana Estrada — Qué Problema (Visualizer)", "Silvana Estrada"),
+     True),
+    ("creep", _video("RadioCreep1", "Creep", "Radiohead - Topic", 239.0), False),
+    ("radiohead nothing here", None, False),
+    ("una cancion sin nombre", _video("NoNameVid01", "", "", None), False),
+]
 
 
 def _refusal(e) -> dict[str, Any]:
@@ -157,7 +186,8 @@ def posted(w: World, scene: str, fn: str, case: str, form: list[tuple[str, str]]
         app.queue = JobQueue(runner, limit=0)
     route = {"POST /youtube": lambda f: youtube_routes.sheet_from_youtube(app, f),
              "POST /request": lambda f: library_routes.request(app, f),
-             "POST /youtube/video": lambda f: youtube_routes.read_pasted_video(app, f, json=wants)}[fn]
+             "POST /youtube/video": lambda f: youtube_routes.read_pasted_video(app, f, json=wants),
+             "POST /youtube/search": lambda f: youtube_routes.search_youtube(app, f, json=wants)}[fn]
     wanted = w.cfg.wanted_file
     before = wanted.read_text("utf-8") if wanted.exists() else ""
     record = {"fn": fn, "scene": scene, "case": case, "form": [list(f) for f in form], "json": wants,
@@ -224,6 +254,21 @@ def asked(w: World, scene: str, case: str, query: dict[str, str], *, problem: st
         return {**record, "out": _refusal(e)}
     body = json.loads(response.body)
     return {**record, "out": {"status": response.status, "body": body, "order": _order(body)}}
+
+
+def searched(w: World, scene: str, case: str, q: str, *, problem: str | None = None) -> dict[str, Any]:
+    """/api/search's ``youtube`` and ``names`` for ``q``, caracole serve's search of YouTube on."""
+    from caracole.web.app import Request
+
+    app = w.app()
+    app.searches_youtube = True
+    with _asking(problem):
+        response = app.handle(Request("GET", "/api/search?" + urlencode({"q": q, "box": "corpus"}),
+                                      {"host": "localhost"}))
+    body = json.loads(response.body)
+    said = {"youtube": body.get("youtube"), "names": body.get("names")}
+    return {"fn": "GET /api/search", "scene": scene, "case": case, "q": q, "problem": problem,
+            "out": {"status": response.status, **said, "order": _order(said)}}
 
 
 def thumb(w: World, scene: str, case: str, name: str) -> dict[str, Any]:
@@ -308,6 +353,36 @@ def records(tmp: Path) -> list[dict[str, Any]]:
         ("the queue full", [("id", FRESH)], {"full": True}),
     ):
         out.append(posted(w, "library", "POST /youtube/video", case, form, **kw))
+    for case, q, kw in (
+        ("a query never searched", "Una canción nueva", {}),
+        ("its words spaced otherwise", "  una   CANCIÓN nueva ", {}),
+        ("searched this month, its thumbnail kept: the video names its artist", "Silvana Estrada que problema", {}),
+        ("searched this month: the video's channel names the song's artist", "creep", {}),
+        ("searched this month, nothing found", "Radiohead nothing here", {}),
+        ("searched this month, a video of no title or channel", "una cancion sin nombre", {}),
+        ("a song of the library by its title: a sheet on the screen", "Calla Lake River Road", {}),
+        ("a song of the library with no sheet, by its title", "Vikingos veganos", {}),
+        ("an artist of the library", "Nick Cani", {}),
+        ("a video's link: no query", WATCH.format(FRESH), {}),
+        ("no sheet from a video here", "Una canción nueva", {"problem": NOT_HERE}),
+        ("a query too short", "ab", {}),
+    ):
+        out.append(searched(w, "library", case, q, **kw))
+    for case, form, kw in (
+        ("a query never searched", [("q", "Una canción nueva")], {}),
+        ("the same, not asking for JSON", [("q", "Una canción nueva")], {"wants": False}),
+        ("its words spaced otherwise", [("q", "  una\tCANCIÓN   nueva ")], {}),
+        ("searched this month", [("q", "creep")], {}),
+        ("searched this month, nothing found", [("q", "radiohead nothing here")], {}),
+        ("a sheet on the screen", [("q", "Calla Lake River Road")], {}),
+        ("no word", [("q", "!!! ...")], {}),
+        ("no query", [("q", "   ")], {}),
+        ("a query too long", [("q", "x" * 201)], {}),
+        ("no sheet from a video here", [("q", "Una canción nueva")], {"problem": NOT_HERE}),
+        ("the queue full", [("q", "Una canción nueva")], {"full": True}),
+        ("asked again while its job waits", [("q", "Una canción nueva")], {"twice": True}),
+    ):
+        out.append(posted(w, "library", "POST /youtube/search", case, form, **kw))
     for case, name in (("a thumbnail kept", f"{READ}.jpg"), ("one kept that isn't a JPEG", f"{NOT_JPEG}.jpg"),
                        ("none kept", f"{FRESH}.jpg"), ("no .jpg", READ), ("not an id", "../x.jpg")):
         out.append(thumb(w, "library", case, name))
@@ -326,9 +401,13 @@ def records(tmp: Path) -> list[dict[str, Any]]:
                                                 WATCH.format(READ)) for n in range(10)])
         else:
             youtube_search.record_failure(w.conn, youtube_search.video_key(FRESH), NOW, "yt-dlp: boom")
+            youtube_search.record_failure(w.conn, youtube_search.query_key("Una canción nueva"), NOW, "yt-dlp: bang")
         out.append(_fixture(w, scene))
         out.append(asked(w, scene, "a video never read", {"id": FRESH}))
         out.append(posted(w, scene, "POST /youtube/video", "a video never read", [("id", FRESH)]))
+        out.append(searched(w, scene, "a query never searched", "Una canción nueva"))
+        out.append(searched(w, scene, "searched this month", "creep"))
+        out.append(posted(w, scene, "POST /youtube/search", "a query never searched", [("q", "Una canción nueva")]))
         if scene == "cooling":  # a sheet from a video is queued all the same: its job waits YouTube out
             out.append(posted(w, scene, yt, "a song of the library", [("youtube", WATCH.format(FRESH)),
                                                                        ("song", str(nick))]))
@@ -375,5 +454,26 @@ def test_the_routes_come_to_what_they_say(made):
     assert by[("POST /youtube/video", "cooling", "a video never read")]["status"] == 429
     assert by[("POST /youtube/video", "spent", "a video never read")]["status"] == 429
     assert by[("POST /youtube/video", "failed", "a video never read")]["status"] == 429
+    fresh = by[("GET /api/search", "library", "a query never searched")]["youtube"]
+    assert fresh["state"] == "auto" and fresh["key"] == youtube_search.query_key("Una canción nueva")
+    silvana = by[("GET /api/search", "library",
+                  "searched this month, its thumbnail kept: the video names its artist")]
+    assert silvana["youtube"]["video"]["thumb"] == f"/youtube/thumb/{READ}.jpg"
+    assert silvana["names"] == {"artist": "Silvana Estrada", "title": "que problema"}
+    assert by[("GET /api/search", "library", "searched this month: the video's channel names the song's artist")][
+        "names"] == {"artist": "Radiohead", "title": "creep"}
+    assert by[("GET /api/search", "library", "a song of the library by its title: a sheet on the screen")][
+        "youtube"] is None
+    assert by[("GET /api/search", "library", "no sheet from a video here")]["youtube"] is None
+    assert by[("GET /api/search", "cooling", "a query never searched")]["youtube"]["state"] == "spent"
+    assert by[("GET /api/search", "spent", "a query never searched")]["youtube"]["state"] == "spent"
+    assert by[("POST /youtube/search", "library", "a query never searched")]["status"] == 202
+    assert by[("POST /youtube/search", "library", "searched this month")]["status"] == 409
+    assert by[("POST /youtube/search", "library", "a sheet on the screen")]["status"] == 409
+    assert by[("POST /youtube/search", "library", "no query")]["status"] == 400
+    assert by[("POST /youtube/search", "cooling", "a query never searched")]["status"] == 429
+    assert by[("POST /youtube/search", "spent", "a query never searched")]["status"] == 429
+    assert by[("POST /youtube/search", "failed", "a query never searched")]["status"] == 429
+    assert by[("GET /api/search", "failed", "a query never searched")]["youtube"]["state"] == "failed"
     assert by[("GET /youtube/thumb/", "library", "a thumbnail kept")]["sha256"] == hashlib.sha256(JPEG).hexdigest()
     assert by[("GET /youtube/thumb/", "library", "one kept that isn't a JPEG")]["status"] == 404

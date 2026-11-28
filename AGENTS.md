@@ -3192,10 +3192,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     thread, open gate or run file left, and the secret nowhere.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
-  - `server/routes/Stubs.kt` keeps `GET /lookup` and `POST /youtube/search` alone, answering "…: not on the phone
-    yet." (409): `GET /lookup` for good, as the library page's search does the lookup page's work, the search's
-    suggested video until the phone-youtube plan's Y4.1; a sheet from a pasted video and its panel are
-    `YouTubeRoutes`';
+  - `server/routes/Stubs.kt` keeps `GET /lookup` alone, answering "…: not on the phone yet." (409), for good, as the
+    library page's search does the lookup page's work; a sheet from a pasted video, its panel and a search's suggested
+    video are `YouTubeRoutes`';
   - no declaration is left a lane's stub (`TODO("lane <id>")`); a later round that adds one names its lane so, in a
     file that lane owns;
   - the lookup reaches `PhoneRender` and `SongbookPagesImpl` through their `seam`, the real ones in `Phone`;
@@ -4568,15 +4567,31 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   policy and the run's name, as `make_client`'s bulk client: `ytimg`'s budget 20, no pause), its own block, cooldown
   and alert. Its words youtube.json's `video_cmd` (commands/youtube.py's constants). vectors/youtube/video_cmd.jsonl
   (`YouTubeVideoReplay`, area `youtube-video`): the command over FakeYtDlp and a fake i.ytimg.com, replayed with the
-  record's answers; apart, `http:last_request:`, `songs:key_version` and the events' times.
+  record's answers; apart, `http:last_request:`, `songs:key_version` and the events' times. Its run's ladder and the
+  thumbnail are `YouTubeAsk`'s, which the search's shares.
+- server/lookups' `YouTubeSearchRunner`, `caracole youtube --search=QUERY [--progress]` (commands/youtube.py's
+  `_search`; `YouTubeRunners` sends `--search` to it, and refuses it with `--video`, exit 2), a job of no song's: the
+  query's words joined by one space; no word, or `Phone.youtubeProblem()`, not searched; `SearchGate.gate` first
+  (searched within 30 days, cooling, the hour's 10 shared with the pasted videos' reads, a failure lately, and, the
+  phone's own, a metered network: `heldBack`, the gate's `off` in `YouTubeSearchRunner.METERED`'s words, "waiting
+  for Wi-Fi"), then one `ytsearch1:` run (`YouTubeAsk.ask`: budget 1, run `youtube-search:<time>`, the network
+  checked again as its `beforeRun`, a run held back counted against nothing), its first video that isn't live kept
+  under `youtube-search:<key>` with the query (or none), then its thumbnail. Its words youtube.json's `search_cmd`
+  and `video_cmd`. vectors/youtube/search_cmd.jsonl (`YouTubeSearchReplay`, area `youtube-search`), replayed as the
+  video's.
 - server/routes' `YouTubeRoutes`, web/youtube_routes.py on the phone: `POST /youtube` (`youtube --sheet --progress
   --url=… --song=…` queued under `youtube:<key>`, a song by its id and `identity` or by name, the job adding one the
   library hasn't, its album and length on the spec (`JobSpec.song`): no wanted.txt, so no note; asked again while it
   waits, that job the answer), `POST /request` with `youtube` handed to it by LibraryRoutes,
   `GET /api/youtube/video` (no request: the gate, the video read, the name guessed by `SongNames.readNames`, the
   library's song by its record, its `[youtube]` or the name), `POST /youtube/video` (`youtube --video` queued under
-  `youtube-search:video:<id>` when `auto`), `GET /youtube/thumb/<id>.jpg` (`Thumbs.read`, a policy that runs
-  nothing); refused as caracole serve refuses, `Phone.youtubeProblem()` its reason ("No sheets from YouTube here:
+  `youtube-search:video:<id>` when `auto`), `POST /youtube/search` (`youtube --search` queued under
+  `youtube-search:<key>` when its gate, its sheet on the screen read as /api/search reads it, says `auto`: 429 on a
+  metered network, "Not now: waiting for Wi-Fi."), `GET /youtube/thumb/<id>.jpg` (`Thumbs.read`, a policy that runs
+  nothing); /api/search's `youtube` (Found, `SearchRoutes.YouTubeAsked`: `Phone.youtubeProblem()` and the network,
+  read before the search's own read; `names` read with the suggested video's title and channel, `SongNames.readNames`'
+  `video`, song_names.py's rule 5), whose row library.js draws and which sends nothing; refused as caracole serve
+  refuses, `Phone.youtubeProblem()` its reason ("No sheets from YouTube here:
   …"); form routes, so App's cross-origin check and token hold. `server.youtube` `{ok, why, off}` and the request
   form's YouTube field where ok (`ServerControls.youtube`: `Phone.youtubeOffered()`, the design's §5.6, YouTube
   cooling down after the problem's reasons, `YouTubeRoutes.COOLING`), its line "its lyrics from the lyrics sites"
@@ -5251,6 +5266,9 @@ picks one).
     - a query once in 30 days (kv `youtube-search:<key>`, which keeps the video for the page);
     - at most `SEARCHES_PER_HOUR` (10) an hour (`events`, runs named `youtube-search:`);
     - none while YouTube cools down, none of a query that failed within the hour, none for the hour once three did;
+    - on the phone the same, on its own records, and none sent by itself on a metered network (the gate's `off`,
+      "waiting for Wi-Fi", the network checked again before the run): a search's suggested video goes on an
+      unmetered network alone;
   - or the metadata of a video pasted into that box, the owner's explicit choice of 2026-10-29
     (`caracole youtube --video`, `youtube_search.read_video`):
     - `--skip-download --flat-playlist --dump-single-json` of the video's plain address after `--`, never a download;

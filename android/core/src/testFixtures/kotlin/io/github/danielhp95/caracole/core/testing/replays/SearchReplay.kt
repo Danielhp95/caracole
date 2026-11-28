@@ -54,8 +54,8 @@ import java.nio.file.Files
  * - [library] and [index]: library.jsonl's and index.jsonl's answers over your songs and UG's index;
  * - [suggestArtists], [suggestTitles] and [suggestions]: suggest.jsonl's "Did you mean", a record with `kw.sites`
  *   "api" handed the other sites' answers /api/search hands it (as the corpus recorded them, else asked of :core);
- * - [names]: names.jsonl, song_names.py's `clean`, `clean_channel` and `read_names` (with no database, or over a
- *   fixture with its songs), SongNamesTest's;
+ * - [names]: names.jsonl, song_names.py's `clean`, `clean_channel` and `read_names` (a video's title with its channel,
+ *   or a query with the video suggested for it; with no database, or over a fixture with its songs), SongNamesTest's;
  * - [sites]: sites.jsonl, search.py's other sites (gtptabs.com, MuseScore, harptabs.com, gametabs.net), SiteSearchTest's;
  * - [lacuerda]: lacuerda.jsonl, lacuerda_index.py's read side and search.py's LaCuerda glue, `lacuerda_leads` handed
  *   UG's answer as index.jsonl records Python's `find_index` of the query, LaCuerdaTest's.
@@ -340,8 +340,9 @@ object SearchReplay : AreaReplay {
                 CLEAN -> JsonPrimitive(SongNames.clean(text))
                 CLEAN_CHANNEL -> JsonPrimitive(SongNames.cleanChannel(text))
                 READ_NAMES -> {
-                    val read = if (db == null) SongNames.readNames(null, text, emptyList(), r.string("channel"))
-                    else SongNames.readNames(db, text, songsOf(db), r.string("channel"))
+                    val video = r.kw["video"]?.jsonArray?.map { it.jsonPrimitive.content }?.let { it[0] to it[1] }
+                    val read = if (db == null) SongNames.readNames(null, text, emptyList(), r.string("channel"), video)
+                    else SongNames.readNames(db, text, songsOf(db), r.string("channel"), video)
                     read?.let { (artist, title) -> JsonArray(listOf(JsonPrimitive(artist), JsonPrimitive(title))) } ?: JsonNull
                 }
                 else -> throw IllegalStateException("not a record of $NAMES: ${r.fn}")

@@ -20,6 +20,7 @@ import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.page.MirrorPageData
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
+import io.github.danielhp95.caracole.server.routes.SearchRoutes
 import io.github.danielhp95.caracole.server.routes.YouTubeRoutes
 import io.github.danielhp95.caracole.server.testing.TestApp
 import io.github.danielhp95.caracole.server.testing.WebJson
@@ -52,7 +53,9 @@ import java.util.Base64
  * (`full`: one that holds no job). Compared with caracole serve's: a refusal's status, title and words; else the
  * status, the Location, the body less the job's view, and the job (title, key, steps, display, note: the phone writes
  * no wanted.txt, so a job of a song new to the library has none); `GET /api/youtube/video`'s JSON whole; a
- * thumbnail's status, type, policy and body's SHA-256, or its 404's body.
+ * thumbnail's status, type, policy and body's SHA-256, or its 404's body; `GET /api/search`'s `youtube` and `names`
+ * (the phone's SearchRoutes, YouTube's gate read with the record's `problem`, on an unmetered network), and their
+ * members' order. `POST /youtube/search` is a post as the others.
  */
 object YouTubeRoutesReplay {
     const val VECTOR = "web/youtube_routes.jsonl"
@@ -121,6 +124,26 @@ object YouTubeRoutesReplay {
                 WebJson.difference(out.getValue("body"), json(answer))?.let { misses.check(false) { "$case: its answer at $it" } }
                 misses.check(order(out) == keyOrder(json(answer))) {
                     "$case: its members in another order: ${keyOrder(json(answer))}, caracole serve's ${order(out)}"
+                }
+            }
+            "GET /api/search" -> {
+                val q = r.getValue("q").jsonPrimitive.content
+                val search = SearchRoutes(database, parts.cards, clock = { now },
+                                          youtube = { SearchRoutes.YouTubeAsked(problem, null) })
+                val target = "/api/search?q=" + URLEncoder.encode(q, Charsets.UTF_8) + "&box=corpus"
+                val route = search.routes.first { it.path == "/api/search" }
+                val answer = route.get!!.answer(TestApp.request("GET", target, emptyMap(), ByteArray(0), TestApp.SECRET))
+                misses.check(JsonPrimitive(answer.status) == out["status"]) { "$case: status ${answer.status}" }
+                val body = json(answer).jsonObject
+                val said = JsonObject(linkedMapOf("youtube" to (body["youtube"] ?: JsonNull),
+                                                  "names" to (body["names"] ?: JsonNull)))
+                for (name in listOf("youtube", "names")) {
+                    WebJson.difference(out.getValue(name), said.getValue(name))?.let {
+                        misses.check(false) { "$case: its $name at $it: ${said[name]}" }
+                    }
+                }
+                misses.check(order(out) == keyOrder(said)) {
+                    "$case: its members in another order: ${keyOrder(said)}, caracole serve's ${order(out)}"
                 }
             }
             "GET /youtube/thumb/" -> {

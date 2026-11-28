@@ -22,11 +22,16 @@ import io.github.danielhp95.caracole.core.search.SiteHit
 import io.github.danielhp95.caracole.core.search.Suggest
 import io.github.danielhp95.caracole.core.search.Suggestion
 import io.github.danielhp95.caracole.core.sites.SiteSearch
+import io.github.danielhp95.caracole.core.youtube.Videos
+import io.github.danielhp95.caracole.core.youtube.SearchGate as YouTubeGate
 import io.github.danielhp95.caracole.server.page.SongCards
+import io.github.danielhp95.caracole.server.routes.SearchRoutes
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.time.Instant
 
@@ -56,9 +61,10 @@ internal class IndexAnswers(
  * index's songs, which leads, the row Enter may act on, each site's rows, the songs spelled close to it, where it
  * looked, a LaCuerda artist's page to read (`lacuerda_unlisted`, LaCuerdaUnlisted) and whether LaCuerda's own search may be
  * sent for it (`lacuerda_search`: LaCuerdaSearch.gate under [config] at [now], with its `why` when it failed lately;
- * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers). What the phone can't answer is
- * null: `youtube` (the phone runs no yt-dlp); `progression` is the records' (Progressions, lane library-cards's
- * wiring). The artists UG's artist directory names whose page caracole hasn't read (`ug_directory`) each say whether
+ * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers), and YouTube's first video for it
+ * (`youtube`, search_routes._youtube_suggestion: [youtube]'s gate, null with none, as `WebApp(searches_youtube=False)`
+ * answers; `names` then read with that video's title and channel); `progression` is the records' (Progressions, lane
+ * library-cards's wiring). The artists UG's artist directory names whose page caracole hasn't read (`ug_directory`) each say whether
  * Read their page on UG may go now, UgLinks.known's state under [config] at [now], the phone's HTTP cache in
  * [cacheDir] (`stateDir/cache`) read with no request. [check] is called between two of its queries, and throws to stop
  * it ([Superseded]).
@@ -68,6 +74,7 @@ internal class Found(
     private val answers: AnswerCache<IndexAnswers>, private val check: () -> Unit,
     private val config: PhoneConfig = PhoneConfig.DEFAULTS, private val searchesLacuerda: Boolean = false,
     private val now: Instant = Instant.EPOCH, private val cacheDir: File = File("cache"),
+    private val youtube: SearchRoutes.YouTubeAsked? = null,
 ) {
     fun answer(q: String): JsonObject {
         val mine = Search.searchLibrary(db, q, LIBRARY_HITS)
@@ -93,7 +100,12 @@ internal class Found(
         check()
         // LaCuerda's group leads: Ultimate Guitar's artist a word names is no lead, and Enter opens LaCuerda's artist.
         val lead = if (leads && answer.lead == "artist") "song" else answer.lead
-        val names = SongNames.readNames(db, q, songs)?.let { (artist, title) -> obj("artist" to artist, "title" to title) }
+        // a link pasted (a UG page's, a YouTube video's) is no query: no hint, no unseen artist, no search sent for it
+        val link = isLink(q)
+        val youtube = if (link) null else youtubeSuggestion(q, mine, kept)
+        val video = youtube?.get("video") as? JsonObject
+        val names = SongNames.readNames(db, q, songs, video = video?.let { orEmpty(it["title"]) to orEmpty(it["channel"]) })
+            ?.let { (artist, title) -> obj("artist" to artist, "title" to title) }
         check()
         val removedRows = removed.map { h ->
             obj("artist" to h.artist, "title" to h.title, "key" to h.key, "removed_at" to h.removedAt) with keyParts(h.key)
@@ -123,8 +135,6 @@ internal class Found(
                                            lacuerdaArtists = kept.lcArtists, lacuerdaSongs = kept.lacuerda)
             ?.let { (name, letter) -> obj("name" to name, "letter" to letter) }
         check()
-        // a link pasted (a UG page's, a YouTube video's) is no query: no hint, no unseen artist, no search sent for it
-        val link = isLink(q)
         val gate = if (searchesLacuerda && !link) lacuerdaSearchGate(q, kept, mine) else null
         check()
         return obj(
@@ -135,7 +145,7 @@ internal class Found(
             "names" to names, "removed" to removedRows, "gtptabs" to gtptabs, "musescore" to musescore,
             "harptabs" to harptabs, "harptabs_artists" to harptabsArtists, "gametabs" to gametabs, "lacuerda" to lacuerda,
             "ug_directory" to directory, "lacuerda_artists" to lacuerdaArtists, "lacuerda_unlisted" to unlisted,
-            "lacuerda_leads" to leads, "lacuerda_search" to gate, "youtube" to null, "suggest" to suggest,
+            "lacuerda_leads" to leads, "lacuerda_search" to gate, "youtube" to youtube, "suggest" to suggest,
             "skipped" to skipped.map { it.json() }, "partial" to partial.map { it.json() },
             "looked" to looked.looked(skipped, partial),
         )
@@ -152,6 +162,23 @@ internal class Found(
         val said = obj("key" to wanted.key, "label" to wanted.label, "name" to wanted.name, "songs" to playing.size)
         return said to playing.filter { it.song.id !in mine }.map { LibraryHit(it.song, 100.0, "progression") }
             .take(LIBRARY_HITS)
+    }
+
+    /** search_routes._youtube_suggestion: what the answer says of YouTube's first video for [q] (SearchGate's gate and
+     * suggestion, with no request): none while the answer has a sheet for it (SearchGate.sheetOnScreen over your songs
+     * [mine] and the indexes' answers [kept]), where this phone makes no sheet from a video, or with [youtube] null. */
+    private fun youtubeSuggestion(q: String, mine: List<LibraryHit>, kept: IndexAnswers): JsonObject? {
+        val asked = youtube ?: return null
+        val onScreen = YouTubeGate.sheetOnScreen(mine, kept.indexFound, kept.lcArtists, kept.lacuerda)
+        return YouTubeGate.suggestion(YouTubeGate.gate(config, db, q, onScreen, now, asked.routeWhy, asked.heldBack), q)
+    }
+
+    /** Python's `str(v or "")` of a JSON value: a video's title or channel as _names_json hands it to read_names (the
+     * suggestion's are strings already, "" for none: SearchGate.suggestion's). */
+    private fun orEmpty(v: JsonElement?): String = when {
+        v == null || v is JsonNull -> ""
+        v is JsonPrimitive && v.isString -> v.content
+        else -> Videos.shown(v)
     }
 
     /** search_routes._lacuerda_search_gate: what sending LaCuerda's search for [q] would be, with no request: null,

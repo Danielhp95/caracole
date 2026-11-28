@@ -152,12 +152,16 @@ object SearchGate {
     /**
      * gate: what a search of [query] is now, with no request; null when none is for it: no word, a sheet on the
      * screen already ([onScreen], [sheetOnScreen]'s), YouTube turned off in [cfg], or [routeWhy], the reason this
-     * phone makes no sheet from a video (youtube_fetch.route_problem's, the phone's own).
+     * phone makes no sheet from a video (youtube_fetch.route_problem's, the phone's own). [heldBack], the phone's own:
+     * why none goes by itself now (a metered network), which makes an `auto` gate `off` with that why; what was
+     * searched within the 30 days, or why none goes otherwise, is said as ever.
      */
-    fun gate(cfg: PhoneConfig, db: Db, query: String, onScreen: Boolean, now: Instant, routeWhy: String? = null): Gate? {
+    fun gate(cfg: PhoneConfig, db: Db, query: String, onScreen: Boolean, now: Instant, routeWhy: String? = null,
+             heldBack: String? = null): Gate? {
         val key = queryKey(query)
         if (key.isEmpty() || onScreen || !cfg.provider(provider).enabled || routeWhy != null) return null
-        return gateOf(db, key, now)
+        val gate = gateOf(db, key, now)
+        return if (heldBack != null && gate.state == AUTO) Gate(state(OFF), key, why = heldBack) else gate
     }
 
     /** video_gate: what reading a pasted video's metadata is now, as a search's; `off` where YouTube is turned off
