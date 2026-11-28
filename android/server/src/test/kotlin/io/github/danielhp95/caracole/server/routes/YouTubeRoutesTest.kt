@@ -34,8 +34,8 @@ import kotlin.test.assertTrue
 
 /** YouTube's routes on the phone: caracole serve's answers replayed (vectors/web/youtube_routes.jsonl,
  * YouTubeRoutesReplay), and on the phone whole, as the app assembles it: a form posted without its token or from
- * another site refused, an `/api/` read another site asks refused, `/youtube/search` still not on the phone, and each
- * reason of the design's §5.6 the page and the routes say. */
+ * another site refused, an `/api/` read another site asks refused, and each reason of the design's §5.6 the page and
+ * the routes say (a search's suggested video: YouTubeSearchTest). */
 class YouTubeRoutesTest {
     @get:Rule val tmp = TemporaryFolder()
 
@@ -77,6 +77,7 @@ class YouTubeRoutesTest {
         val video = "https://www.youtube.com/watch?v=lzN7Thn3FV4"
         for ((path, fields) in listOf("/youtube" to listOf("youtube" to video, "song" to "1"),
                                       "/youtube/video" to listOf("id" to "lzN7Thn3FV4"),
+                                      "/youtube/search" to listOf("q" to "nick cani"),
                                       "/request" to listOf("youtube" to video, "artist" to "A", "title" to "T"))) {
             assertEquals(403, post(path, fields).status, "$path with no token")
             assertEquals(403, post(path, fields + ("csrf" to "not-the-token")).status, "$path with another token")
@@ -111,13 +112,6 @@ class YouTubeRoutesTest {
         for (bad in listOf("?id=short", "?url=https%3A%2F%2Fevil.example%2Fwatch%3Fv%3DdQw4w9WgXcQ", "", "?id=")) {
             assertEquals(400, read(bad).status, bad)
         }
-    }
-
-    /** `POST /youtube/search` stays not on the phone until Y4.1. */
-    @Test fun youtubesSearchStillAnswersNotOnThePhoneYet() {
-        val asked = post("/youtube/search", listOf("csrf" to TestApp.CSRF, "q" to "nick cani"))
-        assertEquals(409, asked.status)
-        assertEquals("YouTube's search: not on the phone yet.", asked.json.jsonObject.getValue("error").jsonPrimitive.content)
     }
 
     /** The routes refuse where the phone makes no sheet from a video, in Phone.youtubeProblem's words. */

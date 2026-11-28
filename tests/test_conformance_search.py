@@ -888,7 +888,23 @@ def names_records(corpus: Corpus) -> list[dict]:
             for title, channel in videos:
                 out.append(record("caracole.song_names.read_names", name, [title], {"channel": channel},
                                   lambda: read_names(conn, title, songs=songs, channel=channel)))
+            # rule 5: a query read with the video /api/search suggests for it, its title and its channel
+            for text, video in _suggested_videos(tsn):
+                out.append(record("caracole.song_names.read_names", name, [text], {"video": list(video)},
+                                  lambda: read_names(conn, text, songs=songs, video=video)))
     return out
+
+
+def _suggested_videos(tsn: object) -> list[tuple[str, tuple[str, str]]]:
+    """Queries and the video suggested for each: test_song_names.py's rule 5, and its edges (no word in the query, a
+    video of no title or no channel, one of another song, a query a rule reads first)."""
+    silvana, vikingos, creep = tsn.SILVANA_VIDEO, tsn.VIKINGOS_VIDEO, ("Creep", "Radiohead - Topic")
+    return [("silvana estrada que problema", silvana), ("que problema by silvana estrada", silvana),
+            ("creep", creep), ("que problema", silvana), ("que problema", ("Tregua", "Silvana Estrada")),
+            ("vikingos veganos", vikingos), ("Somos vikingos veganos", vikingos), ("creep", ("", "")),
+            ("creep", ("Creep", "")), ("creep", ("", "Radiohead")), ("!!", silvana), ("Radiohead - Creep", vikingos),
+            ("CREEP!", creep), ("安和桥", ("宋冬野 - 安和桥", "宋冬野")), ("lemon", ("MV「Lemon」", "米津玄師")),
+            ("Que Problema", ("Silvana Estrada - Qué Problema", "kintanedu"))]
 
 
 @contextmanager

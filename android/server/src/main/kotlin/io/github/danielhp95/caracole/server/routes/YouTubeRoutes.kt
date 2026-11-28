@@ -14,6 +14,9 @@ import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
+import io.github.danielhp95.caracole.core.search.IndexFound
+import io.github.danielhp95.caracole.core.search.Search
 import io.github.danielhp95.caracole.core.youtube.Records
 import io.github.danielhp95.caracole.core.youtube.SearchGate
 import io.github.danielhp95.caracole.core.youtube.Thumbs
@@ -32,6 +35,7 @@ import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.Status
+import io.github.danielhp95.caracole.server.lookups.YouTubeSearchRunner
 import io.github.danielhp95.caracole.server.routes.library.Answers
 import io.github.danielhp95.caracole.server.routes.library.SongForm
 import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
@@ -61,6 +65,11 @@ import java.time.Instant
  *     POST /youtube/video   that video read now (`url` or `id`): `caracole youtube --video=<id> --progress` queued under
  *                           `youtube-search:video:<id>`, a job of no song's, when its gate says `auto`; 202 {job, url}
  *                           to the page's script
+ *     POST /youtube/search  YouTube's first video for a query (`q`), suggested beside the search's results: `caracole
+ *                           youtube --search=<q> --progress` queued under `youtube-search:<key>`, a job of no song's
+ *                           (asked again while it waits or runs, that job), when its gate says `auto` (SearchGate.gate,
+ *                           its sheet on the screen read as /api/search reads it, never on a metered network: [metered],
+ *                           the gate's `off`); 202 {job, url} to the page's script, which follows it, then searches again
  *     GET  /youtube/thumb/<id>.jpg
  *                           a kept thumbnail, checked again (Thumbs.read), with a policy that runs nothing; 404 else
  *
@@ -69,13 +78,16 @@ import java.time.Instant
  * video ([problem]: Phone.youtubeProblem, the design's §5.6, 409 "No sheets from YouTube here: …"); a song YouTube
  * isn't for (ignored, a human sheet, audio of its own: an upload of [audio]'s or an `audio_path` that isn't its
  * `youtube:` record's, 409); a pasted video read this month (409), off (409), cooling, the hour's 10 spent or failed
- * lately (429). The POSTs are form routes, so App's cross-origin check and form token hold; the GET under `/api/` is
+ * lately (429); a search of no query or one past 200 characters (400), one with nothing for it (no word, a sheet on
+ * the screen, no sheet from a video here: 409), searched this month (409), cooling, spent, failed lately or the network
+ * metered (429). The POSTs are form routes, so App's cross-origin check and form token hold; the GET under `/api/` is
  * App's own-page read alone. vectors/web/youtube_routes.jsonl holds them to caracole serve's (WebReplay).
  */
 class YouTubeRoutes(
     val parts: PhoneParts,
     private val audio: AudioStore?,
     private val problem: () -> String?,
+    private val metered: () -> Boolean = { false },
     private val clock: () -> Instant = Instant::now,
 ) : RouteModule {
     override val routes: List<Route> = listOf(
@@ -85,6 +97,8 @@ class YouTubeRoutes(
               get = GetAnswer { request -> pastedVideo(request) }),
         Route("POST", "/youtube/video", "a video pasted into the search box read now (url or id)",
               post = PostAnswer { request, form -> readPastedVideo(request, form) }),
+        Route("POST", "/youtube/search", "YouTube's first video for a query (q), suggested beside the search's results",
+              page = "the library", post = PostAnswer { request, form -> searchYoutube(request, form) }),
         Route("GET", THUMB, "a pasted or suggested video's thumbnail, as kept", under = true,
               get = GetAnswer { request -> thumbnail(request) }),
     )
@@ -246,6 +260,49 @@ class YouTubeRoutes(
                                                    "url" to JsonPrimitive("/api/jobs/${job.id}"))), 202)
     }
 
+    // --- a video suggested for a search -------------------------------------------------------------------------
+
+    /** search_youtube (POST /youtube/search): the query's words joined by one space, its gate as /api/search reads
+     * it (its sheet on the screen [onScreen]'s), then the job queued, or refused. */
+    private fun searchYoutube(request: Request, form: Map<String, String>): Response {
+        val q = Py.split(form["q"].orEmpty()).joinToString(" ")
+        if (q.isEmpty() || Py.len(q) > QUERY_LIMIT) {
+            throw Refused(400, "Not a query", "Which query? 1 to $QUERY_LIMIT characters.")
+        }
+        val now = clock()
+        val config = parts.config()
+        val why = problem()  // read before: no read nested in the one below
+        val held = heldBack()
+        val said = parts.database.read { db -> SearchGate.gate(config, db, q, onScreen(db, q), now, why, held) }
+            ?: throw Refused(409, "Not for this", "No YouTube search for this.")
+        when (said.state) {
+            FOUND, NONE -> throw Refused(409, "Searched already", "Searched already this month.")
+            AUTO -> {}
+            else -> throw Refused(429, "Not now", "Not now: ${said.why.ifEmpty { "try again later" }}.")
+        }
+        val spec = LookupForms.spec("Search YouTube for “$q”", JobCommands.YOUTUBE_SEARCH + said.key,
+                                    JobCommands.youtubeSearchSteps(q), display = "“$q” on YouTube")
+        val job = parts.queue.submitOrRefuse(spec).first
+        if ("application/json" !in PyText.lower(request.headers["accept"].orEmpty())) {
+            return Response(303, Body.Empty, mutableListOf("Location" to "/${Status.detailsHref(job.id)}"))
+        }
+        return Answers.json(JsonObject(linkedMapOf("job" to JsonPrimitive(job.id),
+                                                   "url" to JsonPrimitive("/api/jobs/${job.id}"))), 202)
+    }
+
+    /** The phone's own reason no search of YouTube is sent by itself now: a metered network ([metered]), in the
+     * runner's words; null where one may be. /api/search's gate reads it too (Phone's `search`). */
+    fun heldBack(): String? = if (metered()) YouTubeSearchRunner.METERED else null
+
+    /** _on_screen: SearchGate.sheetOnScreen for [q], its searches made now as /api/search makes them (your library's
+     * ten, UG's index while it holds a row, LaCuerda's five songs). */
+    private fun onScreen(db: Db, q: String): Boolean {
+        val index = if ((db.one("SELECT COUNT(*) FROM ug_index") { it.long(0) } ?: 0L) > 0L) Search.findIndex(db, q)
+        else IndexFound()
+        val (artists, songs) = LaCuerda.searchLacuerda(db, q, songs = 5)
+        return SearchGate.sheetOnScreen(Search.searchLibrary(db, q, 10), index, artists, songs)
+    }
+
     /** song_of_video: the library's song a video is the audio of (its `youtube:` record's), else under `[youtube]`
      * for (its paste's). */
     private fun songOfVideo(db: Db, overrides: Overrides, videoId: String): SongRow? {
@@ -324,6 +381,8 @@ class YouTubeRoutes(
         private const val CACHE = "cache"
         private const val HUMAN_SHEET = "sheet.txt"
         private const val FULL = "The queue is full: nothing queued. Ask again once it empties."
+        /** youtube_routes.QUERY_LIMIT: characters of a query searched. */
+        private const val QUERY_LIMIT = 200
         private const val FOUND = "found"
         private const val NONE = "none"
         private const val AUTO = "auto"

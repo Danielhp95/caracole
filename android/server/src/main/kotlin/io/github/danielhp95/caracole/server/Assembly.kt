@@ -48,6 +48,7 @@ import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.lookups.YouTubeRunners
 import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
+import io.github.danielhp95.caracole.server.lookups.YouTubeSearchRunner
 import io.github.danielhp95.caracole.server.lookups.YouTubeVideoRunner
 import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
@@ -236,6 +237,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
             YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio, problem = ::youtubeProblem, names = models::names,
                                hold = { hearing -> models.holding(hearing) }, chordsProblem = ::audioProblem),
             YouTubeVideoRunner(parts, deps.youtube, routeWhy = ::youtubeProblem),
+            YouTubeSearchRunner(parts, deps.youtube, routeWhy = ::youtubeProblem, metered = deps.metered),
         )
         sweepYouTube()  // the YouTube audio past its days, and what a stopped download left, as the phone starts
     }
@@ -272,8 +274,12 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
 
+    /** /api/search; its `youtube` read with [youtubeProblem] and the network ([PhoneDeps.metered]: none sent by itself
+     * on a metered one). */
     val search: SearchRoutes = SearchRoutes(deps.database, cards, searchesLacuerda = deps.searchesLacuerda,
-                                            cacheDir = File(deps.stateDir, "cache"))
+                                            cacheDir = File(deps.stateDir, "cache"), youtube = {
+        SearchRoutes.YouTubeAsked(youtubeProblem(), if (deps.metered()) YouTubeSearchRunner.METERED else null)
+    })
 
     private val engine = SyncEngine(
         deps.database, store, deps.stateDir,
@@ -309,10 +315,11 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         afterSync = ::afterSync, version = deps.version,
     ).also { sync.files = it }
 
-    /** A sheet from a YouTube video and a pasted video's panel (POST /youtube, GET /api/youtube/video, POST
-     * /youtube/video, GET /youtube/thumb/), refused where [youtubeProblem] says why; POST /request with `youtube` is
+    /** A sheet from a YouTube video, a pasted video's panel and a search's suggested video (POST /youtube, GET
+     * /api/youtube/video, POST /youtube/video, POST /youtube/search, GET /youtube/thumb/), refused where
+     * [youtubeProblem] says why, a search on a metered network ([PhoneDeps.metered]); POST /request with `youtube` is
      * handed to it by LibraryRoutes. */
-    val youtubeRoutes: YouTubeRoutes = YouTubeRoutes(parts, audio, ::youtubeProblem)
+    val youtubeRoutes: YouTubeRoutes = YouTubeRoutes(parts, audio, ::youtubeProblem, metered = deps.metered)
 
     /** The route modules, in their order. */
     val modules: List<RouteModule> = listOf(

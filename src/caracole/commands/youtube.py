@@ -263,6 +263,14 @@ THUMB_BLOCKED = "YouTube's images turned us back; waiting until {until}"
 THUMB_SPENT = "no asks left"
 THUMB_FAILED = "no thumbnail"
 THUMBS_ALERT = "{error}\nNo more thumbnails until {until} (block #{strikes})."
+# --search's words, which the phone says as they are (youtube.json's ``search_cmd``); ``query`` is the query quoted
+QUOTED = "“{query}”"
+NO_WORD = "{query} has no word to search for."
+NO_SHEETS_HERE = "no YouTube sheets here ({problem})."
+NOTHING_TO_SEARCH = "nothing to search for"
+SEARCHED = "Searched: YouTube's first video for {query}: {title} ({channel}), {url}."
+NONE_LATELY = "Nothing found: YouTube had no video for {query} lately."
+NONE_NOW = "Nothing found: YouTube has no video for {query}."
 
 
 def _search(cfg: Config, query: str, *, progress: bool) -> None:
@@ -286,7 +294,7 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
     )
     from caracole.youtube_search import gate as search_gate
 
-    shown_query = f"“{query}”"
+    shown_query = QUOTED.format(query=query)
 
     def say(stage: str, state: str, detail: str = "") -> None:
         if progress:
@@ -297,26 +305,26 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
         typer.echo(line)
 
     if not query_key(query):
-        end(f"{NOT_SEARCHED}{shown_query} has no word to search for.")
+        end(NOT_SEARCHED + NO_WORD.format(query=shown_query))
         return
     problem = route_problem(cfg)
     if problem is not None:
-        end(f"{NOT_SEARCHED}no YouTube sheets here ({problem}).")
+        end(NOT_SEARCHED + NO_SHEETS_HERE.format(problem=problem))
         return
-    say("video", "running", "asking YouTube")
+    say("video", "running", ASKING)
     with exclusive(cfg, f"youtube --search {query}", interactive=True), closing(open_db(cfg)) as conn:
         now = utcnow()
         said = search_gate(cfg, conn, query, on_screen=False, now=now)
         if said is not None and said.asked is not None:
             video = said.asked.get("video")
             if isinstance(video, dict):
-                end(f"Searched: YouTube's first video for {shown_query}: {video.get('title')} "
-                    f"({video.get('channel')}), {video.get('url')}.", "done")
+                end(SEARCHED.format(query=shown_query, title=video.get('title'), channel=video.get('channel'),
+                                    url=video.get('url')), "done")
             else:
-                end(f"Nothing found: YouTube had no video for {shown_query} lately.", "done")
+                end(NONE_LATELY.format(query=shown_query), "done")
             return
         if said is None or said.state in ("spent", "failed"):
-            end(f"{NOT_SEARCHED}{said.why if said else 'nothing to search for'}. Try again later.")
+            end(NOT_SEARCHED + TRY_LATER.format(why=said.why if said else NOTHING_TO_SEARCH))
             return
         run_id = RUN + run_id_for(now)
         runner = make_youtube(cfg, conn, run_id)
@@ -325,29 +333,28 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
             found = search(conn, runner, query, now)
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
-            message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
+            message = RUNS_ALERT.format(error=e, until=shown(state.cooldown_until), strikes=state.strikes)
             _common.alert_block(cfg, PROVIDER, message, strikes=state.strikes)
-            end(f"{NOT_SEARCHED}YouTube turned us back ({e}); no yt-dlp runs until "
-                f"{shown(state.cooldown_until)}.")
+            end(NOT_SEARCHED + TURNED_BACK.format(error=e, until=shown(state.cooldown_until)))
             return
         except BudgetExhausted:
-            end(f"{NOT_SEARCHED}no YouTube runs left. Try again later.")
+            end(NOT_SEARCHED + NO_RUNS)
             return
         except ProviderError as e:
             record_error(conn, PROVIDER, now, str(e))
             record_failure(conn, query_key(query), now, str(e.message or e))
-            end(f"{NOT_SEARCHED}yt-dlp failed ({e.message or e}). Try again later.")
+            end(NOT_SEARCHED + YTDLP_FAILED.format(error=e.message or e))
             return
         finally:
             runner.close()
         if answered_any(conn, run_id, PROVIDER, runner.requests_made):
             record_ok(conn, PROVIDER, now)
         if found is None:
-            end(f"Nothing found: YouTube has no video for {shown_query}.", "done")
+            end(NONE_NOW.format(query=shown_query), "done")
             return
-        say("video", "done", f"{found.title} ({found.channel})")
+        say("video", "done", VIDEO_DONE.format(title=found.title, channel=found.channel))
         _thumbnail(cfg, conn, found.id, query_key(query), run_id, now, say)
-    typer.echo(f"Searched: YouTube's first video for {shown_query}: {found.title} ({found.channel}), {found.url}.")
+    typer.echo(SEARCHED.format(query=shown_query, title=found.title, channel=found.channel, url=found.url))
 
 
 def _video(cfg: Config, link: str, *, progress: bool) -> None:

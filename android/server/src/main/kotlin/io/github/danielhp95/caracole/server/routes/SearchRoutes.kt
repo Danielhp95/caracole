@@ -37,8 +37,9 @@ import java.time.Instant
  *                              hasn't read (`ug_directory`, each with whether Read their page on UG, `POST /ug/link`,
  *                              may go now) and whether LaCuerda's own search may be sent (`lacuerda_search`,
  *                              its gate at [clock]'s time; null with [searchesLacuerda] false), the `progression`
- *                              the query types or names (the songs' progressions' records), and `youtube` null (no
- *                              yt-dlp ever)
+ *                              the query types or names (the songs' progressions' records), and YouTube's first
+ *                              video for a query with no sheet on the sites (`youtube`, its gate read as [youtube]
+ *                              says, null with none: `names` then read with the video's title and channel)
  *     GET /api/artist?key=     an artist of the offline index: their songs, most tabbed first, 50 from `offset`, and
  *                              yours by them; `?lacuerda=SLUG` (`?lacuerda_name=NAME`), a LaCuerda artist's songs the
  *                              index holds; `?harptabs=PATH`, a harptabs.com artist's
@@ -56,7 +57,13 @@ import java.time.Instant
  */
 class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Set<String>? = null,
                    val searchesLacuerda: Boolean = false, val clock: () -> Instant = Instant::now,
-                   cacheDir: File? = null) : RouteModule {
+                   cacheDir: File? = null, private val youtube: () -> YouTubeAsked? = { null }) : RouteModule {
+    /** What /api/search's `youtube` is read with ([youtube]'s, read before the search's own read: no read nested in
+     * it; null, none, as `WebApp(searches_youtube=False)`): [routeWhy], why this phone makes no sheet from a video now
+     * (Phone.youtubeProblem), null where it does; [heldBack], the phone's own reason none is sent by itself now (a
+     * metered network: the gate's `off`), null where one may be. */
+    data class YouTubeAsked(val routeWhy: String?, val heldBack: String?)
+
     /** The phone's HTTP cache (`stateDir/cache`), which says with no request whether an artist UG's directory names
      * may have their page read now (UgLinks.known); beside the database when none is given (a test's). */
     private val cacheDir: File = cacheDir ?: File(database.path.absoluteFile.parentFile, "cache")
@@ -86,10 +93,11 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
         val superseded = obj("query" to q, "superseded" to true)
         return searches.search(box) { ticket ->
             try {
+                val yt = youtube()
                 database.read { db ->
                     val config = PhoneConfig.read(db)
                     jsonResponse(200, Found(db, on(config), cards, forms, answers, ticket::check, config, searchesLacuerda,
-                                            clock(), cacheDir).answer(q))
+                                            clock(), cacheDir, yt).answer(q))
                 }
             } catch (e: Exception) {
                 if (e is Superseded || !unreadable(e)) throw e
@@ -106,9 +114,10 @@ class SearchRoutes(val database: Database, val cards: SongCards, val enabled: Se
      */
     internal fun answer(q: String): JsonObject = searches.alone {
         try {
+            val yt = youtube()
             database.read { db ->
                 val config = PhoneConfig.read(db)
-                Found(db, on(config), cards, forms, answers, {}, config, searchesLacuerda, clock(), cacheDir).answer(q)
+                Found(db, on(config), cards, forms, answers, {}, config, searchesLacuerda, clock(), cacheDir, yt).answer(q)
             }
         } catch (e: Exception) {
             if (!unreadable(e)) throw e

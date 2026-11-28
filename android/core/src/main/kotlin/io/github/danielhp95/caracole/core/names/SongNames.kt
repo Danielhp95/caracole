@@ -13,8 +13,6 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
  * phone's request form (lane song-names). Its rules and their order are song_names.py's module docstring; this file
  * keeps them in the same order, each regex Python's through [PyRegex] (an IGNORECASE one with sre's `(?i)`), each
  * word and key [Normalize]'s.
- *
- * The phone suggests no YouTube video for a query, so `read_names`' `video` (its rule 5) has no counterpart here.
  */
 object SongNames {
     /** [text] without what a video's title adds to a song's name (a group of a video's or a lyric channel's words, a
@@ -61,15 +59,23 @@ object SongNames {
      * The artist and the title [text] names (song_names.py's module docstring), or null for a text that doesn't say
      * who its artist is. [songs] are your library's; no database ([db] null) knows nothing but the channel given.
      * [channel]: [text] is the title of a video of that channel's, whose song it always names, "" for a part it can't
-     * tell.
+     * tell. [video]: the title and the channel of the video suggested for [text], a query (/api/search's `youtube`):
+     * its channel a known artist for it, and a query that is that video's song named by its artist (rule 5).
      */
-    fun readNames(db: Db?, text: String, songs: List<SongRow>, channel: String? = null): Pair<String, String>? {
-        val hints = listOfNotNull(channel).filter { it.isNotEmpty() }.map { cleanChannel(it) }.filter { it.isNotEmpty() }
+    fun readNames(db: Db?, text: String, songs: List<SongRow>, channel: String? = null,
+                  video: Pair<String, String>? = null): Pair<String, String>? {
+        val hints = listOfNotNull(channel, video?.second).filter { it.isNotEmpty() }.map { cleanChannel(it) }
+            .filter { it.isNotEmpty() }
         val known = Known(db, songs, hints)
         val cleaned = untagged(clean(text, known))
         val named = twoParts(cleaned, known) ?: bracketed(cleaned, known) ?: knownArtistIn(cleaned, known)
         if (named != null) return named
         if (channel != null) return cleanChannel(channel) to own(cleaned)
+        if (video != null && Normalize.nameWords(cleaned).isNotEmpty()) {
+            // its channel's song (a title read with its channel always names one), the query's words that title's
+            val (artist, title) = readNames(db, video.first, songs, channel = video.second)!!
+            if (artist.isNotEmpty() && Normalize.nameWords(title) == Normalize.nameWords(cleaned)) return artist to cleaned
+        }
         return null
     }
 

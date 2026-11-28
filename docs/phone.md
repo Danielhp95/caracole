@@ -80,6 +80,9 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
   or Shazam to look it up, or a Guitar Pro file or score to file under its song.
 - Backups, daily and before each sync (Settings › Backups).
 - Pinch to change the text size.
+- In the debug build, a search with no sheet on the sites suggests YouTube's first video, as the
+  computer's page does, on Wi-Fi only: its row fills the request form, and nothing goes until you
+  send it.
 
 ## What stays on the computer
 

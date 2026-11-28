@@ -195,6 +195,7 @@ def _cooling_when() -> str:
 VIDEO_CMD_WORDS = ("NOT_A_VIDEO", "ASKING", "SEARCHED_VIDEO", "WONT_GIVE", "NOT_SEARCHED", "TRY_LATER", "TURNED_BACK",
                    "NO_RUNS", "YTDLP_FAILED", "VIDEO_DONE", "RUNS_ALERT", "THUMB_OFF", "THUMB_COOLING", "THUMB_KEPT",
                    "THUMB_NONE", "THUMB_BLOCKED", "THUMB_SPENT", "THUMB_FAILED", "THUMBS_ALERT")
+SEARCH_CMD_WORDS = ("QUOTED", "NO_WORD", "NO_SHEETS_HERE", "NOTHING_TO_SEARCH", "SEARCHED", "NONE_LATELY", "NONE_NOW")
 
 
 def youtube_json() -> str:
@@ -282,6 +283,7 @@ def youtube_json() -> str:
                   "part": youtube_search.THUMB_PART, "max_bytes": youtube_search.MAX_BYTES,
                   "max_side": youtube_search.MAX_SIDE, "frames": list(youtube_search.FRAMES)},
         "video_cmd": {name.lower(): getattr(youtube_cmd, name) for name in VIDEO_CMD_WORDS},
+        "search_cmd": {name.lower(): getattr(youtube_cmd, name) for name in SEARCH_CMD_WORDS},
         "gate": {"names": list(youtube.PHONE_GATE.names), "suffixes": list(youtube.PHONE_GATE.suffixes),
                  "port": youtube.PHONE_GATE.port, "apart": list(youtube.PHONE_GATE.apart),
                  "refused": list(youtube.PHONE_GATE.refused), "refusal": youtube.PHONE_GATE.refusal,
@@ -1425,6 +1427,31 @@ VIDEO_SCENES = [
 
 
 def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
+    case, link, yt_on, img_on, kv, events, answer, thumb, kept, cooling = scene
+
+    def plan(fake):
+        if answer is not None:
+            fake.video(PASTED_ID, **{"title": "", "channel": "", "duration": 0, **answer})
+
+    out, seeded = _command(tmp_path / f"video-{n}", monkeypatch, ["--video", link], plan, PASTED_ID, yt_on, img_on, kv,
+                           events, thumb, kept, cooling)
+    out["error"] = None
+    if out["exit"] == 2:
+        import caracole.commands.youtube as cmd
+        out["error"] = cmd.NOT_A_VIDEO.format(link=repr(link))
+    out = {k: out[k] for k in ("exit", "lines", "progress", "error", "runs", "asked", "kv", "events", "thumb",
+                               "alerts")}
+    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kw": {"link": link, "video_id": PASTED_ID, "youtube": yt_on, "ytimg": img_on,
+                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
+                   "events": events, "video": answer, "thumb": thumb, "kept": kept},
+            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+
+
+def _command(root, monkeypatch, args: list[str], plan, thumb_id: str, yt_on: bool, img_on: bool, kv: dict,
+             events: list, thumb, kept, cooling) -> tuple[dict, dict]:
+    """``caracole youtube ARGS --progress`` over FakeYtDlp (``plan`` its answers) and a fake i.ytimg.com, recorded:
+    its ``out`` (the module's comment over the video's records) and the kv texts seeded before it."""
     import httpx
     from typer.testing import CliRunner
 
@@ -1433,11 +1460,8 @@ def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
     from caracole.commands import _common
     from caracole.get import read_progress_line
 
-    case, link, yt_on, img_on, kv, events, answer, thumb, kept, cooling = scene
-    root = tmp_path / f"video-{n}"
     fake = FakeYtDlp(root / "bin")
-    if answer is not None:
-        fake.video(PASTED_ID, **{"title": "", "channel": "", "duration": 0, **answer})
+    plan(fake)
     models = root / "models"
     models.mkdir(parents=True)
     for name in ("btc.pt", "beat.ckpt"):
@@ -1466,7 +1490,7 @@ def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
     if kept is not None:
         thumbs = root / "cache" / youtube_search.THUMBS
         thumbs.mkdir(parents=True)
-        (thumbs / f"{PASTED_ID}.jpg").write_bytes(base64.b64decode(kept))
+        (thumbs / f"{thumb_id}.jpg").write_bytes(base64.b64decode(kept))
     asked, alerts = [], []
 
     def handler(request):
@@ -1485,7 +1509,7 @@ def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
     monkeypatch.setattr(_common, "sleep", lambda s: None)
     monkeypatch.setattr(_common, "alert_block", lambda cfg, provider, message, **kw: alerts.append(provider))
     monkeypatch.setattr(cmd, "utcnow", lambda: NOW)
-    result = CliRunner().invoke(build_app(), ["--config", str(config), "youtube", "--video", link, "--progress"])
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "youtube", *args, "--progress"])
     conn = db.connect(root / "state" / "caracole.sqlite")
     after = dict(conn.execute("SELECT key, value FROM kv").fetchall())
     new_events = [list(r) for r in conn.execute("SELECT provider, run, url, status, decision FROM events WHERE id > ? "
@@ -1498,20 +1522,15 @@ def _video_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
             progress.append([event["stage"], event["state"], event["detail"]])
         elif result.exit_code == 0:
             plain.append(line)
-    kept_after = root / "cache" / youtube_search.THUMBS / f"{PASTED_ID}.jpg"
+    kept_after = root / "cache" / youtube_search.THUMBS / f"{thumb_id}.jpg"
     changed = {k: after.get(k) for k in sorted(set(before) | set(after))
                if before.get(k) != after.get(k) and not k.startswith(VIDEO_APART)}
     out = {"exit": result.exit_code, "lines": plain, "progress": progress,
-           "error": cmd.NOT_A_VIDEO.format(link=repr(link)) if result.exit_code == 2 else None,
            "runs": [argv[-1] for argv in fake.argvs()], "asked": asked, "kv": changed, "events": new_events,
            "thumb": hashlib.sha256(kept_after.read_bytes()).hexdigest() if kept_after.is_file() else None,
            "alerts": alerts}
     assert result.exit_code in (0, 2), result.output
-    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "kw": {"link": link, "video_id": PASTED_ID, "youtube": yt_on, "ytimg": img_on,
-                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
-                   "events": events, "video": answer, "thumb": thumb, "kept": kept},
-            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+    return out, seeded
 
 
 def _jpeg(*segments: bytes, scan: bytes = b"\x12\x34\xff\xd9") -> bytes:
@@ -1585,3 +1604,124 @@ def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
     assert by["a thumbnail kept already"]["out"]["asked"] == []
     assert by["not a video's link"]["out"]["exit"] == 2 and by["not a video's link"]["out"]["runs"] == []
     assert VKEY in json.loads(by["an error"]["out"]["kv"][youtube_search.FAILED_KEY])
+
+
+# --- search_cmd.jsonl ---------------------------------------------------------------------------------------------
+#
+# ``caracole youtube --search=QUERY --progress`` (commands/youtube.py ``_search`` and ``_thumbnail``) as video_cmd.jsonl
+# records ``--video``, a scene a record: ``kw`` the command's ``query``, the video's ``video_id`` (its thumbnail's),
+# whether ``youtube`` and ``ytimg`` are on, ``problem`` (youtube_fetch.route_problem's reason this caracole makes no
+# sheet from a video, null for none: the phone's is its own, so the record names it), the kv texts and ``events`` before,
+# FakeYtDlp's answer for the search (``search``: its ``entries``, or ``stderr`` and ``exit``; null: never asked), the
+# image host's (``thumb``) and a thumbnail kept before (``kept``); ``out`` as video_cmd.jsonl's.
+
+SEARCHED_KV = youtube_search.KV_PREFIX + QK
+
+
+def _search_kv(video, *, thumb=True, **ago) -> dict:
+    return {SEARCHED_KV: json.dumps({"at": _at(**ago), "query": Q, "video": video, "thumb": thumb},
+                                    ensure_ascii=False)}
+
+
+CREEP_ENTRY = entry(ID, "Radiohead - Creep", "Radiohead", 239)
+BLOCKED = {"stderr": "ERROR: [youtube] Sign in to confirm you’re not a bot.", "exit": 1}
+BOOM = {"stderr": "ERROR: Unable to download API page: HTTP Error 500: Internal Server Error", "exit": 1}
+OFF = "turned off ([providers.youtube] enabled = false)"
+
+# (case, query, youtube on, ytimg on, problem, kv, events, the search's answer, the thumbnail's, a thumbnail kept, cooling)
+SEARCH_SCENES = [
+    ("a query searched: its first video, its thumbnail kept", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("a query of other scripts", "宋冬野 安和桥", True, True, None, {}, [],
+     {"entries": [entry(ID, "宋冬野 - 安和桥 (Live) «Café»", "宋冬野", 240.5)]}, JPEG_OK, None, None),
+    ("a query that reads as placeholders", "{title} {url} Creep", True, True, None, {}, [],
+     {"entries": [entry(ID, "{query} – a title", "{channel}", 200)]}, JPEG_OK, None, None),
+    ("its first video a live stream: none found", Q, True, True, None, {}, [],
+     {"entries": [entry(ID, "Radiohead live now", "Radiohead", None, live_status="is_live")]}, None, None, None),
+    ("no video: none found", Q, True, True, None, {}, [], {"entries": []}, None, None, None),
+    ("searched this month: nothing asked", Q, True, True, None, _search_kv(FOUND, days=3), [], None, None, None,
+     None),
+    ("searched this month as none: nothing asked", Q, True, True, None, _search_kv(None, thumb=False, days=2), [],
+     None, None, None, None),
+    ("searched 31 days ago: searched again", Q, True, True, None, _search_kv(FOUND, days=31), [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("a block: the cooldown recorded, one alert, nothing kept", Q, True, True, None, {}, [], BLOCKED, None, None,
+     None),
+    ("an error: remembered for the hour", Q, True, True, None, {}, [], BOOM, None, None, None),
+    ("an earlier failure of it forgotten once searched", Q, True, True, None,
+     _failed(**{"other": {"at": _at(minutes=5), "error": "x"}, QK: {"at": _at(minutes=90), "error": "old"}}), [],
+     {"entries": [CREEP_ENTRY]}, JPEG_OK, None, None),
+    ("YouTube cooling down: not searched", Q, True, True, None, {}, [], None, None, None, {"hours": 1}),
+    ("the hour's 10 spent, pasted videos' reads among them: not searched", Q, True, True, None, {},
+     _runs(6) + _runs(4, run=youtube_search.RUN + youtube_search.VIDEO_KEY), None, None, None, None),
+    ("9 of the hour's spent: searched", Q, True, True, None, {}, _runs(9), {"entries": [CREEP_ENTRY]}, JPEG_OK, None,
+     None),
+    ("failed within the hour: not searched", Q, True, True, None,
+     _failed(**{QK: {"at": _at(minutes=10), "error": "boom"}}), [], None, None, None, None),
+    ("three failed this hour: not searched", Q, True, True, None,
+     _failed(**{f"q{i}": {"at": _at(minutes=10), "error": "x"} for i in range(3)}), [], None, None, None, None),
+    ("YouTube off: not searched", Q, False, True, OFF, {}, [], None, None, None, None),
+    ("no sheet from a video here: not searched", Q, True, True, "yt-dlp isn't there (yt-dlp)", {}, [], None, None,
+     None, None),
+    ("no word to search for", "!!! ...", True, True, None, {}, [], None, None, None, None),
+    ("the image host off: no thumbnail asked", Q, True, False, None, {}, [], {"entries": [CREEP_ENTRY]}, None, None,
+     None),
+    ("the image host cooling: no thumbnail asked", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]}, None,
+     None, "ytimg"),
+    ("no thumbnail there (404)", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]},
+     {"status": 404, "base64": ""}, None, None),
+    ("the image host blocking (403): its own cooldown and alert", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, {"status": 403, "base64": ""}, None, None),
+    ("the image host failing (500)", Q, True, True, None, {}, [], {"entries": [CREEP_ENTRY]},
+     {"status": 500, "base64": ""}, None, None),
+    ("a thumbnail kept already: nothing asked of the image host", Q, True, True, None, {}, [],
+     {"entries": [CREEP_ENTRY]}, None, JPEG_OK["base64"], None),
+]
+
+
+def _search_record(tmp_path, monkeypatch, n: int, scene: tuple) -> dict:
+    case, query, yt_on, img_on, problem, kv, events, answer, thumb, kept, cooling = scene
+
+    def plan(fake):
+        if answer is not None:
+            fake.search(" ".join(query.split()), *answer.get("entries", []),
+                        **{k: v for k, v in answer.items() if k != "entries"})
+
+    if problem is not None and yt_on:
+        monkeypatch.setattr(youtube_fetch, "route_problem", lambda cfg: problem)
+    out, seeded = _command(tmp_path / f"search-{n}", monkeypatch, [f"--search={query}"], plan, ID, yt_on, img_on, kv,
+                           events, thumb, kept, cooling)
+    monkeypatch.undo()
+    return {"case": case, "now": NOW.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kw": {"query": query, "video_id": ID, "youtube": yt_on, "ytimg": img_on, "problem": problem,
+                   "kv": {k: v for k, v in seeded.items() if k in kv or k.startswith("provider:")},
+                   "events": events, "search": answer, "thumb": thumb, "kept": kept},
+            "out": out, "apart": {"kv": list(VIDEO_APART), "events_at": True}}
+
+
+def _search_records(tmp_path, monkeypatch) -> list[dict]:
+    return [_search_record(tmp_path, monkeypatch, n, scene) for n, scene in enumerate(SEARCH_SCENES)]
+
+
+def test_the_search_command_corpus(tmp_path, monkeypatch):
+    check(VECTORS / "youtube" / "search_cmd.jsonl",
+          jsonl(_search_records(tmp_path, monkeypatch), corpus="youtube/search_cmd", made_by=MADE_BY))
+
+
+def test_the_search_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
+    by = {r["case"].split(":")[0]: r["out"] for r in _search_records(tmp_path, monkeypatch)}
+    first = by["a query searched"]
+    assert first["runs"] == [youtube.SEARCH_PREFIX.format(n=1) + Q]
+    assert first["asked"] == [youtube_search.THUMB_URL.format(id=ID)] and first["alerts"] == []
+    assert first["lines"] == [f"Searched: YouTube's first video for “{Q}”: Radiohead - Creep (Radiohead), {watch_url(ID)}."]
+    assert json.loads(first["kv"][SEARCHED_KV])["thumb"] is True
+    for case in ("searched this month", "searched this month as none", "YouTube cooling down",
+                 "the hour's 10 spent, pasted videos' reads among them", "failed within the hour",
+                 "three failed this hour", "YouTube off", "no sheet from a video here", "no word to search for"):
+        assert by[case]["runs"] == [], case
+    assert len(by["9 of the hour's spent"]["runs"]) == 1
+    assert by["a block"]["alerts"] == ["youtube"] and SEARCHED_KV not in by["a block"]["kv"]
+    assert QK in json.loads(by["an error"]["kv"][youtube_search.FAILED_KEY])
+    assert json.loads(by["its first video a live stream"]["kv"][SEARCHED_KV])["video"] is None
+    assert by["the image host blocking (403)"]["alerts"] == ["ytimg"]
+    assert by["a thumbnail kept already"]["asked"] == []
