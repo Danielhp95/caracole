@@ -21,7 +21,7 @@ import java.time.Instant
  * found nothing in the last `fetch.recheck_after_days`), less those with audio of their own (`audio_path`: an upload,
  * YouTube's audio kept, a purchase) and those with any sheet kept, human or auto, whoever made it. Of `_due`'s other
  * branches none can reach the phone's list: a song with YouTube's audio kept has an `audio_path`, and R3's
- * `_left_elsewhere` weighs only a song that keeps an auto sheet.
+ * `left_elsewhere` weighs only a song that keeps an auto sheet.
  *
  * On a [paired] phone only the songs it noted (kv `youtube-wanted:<id>`, a lookup that ended "Not on the sites"): the
  * rest are the computer's nightly work. Order: the noted first, then the rest, newest first in each (Songs.list's);

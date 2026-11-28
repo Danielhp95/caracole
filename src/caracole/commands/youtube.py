@@ -3,7 +3,9 @@
 Without ``--song`` it makes the same pass as the step (youtube_fetch.py): the songs with
 no human sheet that are due for their audio from YouTube, newest first, within the
 budget. With ``--song "Artist - Title"`` it takes that song's audio, even when its search
-found nothing lately, unless it has a human sheet, is ignored or has a purchase linked;
+found nothing lately, unless it has a human sheet, is ignored, has a purchase linked, or keeps
+an auto sheet another caracole made that no run here makes again (youtube_fetch.py ``left_elsewhere``: --sheet
+makes that one here);
 ``--url`` first writes the video to use under ``[youtube]`` in overrides.toml, and
 ``--none`` writes "none" there, lets go of any audio the song has from YouTube, and asks
 YouTube nothing: it does so with YouTube off too, and for a song not in the library yet.
@@ -70,6 +72,11 @@ if TYPE_CHECKING:
 
 PROVIDER = "youtube"
 NOT_BUILT = "use the flake's packages.autochords, which has auto-chords and yt-dlp"
+# --song for a song whose auto sheet another caracole made, which no pass here makes again (youtube_fetch.py
+# ``left_elsewhere``, R3): --sheet is the ask that makes it here
+MADE_THERE = ('"{song}" keeps an auto sheet made by another caracole, which no run here makes again: caracole '
+              'takes no audio from YouTube for it. To make its sheet here from a video, run caracole youtube '
+              '--song "{song}" --sheet (with --url URL for the video).')
 
 
 def register(app: typer.Typer) -> None:
@@ -496,11 +503,13 @@ def _decline(cfg: Config, display: str) -> None:
 
 def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Overrides) -> Song:
     """The song ``--song`` names, if YouTube may be asked for its audio; otherwise say why not."""
-    from caracole.youtube_fetch import youtube_audio
+    from caracole.youtube_fetch import left_elsewhere, youtube_audio
 
     song = song_named(conn, display, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
+    if left_elsewhere(conn, song):  # R3: no pass here would make its sheet again, so the audio would be for nothing
+        fail(MADE_THERE.format(song=song.display))
     if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, or a file you gave it
         audio = Path(song.audio_path)
         where = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
