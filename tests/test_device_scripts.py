@@ -165,15 +165,22 @@ for line in os.environ.get("FAKE_PS_EXTRA", "").splitlines():
 '''
 
 # python, for device-test.sh's start_computer (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT
-# ...`): its argv kept in computers/<port>.json with its pid, then a listener on 127.0.0.1:PORT until killed.
+# ...`): a parent that waits for a child listening on 127.0.0.1:PORT, as nix develop waits for caracole serve; its argv
+# and both pids kept in computers/<port>.json. With FAKE_COMPUTER_DEAF the child ignores SIGTERM.
 COMPUTER = r'''
-import json, os, socket, sys
+import json, os, signal, socket, sys
 from pathlib import Path
 here = Path(__file__).resolve().parent
 argv = sys.argv[1:]
 port = int(argv[argv.index("serve") + 2])
 (here / "computers").mkdir(exist_ok=True)
-(here / "computers" / f"{port}.json").write_text(json.dumps({"pid": os.getpid(), "argv": argv}))
+child = os.fork()
+if child:
+    (here / "computers" / f"{port}.json").write_text(json.dumps({"pid": os.getpid(), "child": child, "argv": argv}))
+    os.waitpid(child, 0)
+    sys.exit(0)
+if os.environ.get("FAKE_COMPUTER_DEAF"):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
 s = socket.create_server(("127.0.0.1", port))
 while True:
     c, _ = s.accept()
@@ -295,6 +302,29 @@ def stop_rig(tmp_path):
     made.close()
 
 
+def computers(rig: Rig) -> dict[str, list[int]]:
+    """Each computer the script started: its port, and the pids of the parent and its child."""
+    folder = rig.bin / "computers"
+    out = {}
+    for f in folder.glob("*.json") if folder.exists() else []:
+        try:
+            record = json.loads(f.read_text())
+            out[f.stem] = [record["pid"], record["child"]]
+        except (ValueError, KeyError):
+            pass
+    return out
+
+
+def left_running(started: dict[str, list[int]]) -> dict[str, list[int]]:
+    end = time.monotonic() + 5
+    while True:
+        left = {port: [p for p in pids if alive(p)] for port, pids in started.items()}
+        left = {port: pids for port, pids in left.items() if pids}
+        if not left or time.monotonic() > end:
+            return left
+        time.sleep(0.1)
+
+
 @pytest.fixture
 def computer_rig(tmp_path):
     """The rig with a stand-in `python` for the computers device-test.sh starts; each one killed at the end."""
@@ -303,12 +333,12 @@ def computer_rig(tmp_path):
     tool.write_text(f"#!{sys.executable}\n{COMPUTER}", encoding="utf-8")
     tool.chmod(0o755)
     yield made
-    folder = made.bin / "computers"
-    for record in folder.glob("*.json") if folder.exists() else []:
-        try:
-            os.kill(json.loads(record.read_text())["pid"], signal.SIGKILL)
-        except (OSError, ValueError, KeyError):
-            pass
+    for pids in computers(made).values():
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
     made.close()
 
 
@@ -539,6 +569,65 @@ def test_an_adb_that_hangs_in_the_stop_is_cut_off_and_the_emulator_killed_all_th
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released
 
 
+# device-test.sh: the computers and servers it starts
+
+
+def test_a_computer_it_started_for_a_class_is_stopped_as_it_ends(computer_rig, tmp_path):
+    rig = computer_rig
+    rig.server_up()
+    done = rig.run("device-test.sh", f"NoSitesTest={tmp_path / 'computer'}")
+    assert done.returncode == 0, done.stderr
+    started = computers(rig)
+    assert len(started) == 1, (started, done.stderr)
+    assert rig.emulators() == {}
+    assert left_running(started) == {}, f"device-test.sh ended and left its computer running: {done.stderr}"
+    assert (tmp_path / "computer").is_dir(), "a folder it was given is the caller's: never removed"
+
+
+def test_the_apps_five_computers_are_stopped_and_their_folder_removed_as_it_ends(computer_rig, tmp_path):
+    rig = computer_rig
+    rig.server_up()
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    done = rig.run("device-test.sh", "--app", TMPDIR=str(tmp))
+    assert done.returncode == 0, done.stderr
+    started = computers(rig)
+    assert len(started) == 5, (started, done.stderr)
+    assert left_running(started) == {}, done.stderr
+    assert list(tmp.glob("caracole-device-*")) == [], "the folder it made for the computers is gone"
+
+
+def test_an_interrupt_stops_the_computer_too(computer_rig, tmp_path):
+    rig = computer_rig
+    rig.server_up()
+    proc = subprocess.Popen(rig.command("device-test.sh", f"NoSitesTest={tmp_path / 'computer'}"),
+                            env=rig.env(FAKE_INSTRUMENT="hang"), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, start_new_session=True)
+    try:
+        until(lambda: (rig.bin / "instrumenting").exists(), timeout=60)
+        started = computers(rig)
+        os.killpg(proc.pid, signal.SIGINT)  # Ctrl-C: the script and its foreground command
+        _, err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    assert len(started) == 1, err
+    assert "stopped emulator-5554" in err
+    assert left_running(started) == {}, f"interrupted, device-test.sh left its computer running: {err}"
+
+
+def test_a_computer_deaf_to_term_is_killed(computer_rig, tmp_path):
+    rig = computer_rig
+    rig.server_up()
+    done = rig.run("device-test.sh", f"NoSitesTest={tmp_path / 'computer'}", FAKE_COMPUTER_DEAF="1")
+    assert done.returncode == 0, done.stderr
+    started = computers(rig)
+    assert len(started) == 1, done.stderr
+    assert left_running(started) == {}, done.stderr
+    assert "didn't stop on TERM: killed it" in done.stderr
+
+
 # device-test.sh: the chords lane's --data, --models, --ml and --tcpdump
 
 
@@ -655,7 +744,9 @@ def test_youtube_runs_its_classes_and_the_apps_and_stops_the_emulator(rig):
     clip = rig.android / "youtube" / "src" / "androidTest" / "assets" / "youtube" / "clip.m4a"
     clip.parent.mkdir(parents=True)
     clip.write_bytes(b"m4a")
-    done = rig.run("device-test.sh", "--youtube")
+    tmp = rig.tmp / "tmp"
+    tmp.mkdir()
+    done = rig.run("device-test.sh", "--youtube", TMPDIR=str(tmp))
     assert done.returncode == 0, done.stderr
     calls = rig.calls("adb")
     ns = "io.github.danielhp95.caracole"
@@ -673,6 +764,7 @@ def test_youtube_runs_its_classes_and_the_apps_and_stops_the_emulator(rig):
         assert f"PASS {name}" in done.stdout
     assert rig.emulators() == {}
     assert "stopped emulator-5554, which it started" in done.stderr
+    assert list(tmp.glob("caracole-ytbench-*")) == [], "the clip's folder it made is gone"
 
 
 # stop-all.sh

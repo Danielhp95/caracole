@@ -5050,7 +5050,9 @@ nix flake check
     `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
     It stops the adb server it started once adb lists no device at all and no other caller holds a pool emulator,
     never one running before it nor while a phone is attached (tests/test_device_scripts.py). No adb it runs inherits
-    the lock, and each adb call of a stop is bounded (`CARACOLE_ADB_TIMEOUT`, 10 s; no answer, then the kill). An
+    the lock, and each adb call of a stop is bounded (`CARACOLE_ADB_TIMEOUT`, 10 s; no answer, then the kill).
+    The servers it starts (a class's computer, the fake sites, the clip's server, the capture's listener) run each in a
+    session of its own, stopped whole as it ends (TERM, then KILL after 5 s), and the folders it made are removed. An
     emulator left by a run that was SIGKILLed, or by a script older than this, reads as someone else's to every later
     caller and stays up until stop-all.sh runs.
   - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
