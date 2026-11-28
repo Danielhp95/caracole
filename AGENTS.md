@@ -3076,8 +3076,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `CANT_WRITE`). A cancel is asked in the decode's, the mixdown's and the resample's loops and at each reading of a
     heat waited out, as before each chunk. `HeatRules` (Heat.kt, the design's §3.4 table over a
     `Heat.Reading`, `HeatGauge` behind it, `HeatTest` on the JVM): 4 threads, 2 at moderate, headroom ≥ 0.85 or
-    Battery Saver; severe waits before a stage (10 s polls, 5 minutes at most); critical stops at the next window batch
-    or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml` process, by its name
+    Battery Saver; severe waits before a stage (10 s polls, 5 minutes at most), the stage's step told again once it
+    is over; critical stops at the next window batch or chunk; under 15 % and not charging refused. `Caracole.phone` refuses to start in the `:ml` process, by its name
     (`MODELS_PROCESS`, the app's `MlProcessTest` holding it to the manifest and `MlProtocol`). `PipelineCheckpointsTest`
     (JVM, the graphs faked) holds the checkpoints; `PipelineTest` (`device-test.sh --ml`) hears each committed clip
     and models.jsonl's `hearing` files (44.1 kHz stereo MP3, 48 kHz stereo AAC) through the process against
