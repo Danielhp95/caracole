@@ -235,26 +235,18 @@ object Caracole {
     fun cacheDir(context: Context): File = File(context.applicationContext.filesDir, "state/cache")
 
     /**
-     * The app's yt-dlp for the phone's jobs: the debug build's `:youtube` (src/debug's DebugYouTube, reached by its
-     * name alone, so this source set names no `:youtube` class), its runner's folder `files/state/cache/youtube`; null
-     * in a release, which carries none (android/scripts/release-check.sh).
+     * The app's yt-dlp for the phone's jobs: `:youtube`'s ([PhoneYouTube], both builds), its runner's folder
+     * `files/state/cache/youtube`; null on a phone whose processor the APK carries no Python for (an x86_64 phone of the
+     * release, which carries arm64-v8a's alone).
      */
-    internal fun youtube(context: Context): YouTubeEngine? {
-        if (!BuildConfig.DEBUG) return null
-        return try {
-            Class.forName("$PACKAGE.DebugYouTube").getMethod("engine", Context::class.java, File::class.java)
-                .invoke(null, context.applicationContext, File(cacheDir(context), YOUTUBE)) as YouTubeEngine
-        } catch (_: ClassNotFoundException) {
-            null
-        }
-    }
+    internal fun youtube(context: Context): YouTubeEngine? =
+        PhoneYouTube.engine(context.applicationContext, File(cacheDir(context), YOUTUBE), Build.SUPPORTED_ABIS.toList())
 
     /** [real], its process [youtubeForTests]'s while a test sets one. */
     private fun withTestsProcess(real: YouTubeEngine): YouTubeEngine = object : YouTubeEngine by real {
         override fun process(): YtDlpProcess = youtubeForTests ?: real.process()
     }
 
-    private const val PACKAGE = "io.github.danielhp95.caracole"
     private const val YOUTUBE = "youtube"
 
     /**

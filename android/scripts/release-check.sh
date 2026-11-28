@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# What the release carries for chords on the phone and what it doesn't (the chords-on-the-phone design's §7, stage S),
-# and what the debug build carries for YouTube on the phone (:youtube, Chaquopy's Python and yt-dlp) and the release
-# doesn't, until the owner's gate (the phone-youtube design's stage Y5):
+# What the release carries for chords on the phone (the chords-on-the-phone design's §7, stage S) and for YouTube on
+# the phone (the phone-youtube design's §3.4 and §3.6, stage Y5.1), and what it doesn't:
 #
 #   android/scripts/release-check.sh
 #
@@ -10,45 +9,43 @@
 # :ml (its CARACOLE_ONNXRUNTIME: the runtime's one-off build a machine; a release is never made without it), each APK
 # read by the name its output-metadata.json gives (never a stale one beside it), then checks the release:
 #
-# - its runtime classpath names onnxruntime and project :ml (and project :core: the tree was read), and no project
-#   :youtube (Chaquopy's runtime is no dependency of it, its plugin packages it, so the APK's probes below hold it);
+# - its runtime classpath names onnxruntime, project :ml and project :youtube (and project :core: the tree was read;
+#   Chaquopy's runtime is no dependency of it, its plugin packages it, so the APK's probes below hold it);
 # - its APK holds ONNX Runtime's and libsoxr's libraries for arm64-v8a and for no other ABI (SQLite's for both), classes
 #   under ai/onnxruntime/ and of :ml (dexdump's descriptors), caracole/autochords/ (BTC's graph and the pins), one model
 #   file, BTC's graph (no weights' file: the phone fetches them), MlService in its ":ml" process, and none of the
 #   Chords bench (no "ChordsBench", "BenchService" or Settings' row's words, "Chords bench", in its dex; no
 #   assets/autochords/, the bench's clips; no ChordsBenchActivity, BenchService or BenchWorkerService, ":bench" or
 #   ":benchrun" process or FOREGROUND_SERVICE_SPECIAL_USE in its manifest, aapt2's dump), no TelemetryInitializer;
-# - and of Python: no lib/*/libpython*, no libchaquopy_java.so, none of the libraries Chaquopy's Python links
-#   (lib<name>_python.so, lib<name>_chaquopy.so: OpenSSL's, SQLite's), no class under com/chaquo/ (Chaquopy's) in its
-#   dex and no entry under assets/chaquopy/ (the standard library, yt-dlp, the glue);
-# - and of :youtube's own: no class under io/github/danielhp95/caracole/youtube/ in its dex, and its manifest no
-#   YtDlpService, GateService or ":youtube" process;
-# - and of the YouTube bench: no "YouTubeBench" or Settings' row's words ("YouTube bench") in its dex, and its manifest
-#   no YouTubeBenchActivity, YouTubeBenchLedger or ":ytbench" process;
-# - and of QuickJS-NG: no lib/*/libqjs.so; and its native libraries packaged as before the debug build's
-#   useLegacyPackaging (app/build.gradle.kts): every lib/*/*.so entry of the APK stored uncompressed and 16 KB aligned
-#   (zipalign -c -P 16's "(OK)", counted against the APK's own lib/*/*.so entries, so one zipalign leaves unsaid
-#   fails too), none compressed, and no android:extractNativeLibs="true" in its manifest;
+# - and Python for arm64-v8a alone: lib/arm64-v8a/libpython*, libchaquopy_java.so and the libraries Chaquopy's Python
+#   links (lib<name>_python.so, lib<name>_chaquopy.so: OpenSSL's, SQLite's), Chaquopy's classes (com/chaquo/) and its
+#   assets (assets/chaquopy/: the standard library, yt-dlp, the glue), and none of them for x86_64 (no lib/x86_64/ of
+#   theirs, no stdlib-x86_64.imy, requirements-x86_64.imy or bootstrap-native/x86_64/);
+# - and :youtube's own: its classes (io/github/danielhp95/caracole/youtube/), YtDlpService, GateService and the
+#   ":youtube" process in its manifest, lib/arm64-v8a/libqjs.so and no x86_64 one;
+# - and none of the YouTube bench: no "YouTubeBench" or Settings' row's words ("YouTube bench") in its dex, and its
+#   manifest no YouTubeBenchActivity, YouTubeBenchLedger or ":ytbench" process;
+# - its native libraries compressed and extracted at install (useLegacyPackaging, app/build.gradle.kts: the one place
+#   Android runs qjs from): android:extractNativeLibs="true" in its manifest, every lib/*/*.so entry compressed;
 # - the licences of what the chord models ship, under assets/chords/licenses/, each its source's bytes: ONNX Runtime's
 #   LICENSE and ThirdPartyNotices.txt (from its AAR), libsoxr's LICENCE and COPYING.LGPL and PFFFT's (pffft.c's own,
-#   verbatim), BTC's and beat_this's, and the README saying where the source is;
+#   verbatim), BTC's and beat_this's, and the README saying where the source is; and those of what its yt-dlp ships,
+#   assets/licenses/youtube/'s thirteen (NoticesTest, through apkScan below, holds each to its source);
 # - its size: 100 MiB at most;
 #
 # and the controls, so that no probe passes for nothing:
 #
-# - the debug classpath names project :youtube;
-# - the debug APK holds the bench, x86_64's libraries of the runtime, the YouTube bench, each of Python's native-library
-#   probes, Chaquopy's classes and assets/chaquopy/, :youtube's classes and services, libqjs.so, and its native
-#   libraries compressed under android:extractNativeLibs="true";
+# - the debug APK holds the bench, x86_64's libraries of the runtime, the YouTube bench, and Python's and qjs's for
+#   x86_64 too;
 # - the model files' names, those `nix build .#chord-models` makes ($CARACOLE_CHORD_MODELS, else the ./android#ml
 #   shell's), are each one the model-file probe matches, and the weights' probe all but BTC's graph;
 # - the runtime's AAR (ONNX Runtime built from its source, the ml shell's $CARACOLE_ONNXRUNTIME) declares no provider;
 # - and ApkScanTest (`gradle :app:apkScan`, in the ml shell) finds none of what made Maven's AAR phone home
 #   (mobile.events.data.microsoft.com, ai.onnxruntime.TelemetryInitializer, its ai/onnxruntime/telemetry/ client) in
-#   either APK, nor in the runtime's AAR, its own control finding each where it would be;
-# - and native-check.sh on both APKs: the runtime's, libsoxr's and libqjs.so (both ABIs in the debug APK, compressed and
-#   extracted at install; the chord models' arm64-v8a's alone in the release's, stored aligned), stripped and naming no
-#   path of the build.
+#   either APK, nor in the runtime's AAR, its own control finding each where it would be; NoticesTest, in the same
+#   run, the yt-dlp's notices in both APKs, byte for byte;
+# - and native-check.sh on both APKs: the runtime's, libsoxr's and libqjs.so (both ABIs in the debug APK, arm64-v8a's
+#   alone in the release's), compressed and extracted at install, stripped and naming no path of the build.
 #
 # It prints each check and exits non-zero on any failure.
 set -euo pipefail
@@ -88,7 +85,9 @@ weights_file='(^|/)(btc_model_large_voca\.pt|beat_this[^/]*\.onnx)$'
 # manifest's; ytclasses, classes of :youtube, io/github/danielhp95/caracole/youtube/, in its dex; ytmanifest, the
 # manifest's YtDlpService, GateService or ":youtube" process; ytbenchdex, "YouTubeBench" or Settings' "YouTube bench"
 # row's words in its dex; ytbenchmanifest, the manifest's YouTubeBenchActivity, YouTubeBenchLedger or ":ytbench"
-# process; mlmanifest, the chord models' service, MlService, and its ":ml" process).
+# process; mlmanifest, the chord models' service, MlService, and its ":ml" process), then "py86 pyassets86 notices"
+# (py86, the yt-dlp's libraries for x86_64: libpython*, libchaquopy_java.so, lib*_python.so, lib*_chaquopy.so,
+# libqjs.so; pyassets86, Chaquopy's x86_64 assets; notices, entries under assets/licenses/youtube/).
 probes() {
     local apk="$1" dexes=0 ortclasses=0 mlclasses=0 benchdex=0 rowwords=0 chaquoclasses=0 ytclasses=0 ytbenchdex=0 dex
     local dump
@@ -104,7 +103,9 @@ probes() {
         # Settings' row's words as a string of their own in the dex (its length byte, the words, its end): never
         # "the Chords bench's" inside :ml's busy message, which the release says too.
         rowwords=$((rowwords + $({ grep -a -o -P '\x0cChords bench\x00' "$dex" || true; } | wc -l)))
-        ytbenchdex=$((ytbenchdex + $({ grep -a -o -E 'YouTubeBench|YouTube bench' "$dex" || true; } | wc -l)))
+        # The bench's class names, and Settings' row's words as a string of their own (never "the YouTube bench's" in
+        # the gate's refusal, which the release says too).
+        ytbenchdex=$((ytbenchdex + $({ grep -a -o -P 'YouTubeBench|\x0dYouTube bench\x00' "$dex" || true; } | wc -l)))
         chaquoclasses=$((chaquoclasses + $(grep -c "Class descriptor *: 'Lcom/chaquo/" <<<"$dump" || true)))
         ytclasses=$((ytclasses + $(grep -c "Class descriptor *: 'Lio/github/danielhp95/caracole/youtube/" <<<"$dump" \
             || true)))
@@ -135,7 +136,12 @@ probes() {
         "$(grep -c -E 'YtDlpService|GateService|:youtube"' "$probe/manifest" || true)" \
         "$ytbenchdex" \
         "$(grep -c -E 'YouTubeBench(Activity|Ledger)|:ytbench"' "$probe/manifest" || true)" \
-        "$(grep -c -E 'MlService|:ml"' "$probe/manifest" || true)"
+        "$(grep -c -E 'MlService|:ml"' "$probe/manifest" || true)" \
+        "$(grep -c -E '^lib/x86_64/(libpython[^/]*|libchaquopy_java|lib[a-z0-9]+_(python|chaquopy)|libqjs)\.so$' \
+            "$probe/entries" || true)" \
+        "$(grep -c -E '^assets/chaquopy/((stdlib|requirements)-x86_64\.imy|bootstrap-native/x86_64/)' "$probe/entries" \
+            || true)" \
+        "$(grep -c '^assets/licenses/youtube/.' "$probe/entries" || true)"
 }
 
 # One APK's native libraries: "qjs stored compressed extracted total" (libqjs.so entries; lib/*/*.so stored
@@ -162,14 +168,12 @@ check "release classpath read (it names project :core)" \
     "$(yes_if '[ "$(grep -c "project :core" <<<"$classpath" || true)" -gt 0 ]')"
 check "release classpath names onnxruntime" "$(yes_if '[ "$(grep -ci onnxruntime <<<"$classpath" || true)" -gt 0 ]')"
 check "release classpath names project :ml" "$(yes_if '[ "$(grep -c "project :ml" <<<"$classpath" || true)" -gt 0 ]')"
-check "release classpath names no project :youtube" \
-    "$(yes_if '[ "$(grep -c "project :youtube" <<<"$classpath" || true)" = 0 ]')"
-check "the control: the debug classpath names project :youtube" \
-    "$(yes_if '[ "$(grep -c "project :youtube" <<<"$debug_classpath" || true)" -gt 0 ]')"
+check "release classpath names project :youtube" \
+    "$(yes_if '[ "$(grep -c "project :youtube" <<<"$classpath" || true)" -gt 0 ]')"
 
 read -r arm64 x86 soxr86 sqlite86 ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider \
     benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest ytbenchdex \
-    ytbenchmanifest mlmanifest < <(probes "$release")
+    ytbenchmanifest mlmanifest py86 pyassets86 notices < <(probes "$release")
 size="$(stat -c %s "$release")"
 echo "release APK $release, $size bytes: $arm64 libonnxruntime* for arm64-v8a, $x86 and $soxr86 libsoxr for x86_64" \
     "($sqlite86 SQLite), $ortclasses classes under ai/onnxruntime/, $mlclasses of :ml, $benchdex bench names and" \
@@ -198,38 +202,36 @@ check "release APK's dex names no YouTubeBench and holds no \"YouTube bench\" (S
 check "release APK's manifest has no YouTubeBenchActivity, YouTubeBenchLedger or :ytbench" \
     "$(yes_if '[ "$ytbenchmanifest" = 0 ]')"
 echo "release APK: $pylibs libpython*, $chaquojni libchaquopy_java.so, $chaquolinked lib*_python.so or" \
-    "lib*_chaquopy.so, $chaquoclasses classes under com/chaquo/, $chaquoassets entries under" \
-    "assets/chaquopy/"
-check "release APK holds no libpython*" "$(yes_if '[ "$pylibs" = 0 ]')"
-check "release APK holds no libchaquopy_java.so" "$(yes_if '[ "$chaquojni" = 0 ]')"
-check "release APK holds no lib*_python.so or lib*_chaquopy.so" "$(yes_if '[ "$chaquolinked" = 0 ]')"
-check "release APK holds no class under com/chaquo/" "$(yes_if '[ "$chaquoclasses" = 0 ]')"
-check "release APK holds nothing under assets/chaquopy/" "$(yes_if '[ "$chaquoassets" = 0 ]')"
+    "lib*_chaquopy.so, $chaquoclasses classes under com/chaquo/, $chaquoassets entries under assets/chaquopy/;" \
+    "for x86_64: $py86 of the yt-dlp's libraries, $pyassets86 of Chaquopy's assets; $notices notices"
+check "release APK holds libpython* for arm64-v8a" "$(yes_if '[ "$pylibs" -gt 0 ]')"
+check "release APK holds libchaquopy_java.so" "$(yes_if '[ "$chaquojni" = 1 ]')"
+check "release APK holds lib*_python.so and lib*_chaquopy.so" "$(yes_if '[ "$chaquolinked" -gt 0 ]')"
+check "release APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses" -gt 0 ]')"
+check "release APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
+check "release APK holds none of the yt-dlp's libraries for x86_64 (Python's, libqjs.so)" "$(yes_if '[ "$py86" = 0 ]')"
+check "release APK holds none of Chaquopy's x86_64 assets" "$(yes_if '[ "$pyassets86" = 0 ]')"
+check "release APK holds the yt-dlp's thirteen notices under assets/licenses/youtube/" "$(yes_if '[ "$notices" = 13 ]')"
 echo "release APK: $ytclasses classes of :youtube in its dex, $ytmanifest YtDlpService, GateService or :youtube" \
     "entries in its manifest"
-check "release APK holds no class of :youtube (io/github/danielhp95/caracole/youtube/)" \
-    "$(yes_if '[ "$ytclasses" = 0 ]')"
-check "release APK's manifest names no YtDlpService, GateService or :youtube process" \
-    "$(yes_if '[ "$ytmanifest" = 0 ]')"
+check "release APK holds classes of :youtube (io/github/danielhp95/caracole/youtube/)" \
+    "$(yes_if '[ "$ytclasses" -gt 0 ]')"
+check "release APK's manifest names YtDlpService, GateService and :youtube" "$(yes_if '[ "$ytmanifest" -ge 3 ]')"
 read -r qjs stored compressed extracted total < <(natives "$release")
 echo "release APK: $qjs libqjs.so, native libraries $stored stored and aligned, $compressed compressed, of $total" \
     "lib/*/*.so entries, extractNativeLibs=true $extracted"
-check "release APK holds no libqjs.so" "$(yes_if '[ "$qjs" = 0 ]')"
+check "release APK holds libqjs.so for arm64-v8a alone" \
+    "$(yes_if '[ "$qjs" = 1 ] && grep -qx lib/arm64-v8a/libqjs.so "$probe/entries"')"
 check "release APK holds native libraries (lib/*/*.so)" "$(yes_if '[ "$total" -gt 0 ]')"
-if [ "$total" -gt 0 ] && [ "$stored" != "$total" ]; then
-    echo "      $((total - stored)) of the release's $total lib/*/*.so entries aren't stored uncompressed and 16 KB" \
-        "aligned (zipalign's (OK)): compressed, misaligned, or not read by zipalign"
-fi
-check "release APK's native libraries are every one stored uncompressed and 16 KB aligned" \
-    "$(yes_if '[ "$total" -gt 0 ] && [ "$stored" = "$total" ] && [ "$compressed" = 0 ]')"
-check "release APK's manifest says no extractNativeLibs=true" "$(yes_if '[ "$extracted" = 0 ]')"
+check "release APK's native libraries are compressed, extracted at install" \
+    "$(yes_if '[ "$total" -gt 0 ] && [ "$compressed" = "$total" ] && [ "$extracted" = 1 ]')"
 
 check "release APK's manifest declares no TelemetryInitializer" "$(yes_if '[ "$provider" = 0 ]')"
 check "release APK is 100 MiB at most" "$(yes_if '[ "$size" -le $((100 * 1024 * 1024)) ]')"
 
 read -r arm64 x86 soxr86 sqlite86 ortclasses mlclasses benchdex rowwords autochords assets modelfiles weights provider \
     benchmanifest providers pylibs chaquojni chaquolinked chaquoclasses chaquoassets ytclasses ytmanifest ytbenchdex \
-    ytbenchmanifest mlmanifest < <(probes "$debug")
+    ytbenchmanifest mlmanifest py86 pyassets86 notices < <(probes "$debug")
 echo "debug APK (the control) $debug, $(stat -c %s "$debug") bytes: $arm64 and $x86 libonnxruntime* (arm64-v8a," \
     "x86_64), $soxr86 libsoxr for x86_64, $benchdex bench names and $rowwords of Settings' row's words in its dex," \
     "$assets under assets/autochords/, $modelfiles model files ($weights the weights'), $provider" \
@@ -258,6 +260,8 @@ check "the control: the debug APK holds lib*_python.so and lib*_chaquopy.so" \
     "$(yes_if '[ "$chaquolinked" -gt 0 ]')"
 check "the control: the debug APK holds classes under com/chaquo/" "$(yes_if '[ "$chaquoclasses" -gt 0 ]')"
 check "the control: the debug APK holds assets/chaquopy/" "$(yes_if '[ "$chaquoassets" -gt 0 ]')"
+check "the control: the debug APK holds the yt-dlp's libraries and Chaquopy's assets for x86_64" \
+    "$(yes_if '[ "$py86" -gt 0 ] && [ "$pyassets86" -gt 0 ]')"
 echo "debug APK (the control): $ytclasses classes of :youtube, $ytmanifest YtDlpService, GateService or :youtube" \
     "entries in its manifest"
 check "the control: the debug APK holds classes of :youtube" "$(yes_if '[ "$ytclasses" -gt 0 ]')"
@@ -325,17 +329,19 @@ check "the control: the licences' probe finds no licence the APK lacks" \
 
 echo "ApkScanTest (gradle :app:apkScan):"
 if nix develop ./android#ml -c gradle -p android :app:apkScan --console=plain -q; then scanned=1; else scanned=0; fi
-check "ApkScanTest: no telemetry host, provider or client in the APKs or the runtime's AAR" "$scanned"
+check "ApkScanTest and NoticesTest: no telemetry in the APKs or the runtime's AAR; the yt-dlp's notices, verbatim" \
+    "$scanned"
 
-# Our native libraries (native-check.sh): the debug APK's runtime, libsoxr and libqjs.so, both ABIs, extracted at
-# install; the release's runtime and libsoxr, arm64-v8a's alone, stored aligned; each stripped and naming no path of the
-# build.
+# Our native libraries (native-check.sh): the runtime, libsoxr and libqjs.so, both ABIs' in the debug APK, arm64-v8a's
+# alone in the release's, each extracted at install, stripped and naming no path of the build.
 echo "native-check.sh, the debug APK:"
 if nix develop ./android -c "$here/native-check.sh" --expect extracted "$debug"; then native=1; else native=0; fi
 check "the debug APK's runtime, libsoxr and libqjs.so, both ABIs: extracted, stripped, no build path" \
     "$native"
 echo "native-check.sh, the release APK:"
-if nix develop ./android -c "$here/native-check.sh" --release "$release"; then native=1; else native=0; fi
-check "the release APK's runtime and libsoxr, arm64-v8a's alone: aligned, stripped, no build path" "$native"
+if nix develop ./android -c "$here/native-check.sh" --expect extracted --release "$release"; then native=1
+else native=0; fi
+check "the release APK's runtime, libsoxr and libqjs.so, arm64-v8a's alone: extracted, stripped, no build path" \
+    "$native"
 
 exit "$failed"

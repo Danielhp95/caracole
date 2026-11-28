@@ -5,16 +5,16 @@
 #
 #   android/scripts/native-check.sh [--expect extracted|stored] [APK]
 #                                  # default: android/app/build/outputs/apk/debug/app-debug.apk
-#   android/scripts/native-check.sh --release APK      # the release's: arm64-v8a's alone, and no other ABI's
+#   android/scripts/native-check.sh [--expect …] --release APK   # the release's: arm64-v8a's alone, no other ABI's
 #
-# release-check.sh runs it on both APKs it builds. Each library (in the debug APK the four for arm64-v8a and x86_64, in
-# the release the chord models' three for arm64-v8a, and its libqjs.so where it holds one, all required) must be:
+# release-check.sh runs it on both APKs it builds. Each library (the four, for arm64-v8a and x86_64 in the debug APK,
+# for arm64-v8a alone in the release, all required) must be:
 #
 # - either stored uncompressed and 16 KB aligned (zipalign -c -P 16), or compressed in an APK whose manifest says
 #   android:extractNativeLibs="true" (the debug build's useLegacyPackaging, app/build.gradle.kts: the package manager
 #   extracts it at install, and the zip's alignment is nothing to it); with --expect, the one of the two named
-#   (extracted: compressed under extractNativeLibs="true", the debug build's; stored: uncompressed and aligned, the
-#   release's), the other a failure; and its every LOAD segment aligned 0x4000;
+#   (extracted: compressed under extractNativeLibs="true", every build's since Y5.1; stored: uncompressed and
+#   aligned, the releases' before it), the other a failure; and its every LOAD segment aligned 0x4000;
 # - stripped: no .debug_* or .symtab section, no .comment, no build-id note;
 # - no path of the machine that built it: no "/home/", "/nix/store/", ".cxx/" or "/tmp/" among its strings;
 # - libqjs.so a position-independent executable (ELF type DYN with an interpreter, /system/bin/linker64), which
@@ -27,11 +27,14 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 expect=""
 release=0
-case "${1-}" in
-  --expect) expect="${2-}"; shift 2 || true ;;
-  --expect=*) expect="${1#--expect=}"; shift ;;
-  --release) release=1; shift ;;
-esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --expect) expect="${2-}"; shift 2 || shift ;;
+    --expect=*) expect="${1#--expect=}"; shift ;;
+    --release) release=1; shift ;;
+    *) break ;;
+  esac
+done
 case "$expect" in
   ""|extracted|stored) ;;
   *) echo "native-check.sh: --expect takes extracted or stored, not '$expect'" >&2; exit 2 ;;
@@ -53,17 +56,15 @@ extracted=0
 grep -qF 'android:extractNativeLibs(0x010104ea)=true' <<< "$manifest" && extracted=1
 ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/(libcaracole_[^/]*|libonnxruntime|libonnxruntime4j_jni|libqjs)\.so$' \
   || true)
-libs="libcaracole_soxr.so libonnxruntime.so libonnxruntime4j_jni.so"
+libs="libcaracole_soxr.so libonnxruntime.so libonnxruntime4j_jni.so libqjs.so"
 if [ "$release" = 1 ]; then
   abis="arm64-v8a"
-  # The release's chord models' libraries are arm64-v8a's alone (app/build.gradle.kts's releaseMlAbis); its libqjs,
-  # where it carries one, too.
+  # The release's chord models' libraries and its libqjs.so are arm64-v8a's alone (app/build.gradle.kts's
+  # releaseMlAbis and releaseYoutubeAbis).
   others=$(grep -v '^lib/arm64-v8a/' <<< "$ours" || true)
   [ -z "$others" ] || fail "the release carries another ABI's: $(tr '\n' ' ' <<< "$others")"
-  grep -qxF lib/arm64-v8a/libqjs.so <<< "$ours" && libs="$libs libqjs.so"
 else
   abis="arm64-v8a x86_64"
-  libs="$libs libqjs.so"
 fi
 entries=$(for abi in $abis; do for lib in $libs; do echo "lib/$abi/$lib"; done; done)
 

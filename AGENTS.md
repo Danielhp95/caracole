@@ -3227,8 +3227,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `OPEN_OBSERVING`; HostGate's OBSERVE reaches no address that isn't public), `-v` under the network only by the
     request's `verbose` leave.
   - The engine (Y1.5): `PhoneDeps.youtube: YouTubeEngine?` (core.youtube: `ready()`, `process()`, `gate()`, `qjs`,
-    `cacheDir`), the debug build's `YtDlpEngine` (src/debug's `DebugYouTube`, which `Caracole.youtube` reaches by name,
-    so the main source set names no `:youtube` class), null in a release; a device test's process in its place while
+    `cacheDir`), `:youtube`'s `YtDlpEngine` in both builds (`PhoneYouTube`, src/main), null on a phone whose primary
+    ABI the APK carries no Python for (`BuildConfig.YOUTUBE_ABIS`: the release's arm64-v8a alone); a device test's process in its place while
     `Caracole.youtubeForTests` is set (the engine's gate, readiness and folder kept: YouTubeEndToEndTest's yt-dlp of
     the committed clip, `device-test.sh --models --sites chords YouTubeEndToEndTest`: Ready, "chords over the lyrics",
     requests LRCLIB's and its own, the audio gone after). Settings' YouTube audio row (server's `YouTubeRow`, the

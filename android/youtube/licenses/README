@@ -1,0 +1,17 @@
+What the app's yt-dlp ships (android/youtube/), on arm64-v8a phones, and the licence each comes under:
+
+- CPython 3.13.16 (PSF-2.0: cpython-LICENSE, and cpython-license.rst, Doc/license.rst, with the licences of the
+  software it incorporates), built for Android by Chaquopy 17.2.0 (MIT: chaquopy-LICENSE.txt), linked with
+  OpenSSL 3.5.9 (Apache-2.0: openssl-LICENSE.txt), libffi 3.4.4 (libffi-LICENSE), bzip2 1.0.8 (bzip2-LICENSE),
+  xz 5.4.6 (liblzma: xz-COPYING) and SQLite 3.53.4 (public domain, no licence text); zlib is Android's own;
+- the CA bundle, certifi 2026.10.23's (MPL-2.0: certifi-LICENSE);
+- yt-dlp (Unlicense: yt-dlp-LICENSE) and yt-dlp-ejs (Unlicense: yt-dlp-ejs-LICENSE), at pins.json's versions,
+  with yt-dlp-ejs's bundled meriyah (ISC) and astring (MIT): yt-dlp-ejs-BUNDLED, the notice its lib.min.js begins
+  with, verbatim;
+- QuickJS-NG, pins.json's tag (MIT: quickjs-ng-LICENSE; its dtoa, libregexp and libunicode are Fabrice Bellard's,
+  under the same licence), compiled into lib/arm64-v8a/libqjs.so.
+
+Chaquopy's bootstrap carries setuptools 68.2.2's (MIT) and pyelftools 0.26's (public domain) licences beside their
+code. The texts here are each project's own at that version; yt-dlp's, yt-dlp-ejs's and QuickJS-NG's are copied at
+build time from the pinned wheels and source (android/youtube/pins.json). The complete source of caracole and of the
+build is at caracole's public repository, github.com/Danielhp95/caracole (android/youtube/).

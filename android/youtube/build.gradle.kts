@@ -1,11 +1,12 @@
 // youtube: yt-dlp under Chaquopy's Python (the phone-youtube design's §3.1 and §3.5), an Android library linked into
-// the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries Python before the owner's
-// gate (stage Y5). Every piece is youtube/pins.json's: Chaquopy's plugin (settings.gradle.kts) and its Python, and the
-// two pure wheels, yt-dlp and yt-dlp-ejs, which android/flake.nix fetches by URL and SHA-256 into
-// CARACOLE_YTDLP_WHEELS and pip installs from there alone, `--no-index --no-deps`. Its device tests (YtDlpVersionTest,
-// QjsTest, YtDlpServiceTest, KillTest) are run by `android/scripts/device-test.sh --youtube`; PinsTest, GlueTest and
-// GlueRefusalTest, on the JVM, are in `gradle test`.
+// both builds of the app (stage Y5.1; the release's for arm64-v8a alone, app/build.gradle.kts), with its notices. Every
+// piece is youtube/pins.json's: Chaquopy's plugin (settings.gradle.kts) and its Python, and the two pure wheels, yt-dlp
+// and yt-dlp-ejs, which android/flake.nix fetches by URL and SHA-256 into CARACOLE_YTDLP_WHEELS and pip installs from
+// there alone, `--no-index --no-deps`. Its device tests (YtDlpVersionTest, QjsTest, YtDlpServiceTest, KillTest) are run
+// by `android/scripts/device-test.sh --youtube`; PinsTest, GlueTest and GlueRefusalTest, on the JVM, are in `gradle
+// test`.
 import groovy.json.JsonSlurper
+import java.util.zip.ZipFile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -119,6 +120,56 @@ androidComponents.onVariants { variant ->
         it.packaging.jniLibs.useLegacyPackaging.set(true)
     }
 }
+
+/**
+ * The notices of what this module ships (the phone-youtube design's §3.6), as the APK's assets `licenses/youtube/` (as
+ * the chord models' are `chords/licenses/`, ml/build.gradle.kts): licenses/'s own texts (CPython's, Chaquopy's,
+ * OpenSSL's, libffi's, bzip2's, xz's, certifi's and the README, each that project's own at the version Chaquopy's
+ * Python carries); the pinned wheels' LICENSEs, yt-dlp's and yt-dlp-ejs's; the notice yt-dlp-ejs's lib.min.js begins
+ * with (its bundled meriyah's and astring's), verbatim; QuickJS-NG's LICENSE from its pinned source. The app's
+ * NoticesTest holds each to its source, and the APKs to the folder.
+ */
+abstract class CopyLicences : DefaultTask() {
+    @get:InputDirectory abstract val committed: DirectoryProperty
+    @get:InputFile abstract val ytdlp: RegularFileProperty
+    @get:InputFile abstract val ejs: RegularFileProperty
+    @get:InputFile abstract val quickjs: RegularFileProperty
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val dir = out.get().asFile.apply { deleteRecursively() }.resolve("licenses/youtube").apply { mkdirs() }
+        committed.get().asFile.listFiles().orEmpty().filter { it.isFile }.forEach { it.copyTo(dir.resolve(it.name)) }
+        fun entry(wheel: File, matches: (String) -> Boolean): ByteArray = ZipFile(wheel).use { zip ->
+            val found = zip.entries().toList().filter { matches(it.name) }
+            check(found.size == 1) { "$wheel: one entry expected, found ${found.map { it.name }}" }
+            zip.getInputStream(found.single()).readBytes()
+        }
+        val licence: (String) -> Boolean = { it.endsWith(".dist-info/licenses/LICENSE") }
+        dir.resolve("yt-dlp-LICENSE").writeBytes(entry(ytdlp.get().asFile, licence))
+        dir.resolve("yt-dlp-ejs-LICENSE").writeBytes(entry(ejs.get().asFile, licence))
+        val js = String(entry(ejs.get().asFile) { it.endsWith("/solver/lib.min.js") }, Charsets.UTF_8)
+        val start = js.indexOf("/*!")
+        val end = js.indexOf("*/", start)
+        check(start >= 0 && end > start) { "yt-dlp-ejs's lib.min.js begins with no /*! notice */" }
+        dir.resolve("yt-dlp-ejs-BUNDLED").writeText(js.substring(start, end + 2) + "\n")
+        quickjs.get().asFile.copyTo(dir.resolve("quickjs-ng-LICENSE"))
+    }
+}
+val copyLicences by tasks.registering(CopyLicences::class) {
+    dependsOn(checkEngine)
+    committed.set(layout.projectDirectory.dir("licenses"))
+    ytdlp.set(wheel("ytdlp"))
+    ejs.set(wheel("ejs"))
+    quickjs.set(File(quickjsSrc, "LICENSE"))
+    out.set(layout.buildDirectory.dir("generated/licenceAssets"))
+}
+// A folder, and the tasks that read this module's assets made to wait for it (ml/build.gradle.kts's pattern: srcDir of
+// a task carries no dependency on AGP's legacy source sets).
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/licenceAssets"))
+tasks.matching {
+    it.name != "copyLicences" && (it.name.endsWith("Assets") || it.name.contains("Lint") || it.name.startsWith("lint"))
+}.configureEach { dependsOn(copyLicences) }
 
 chaquopy {
     defaultConfig {

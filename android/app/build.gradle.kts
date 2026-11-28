@@ -32,7 +32,13 @@ val chordsOnPhone = findProject(":ml") != null
  * processor" on the others (BuildConfig.ML_ABIS). */
 val releaseMlAbis = listOf("arm64-v8a")
 
-/** The app's ABIs (SQLite's library for both, and a debug build's chord models' too). */
+/** The release's ABIs for the app's yt-dlp (Chaquopy's Python, its libraries and standard library, and :youtube's
+ * libqjs.so): arm64-v8a alone, as the chord models', which a sheet from a YouTube video needs (the phone-youtube
+ * design's §3.4); a debug build keeps both. PhoneYouTube says "this phone's caracole has no yt-dlp" on the others
+ * (BuildConfig.YOUTUBE_ABIS). */
+val releaseYoutubeAbis = listOf("arm64-v8a")
+
+/** The app's ABIs (SQLite's library for both, and a debug build's chord models' and yt-dlp's too). */
 val appAbis = listOf("arm64-v8a", "x86_64")
 
 /** The largest release APK the self-hosted F-Droid repository takes (its Pages site: no file over 100 MB). */
@@ -63,6 +69,8 @@ android {
         buildConfigField("int", "SERVER_PORT", "8738")
         // The yt-dlp :youtube packages (youtube/pins.json's), which Settings' YouTube audio row names (YouTubeRow).
         buildConfigField("String", "YTDLP_VERSION", "\"$ytdlpVersion\"")
+        // The ABIs whose Python and qjs the APK carries ([releaseYoutubeAbis]; a debug build's below).
+        buildConfigField("String", "YOUTUBE_ABIS", "\"${releaseYoutubeAbis.joinToString(",")}\"")
         // Settings' Chords bench row: a debug build with :ml alone (below).
         buildConfigField("boolean", "CHORDS_BENCH", "false")
         // The ABIs whose chord models' libraries the APK carries ([releaseMlAbis]; a debug build's below).
@@ -93,6 +101,7 @@ android {
             buildConfigField("int", "SERVER_PORT", "8739")
             buildConfigField("boolean", "CHORDS_BENCH", chordsOnPhone.toString())
             buildConfigField("String", "ML_ABIS", "\"${appAbis.joinToString(",")}\"")
+            buildConfigField("String", "YOUTUBE_ABIS", "\"${appAbis.joinToString(",")}\"")
         }
         release {
             signingConfig = releaseSigning
@@ -130,9 +139,9 @@ android {
     // the instrumentation's AssetManager.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
     // The chord models, where :ml is (settings.gradle.kts: the ml shell's source-built ONNX Runtime): src/ml's
-    // PhoneChords and PhoneExaminer in both builds; the debug build's Chords bench and its manifest (src/debugMl, its
-    // manifest merged below), and src/testDebugMl's and src/androidTestMl's tests. Elsewhere src/noMl's (none:
-    // auto-chords isn't on the phone) and no bench, so the other shells build and test the app with no ONNX Runtime ([chordsOnPhone],
+    // PhoneChords and PhoneExaminer in both builds; the debug build's Chords bench (src/debugMl, its manifest merged
+    // below), and src/testDebugMl's and src/androidTestMl's tests. Elsewhere src/noMl's (none: auto-chords isn't on the
+    // phone) and no bench, so the other shells build and test the app with no ONNX Runtime ([chordsOnPhone],
     // BuildConfig.CHORDS_BENCH); a release is never made so (below).
     if (chordsOnPhone) {
         sourceSets.getByName("main").java.srcDir("src/ml/kotlin")
@@ -148,17 +157,16 @@ android {
     sourceSets.getByName("debug").assets.srcDir(layout.buildDirectory.dir("generated/benchAssets"))
 }
 
-// The debug build's native libraries extracted at install into the app's native library folder (android:
+// Every build's native libraries extracted at install into the app's native library folder (android:
 // extractNativeLibs), the one place Android runs a program of the app's own: :youtube's libqjs.so, QuickJS-NG's qjs,
 // which yt-dlp runs for YouTube's player challenges (the phone-youtube design's §3.4). It applies to every library of
 // the APK, not qjs alone: ONNX Runtime's, SQLite's, Python's and libsoxr are then compressed in the APK and installed
-// a second time, uncompressed, in that folder: the compressed copies the APK keeps are what it costs installed, 21.0 MB
-// of arm64-v8a's 51.2 MB of libraries (24.7 of x86_64's 60.0), the design's "15–25 MB". This two-ABI debug APK shrinks
-// from 140.0 to 74.8 MB, the other ABI's libraries compressed too, so it installs smaller (126.0 MB on arm64, 134.8 on
-// the x86_64 emulator, from 140.0), qjs's 1.2 MB included. The release keeps them stored, page-aligned and mapped from
-// the APK (release-check.sh) until stage Y5.1 moves this to it, with its size measured again against E33's.
-androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) {
+// a second time, uncompressed, in that folder, which costs the compressed copies the APK keeps: the release's growth
+// over E33's, measured with them so, is android/README.md's ("A sheet from a YouTube video").
+androidComponents.onVariants(androidComponents.selector().all()) {
     it.packaging.jniLibs.useLegacyPackaging.set(true)
+}
+androidComponents.onVariants(androidComponents.selector().withBuildType("debug")) {
     // The Chords bench's manifest (src/debugMl), merged over src/debug's (the YouTube bench's) where :ml is.
     if (chordsOnPhone) it.sources.manifests.addStaticManifestFile("src/debugMl/AndroidManifest.xml")
 }
@@ -186,13 +194,26 @@ kotlin {
 }
 
 // The release's chord models' libraries for [releaseMlAbis] alone: ONNX Runtime's and libsoxr's of every other ABI left
-// out of its APK (SQLite's kept).
+// out of its APK (SQLite's kept); and its yt-dlp's for [releaseYoutubeAbis] alone: Python's libraries (libpython*,
+// libchaquopy_java.so, OpenSSL's and SQLite's lib*_python.so and lib*_chaquopy.so) and libqjs.so, and Chaquopy's assets
+// of the other ABIs ([DropPythonAbis]), which Chaquopy, reading defaultConfig's abiFilters alone, makes for both.
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         for (abi in appAbis.filter { it !in releaseMlAbis }) {
             variant.packaging.jniLibs.excludes.addAll(
                 "**/$abi/libonnxruntime.so", "**/$abi/libonnxruntime4j_jni.so", "**/$abi/libcaracole_soxr.so")
         }
+        val dropped = appAbis.filter { it !in releaseYoutubeAbis }
+        for (abi in dropped) {
+            variant.packaging.jniLibs.excludes.addAll(
+                "**/$abi/libpython*.so", "**/$abi/libchaquopy_java.so", "**/$abi/lib*_python.so",
+                "**/$abi/lib*_chaquopy.so", "**/$abi/libqjs.so")
+        }
+        val drop = tasks.register<DropPythonAbis>("drop${variant.name.replaceFirstChar { it.uppercase() }}PythonAbis") {
+            abis.set(dropped)
+        }
+        variant.artifacts.use(drop).wiredWithDirectories(DropPythonAbis::input, DropPythonAbis::output)
+            .toTransform(com.android.build.api.artifact.SingleArtifact.ASSETS)
     }
 }
 
@@ -235,16 +256,30 @@ tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(chec
 // unit test run; the release and debug APKs by apkScan alone, which builds them (release-check.sh runs it).
 tasks.withType<Test>().configureEach {
     systemProperty("caracole.onnxruntime", System.getenv("CARACOLE_ONNXRUNTIME") ?: "")
-    if (name != "apkScan") filter { excludeTestsMatching("*.ApkScanTest.theApksHoldNoTelemetry") }
+    if (name != "apkScan") filter {
+        excludeTestsMatching("*.ApkScanTest.theApksHoldNoTelemetry")
+        excludeTestsMatching("*.NoticesTest.theApksCarryTheNotices")
+    }
+    // NoticesTest: :youtube's notices folder (its copyLicences) against their sources.
+    dependsOn(":youtube:copyLicences")
+    systemProperty("caracole.youtube.licenses",
+                   rootProject.file("youtube/build/generated/licenceAssets/licenses/youtube").path)
+    systemProperty("caracole.youtube.committed", rootProject.file("youtube/licenses").path)
+    systemProperty("caracole.youtube.wheels", System.getenv("CARACOLE_YTDLP_WHEELS") ?: "")
+    systemProperty("caracole.youtube.quickjs", System.getenv("CARACOLE_QUICKJS_SRC") ?: "")
 }
 val apkScan by tasks.registering(Test::class) {
-    description = "Scans the release and debug APKs for what made ONNX Runtime's Maven AAR phone home (ApkScanTest)."
+    description = "Scans the release and debug APKs for what made ONNX Runtime's Maven AAR phone home (ApkScanTest), " +
+        "and for the notices of their yt-dlp (NoticesTest)."
     group = "verification"
     val unit = tasks.named<Test>("testDebugUnitTest").get()
     dependsOn("assembleRelease", "assembleDebug", "compileDebugUnitTestKotlin")
     testClassesDirs = unit.testClassesDirs
     classpath = unit.classpath
-    filter { includeTestsMatching("*.ApkScanTest") }
+    filter {
+        includeTestsMatching("*.ApkScanTest")
+        includeTestsMatching("*.NoticesTest")
+    }
     systemProperty("caracole.apks", listOf("release", "debug").joinToString(File.pathSeparator) {
         layout.buildDirectory.dir("outputs/apk/$it").get().asFile.path
     })
@@ -266,9 +301,9 @@ dependencies {
     } else {
         debugImplementation(project(":autochords"))
     }
-    // yt-dlp under Chaquopy's Python (a song's audio from YouTube), the debug build's alone until the owner's gate
-    // (the phone-youtube design's stage Y5): no release carries Python.
-    debugImplementation(project(":youtube"))
+    // yt-dlp under Chaquopy's Python (a song's audio from YouTube), both builds (the phone-youtube design's stage Y5),
+    // the release's for arm64-v8a alone (above).
+    implementation(project(":youtube"))
 
     // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
     // phone's server and copied for another app, an index fetched): `gradle :app:test`.
@@ -289,3 +324,35 @@ dependencies {
 
 // alphaTab's bundle as the APK's assets, for the Guitar Pro page (lane guitar-alphatab's).
 apply(from = "alphatab.gradle.kts")
+
+/**
+ * A release's merged assets less Chaquopy's of [abis] (its standard library's and requirements' `.imy`, its bootstrap's
+ * native modules), and their entries in `chaquopy/build.json` (written again, its assets sorted); Chaquopy's runtime
+ * takes the first of the phone's ABIs it finds a `stdlib-<abi>.imy` of. Every other asset copied as it is.
+ */
+abstract class DropPythonAbis : DefaultTask() {
+    @get:Input abstract val abis: ListProperty<String>
+    @get:InputDirectory abstract val input: DirectoryProperty
+    @get:OutputDirectory abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun drop() {
+        val from = input.get().asFile
+        val into = output.get().asFile.apply { deleteRecursively(); mkdirs() }
+        val dropped = abis.get().flatMap { listOf("stdlib-$it.imy", "requirements-$it.imy", "bootstrap-native/$it/") }
+        fun gone(path: String) = dropped.any { path == it || path.startsWith(it) }
+        from.walkTopDown().filter { it.isFile }.sortedBy { it.path }.forEach { file ->
+            val path = file.relativeTo(from).invariantSeparatorsPath
+            if (path.startsWith("chaquopy/") && gone(path.removePrefix("chaquopy/"))) return@forEach
+            val to = File(into, path).apply { parentFile.mkdirs() }
+            if (path == "chaquopy/build.json") {
+                @Suppress("UNCHECKED_CAST")
+                val json = groovy.json.JsonSlurper().parse(file) as MutableMap<String, Any?>
+                @Suppress("UNCHECKED_CAST")
+                val assets = json["assets"] as MutableMap<String, Any?>
+                json["assets"] = assets.filterKeys { !gone(it) }.toSortedMap()
+                to.writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)) + "\n")
+            } else file.copyTo(to)
+        }
+    }
+}

@@ -128,18 +128,34 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    Without those properties the release APK is built unsigned. Outside the `ml` shell every packaging task of the
    release (assemble, bundle, package, install) refuses before anything runs, so no `app-release.apk` without the chord
    models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
-   over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
+   over 100 MiB, the most the repository's Pages site takes (about 28.8 MB today). The chord models' libraries are
    arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
    models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
    ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, PFFFT's, which libsoxr is built with, BTC's and
    beat_this's) are its assets `chords/licenses/`, as alphaTab's are `alphatab/licenses/`, with a README saying that
    libsoxr is compiled into `libcaracole_soxr.so` and that caracole's, libsoxr's and the build's source is this
-   repository, github.com/Danielhp95/caracole. `android/scripts/release-check.sh` checks all of it.
+   repository, github.com/Danielhp95/caracole. It carries the app's yt-dlp too (`:youtube`: Chaquopy's Python, yt-dlp,
+   `libqjs.so`), for arm64-v8a alone (`releaseYoutubeAbis`: Python's x86_64 libraries and Chaquopy's x86_64 assets left
+   out, `DropPythonAbis`), with its notices under `licenses/youtube/`
+   ([below](#youtube-on-the-phone-the-engine-debug-build)), and extracts every native library at install
+   (`useLegacyPackaging`, so Android runs qjs). That makes the release 28.8 MB, 9.3 MB more than chords alone (19.6 MB),
+   and 55.6 MB installed on an arm64 phone (its 26.8 MB of libraries extracted beside the APK), 36.0 MB more (34.4 MiB);
+   Chaquopy unpacks its standard library into the app's files at Python's first start, on top. Two builds of the same
+   commit from checkouts at different paths give the same unsigned APK, byte for byte (`:youtube`'s assets and
+   `libqjs.so` among it). `android/scripts/release-check.sh` checks all of it.
+
+   F-Droid's own build server (an f-droid.org recipe, not this repository) would need, besides ONNX Runtime from its
+   source: CPython for Android and Chaquopy's runtime built from source (both come prebuilt from Maven Central,
+   `com.chaquo.python:target` and `com.chaquo.python.runtime`, which F-Droid's scanner refuses), python3.13 as
+   Chaquopy's `buildPython`, the two wheels from `youtube/pins.json` by URL and SHA-256 into `CARACOLE_YTDLP_WHEELS`
+   (pure Python, no build), QuickJS-NG's tree at pins.json's commit as `CARACOLE_QUICKJS_SRC`, NDK r28c and CMake
+   3.31, and `AntiFeatures: NonFreeNet` (docs/fdroid/metadata/).
 3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
    that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
    same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
    release's R8 output and its arm64 libraries run nowhere else before it is published (the emulator takes debug
-   builds alone, the Chords bench is a debug build's).
+   builds alone, the Chords bench is a debug build's). Its yt-dlp likewise: paste one video and make its sheet, on
+   Wi-Fi, within the day's runs.
 4. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
@@ -949,10 +965,10 @@ runs the same C. It is vendored in `autochords/native/soxr/` (LGPL-2.1+, its REA
 two patches) and built with caracole's resample over it (`caracole_soxr.c`: python-soxr's `soxr.resample` of a
 contiguous 1-D float32 array, the path that takes, `csoxr_split_ch`, one channel of split I/O) and the JNI to that
 (`soxr_jni.c`) into one shared library, `libcaracole_soxr.so`, by `autochords/native/CMakeLists.txt`: by the NDK for
-arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`, so the debug build's alone), and by the host's gcc for the
-JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`, plain JVM,
-holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates finite
-and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
+arm64-v8a and x86_64 in `:ml` (its `externalNativeBuild`; the release keeps arm64-v8a's alone), and by the host's gcc
+for the JVM's tests (`:autochords`'s `hostSoxr` task, its folder on the tests' `java.library.path`). `:autochords`,
+plain JVM, holds the front ends of the chords from audio (below); its resampler is `Soxr.resample(x, from, to)` (rates
+finite and over 0: libsoxr never returns from an infinite one), which `SoxrTest` holds to python-soxr's answers
 (`tests/conformance/vectors/autochords/soxr.jsonl`, made on x86_64 by libsoxr's SIMD engine, cr32s) within 1e-6:
 
     nix develop ./android -c gradle -p android :autochords:test
@@ -981,7 +997,7 @@ is hidden.
 
 ## Chords from audio: the hearing
 
-The phone hears a song in a process of its own, `:ml` (`MlService`, debug builds alone), so the models' memory, a
+The phone hears a song in a process of its own, `:ml` (`MlService`, in both builds), so the models' memory, a
 crash or Android's low-memory killer never touch the app's server: `MlChordModels.hear(audio, onStep, waiting)` sends
 the service the file's path and waits, saying run.py's steps ("setting up the models", "hearing the chords", "finding
 the beats", and "waiting for the phone to cool"). The service's `Pipeline` decodes, mixes down and resamples to 22,050
@@ -1202,8 +1218,9 @@ songs (B1) button runs it.
 ## YouTube on the phone: the engine (debug build)
 
 A song's audio from YouTube on the phone runs yt-dlp itself, in Python, inside the app: `:youtube`, Chaquopy's Python
-3.13 with yt-dlp and yt-dlp-ejs, linked into the debug build alone (`debugImplementation`) until the owner's gate (the
-phone-youtube design's stage Y5). The release carries no Python.
+3.13 with yt-dlp and yt-dlp-ejs, linked into both builds (stage Y5.1), the release's for arm64-v8a alone: an x86_64
+phone of the release gets no yt-dlp (`PhoneYouTube`, `BuildConfig.YOUTUBE_ABIS`) and says "this phone's caracole has
+no yt-dlp".
 
 Every piece is pinned in `youtube/pins.json`: Chaquopy's version (its Gradle plugin and its Python runtime, from Maven
 Central), the Python minor version, the two pure wheels by URL and SHA-256, and QuickJS-NG's source for the JavaScript
@@ -1269,24 +1286,28 @@ binary exists, so `youtube/native/CMakeLists.txt` builds it by the NDK for both 
 engine, its libc and `qjs.c`, with the REPL's and standalone's bytecode upstream commits in `gen/`, so no host `qjsc`
 step), with libsoxr's reproducibility flags and 16 KB pages, as a position-independent executable named `libqjs.so`.
 Android runs no program an app writes, only one from its native library folder, where the package manager extracts the
-APK's `lib*.so` when the build asks for it: `useLegacyPackaging`, the debug build's alone (`app/build.gradle.kts`, and
+APK's `lib*.so` when the build asks for it: `useLegacyPackaging`, every build's (`app/build.gradle.kts`, and
 `:youtube`'s test APK). That applies to every native library, not qjs alone: ONNX Runtime's, SQLite's, Python's and
 libsoxr are then compressed in the APK and extracted again at install, which costs the compressed copies, 21.0 MB on
 arm64 (24.7 MB on x86_64). The two-ABI debug APK goes from 140.0 to 74.8 MB and installs smaller (126.0 MB on arm64,
 134.8 MB on the x86_64 emulator, from 140.0), `libqjs.so` 1.2 MB of it an ABI. `Qjs.path(context)` is where it is;
 yt-dlp runs it with `--script FILE` for each challenge and `--help` to read its version, each with its output piped
-back, never onto the app's own descriptors. `release-check.sh` checks the release holds no `libqjs.so` and stores its
-native libraries uncompressed and aligned as before, with no `extractNativeLibs`. QuickJS-NG's `LICENSE` (MIT, Fabrice
-Bellard, Charlie Gordon, Ben Noordhuis, Saúl Ibarra Corretgé), which its `libregexp`, `libunicode` and `dtoa` sources
-repeat, isn't in the APK yet (Y5.1's, with the others').
+back, never onto the app's own descriptors. `release-check.sh` checks the release holds `lib/arm64-v8a/libqjs.so` and
+no x86_64 one, and extracts its native libraries at install. QuickJS-NG's `LICENSE` (MIT, Fabrice Bellard, Charlie
+Gordon, Ben Noordhuis, Saúl Ibarra Corretgé), which its `libregexp`, `libunicode` and `dtoa` sources repeat, is
+`assets/licenses/youtube/quickjs-ng-LICENSE`.
 
 It costs the debug APK 45.0 MB, both ABIs (26.3 MB of an arm64-only APK): Python's native libraries 12.3 MB an ABI, the
-standard library and Chaquopy's bootstrap, the CA bundle and yt-dlp 10.8 MB for both. What ships with it, and whose
-licence texts the APK doesn't carry yet (Y5.1's, the design's §3.6): CPython (PSF-2.0) with its OpenSSL (Apache-2.0),
-SQLite (public domain), libffi, bzip2, xz and zlib; Chaquopy (MIT, its POMs'); its CA bundle (certifi, MPL-2.0);
-setuptools (MIT) and pyelftools (public domain) in its bootstrap, whose texts are there; yt-dlp and yt-dlp-ejs
-(Unlicense, their texts there); and yt-dlp-ejs's bundled meriyah (ISC) and astring (MIT), whose texts its wheel doesn't
-carry.
+standard library and Chaquopy's bootstrap, the CA bundle and yt-dlp 10.8 MB for both. The licences of what ships with
+it are the APK's assets `licenses/youtube/` (the design's §3.6; `youtube/licenses/README` says which is whose): CPython
+3.13.16's LICENSE and Doc/license.rst (PSF-2.0, with what it incorporates), Chaquopy's (MIT), OpenSSL 3.5.9's
+(Apache-2.0), libffi 3.4.4's, bzip2 1.0.8's and xz 5.4.6's, each that project's text at the version Chaquopy's Python
+is built with (CPython's `Android/android.py`; SQLite is public domain, zlib Android's own), certifi's (MPL-2.0, its CA
+bundle's), all kept in `youtube/licenses/`; and, copied at build time from the pinned wheels and source (`:youtube`'s
+`copyLicences`), yt-dlp's and yt-dlp-ejs's (Unlicense), the notice yt-dlp-ejs's `lib.min.js` begins with (its bundled
+meriyah, ISC, and astring, MIT) and QuickJS-NG's. Setuptools' (MIT) and pyelftools' (public domain) are in Chaquopy's
+bootstrap beside their code. The app's `NoticesTest` holds each to its source, and (`gradle :app:apkScan`,
+release-check.sh's) both APKs to that folder.
 
 ## A sheet from a YouTube video (debug build)
 

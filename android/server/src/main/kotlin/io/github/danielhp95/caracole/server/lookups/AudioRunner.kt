@@ -147,8 +147,7 @@ class AudioRunner(
         override val album: String? get() = given.album
         override val duration: Double? get() = given.duration
 
-        override fun maker(db: Db, s: SongRow, audio: File): Maker =
-            Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, store.givenName(db, s), sha16(audio))
+        override fun maker(db: Db, s: SongRow, audio: File): Maker = fileMaker(store, chords, names, db, s, audio)
 
         /** audio_sheet.py `audio`. */
         override fun audio(): Pair<String, String> = parts.database.writeBlocking { db ->
@@ -222,9 +221,15 @@ class AudioRunner(
         internal fun keepAutoSheet(parts: PhoneParts, store: AudioStore, chords: ChordModels,
                                    names: () -> Map<String, String>, db: Db, s: SongRow, heard: Heard,
                                    audio: File, stamp: String): Pair<Pair<String, String>, String?> =
-            keepAutoSheet(parts, db, s, heard, stamp, Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(),
-                                                           chords.runtime, store.givenName(db, s), sha16(audio)),
+            keepAutoSheet(parts, db, s, heard, stamp, fileMaker(store, chords, names, db, s, audio),
                           "file://" + audio.absolutePath)
+
+        /** The maker of a sheet made here from an audio file the owner gave ([audio], the song's in [store]): this
+         * phone, its sync id, the models' names and runtime, the file's given name and its SHA-256's 16 digits. */
+        internal fun fileMaker(store: AudioStore, chords: ChordModels, names: () -> Map<String, String>, db: Db,
+                               s: SongRow, audio: File): Maker =
+            Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, store.givenName(db, s),
+                  sha16(audio))
 
         internal fun keepAutoSheet(parts: PhoneParts, db: Db, s: SongRow, heard: Heard, stamp: String, maker: Maker,
                                    url: String, source: String? = null,
