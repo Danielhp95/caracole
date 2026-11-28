@@ -73,6 +73,9 @@ class Lookup(val cfg: PhoneConfig, val database: Database, val store: LibrarySto
     /** get.py's lyrics stage alone over the song of [songId], LRCLIB and Megalobiz asked with the audio's [length]
      * (a staged job's on the phone, server.lookups' AudioRunner: the lookup's words, pace and envelope where the
      * computer's job asks at the bulk pace); its end in [LookupResult.states] and `details`, its requests, as [run]'s.
-     * The caller holds [db]'s write, as for [run]; [request] is unused. */
-    fun lyrics(db: Db, songId: Long, length: Double?): LookupResult = LookupRun(this, db).lyricsAlone(songId, length)
+     * [bulkRun], for work nobody asked for now (an automatic YouTube job's, `youtube-auto:<UTC>:<song id>`): its sites
+     * asked under that run at the bulk pace, the computer's ([InteractiveAsk.bulk]). The caller holds [db]'s write, as
+     * for [run]; [request] is unused. */
+    fun lyrics(db: Db, songId: Long, length: Double?, bulkRun: String? = null): LookupResult =
+        LookupRun(this, db, bulkRun).lyricsAlone(songId, length)
 }

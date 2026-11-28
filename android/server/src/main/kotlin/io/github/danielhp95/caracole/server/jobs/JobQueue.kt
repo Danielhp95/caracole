@@ -37,13 +37,16 @@ import java.time.Instant
  * lookup's), [note] what Job.asJson's `note` says. [join] false: a job of the key that waits or runs is its answer,
  * left as it is (web/jobs.py's `join=False`). [song]: the song a request names that its job adds should the library
  * not have it, as caracole serve's request wrote wanted.txt's line (its album and length too: a sheet from a YouTube
- * video asked for by name), which a command reads as [JobContext.adds], never from its argv.
+ * video asked for by name), which a command reads as [JobContext.adds], never from its argv. [automatic]: work nobody
+ * asked for now, the phone's automatic YouTube pass's (the design's §5.3), never in its argv, so its Journal words stay
+ * the computer's; a command reads it as [JobContext.automatic] (its lyrics stage at the bulk pace). A request asked for
+ * now that joins it makes it asked for now.
  */
 data class JobSpec(val title: String, val key: String, val kind: String, val stages: List<Pair<String, String>>,
                    val display: String = "", val songId: Long? = null, val join: Boolean = true,
                    val doneLine: String? = null, val commands: List<Command> = emptyList(),
                    val fetching: Boolean = false, val note: String = "", val song: NamedSong? = null,
-                   val run: (suspend (JobContext) -> Unit)? = null)
+                   val automatic: Boolean = false, val run: (suspend (JobContext) -> Unit)? = null)
 
 /** What a running job tells its view: a stage's state and what it says now, a line of its output (an `error: …`
  * line is what its line says should it fail), its outcome (the view's `outcome`), and the song it turned out to be
@@ -61,6 +64,9 @@ interface JobContext {
 
     /** The song its request named for it to add, should the library not have it ([JobSpec.song]); null for none. */
     val adds: NamedSong? get() = null
+
+    /** Whether nobody asked for it now ([JobSpec.automatic]). */
+    val automatic: Boolean get() = false
 
     /** The files a reader can open already, and how long they took (get.py's `readable` event). */
     fun readable(files: Map<String, String>, seconds: Double) {}
@@ -516,7 +522,14 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         val mine = jobs.filter { it.active && it.key == spec.key }
         val waiting = mine.firstOrNull { it.state == Job.QUEUED }
         val enough = asMuch(mine, waiting, new, spec.fetching, spec.join)
-        if (enough != null) return enough.copy() to false
+        if (enough != null) {
+            // Asked for now, it is asked for now from here on, as a request that joins it makes it (a running job's
+            // spec never changes).
+            if (enough.state == Job.QUEUED && enough.spec.automatic && !spec.automatic) {
+                enough.spec = enough.spec.copy(automatic = false)
+            }
+            return enough.copy() to false
+        }
         if (waiting != null && spec.run == null) {
             join(waiting, spec)
             return waiting.copy() to false
@@ -565,7 +578,8 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         waiting.stages = waiting.stages + JobCommands.stages(waiting.steps.map { it.args })
             .filter { it.first !in had }.map { (name, label) -> Stage(name, label) }
         waiting.spec = spec.copy(title = request.title, fetching = true, note = spec.note.ifEmpty { request.note },
-                                 commands = waiting.steps.map { it.command })
+                                 commands = waiting.steps.map { it.command },
+                                 automatic = spec.automatic && request.automatic)
     }
 
     // --- the worker -----------------------------------------------------------------------------------------------
@@ -832,6 +846,7 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
 
         override val isCancelled: Boolean get() = worker?.isCancelled == true
         override val adds: NamedSong? get() = job.spec.song
+        override val automatic: Boolean get() = job.spec.automatic
 
         override fun song(id: Long, display: String) {
             if (asLine(JsonObject(linkedMapOf("song" to JsonObject(linkedMapOf(

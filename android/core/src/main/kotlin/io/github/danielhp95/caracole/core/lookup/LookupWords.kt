@@ -131,6 +131,15 @@ object LookupWords {
         return "$spent; tonight's run does the rest"
     }
 
+    /** The phone's own words for bulk work's client spent (an automatic YouTube job's lyrics, Clients.bulk): the
+     * provider's `per_day` when it has one (Megalobiz's, which every run counts), else its budget; no nightly run on the
+     * phone to promise, a later lookup asks. */
+    fun bulkSpent(provider: String, policy: ProviderPolicy): String {
+        val spent = policy.perDay?.let { "no asks of ${name(provider)} left today ($it spent)" }
+            ?: "no asks of ${name(provider)} left (${policy.budget} spent)"
+        return "$spent; a later lookup asks"
+    }
+
     /** `asking`'s ProviderError: the site's part ends for this lookup. */
     fun failed(error: ProviderError): String =
         "${name(error.provider)} failed (${error.message}); tried again tonight"
@@ -150,7 +159,8 @@ object LookupWords {
         is Asked.Off -> StageEnd("skipped", asked.why)
         is Asked.Cooling -> StageEnd("skipped", cooling(provider, asked.until))
         is Asked.Blocked -> StageEnd("skipped", blocked(asked.error, asked.state.cooldownUntil))
-        is Asked.Spent -> StageEnd("skipped", spent(provider, config.provider(provider), asked.hour, asked.keptForSheets))
+        is Asked.Spent -> StageEnd("skipped", if (asked.bulk) bulkSpent(provider, config.provider(provider))
+                                            else spent(provider, config.provider(provider), asked.hour, asked.keptForSheets))
         is Asked.Failed -> StageEnd("failed", failed(asked.error))
     }
 

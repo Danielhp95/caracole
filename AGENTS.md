@@ -5115,7 +5115,11 @@ picks one).
   choice of 2026-11-03 ("Don't do the polite request across 2 devices";
   docs/superpowers/specs/2026-11-03-politeness-crossing.md).
 - So two caracoles at one address may together send a site more than either one's limits; each keeps every rule
-  here on its own, and the phone looks songs up at the lookup pace alone.
+  here on its own, and the phone looks songs up at the lookup pace alone, but for an automatic YouTube job's lyrics
+  stage, which asks at the bulk pace and budget (The one exception is YouTube, on the phone too): each provider's own
+  `budget` and `delay` (`Clients.bulk`, `InteractiveAsk(bulk=)`), under run `youtube-auto:<UTC>:<song id>` (`JobSpec
+  .automatic`, `StagedSheet.AUTO_RUN`), so never within `lookup_per_hour`, and still within Megalobiz's `per_day`
+  (server's AutomaticPaceTest).
 - What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
   user agent, the library's name: `GET /api/peer/state`'s `settings`, politeness.py `settings_document`, which the
   phone keeps as kv `phone:settings`), never its politeness.

@@ -51,14 +51,16 @@ import java.util.concurrent.CancellationException
 /** A lookup that can't go on (an ignored song, a pick that isn't one), said in the song's stage: get.py's `_Stop`. */
 internal class Stop(message: String) : Exception(message)
 
-/** One run of a [Lookup]: get.py's `_Lookup`, its stages over the lookup's [db] (Lookup's KDoc). */
-internal class LookupRun(private val lookup: Lookup, private val db: Db) {
+/** One run of a [Lookup]: get.py's `_Lookup`, its stages over the lookup's [db] (Lookup's KDoc); [bulkRun], for the
+ * lyrics stage alone of work nobody asked for now, the run its sites are asked under at the bulk pace
+ * ([InteractiveAsk.bulk]). */
+internal class LookupRun(private val lookup: Lookup, private val db: Db, private val bulkRun: String? = null) {
     private val request: LookupRequest = lookup.request
     private val pacing = lookup.pacing
     private val started = pacing.monotonic()
     private val now: Instant = pacing.clock().truncatedTo(ChronoUnit.SECONDS)
-    private val runId = Pace.lookupRunId(now)
-    private val ask = InteractiveAsk(lookup.clients, db, runId, now, lookup.alerts, lookup.cfg)
+    private val runId = bulkRun ?: Pace.lookupRunId(now)
+    private val ask = InteractiveAsk(lookup.clients, db, runId, now, lookup.alerts, lookup.cfg, bulk = bulkRun != null)
     private val plain: Asking = SheetFrom(ask)
 
     private val states = LinkedHashMap<String, String>()

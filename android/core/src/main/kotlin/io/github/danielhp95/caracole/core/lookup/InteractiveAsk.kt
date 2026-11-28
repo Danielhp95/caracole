@@ -34,9 +34,15 @@ import kotlin.math.ceil
  * [io.github.danielhp95.caracole.core.library.SharedFolder], a bug) is the caller's. [db] is the lookup's, in
  * autocommit: each event, block and record commits as it happens. [make] stands in for [Clients.interactive], a
  * test's; [config] is the phone's settings the lookup began with.
+ *
+ * [bulk]: the envelope of work nobody asked for now (an automatic YouTube job's lyrics stage, the design's §5.3): each
+ * client [Clients.bulk]'s, at the provider's own budget and delay under [runId] as it is (`youtube-auto:…`, no
+ * `lookup:` put before it), so its requests count in no hour's lookups, and a spent budget is [Asked.Spent.bulk]; the
+ * rest (off, cooling, a block recorded and alerted once, an error counted) as a lookup's.
  */
 class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val now: Instant,
                      val alerts: Alerts = Alerts.NONE, val config: PhoneConfig = clients.cfg,
+                     val bulk: Boolean = false,
                      private val make: ((provider: String, policy: ProviderPolicy?) -> Client)? = null) : Asking {
     /** The providers that blocked caracole in this lookup, each asked nothing more. */
     val blocked: MutableSet<String> = linkedSetOf()
@@ -68,7 +74,9 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
             if (policy != null) client.policy = policy
             return client
         }
-        val client = make?.invoke(provider, policy) ?: clients.interactive(db, provider, runId, policy)
+        val client = make?.invoke(provider, policy)
+            ?: if (bulk) clients.bulk(db, provider, runId).also { if (policy != null) it.policy = policy }
+               else clients.interactive(db, provider, runId, policy)
         made[provider] = client
         return client
     }
@@ -89,8 +97,9 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
         } catch (e: BudgetExhausted) {
             owed(provider)
             val p = config.provider(e.provider)
-            Asked.Spent(hour = e.provider !in keptForSheets && client.policy.budget < p.lookupRequests,
-                        keptForSheets = e.provider in keptForSheets)
+            if (bulk) Asked.Spent(hour = false, keptForSheets = false, bulk = true)
+            else Asked.Spent(hour = e.provider !in keptForSheets && client.policy.budget < p.lookupRequests,
+                             keptForSheets = e.provider in keptForSheets)
         } catch (e: ProviderError) {
             owed(provider)
             Health.recordError(db, e.provider, now, e.message.orEmpty())
@@ -152,8 +161,9 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
         for (client in made.values) (client as? AutoCloseable)?.close()
     }
 
-    /** The run its clients log their events under, `lookup:` put before it as [Clients.interactive] puts it. */
-    private fun runId(): String = if (runId.startsWith(Pace.LOOKUP_RUN)) runId else Pace.LOOKUP_RUN + runId
+    /** The run its clients log their events under, `lookup:` put before it as [Clients.interactive] puts it ([bulk]'s
+     * as it is). */
+    private fun runId(): String = if (bulk || runId.startsWith(Pace.LOOKUP_RUN)) runId else Pace.LOOKUP_RUN + runId
 
     /** get.py's `_owed`: a song whose Ultimate Guitar part was cut short is marked to fetch, as `caracole fetch
      * --song` marks it, when it is matched or pinned and not owed already. */

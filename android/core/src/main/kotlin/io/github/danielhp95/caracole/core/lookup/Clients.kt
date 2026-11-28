@@ -39,6 +39,16 @@ class Clients(val cfg: PhoneConfig, val cacheDir: File, val transport: (provider
     fun named(writes: Writes, provider: String, runId: String, onEvent: ((Event) -> Unit)? = null): PoliteClient =
         built(writes, provider, runId, { _, _ -> cfg.provider(provider) }, onEvent)
 
+    /** [provider]'s client for bulk work under the run [run] as it is (never a `lookup:` one): the provider's own
+     * policy, its `budget` and `delay`, within the day's `per_day`, every event logged and its `http:last_request:`
+     * written, as `make_client` makes the nightly run's; over [db], the caller's (a lookup's stage holds its write). An
+     * automatic YouTube job's lyrics stage asks through it (the design's §5.3), so its requests count in no hour's
+     * lookups. */
+    fun bulk(db: Db, provider: String, run: String, onEvent: ((Event) -> Unit)? = null): PoliteClient {
+        require(!run.startsWith(Pace.LOOKUP_RUN)) { "a bulk run is no lookup's: $run" }
+        return named(Writes.of(db), provider, run, onEvent)
+    }
+
     /** The one builder: the policy within the day, the pause after the last request this side sent (read in a touch,
      * slept after it), every event logged and, for one sent, kv `http:last_request:<provider>` written. */
     private fun built(writes: Writes, provider: String, run: String, policy: (Db, java.time.Instant) -> ProviderPolicy,

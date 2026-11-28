@@ -112,6 +112,25 @@ class JobQueueTest {
         assertTrue(queue.submit(spec("oasis/wonderwall")).second)  // over: the next is a job of its own
     }
 
+    /** An automatic job (nobody asked for it now) that still waits is asked for now once a request asked for now is
+     * answered by it; one that runs stays as it began. */
+    @Test fun anAutomaticJobThatWaitsIsAskedForNowOnceARequestAskedForNowIsAnsweredByIt() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("blur/song 2") { gate.await() })
+        runCurrent()
+        val seen = mutableListOf<Boolean>()
+        val auto = queue.submit(spec("oasis/wonderwall").copy(automatic = true, run = { seen += it.automatic })).first
+        assertTrue(queue.job(auto.id)!!.spec.automatic)
+        val (same, new) = queue.submit(spec("oasis/wonderwall"))
+        assertFalse(new)
+        assertEquals(auto.id, same.id)
+        assertFalse(queue.job(auto.id)!!.spec.automatic)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf(false), seen)
+    }
+
     @Test fun aFullQueueTakesNoNewJobButAJobThatJoinsNeedsNoRoom() = runTest {
         val queue = queue(limit = 2)
         val gate = CompletableDeferred<Unit>()

@@ -282,7 +282,9 @@ internal abstract class StagedSheet(
     // --- the lyrics ---------------------------------------------------------------------------------------------------
 
     /** The lookup's lyrics stage over the song, asked with the audio's length (lyrics_search.audio_length: the
-     * song's line's, else [keptLength], once the audio stage kept the audio). */
+     * song's line's, else [keptLength], once the audio stage kept the audio): at the lookup pace for a job asked for
+     * now; at the bulk pace, under a run of its own ([AUTO_RUN], the time and the song's id), for an automatic one
+     * ([JobContext.automatic], the design's §5.3), so never within `lookup_per_hour`. */
     private fun lyrics(): Pair<String, String> {
         val current = parts.database.writeBlocking { db -> again(db).also { stillOurs(db, it) } }
         val length = current.durationMs?.let { it / 1000.0 } ?: keptLength?.takeIf { states["audio"] == "done" }
@@ -296,7 +298,8 @@ internal abstract class StagedSheet(
         val lookup = Lookup(parts.config(), parts.database, parts.store, parts.clients(), SongPages.NONE,
                             SongbookPages.NONE, parts.alerts, LookupRequest(artist, title), progress, parts.pacing, stages,
                             readOverrides)
-        val result = parts.database.writeBlocking { db -> lookup.lyrics(db, current.id, length) }
+        val bulk = if (context.automatic) "$AUTO_RUN$stamp:${current.id}" else null  // nobody asked for it now
+        val result = parts.database.writeBlocking { db -> lookup.lyrics(db, current.id, length, bulk) }
         for ((p, n) in result.requests) requests[p] = (requests[p] ?: 0) + n
         result.bug?.let { bug = bug ?: it }
         parts.database.writeBlocking { db -> again(db) }
@@ -433,5 +436,8 @@ internal abstract class StagedSheet(
     companion object {
         const val AUTO_PROVIDER = "auto"
         const val SYNC_ID = "sync:id"
+
+        /** The run an automatic job's lyrics are asked under, the time and the song's id after it (never `lookup:`). */
+        const val AUTO_RUN = "youtube-auto:"
     }
 }
