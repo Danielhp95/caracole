@@ -9,9 +9,10 @@
 #   --launch    start the app once it is installed
 #
 # It builds the debug APK of the checkout it is in, in the ml shell so the chord models' :ml is in it (nix develop
-# <checkout>/android#ml -c gradle -p <checkout>/android :app:assembleDebug --max-workers=2), checks that it is the
-# debug build, io.github.danielhp95.caracole.debug, then installs it for the phone's own user alone (adb install -r --user 0: another user of the phone is left alone) and
-# says the package and the versionName the phone now has. It never touches F-Droid's io.github.danielhp95.caracole.
+# <checkout>/android#ml -c gradle -p <checkout>/android :app:assembleDebug --max-workers=2), checks that it is the debug
+# build, io.github.danielhp95.caracole.debug, then installs it for the phone's own user alone (adb install -r --user 0:
+# another user of the phone is left alone) and says the package and the versionName the phone now has. It never touches
+# F-Droid's io.github.danielhp95.caracole.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
