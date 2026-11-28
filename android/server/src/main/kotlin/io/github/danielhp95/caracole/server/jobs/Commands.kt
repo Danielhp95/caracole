@@ -352,6 +352,18 @@ object JobCommands {
     /** Whether a command makes a song's sheet from a YouTube video (`caracole youtube --sheet`). */
     fun sheetsFromYoutube(args: List<String>): Boolean = first(args) == "youtube" && "--sheet" in args
 
+    /** The video a sheet from YouTube among [commands] was given (`youtube --sheet --url=<video>`), null for none. */
+    fun video(commands: List<List<String>>): String? = commands.filter(::sheetsFromYoutube).firstNotNullOfOrNull { args ->
+        options(args).firstOrNull { it.startsWith("--url=") }?.removePrefix("--url=")
+    }
+
+    /** Whether [commands] make a sheet from YouTube with no video named: the phone's automatic pass's job
+     * (YouTubeAuto.spec), or Try again of one. The computer queues none (every `youtube --sheet` of caracole serve's
+     * names its video), so this is the phone's rule alone: a video the owner gives is never answered by such a job
+     * (JobQueue.submitLocked). */
+    fun namesNoVideo(commands: List<List<String>>): Boolean =
+        commands.any { sheetsFromYoutube(it) && video(listOf(it)) == null }
+
     /** Whether a command transcribes a song's lyrics from its audio (`caracole transcribe`). */
     fun transcribes(args: List<String>): Boolean = first(args) == "transcribe"
 

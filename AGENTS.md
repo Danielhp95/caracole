@@ -5485,7 +5485,9 @@ picks one).
   left, quiet (`Job.quiet`: no failed alert; a block's alert still once a cooldown), and their lyrics stage at the
   bulk pace and budget, under a run of its own (`youtube-auto:`), never within `lookup_per_hour`. Settings' switch
   "Find audio on YouTube by itself" (kv `phone:youtube-auto`, on by default) turns the pass alone off. A sheet from a
-  video you paste or share is asked for now, on any network. No route asks the computer to do it.
+  video you paste or share is asked for now, on any network, and made from that video: a waiting automatic job of the
+  song takes its command (`--url`) in its place, a running one is no answer to it, which queues behind it
+  (`JobQueue.submitLocked`, `JobCommands.namesNoVideo`). No route asks the computer to do it.
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.
