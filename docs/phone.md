@@ -106,6 +106,7 @@ computer in 14 days. It takes only songs with no sheet at all, whose sites were 
 block, near the day's limit of 50 runs, or after 8 minutes, going on later with the songs it
 didn't reach. Settings › **Find audio on YouTube by
 itself** turns that off.
+A video you paste while caracole is finding audio for that song by itself is the one its sheet is made from.
 
 Settings › **YouTube audio** says whether it can run, and how many of the day's runs of yt-dlp
 it used in the last 24 hours. The phone keeps the computer's limits, counted on its own, and the same caveat:

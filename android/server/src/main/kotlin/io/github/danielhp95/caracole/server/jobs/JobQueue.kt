@@ -40,7 +40,9 @@ import java.time.Instant
  * video asked for by name), which a command reads as [JobContext.adds], never from its argv. [automatic]: work nobody
  * asked for now, the phone's automatic YouTube pass's (the design's §5.3), never in its argv, so its Journal words stay
  * the computer's; a command reads it as [JobContext.automatic] (its lyrics stage at the bulk pace). A request asked for
- * now that joins it makes it asked for now.
+ * now that joins it makes it asked for now. A sheet from a video the owner gave is never answered by a job of the song's
+ * whose sheet from YouTube names no video (JobCommands.namesNoVideo): one that waits makes it from that video instead,
+ * one that runs is passed over.
  */
 data class JobSpec(val title: String, val key: String, val kind: String, val stages: List<Pair<String, String>>,
                    val display: String = "", val songId: Long? = null, val join: Boolean = true,
@@ -525,7 +527,23 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
      * else a job of its own. */
     private fun submitLocked(spec: JobSpec): Pair<Job, Boolean> {
         val new = spec.commands.map { it.args }
-        val mine = jobs.filter { it.active && it.key == spec.key }
+        var mine = jobs.filter { it.active && it.key == spec.key }
+        if (JobCommands.video(new) != null) {
+            // A video the owner gave (the phone's rule alone: JobCommands.namesNoVideo). A job of the song's whose sheet
+            // from YouTube names no video is no answer to it: one that waits makes its sheet from this video now, asked
+            // for now; one that runs is passed over, so the request queues behind it.
+            val unnamed = mine.filter { job -> JobCommands.namesNoVideo(job.steps.map { it.args }) }
+            unnamed.firstOrNull { it.state == Job.QUEUED }?.let { job ->
+                val given = spec.commands.first { JobCommands.sheetsFromYoutube(it.args) }
+                job.steps = job.steps.map { step ->
+                    if (JobCommands.sheetsFromYoutube(step.args)) Step(step.label, given.args) else step
+                }
+                job.spec = job.spec.copy(commands = job.steps.map { it.command }, automatic = false,
+                                         song = job.spec.song ?: spec.song)
+                return job.copy() to false
+            }
+            mine = mine - unnamed.toSet()
+        }
         val waiting = mine.firstOrNull { it.state == Job.QUEUED }
         val enough = asMuch(mine, waiting, new, spec.fetching, spec.join)
         if (enough != null) {
