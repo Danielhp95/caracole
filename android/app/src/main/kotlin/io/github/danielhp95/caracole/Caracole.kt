@@ -91,7 +91,7 @@ object Caracole {
      * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
 
-    /** A device test's yt-dlp (YouTubeEndToEndTest: a FakeYtDlpProcess whose download is the committed clip), read
+    /** A device test's yt-dlp (YouTubeEndToEndTest's ClipYtDlp, whose one download is the committed clip), read
      * each time a job takes the engine's process: in place of `:youtube`'s, the app's own gate, readiness and folder
      * kept; null, `:youtube`'s own. A release has no engine to put it in. */
     @Volatile var youtubeForTests: YtDlpProcess? = null

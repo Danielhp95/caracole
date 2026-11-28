@@ -3161,25 +3161,26 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     so the main source set names no `:youtube` class), null in a release; a device test's process in its place while
     `Caracole.youtubeForTests` is set (the engine's gate, readiness and folder kept: YouTubeEndToEndTest's yt-dlp of
     the committed clip, `device-test.sh --models --sites chords YouTubeEndToEndTest`: Ready, "chords over the lyrics",
-    requests LRCLIB's and its own, the audio gone after). Settings' YouTube audio row (`YouTubeRow`, the design's §7,
-    `BuildConfig.YTDLP_VERSION` pins.json's): "On · yt-dlp 2026.11.23 · N of 50 runs today" (the UTC day's `events`
-    of `youtube` against PhoneConfig's budget), "Off (the computer's settings)", "Needs the chord models", "Cooling down
-    until …", "Out of date: …" (kv `youtube-outdated` of this version), none without an engine; YouTubeRowTest on the
-    JVM. `process()` is a `ProcessYtDlp`, core's
-    `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with it: the argv the runner built, its
-    folders read off the templates; `Ran` its exit, stdout and stderr (its first 64 KiB, then the client's tail);
-    `NotStarted` for nothing sent (no bind, a refusal, another process's run, a stop before its turn); cut off, thrown
-    as it is (`YtDlpStopped`, a `close` or `cancel` a CancellationException, an interrupt an InterruptedException, the
-    process killed first), for the runner to count and log. `gate()` a `GateService.gate()`, opened in the main
-    process in the app's one mode (`GateService.gatesMode`), closed by the runner after each run. One run at a time
-    with the bench's (the client's turn and file lock: a run while `:ytbench` runs one is `NotStarted`, "another run is
-    going"). The client refuses (`Refused`, `NOT_OUR_GATE`) a gate-shaped `--proxy` that is no open gate of the app's
-    (`HostGate.isOpen` here, `GateService` `IS_OPEN` from another process) before it binds, and stops a run whose thread
-    is interrupted as `cancel` does. `YtDlpEngineTest` (`device-test.sh --youtube`): the real runner's download of the
-    host's clip, its argv the template filled, the gate's log 10.0.2.2 alone, one `events` row; a redirect to a host
-    the gate refuses, `GateRefused` in the data's words, no strike; the turn held, nothing started; an interrupt and a
-    close mid-download, cut off and counted; after each no process, thread, open gate or run file left, and the secret
-    nowhere.
+    requests LRCLIB's and its own, the audio gone after). Settings' YouTube audio row (server's `YouTubeRow`, the
+    design's §7, `BuildConfig.YTDLP_VERSION` pins.json's): no row without an engine (a release), whatever
+    `youtubeProblem` says; else "Off (the computer's settings)", "Needs the chord models", "Cooling down until …",
+    "Out of date: …" (kv `youtube-outdated` of this version), or "On · yt-dlp 2026.11.23 · N runs in the last 24 hours"
+    (a rolling 24 hours of `events` of `youtube` that ran: ok, error or blocked, never budget; no limit said until
+    Y3.3 settles the phone's day); a read that fails said in the row and logged; YouTubeRowTest on the JVM.
+    `process()` is a `ProcessYtDlp`, core's `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with
+    it: the argv the runner built, its folders read off the templates; `Ran` its exit, stdout and stderr (its first 64
+    KiB, then the client's tail); `NotStarted` for nothing sent (no bind, a refusal, another process's run, a stop
+    before its turn); cut off, thrown as it is (`YtDlpStopped`, a `close` or `cancel` a CancellationException, an
+    interrupt an InterruptedException, the process killed first), for the runner to count and log. `gate()` a
+    `GateService.gate()`, opened in the main process in the app's one mode (`GateService.gatesMode`), closed by the
+    runner after each run. One run at a time with the bench's (the client's turn and file lock: a run while `:ytbench`
+    runs one is `NotStarted`, "another run is going"). The client refuses (`Refused`, `NOT_OUR_GATE`) a gate-shaped
+    `--proxy` that is no open gate of the app's (`HostGate.isOpen` here, `GateService` `IS_OPEN` from another process)
+    before it binds, and stops a run whose thread is interrupted as `cancel` does. `YtDlpEngineTest` (`device-test.sh
+    --youtube`): the real runner's download of the host's clip, its argv the template filled, the gate's log 10.0.2.2
+    alone, one `events` row; a redirect to a host the gate refuses, `GateRefused` in the data's words, no strike; the
+    turn held, nothing started; an interrupt and a close mid-download, cut off and counted; after each no process,
+    thread, open gate or run file left, and the secret nowhere.
 - Milestones 1–6 are built (docs/android_port.md's status, "Built: milestones 4 to 6"), each route a module of its
   own:
   - `server/routes/Stubs.kt` keeps `GET /lookup` and `POST /youtube/search` alone, answering "…: not on the phone

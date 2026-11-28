@@ -214,7 +214,7 @@
                 android:textSize="13sp" />
 
             <!-- YouTube audio (YouTubeRow, the phone-youtube design's §7): what sheets from a YouTube video stand on
-                 now, "On · yt-dlp 2026.11.23 · 2 of 50 runs today"; gone in a build that carries no yt-dlp. -->
+                 now, "On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours"; gone in a build that carries no yt-dlp. -->
             <LinearLayout
                 android:id="@+id/youtube_row"
                 android:layout_width="match_parent"

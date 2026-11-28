@@ -1179,8 +1179,8 @@ Paste a video into the library page's request form (its YouTube field), use a ca
 share a YouTube link to the app and press Make its sheet from this video: the phone takes the video's audio with its
 yt-dlp, asks the lyrics sites for the words, hears the chords with its own models and keeps the sheet, then lets the
 audio go. Nothing downloads before you press the button. Settings' **YouTube audio** row says where it stands: "On ·
-yt-dlp 2026.11.23 · 2 of 50 runs today", "Off (the computer's settings)", "Needs the chord models", "Cooling down until
-…" or "Out of date: …" (`YouTubeRow`); a build without yt-dlp has no row.
+yt-dlp 2026.11.23 · 2 runs in the last 24 hours", "Off (the computer's settings)", "Needs the chord models", "Cooling
+down until …" or "Out of date: …" (`YouTubeRow`); a build without yt-dlp has no row.
 
 `YouTubeEndToEndTest` runs it whole on the emulator, with the real models and a yt-dlp of the test's own
 (`Caracole.youtubeForTests`: its one download the committed clip, `tests/fixtures/autochords/hearing.m4a`, nothing

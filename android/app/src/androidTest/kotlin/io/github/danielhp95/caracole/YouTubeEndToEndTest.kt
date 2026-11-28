@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.youtube.Records
 import io.github.danielhp95.caracole.core.youtube.YouTubeAudio
 import io.github.danielhp95.caracole.core.youtube.YtDlpProcess
 import io.github.danielhp95.caracole.server.Phone
+import io.github.danielhp95.caracole.server.YouTubeRow
 import io.github.danielhp95.caracole.server.jobs.Job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -55,7 +56,8 @@ import java.time.Instant
  *   app's own: `--proxy` the gate's, the video after `--`);
  * - the video's audio gone after Ready (no file in `cache/youtube/`, the song's `audio_path` and its record's `audio`
  *   none), the sheet credited to the video (`raw.youtube.id`);
- * - Settings' YouTube audio row then "On · yt-dlp <the pinned version> · N of 50 runs today", one run more than before.
+ * - Settings' YouTube audio row then "On · yt-dlp <the pinned version> · N runs in the last 24 hours", one run more
+ *   than before (a rolling 24 hours: no midnight between the two reads can move it).
  */
 @RunWith(AndroidJUnit4::class)
 class YouTubeEndToEndTest {
@@ -120,12 +122,15 @@ class YouTubeEndToEndTest {
         }
         val folder = YouTubeAudio.folder(File(phone.parts.stateDir, "cache"))
         assertEquals(emptyList<String>(), folder.listFiles().orEmpty().filter { it.name.endsWith(".m4a") }.map { it.name })
+        assertEquals("no part folder left", emptyList<String>(),
+                     folder.listFiles().orEmpty().filter { it.name.startsWith(".part-") }.map { it.name })
 
-        // Settings' YouTube audio row says it, one run more today.
+        // Settings' YouTube audio row says it, one run more in the last 24 hours.
         val runs = runsToday(phone)
         assertEquals(runsBefore + 1, runs)
-        val expected = "On · yt-dlp ${BuildConfig.YTDLP_VERSION} · $runs of " +
-            "${phone.parts.config().provider("youtube").budget} runs today"
+        val expected = YouTubeRow.line(YouTubeRow.State(true, null, null, null, BuildConfig.YTDLP_VERSION, runs))
+        assertEquals("On · yt-dlp ${BuildConfig.YTDLP_VERSION} · $runs run${if (runs == 1L) "" else "s"} in the last 24 hours",
+                     expected)
         ActivityScenario.launch(SettingsActivity::class.java).use { settings ->
             var said = ""
             waitUntil("Settings' YouTube audio row", 30_000) {
@@ -168,6 +173,7 @@ class YouTubeEndToEndTest {
         override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit): Ran {
             if (argvs.isNotEmpty()) throw AssertionError("a second yt-dlp run")
             argvs += argv
+            assertTrue("no -o in the argv: $argv", argv.indexOf("-o") in 0 until argv.size - 1)
             val file = File(argv[argv.indexOf("-o") + 1].replace("%(ext)s", "m4a"))
             file.parentFile!!.mkdirs()
             instrumentation.context.assets.open("fixtures/$CLIP").use { input -> file.outputStream().use { input.copyTo(it) } }
@@ -178,11 +184,8 @@ class YouTubeEndToEndTest {
         }
     }
 
-    private fun runsToday(phone: Phone): Long = phone.parts.database.read { db ->
-        db.one("SELECT COUNT(*) FROM events WHERE provider = 'youtube' AND at >= ?", YouTubeRow.dayOf(Instant.now())) {
-            it.long(0)
-        } ?: 0
-    }
+    /** The yt-dlp runs of the last 24 hours, as the row counts them. */
+    private fun runsToday(phone: Phone): Long = phone.parts.database.read { db -> YouTubeRow.runsSince(db, Instant.now()) }
 
     // --- the fake sites ---------------------------------------------------------------------------------------------
 
