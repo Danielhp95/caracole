@@ -36,7 +36,7 @@ class ModelFilesTest {
 
     @Test fun carriedIsTheOneProbeOfWhetherThisBuildHasTheModels() {
         assertEquals(pins, ModelFiles.carried())
-        // A build whose classpath holds no models.json (the release's: :core ships none): null, never a throw.
+        // A build whose classpath holds no models.json (one without :ml: :core ships none): null, never a throw.
         val none = java.net.URLClassLoader(arrayOf(), null)
         assertNull(ModelFiles.carried(none))
         val e = kotlin.test.assertFailsWith<ModelsNotCarried> { ModelFiles.read(none) }

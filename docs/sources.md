@@ -47,6 +47,6 @@ phone, comes from this repository's `models` release. BTC comes from its authors
 caracole never republishes it. Each file is checked against its SHA-256 before it is kept. If GitHub says the hour's
 requests are spent, the app waits until then and asks nothing before. The owner uploads beat_this's two files to that
 release by hand, with `nix run .#publish-models -- DIR` (nix/publish-models.sh): each is checked against the app's
-pins first and uploaded only once.
+pins first and uploaded only once, with beat_this's licence beside them.
 
 The sheets and lyrics are other people's work. Keep your library private.

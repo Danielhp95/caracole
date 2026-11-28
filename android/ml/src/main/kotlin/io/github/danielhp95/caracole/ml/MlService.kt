@@ -83,12 +83,12 @@ object MlProtocol {
 
 /**
  * The chord models' process, `:ml` (its manifest's `android:process`, not exported, in the release as in debug
- * builds): bound by [MlChordModels], it hears one song ([Pipeline], on a thread of its own), so the models' memory, and a crash or the
- * low-memory killer's end of them, never touch the app's server in the main process, where nothing of this runs. One
- * hearing a process: a second request while one goes on is refused in words, and once its client unbinds (after its
- * answer, or to stop it: a [MlProtocol.CANCEL] too stops it at its next chunk) the process ends as soon as no hearing
- * runs, giving the models' memory back to the phone. Before the hearing the process's peak RSS is reset
- * (`/proc/self/clear_refs`), and its peak said with what was heard.
+ * builds): bound by [MlChordModels], it hears one song ([Pipeline], on a thread of its own), so the models' memory,
+ * and a crash or the low-memory killer's end of them, never touch the app's server in the main process, where nothing
+ * of this runs. One hearing a process: a second request while one goes on is refused in words, and once its client
+ * unbinds (after its answer, or to stop it: a [MlProtocol.CANCEL] too stops it at its next chunk) the process ends as
+ * soon as no hearing runs, giving the models' memory back to the phone. Before the hearing the process's peak RSS is
+ * reset (`/proc/self/clear_refs`), and its peak said with what was heard.
  */
 class MlService : Service() {
     private lateinit var looper: HandlerThread
@@ -111,8 +111,8 @@ class MlService : Service() {
 
     /** Its client gone: the hearing stopped, and the process ended once none runs. */
     override fun onUnbind(intent: Intent?): Boolean {
+        leaving.set(true)  // before `cancelled`: a hear() that clears `cancelled` after this then sees `leaving`
         cancelled.set(true)
-        leaving.set(true)
         if (!busy.get()) end()
         return false
     }

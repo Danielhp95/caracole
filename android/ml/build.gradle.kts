@@ -53,7 +53,7 @@ android {
     // instrumentation's AssetManager as CorpusOnDeviceTest reads the rest of the corpus.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/modelAssets"))
     // The runtime data of the models, caracole/autochords/ on the classpath (BTC's graph, models.json's pins):
-    // :ml's, so the debug build's alone, which :core leaves out (core/build.gradle.kts).
+    // :ml's, so a build with :ml's alone (the release's too), which :core leaves out (core/build.gradle.kts).
     sourceSets.getByName("main").resources.srcDir(layout.buildDirectory.dir("generated/modelData"))
 }
 
@@ -85,10 +85,11 @@ tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource")
 
 // The licences of what the chord models ship in the APK, as its assets `chords/licenses/` (as alphaTab's are
 // `alphatab/licenses/`, app/alphatab.gradle.kts): ONNX Runtime's (MIT) LICENSE and ThirdPartyNotices.txt from its
-// AAR's root, which packaging never takes; libsoxr's (LGPL-2.1+) LICENCE and COPYING.LGPL beside its source; BTC's
-// (MIT: its graph is in the APK, its weights downloaded) as src/caracole/autochords vendors it; beat_this's (MIT: its
-// converted graph downloaded), beat-this 1.1.0's LICENSE, kept in licenses/. release-check.sh checks each is in the
-// release APK, byte for byte.
+// AAR's root, which packaging never takes; libsoxr's (LGPL-2.1+) LICENCE and COPYING.LGPL beside its source, and the
+// licence of PFFFT, which it is built with (pffft.c's own comment, verbatim in licenses/libsoxr-pffft-LICENSE), with
+// licenses/README saying where the source is; BTC's (MIT: its graph is in the APK, its weights downloaded) as
+// src/caracole/autochords vendors it; beat_this's (MIT: its converted graph downloaded), beat-this 1.1.0's LICENSE,
+// kept in licenses/. release-check.sh checks each is in the release APK, byte for byte.
 val onnxRuntimeAar = configurations.detachedConfiguration(
     dependencies.create("io.github.danielhp95.caracole:onnxruntime-android:$onnxRuntime@aar"))
 val copyLicences by tasks.registering(Sync::class) {
@@ -103,10 +104,16 @@ val copyLicences by tasks.registering(Sync::class) {
             rename { "libsoxr-$it" }
         }
         from("../../src/caracole/autochords/LICENSE-BTC") { rename { "BTC-LICENSE" } }
-        from("licenses/beat_this-LICENSE.txt")
+        from("licenses") { include("beat_this-LICENSE.txt", "libsoxr-pffft-LICENSE", "README") }
     }
 }
-android.sourceSets.getByName("main").assets.srcDir(copyLicences)
+// A folder, and every task that reads the variants' assets made to wait for it: srcDir(a task) carries no dependency
+// on AGP's legacy source sets (an APK built from clean held none of them; release-check.sh caught it).
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/licenceAssets"))
+tasks.matching {
+    it.name != "copyLicences" && (it.name.endsWith("Assets") || it.name.contains("Lint") || it.name.startsWith("lint"))
+}
+    .configureEach { dependsOn(copyLicences) }
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }

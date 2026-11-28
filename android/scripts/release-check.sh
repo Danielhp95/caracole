@@ -16,7 +16,8 @@
 #   assets/autochords/, the bench's clips; no ChordsBenchActivity, BenchService or BenchWorkerService, ":bench" or
 #   ":benchrun" process or FOREGROUND_SERVICE_SPECIAL_USE in its manifest, aapt2's dump), no TelemetryInitializer;
 # - the licences of what the chord models ship, under assets/chords/licenses/, each its source's bytes: ONNX Runtime's
-#   LICENSE and ThirdPartyNotices.txt (from its AAR), libsoxr's LICENCE and COPYING.LGPL, BTC's and beat_this's;
+#   LICENSE and ThirdPartyNotices.txt (from its AAR), libsoxr's LICENCE and COPYING.LGPL and PFFFT's (pffft.c's own,
+#   verbatim), BTC's and beat_this's, and the README saying where the source is;
 # - its size: 100 MiB at most;
 #
 # and the controls, so that no probe passes for nothing:
@@ -180,6 +181,8 @@ licence_pairs=(
     "libsoxr-COPYING.LGPL=android/autochords/native/soxr/COPYING.LGPL"
     "BTC-LICENSE=src/caracole/autochords/LICENSE-BTC"
     "beat_this-LICENSE.txt=android/ml/licenses/beat_this-LICENSE.txt"
+    "libsoxr-pffft-LICENSE=android/ml/licenses/libsoxr-pffft-LICENSE"
+    "README=android/ml/licenses/README"
 )
 same_licence() {  # same_licence APK NAME SOURCE: the APK's assets/chords/licenses/NAME is SOURCE's bytes
     [ -s "$3" ] && unzip -p "$1" "assets/chords/licenses/$2" 2>/dev/null | cmp -s - "$3"
@@ -189,6 +192,16 @@ for pair in "${licence_pairs[@]}"; do
     check "release APK holds $name (assets/chords/licenses/), its source's bytes" \
         "$(yes_if 'same_licence "$release" "$name" "${pair#*=}"')"
 done
+# PFFFT's licence, which libsoxr is built with (autochords/native/CMakeLists.txt's pffft32s.c), is pffft.c's own
+# comment, verbatim: the file the APK carries is found whole in that source.
+within() {  # within PART WHOLE: PART's text (its last newlines aside) is in WHOLE's, verbatim
+    local part whole
+    part="$(cat "$1")" && whole="$(cat "$2")" && [ -n "$part" ] && [[ "$whole" == *"$part"* ]]
+}
+check "libsoxr-pffft-LICENSE is pffft.c's licence, verbatim" \
+    "$(yes_if 'within android/ml/licenses/libsoxr-pffft-LICENSE android/autochords/native/soxr/src/pffft.c')"
+check "the control: the verbatim probe finds no other licence in pffft.c" \
+    "$(yes_if '! within android/autochords/native/soxr/LICENCE android/autochords/native/soxr/src/pffft.c')"
 check "the control: the licences' probe tells two licences apart (onnxruntime-LICENSE is not libsoxr's LICENCE)" \
     "$(yes_if '! same_licence "$release" onnxruntime-LICENSE android/autochords/native/soxr/LICENCE')"
 check "the control: the licences' probe finds no licence the APK lacks" \

@@ -131,8 +131,10 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
    arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
    models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
-   ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, BTC's and beat_this's) are its assets
-   `chords/licenses/`, as alphaTab's are `alphatab/licenses/`. `android/scripts/release-check.sh` checks all of it.
+   ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, PFFFT's, which libsoxr is built with, BTC's and
+   beat_this's) are its assets `chords/licenses/`, as alphaTab's are `alphatab/licenses/`, with a README saying that
+   libsoxr is compiled into `libcaracole_soxr.so` and that caracole's, libsoxr's and the build's source is this
+   repository, github.com/Danielhp95/caracole. `android/scripts/release-check.sh` checks all of it.
 3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
    that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
    same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
@@ -159,7 +161,7 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
 The chord models themselves are no part of the APK: the app downloads beat_this's two converted graphs from this
 repository's GitHub prerelease `models`, and BTC's weights from its authors' repository, at a tap. The owner uploads the
 first with `publish-models`, by hand, once a model changes (it checks the two files against `models.json`'s pins,
-uploads each only once, and touches no other asset):
+uploads each only once with beat_this's licence, `beat_this-LICENSE.txt`, and touches no other asset):
 
     nix run .#publish-models -- "$(nix build --print-out-paths .#chord-models)"
 

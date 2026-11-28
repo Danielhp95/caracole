@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # publish-models: upload beat_this's two converted graphs to the GitHub release `models`, whence the phone's models'
-# job fetches them (core.models' ModelsSource, the chords-on-the-phone design's §6). BTC's weights are never put there:
-# the phone fetches its authors' own file.
+# job fetches them (core.models' ModelsSource, the chords-on-the-phone design's §6), and beside them beat_this's MIT
+# licence as `beat_this-LICENSE.txt`. BTC's weights are never put there: the phone fetches its authors' own file.
 #
 #   publish-models DIR
 #
 # DIR is `nix build .#chord-models`' folder. The pins are models.json (PINS, which the Nix wrapper sets to the
 # repository's tests/conformance/data/caracole/autochords/models.json): the release's name, each asset's name, size and
-# SHA-256.
+# SHA-256. BEAT_THIS_LICENSE (the Nix wrapper's: android/ml/licenses/beat_this-LICENSE.txt, the one the APK carries)
+# is the licence, checked by its own size and SHA-256 as the graphs are by their pins.
 #
 # Environment: REPO (default Danielhp95/caracole); GitHub's login is gh's own, or GH_TOKEN as set. Run by the owner by
 # hand, never by caracole.
 #
 # Each step says what it does as it begins, on stdout. Steps, each failing the script (exit 1) with a line saying which:
-#   1 the two files of DIR are the pinned ones (size and SHA-256), else nothing is uploaded;
+#   1 the two files of DIR are the pinned ones (size and SHA-256), and the licence is there, else nothing is uploaded;
 #   2 the release exists, else it is created; either way a prerelease, so that it is never the repository's Latest;
 #   3 every asset of the two names whose state isn't "uploaded" is deleted (a half upload);
 #   4 each file: listed as uploaded with the pinned size and digest, "already published"; listed with no digest, which
@@ -27,6 +28,7 @@ set -euo pipefail
 
 REPO=${REPO:-Danielhp95/caracole}
 : "${PINS:?PINS: the path of models.json}"
+: "${BEAT_THIS_LICENSE:?BEAT_THIS_LICENSE: the path of the beat_this licence}"
 
 [ $# -eq 1 ] && [ "${1#-}" = "$1" ] || { echo "usage: publish-models DIR" >&2; exit 2; }
 dir=$1
@@ -47,9 +49,9 @@ delete_id() { gh api -X DELETE "repos/$REPO/releases/assets/$1" >/dev/null; }
 
 # 1: the pinned files, "name<TAB>bytes<TAB>sha256" a line.
 pinned=$(jq -r '.beats.fp32, .beats.fp16 | "\(.asset)\t\(.bytes)\t\(.sha256)"' "$PINS")
-names=() sizes=() shas=()
+names=() sizes=() shas=() paths=()
 while IFS=$'\t' read -r name bytes sha; do
-  names+=("$name") sizes+=("$bytes") shas+=("$sha")
+  names+=("$name") sizes+=("$bytes") shas+=("$sha") paths+=("$dir/$name")
 done <<<"$pinned"
 for i in "${!names[@]}"; do
   name=${names[$i]}
@@ -58,6 +60,15 @@ for i in "${!names[@]}"; do
     && [ "$(sha256sum "$dir/$name" | cut -d' ' -f1)" = "${shas[$i]}" ] \
     || die 1 "$dir/$name isn't the pinned file (${sizes[$i]} bytes, sha256 ${shas[$i]})"
 done
+# The licence, uploaded under its own name whatever its path's (a store path's begins with a hash).
+[ -f "$BEAT_THIS_LICENSE" ] && [ -s "$BEAT_THIS_LICENSE" ] \
+  || die 1 "$BEAT_THIS_LICENSE, beat_this's licence, is missing"
+licence_dir=$(mktemp -d)
+trap 'rm -rf "$licence_dir"' EXIT
+cp "$BEAT_THIS_LICENSE" "$licence_dir/beat_this-LICENSE.txt"
+names+=(beat_this-LICENSE.txt) paths+=("$licence_dir/beat_this-LICENSE.txt")
+sizes+=("$(stat -c %s "$licence_dir/beat_this-LICENSE.txt")")
+shas+=("$(sha256sum "$licence_dir/beat_this-LICENSE.txt" | cut -d' ' -f1)")
 
 # 2
 say "reading the release $TAG of $REPO..."
@@ -104,7 +115,7 @@ for i in "${!names[@]}"; do
     die 4 "a different file of that name is there: $name"
   fi
   say "uploading $name ($bytes bytes) to $REPO, release $TAG..."
-  gh release upload "$TAG" --repo "$REPO" "$dir/$name" || die 4 "$name can't be uploaded"
+  gh release upload "$TAG" --repo "$REPO" "${paths[$i]}" || die 4 "$name can't be uploaded"
   list=$(assets) || die 4 "the release can't be read back"
   there=$(asset "$list" "$name")
   [ -n "$there" ] || die 4 "$name isn't listed after its upload"

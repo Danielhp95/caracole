@@ -1,5 +1,5 @@
-"""nix/publish-models.sh, the owner's upload of beat_this's converted graphs to the GitHub release `models` (the phone's
-models' job fetches them: core.models' ModelsSource), run against a fake ``gh`` (helpers/fake_gh.py): no test reaches
+"""nix/publish-models.sh, the owner's upload of beat_this's converted graphs and its licence to the GitHub release
+`models` (the phone's models' job fetches them: core.models' ModelsSource), run against a fake ``gh`` (helpers/fake_gh.py): no test reaches
 GitHub."""
 
 from __future__ import annotations
@@ -24,6 +24,8 @@ pytestmark = [
 
 FP32 = "beat_this-final0.onnx"
 FP16 = "beat_this-final0-fp16.onnx"
+LICENCE = "beat_this-LICENSE.txt"
+APK_LICENCE = ROOT / "android" / "ml" / "licenses" / LICENCE  # the one the APK carries, which the Nix wrapper names
 
 
 class Rig:
@@ -43,10 +45,14 @@ class Rig:
             pins["beats"][key].update(bytes=len(self.files[name]), sha256=hashlib.sha256(self.files[name]).hexdigest())
         self.pins = tmp_path / "models.json"
         self.pins.write_text(json.dumps(pins), encoding="utf-8")
+        # Under a name of its own, as a store path's: it is uploaded as beat_this-LICENSE.txt whatever its path.
+        self.licence = tmp_path / "0123abcd-licence"
+        self.licence_text = b"MIT License\n\nCopyright (c) 2024 a stand-in\n"
+        self.licence.write_bytes(self.licence_text)
 
     def run(self, **env: str) -> subprocess.CompletedProcess:
         full = {**os.environ, "PATH": f"{self.tmp / 'bin'}{os.pathsep}{os.environ['PATH']}", "REPO": "o/r",
-                "PINS": str(self.pins), **env}
+                "PINS": str(self.pins), "BEAT_THIS_LICENSE": str(self.licence), **env}
         full.pop("GH_TOKEN", None)
         return subprocess.run(["bash", str(SCRIPT), str(self.dir)], env=full, capture_output=True, text=True,
                               timeout=120)
@@ -71,9 +77,10 @@ def test_a_first_publish_makes_the_release_a_prerelease_and_uploads_each_graph_o
     assert done.returncode == 0, done.stderr
     rig.gh.load()
     assert rig.gh.state["release"]["tag"] == "models" and rig.gh.state["release"]["prerelease"]
-    assert rig.gh.names() == [FP16, FP32]
-    assert [Path(p).name for p in rig.uploads()] == [FP32, FP16]
+    assert rig.gh.names() == [LICENCE, FP16, FP32]
+    assert [Path(p).name for p in rig.uploads()] == [FP32, FP16, LICENCE]
     assert rig.gh.content(FP16) == rig.files[FP16]
+    assert rig.gh.content(LICENCE) == rig.licence_text
     assert done.stdout.splitlines() == [
         "publish-models: reading the release models of o/r...",
         "publish-models: creating the release models, a prerelease, so that it is never the repository's Latest...",
@@ -81,19 +88,50 @@ def test_a_first_publish_makes_the_release_a_prerelease_and_uploads_each_graph_o
         f"publish-models: {FP32} uploaded and checked",
         f"publish-models: uploading {FP16} (14 bytes) to o/r, release models...",
         f"publish-models: {FP16} uploaded and checked",
-        "publish-models: published 2 files",
+        f"publish-models: uploading {LICENCE} ({len(rig.licence_text)} bytes) to o/r, release models...",
+        f"publish-models: {LICENCE} uploaded and checked",
+        "publish-models: published 3 files",
     ]
 
 
-def test_a_release_published_by_hand_already_holding_both_uploads_nothing(rig):
-    rig.gh.asset(FP32, rig.files[FP32]).asset(FP16, rig.files[FP16])
+def test_a_release_published_by_hand_already_holding_all_three_uploads_nothing(rig):
+    rig.gh.asset(FP32, rig.files[FP32]).asset(FP16, rig.files[FP16]).asset(LICENCE, rig.licence_text)
     done = rig.run()
     assert done.returncode == 0, done.stderr
     assert rig.uploads() == []
     assert not [c for c in rig.gh.calls() if "DELETE" in c["argv"]]
-    assert f"publish-models: {FP32} is already published" in done.stdout.splitlines()
-    assert f"publish-models: {FP16} is already published" in done.stdout.splitlines()
-    assert rig.gh.names() == [FP16, FP32]
+    for name in (FP32, FP16, LICENCE):
+        assert f"publish-models: {name} is already published" in done.stdout.splitlines()
+    assert rig.gh.names() == [LICENCE, FP16, FP32]
+
+
+def test_a_release_with_the_graphs_and_no_licence_gets_the_licence_alone(rig):
+    rig.gh.asset(FP32, rig.files[FP32]).asset(FP16, rig.files[FP16])
+    done = rig.run()
+    assert done.returncode == 0, done.stderr
+    assert [Path(p).name for p in rig.uploads()] == [LICENCE]
+    assert rig.gh.content(LICENCE) == rig.licence_text
+
+
+def test_another_licence_of_that_name_is_never_replaced(rig):
+    rig.gh.asset(FP32, rig.files[FP32]).asset(FP16, rig.files[FP16]).asset(LICENCE, b"another text")
+    done = rig.run()
+    assert done.returncode == 1
+    assert f"a different file of that name is there: {LICENCE}" in done.stderr
+    assert rig.gh.content(LICENCE) == b"another text" and rig.uploads() == []
+
+
+def test_no_licence_uploads_nothing(rig):
+    done = rig.run(BEAT_THIS_LICENSE=str(rig.tmp / "none"))
+    assert done.returncode == 1
+    assert "beat_this's licence, is missing" in done.stderr
+    assert rig.uploads() == [] and rig.gh.names() == []
+
+
+def test_the_licence_the_wrapper_names_is_the_apks_beat_this_licence():
+    wrapper = (ROOT / "nix" / "publish-models.nix").read_text(encoding="utf-8")
+    assert 'BEAT_THIS_LICENSE = "${../android/ml/licenses/beat_this-LICENSE.txt}"' in wrapper
+    assert APK_LICENCE.read_text(encoding="utf-8").startswith("MIT License")
 
 
 def test_a_release_that_isnt_a_prerelease_is_made_one(rig):
@@ -122,7 +160,7 @@ def test_another_file_of_the_same_name_is_never_replaced(rig):
 
 
 def test_an_asset_listed_with_no_digest_is_uploaded_again(rig):
-    rig.gh.asset(FP32, rig.files[FP32], no_digest=True).asset(FP16, rig.files[FP16])
+    rig.gh.asset(FP32, rig.files[FP32], no_digest=True).asset(FP16, rig.files[FP16]).asset(LICENCE, rig.licence_text)
     done = rig.run()
     assert done.returncode == 0, done.stderr
     assert [Path(p).name for p in rig.uploads()] == [FP32]
@@ -134,7 +172,7 @@ def test_a_half_upload_is_deleted_first(rig):
     rig.gh.asset(FP16, b"half", state="starter")
     done = rig.run()
     assert done.returncode == 0, done.stderr
-    assert rig.gh.names() == [FP16, FP32]
+    assert rig.gh.names() == [LICENCE, FP16, FP32]
     assert rig.gh.content(FP16) == rig.files[FP16]
 
 
@@ -154,9 +192,9 @@ def test_another_repository_or_release_is_never_asked(rig):
     assert rig.gh.names() == [] and rig.uploads() == []
 
 
-def test_nothing_but_the_two_graphs_is_touched(rig):
+def test_nothing_but_the_two_graphs_and_the_licence_is_touched(rig):
     rig.gh.asset("notes.txt", b"the owner's")
     done = rig.run()
     assert done.returncode == 0, done.stderr
-    assert rig.gh.names() == [FP16, FP32, "notes.txt"]
+    assert rig.gh.names() == [LICENCE, FP16, FP32, "notes.txt"]
     assert "btc-graph.onnx" not in " ".join(rig.uploads())

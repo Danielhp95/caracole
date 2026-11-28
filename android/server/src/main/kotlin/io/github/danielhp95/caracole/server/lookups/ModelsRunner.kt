@@ -77,7 +77,7 @@ class ModelsRunner(
     private val metered: () -> Boolean = { false },
     private val ticks: () -> Long = System::nanoTime,
 ) : CommandRunner {
-    /** This build's pins, or null for one that carries no models (the release's). */
+    /** This build's pins, or null for one that carries no models (a build without `:ml`). */
     private val pins: Pins? by lazy { source?.pins?.invoke() }
 
     /** Held by a run and by [remove], so that the files are never deleted under a download. */
