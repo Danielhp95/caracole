@@ -189,9 +189,9 @@ def _target_ok(kind, target, rules, loopback):
         return _loopback(target, rules["loopback_hosts"])
     targets = rules["targets"]
     if kind == "search":
-        # The count the phone asks for alone (youtube.json's search_results), never another.
-        count = re.escape(str(rules["search_results"]))
-        return re.fullmatch(_filled(targets["search_prefix"], "{n}", count) + ".+", target, re.S) is not None
+        # The counts the phone asks for alone (a sheet's search_results, a suggestion's search.results), never another.
+        counts = "(?:" + "|".join(re.escape(str(n)) for n in rules["search_counts"]) + ")"
+        return re.fullmatch(_filled(targets["search_prefix"], "{n}", counts) + ".+", target, re.S) is not None
     vid = targets["video_id"]
     pattern = _filled(targets["watch_url"], "{id}", "(?:" + vid["pattern"] + ")")
     return re.fullmatch(pattern, target, re.I if vid["ignorecase"] else 0) is not None

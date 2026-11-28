@@ -52,8 +52,9 @@ youtube.json (no budget, pause or switch: config/config.json holds ``youtube``'s
 - ``fetch``: youtube_fetch.py's ``recheck_after_days`` (``RECHECK_AFTER``), ``give_up_after`` (``GIVE_UP_AFTER``),
   ``audio_folder`` (``AUDIO_FOLDER``, the downloads' folder under the cache) and ``part_prefix`` (``_PART_PREFIX``, a
   download's own folder there until its file is in place);
-- ``search``: youtube_search.py's ``searches_per_hour``, ``asked_for_days`` (``ASKED_FOR``, the 30 days),
-  ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
+- ``search``: youtube_search.py's ``searches_per_hour``, ``results`` (``RESULTS``, the count of a search's suggested
+  video, ``ytsearch1:``; ``search_results`` above is a sheet's search's), ``asked_for_days`` (``ASKED_FOR``, the 30
+  days), ``failed_for_seconds`` (``FAILED_FOR``) and ``failures_pause``;
 - ``gate``: the phone's gate (``PHONE_GATE``, which the computer never reads: it has no gate): ``names``, and a name
   under one of ``suffixes``, on ``port`` by CONNECT; ``apart``, allowed and reported apart; ``refused``, by name in
   every mode; ``refusal``, a run's error when the gate refused a host (``{host}``), read from its log first;
@@ -267,6 +268,7 @@ def youtube_json() -> str:
             "key": CHOOSE_KEY,
         },
         "search": {"searches_per_hour": youtube_search.SEARCHES_PER_HOUR,
+                   "results": youtube_search.RESULTS,
                    "asked_for_days": youtube_search.ASKED_FOR.days,
                    "failed_for_seconds": int(youtube_search.FAILED_FOR.total_seconds()),
                    "failures_pause": youtube_search.FAILURES_PAUSE,

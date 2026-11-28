@@ -495,6 +495,7 @@
  },
  "search": {
   "searches_per_hour": 10,
+  "results": 1,
   "asked_for_days": 30,
   "failed_for_seconds": 3600,
   "failures_pause": 3,

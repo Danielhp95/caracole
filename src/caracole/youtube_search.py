@@ -58,6 +58,7 @@ if TYPE_CHECKING:
 PROVIDER = "youtube"
 THUMBS_PROVIDER = "ytimg"  # YouTube's image host: a provider of its own, with no pause (config.py)
 SEARCHES_PER_HOUR = 10  # the page's searches of YouTube in the last hour, at most
+RESULTS = 1  # YouTube's first result alone: the one video a search suggests (``ytsearch1:``)
 ASKED_FOR = timedelta(days=30)  # a query searched once in this long
 FAILED_FOR = timedelta(hours=1)  # a search that failed: not sent again for this long
 FAILURES_PAUSE = 3  # searches failed within FAILED_FOR that stop every search for that long
@@ -203,7 +204,7 @@ def _gate(conn: sqlite3.Connection, key: str, now: datetime) -> Gate:
 def search(conn: sqlite3.Connection, runner: YtDlp, query: str, now: datetime) -> Video | None:
     """YouTube's first result for ``query`` (one yt-dlp run), recorded searched with it (or with none). A block, a
     spent budget or an error propagates and records nothing."""
-    videos = runner.search(query, 1)
+    videos = runner.search(query, RESULTS)
     video = next((v for v in videos if not v.live), None)
     kv_set_json(conn, KV_PREFIX + query_key(query), {"at": stamps.stamp(now), "query": query,
                                                      "video": video.as_json() if video else None, "thumb": False})

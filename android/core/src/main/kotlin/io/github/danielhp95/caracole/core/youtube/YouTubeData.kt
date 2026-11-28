@@ -48,6 +48,13 @@ class YouTubeData private constructor(val json: JsonObject) {
 
     val searchResults: Int = json.getValue("search_results").jsonPrimitive.int
 
+    /** A search's suggested video's count (youtube.json's `search.results`, youtube_search.py's RESULTS: 1). */
+    val suggestResults: Int = json.getValue("search").jsonObject.getValue("results").jsonPrimitive.int
+
+    /** Every count the phone's searches ask for, a sheet's then a suggestion's: the :youtube service's glue runs a
+     * search at these alone (GlueRules' `search_counts`). */
+    val searchCounts: List<Int> = listOf(searchResults, suggestResults).distinct()
+
     init {
         check(targets.getValue("video_id_matched").jsonPrimitive.content == "whole") { "video_id is matched whole" }
         check(SEARCH in templates) { "youtube.json has no $SEARCH template" }
