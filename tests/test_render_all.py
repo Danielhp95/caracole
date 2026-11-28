@@ -895,6 +895,32 @@ def test_a_lookup_goes_between_two_songs_and_what_it_changed_is_read_again(conn,
     assert stats.rendered == 1 and not pdf_of(cfg, second).exists()
 
 
+def test_a_hand_over_between_two_re_lay_candidates_is_read_again_by_the_pass(conn, cfg, tmp_path):
+    # The re-lay of auto sheets that keep what was heard comes first, and hands the lock over between two of them:
+    # what the job that had it wrote to overrides.toml is what every song after is rendered by.
+    from test_autochords_sheet_lyrics import _heard_sheet
+
+    _heard_sheet(conn, cfg, tmp_path, "no lyrics", title="River Road")
+    _heard_sheet(conn, cfg, tmp_path, "no lyrics", title="Hill Road")
+    first = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
+    human_sheet(conn, cfg, first, tab_id=1)
+    second = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-01T00:00:00Z")
+    human_sheet(conn, cfg, second, tab_id=2)
+    run, turns = FakeChordPro(), []
+
+    def between() -> bool:  # the lock went to the owner's job once, and it ignored the second song meanwhile
+        if turns:
+            return False
+        turns.append(len(run.calls))
+        overrides(cfg, '[ignore]\nsongs = ["Soda Stereo - Persiana Americana"]\n')
+        return True
+
+    render(conn, cfg, runner=run, between=between)
+    assert turns == [0]  # handed over in the re-lay loop, before any PDF
+    assert pdf_of(cfg, first).exists()
+    assert not pdf_of(cfg, second).exists()  # overrides.toml as the job left it is what the pass renders by
+
+
 def test_each_songs_turn_is_said_as_it_starts_n_of_the_songs_in_all(conn, cfg):
     # What caracole render and the run's render step show while a long pass goes: "PDFs · 2 of 3 songs".
     first = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-03T00:00:00Z")
