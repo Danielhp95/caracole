@@ -81,11 +81,28 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
 - Backups, daily and before each sync (Settings › Backups).
 - Pinch to change the text size.
 
+## A sheet from a YouTube video (debug build)
+
+A song no site has chords for can get a sheet made from a YouTube video, on the phone itself.
+For now this is in the [debug
+build](../android/README.md#a-sheet-from-a-youtube-video-debug-build) alone, and it needs the
+chord models on the phone.
+
+Paste the video into the request form's YouTube field, or into a song's card and tap **Make
+sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone downloads the audio with
+yt-dlp, asks the lyrics sites for the words, works out the chords, keeps the sheet and deletes
+the audio. Nothing is downloaded before you tap. It works on Wi-Fi or mobile data.
+
+Settings › **YouTube audio** says whether it can run, and how many yt-dlp runs the last 24 hours
+held. The phone keeps the computer's limits, counted on its own, and the same caveat: taking
+audio from YouTube goes against its terms ([the sites caracole reads](sources.md)).
+`[providers.youtube] enabled = false` on the computer turns it off on the phone at the next sync.
+
 ## What stays on the computer
 
-The nightly run, building the site indexes, chords from audio, YouTube, PDF files and iReal
-Pro charts. A song you add on the phone without fetching it is picked up by the computer's next
-nightly run, after a sync.
+The nightly run, building the site indexes, PDF files and iReal Pro charts, and, but for the
+debug build's sheet from a YouTube video, chords from audio. A song you add on the phone without
+fetching it is picked up by the computer's next nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
@@ -95,7 +112,7 @@ nightly run, after a sync.
 | Fetch one song now | Yes | Yes |
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |
 | PDF files | Yes | No, prints instead |
-| Chords from audio, YouTube | Optional | No |
+| Chords from audio, YouTube | Optional | Debug build only, from a video |
 | iReal Pro charts | Yes | No |
 | Watch your `Music/` and `_inbox/` folders | Yes | No, share files to the app |
 | Share from another app | No | Yes |
