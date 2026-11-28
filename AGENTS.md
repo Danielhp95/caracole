@@ -2198,8 +2198,9 @@ It is rows.js's, shared by both pages:
     720 px, sliding up there alone): XHR's upload, sent as `application/octet-stream` (a File's own type is refused
     415), its count `aria-hidden` beside the live region, which says only its start and its outcome; a file past
     `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
-    the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces;
-    Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
+    the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces; its
+    hint, and a card's entry's title, saying the words heard from the file only where `server.transcribe.ok` (never
+    the phone); Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
     Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
     purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
     and posts its `songForm` in place (`song`, `identity`, `upload`; `form.audio-sheet`, a class the dialog shares,
