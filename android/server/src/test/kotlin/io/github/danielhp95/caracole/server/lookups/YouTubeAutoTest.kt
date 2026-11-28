@@ -22,6 +22,7 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
@@ -73,6 +74,24 @@ class YouTubeAutoTest {
 
     private fun pass(phone: Phone, metered: () -> Boolean = { false }, problem: String? = null): YouTubeAuto.Ended =
         runBlocking { withTimeout(60_000) { YouTubeAuto(phone.parts, { problem }, metered).pass() } }
+
+    /** A pass of [phone]'s, its monotonic clock [monotonic]. */
+    private fun auto(phone: Phone, monotonic: () -> Double = { System.nanoTime() / 1e9 },
+                     outdated: (Db, Instant) -> String? = { _, _ -> null }) =
+        YouTubeAuto(phone.parts, { null }, { false }, outdated = outdated, monotonic = monotonic)
+
+    private fun run(auto: YouTubeAuto): YouTubeAuto.Ended = runBlocking { withTimeout(60_000) { auto.pass() } }
+
+    /** A monotonic clock at 0 for the pass's start and its first song, then past MOST_S: one job, then TIME. */
+    private fun oneSongThenTimeUp(): () -> Double {
+        var calls = 0
+        return { if (calls++ < 2) 0.0 else YouTubeAuto.MOST_S }
+    }
+
+    /** [phone] synced with a computer just now: paired, its noted songs alone due. */
+    private fun pair(phone: Phone) = phone.database.writeBlocking { db ->
+        db.kvSet("sync:base:0f1e2d3c4b5a6978", """{"format": 3, "units": {"song/x": [null, "${Stamps.of(Instant.now())}"]}}""")
+    }
 
     @Test fun eachDueSongGetsOneAutomaticJobInTurnTheNotedFirst() {
         val phone = phone(listOf("One", "Two", "Three"), noted = setOf("One"))
@@ -139,5 +158,99 @@ class YouTubeAutoTest {
         val ended = runBlocking { YouTubeAuto(phone.parts, { null }, { false }, outdated = { _, _ -> "nsig extraction failed" }).pass() }
         assertEquals(YouTubeAuto.Stop.OUTDATED, ended.stopped)
         assertEquals(emptyList(), phone.asked)
+    }
+
+    /** The hunter's case: a paired phone's noted songs, a pass that stops at 8 minutes after the first; the two it
+     * didn't reach are left, and another pass goes 2 minutes on. */
+    @Test fun aPassStoppedAtEightMinutesLeavesTheSongsItDidntReachAndAsksForAnotherSoon() {
+        val phone = phone(listOf("One", "Two", "Three"), noted = setOf("One", "Two", "Three"))
+        pair(phone)
+        val auto = auto(phone, monotonic = oneSongThenTimeUp())
+        val ended = run(auto)
+        assertEquals(YouTubeAuto.Stop.TIME, ended.stopped)
+        assertEquals(1, phone.asked.size)
+        assertEquals(2, ended.left)
+        assertEquals(YouTubeAuto.AGAIN_SOON, auto.again(ended))
+    }
+
+    /** A song noted while the pass awaits its last job (soon's KEEP enqueues nothing then: its work still runs) is
+     * counted at the pass's end, so another pass takes it. */
+    @Test fun aSongNotedWhileThePassAwaitsItsLastJobIsLeftForTheNextPass() {
+        val phone = phone(listOf("One", "Two"), noted = setOf("One"), during = { db ->
+            db.execute("INSERT OR IGNORE INTO kv (key, value) SELECT 'youtube-wanted:' || id, '\"2026-11-27T00:00:00Z\"' FROM songs")
+        })
+        pair(phone)
+        val auto = auto(phone, monotonic = oneSongThenTimeUp())
+        val ended = run(auto)
+        assertEquals(listOf("Calla Lake - One" to true), phone.asked)
+        assertEquals(1, ended.left)
+        assertEquals(YouTubeAuto.AGAIN_SOON, auto.again(ended))
+    }
+
+    /** A song the pass tried is never left for another: its job's failure waits for the next lookup or the daily. */
+    @Test fun aPassThatTriedEverySongAsksForNoOther() {
+        val phone = phone(listOf("One"), noted = setOf("One"))
+        pair(phone)
+        val auto = auto(phone, monotonic = oneSongThenTimeUp())
+        val ended = run(auto)
+        assertEquals(YouTubeAuto.Stop.TIME, ended.stopped)
+        assertEquals(0, ended.left)
+        assertEquals(null, auto.again(ended))
+        val all = auto(phone(listOf("One", "Two")))
+        val done = run(all)
+        assertEquals(YouTubeAuto.Stop.NOTHING_DUE, done.stopped)
+        assertEquals(null, all.again(done))
+    }
+
+    /** A block's cooldown: another pass once it ends (the first strike's 26 hours), plus 2 minutes. */
+    @Test fun aPassStoppedByACooldownAsksForAnotherOnceItEnds() {
+        val phone = phone(listOf("One", "Two"), during = { db -> Health.recordBlock(db, "youtube", Instant.now(), "bot check") })
+        val auto = auto(phone)
+        val ended = run(auto)
+        assertEquals(YouTubeAuto.Stop.COOLING, ended.stopped)
+        assertEquals(1, ended.left)
+        val again = auto.again(ended)!!
+        assertTrue(again > Duration.ofHours(26) && again <= Duration.ofHours(26).plusMinutes(5), "$again")
+    }
+
+    /** Fewer than 2 runs left: another pass once two are free again, the oldest runs leaving the day. */
+    @Test fun aPassStoppedByTheDaysRunsAsksForAnotherOnceTwoAreFree() {
+        val phone = phone(listOf("One", "Two", "Three"))
+        val budget = phone.parts.config().provider("youtube").budget.toInt()
+        phone.database.writeBlocking { db ->
+            repeat(budget - 2) {
+                db.execute("INSERT INTO events (run, at, provider, url, status, decision) VALUES ('s', ?, 'youtube', 'u', NULL, 'ok')",
+                           Stamps.of(Instant.now().minus(Duration.ofHours(23))))
+            }
+        }
+        val auto = auto(phone)
+        val ended = run(auto)
+        assertEquals(YouTubeAuto.Stop.FEW_RUNS, ended.stopped)
+        assertEquals(1, phone.asked.size)
+        assertEquals(2, ended.left)
+        val again = auto.again(ended)!!
+        assertTrue(again > Duration.ofMinutes(61) && again <= Duration.ofMinutes(63), "$again")
+    }
+
+    /** Out of date, switched off: no other pass, whatever is left (a new yt-dlp, the switch turned on, asks again). */
+    @Test fun aPassStoppedForAReasonThatDoesntPassByItselfAsksForNoOther() {
+        val outdated = phone(listOf("One"))
+        val stale = auto(outdated, outdated = { _, _ -> "nsig extraction failed" })
+        val ended = run(stale)
+        assertEquals(YouTubeAuto.Stop.OUTDATED, ended.stopped)
+        assertEquals(1, ended.left)
+        assertEquals(null, stale.again(ended))
+        val off = phone(listOf("One"))
+        off.database.writeBlocking { db -> YouTubeAuto.set(db, false) }
+        val switched = auto(off)
+        val offEnded = run(switched)
+        assertEquals(YouTubeAuto.Stop.SWITCHED_OFF, offEnded.stopped)
+        assertEquals(null, switched.again(offEnded))
+    }
+
+    /** The switch turned back on asks for a pass only where a song a lookup noted is due. */
+    @Test fun theSwitchTurnedBackOnAsksForAPassOnlyWhereANotedSongIsDue() {
+        assertEquals(false, auto(phone(listOf("One"))).notedDue())
+        assertEquals(true, auto(phone(listOf("One"), noted = setOf("One"))).notedDue())
     }
 }

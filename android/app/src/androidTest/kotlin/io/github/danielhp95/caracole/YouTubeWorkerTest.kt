@@ -19,7 +19,8 @@ import java.time.Instant
 /**
  * The automatic YouTube pass's work on the device (YouTubeWorker, the phone-youtube design's §5.3), through the real
  * WorkManager of the debug app: the daily work scheduled on a phone with no computer, and not on one that synced
- * within 14 days; the switch off schedules nothing and cancels what was there; soon's work enqueued once, KEEP. The
+ * within 14 days; the switch off schedules nothing and cancels what was there; soon's work enqueued once, KEEP;
+ * another pass appended after one that left songs. The
  * pass itself (which songs, how many, its stops) is the JVM's YouTubeAutoTest, over the real queue. Before and after
  * each test: both works cancelled, every `sync:base:%` record cleared (the phone's syncs: a test's own), the switch on.
  *
@@ -80,6 +81,17 @@ class YouTubeWorkerTest {
         assertEquals(1, waiting(YouTubeWorker.SOON))
         val info = work.getWorkInfosForUniqueWork(YouTubeWorker.SOON).get().single()
         assertEquals(WorkInfo.State.ENQUEUED, info.state)  // two minutes on, Wi-Fi and the battery's say
+    }
+
+    /** A pass that stops with songs left asks for another (soonAgain): appended to soon's work, so that it is
+     * enqueued while a soon work waits or runs (where soon's KEEP enqueues nothing), with soon's constraints. */
+    @Test fun anotherPassIsAppendedToTheSoonWork() {
+        YouTubeWorker.soon(context, phone)
+        YouTubeWorker.soonAgain(context, java.time.Duration.ofMinutes(2))
+        assertEquals(2, waiting(YouTubeWorker.SOON))
+        val infos = work.getWorkInfosForUniqueWork(YouTubeWorker.SOON).get()
+        assertTrue("${infos.map { it.state }}", infos.any { it.state == WorkInfo.State.BLOCKED })  // after the first
+        for (info in infos) assertEquals(NetworkType.UNMETERED, info.constraints.requiredNetworkType)
     }
 
     /** Both works' constraints as the design's §5.3 says: unmetered and the battery not low; the daily also charging. */

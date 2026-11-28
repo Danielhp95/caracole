@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
@@ -29,6 +30,9 @@ import java.util.concurrent.TimeUnit
  *
  * - [SOON], after a lookup that left its song "Not on the sites" (Phone.onNoSheet): unique one-time work, KEEP, two
  *   minutes on, on an unmetered network with the battery not low;
+ * - a pass that stops with songs it hadn't tried, for a reason that passes by itself (8 minutes, a metered network,
+ *   the queue full, a cooldown, the day's runs), asks for another (YouTubeAuto.again, [soonAgain]: appended to [SOON]);
+ *   the switch turned back on asks for one where a noted song is due ([switchedOn]);
  * - [DAILY], every 24 hours (6 of flex), also charging, scheduled only on a phone that hasn't synced with a computer in
  *   14 days ([schedule]), and letting itself go when it finds the phone synced since.
  *
@@ -68,7 +72,10 @@ class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             foreground()
             val ended = phone.youtubeAuto.pass()
             lastForTests = ended
-            Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}")
+            val again = withContext(Dispatchers.IO) { phone.youtubeAuto.again(ended) }
+            Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}, " +
+                "${ended.left} song(s) left" + (again?.let { ", another pass in ${it.toMinutes()} min" } ?: ""))
+            if (again != null) soonAgain(context, again)
             return Result.success()
         }
 
@@ -105,20 +112,41 @@ class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         private fun daily(db: io.github.danielhp95.caracole.core.db.Db): Boolean =
             YouTubeAuto.on(db) && !YouTubeAuto.paired(db, Instant.now())
 
+        /** soon's constraints: an unmetered network, the battery not low. */
+        private fun soonConstraints(): Constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+
         /** The after-a-lookup work enqueued (KEEP: one waiting is the answer), unless the switch is off. */
         fun soon(context: Context, phone: Phone = Caracole.phone(context)) {
             if (!on(phone)) return
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.UNMETERED)
-                .setRequiresBatteryNotLow(true)
-                .build()
-            val request = OneTimeWorkRequestBuilder<YouTubeWorker>().setConstraints(constraints)
+            val request = OneTimeWorkRequestBuilder<YouTubeWorker>().setConstraints(soonConstraints())
                 .setInitialDelay(SOON_DELAY_MIN, TimeUnit.MINUTES).addTag(SOON).build()
             try {
                 WorkManager.getInstance(context).enqueueUniqueWork(SOON, ExistingWorkPolicy.KEEP, request)
             } catch (_: IllegalStateException) {
                 // WorkManager isn't there (a test's context): nothing is enqueued.
             }
+        }
+
+        /** Another pass [delay] on, after one that stopped with songs left (YouTubeAuto.again): appended to soon's work
+         * (APPEND_OR_REPLACE), so that it is enqueued while this pass's own work still runs, where soon's KEEP would
+         * keep the running one and enqueue nothing; soon's constraints. */
+        internal fun soonAgain(context: Context, delay: Duration) {
+            val request = OneTimeWorkRequestBuilder<YouTubeWorker>().setConstraints(soonConstraints())
+                .setInitialDelay(delay.toMillis().coerceAtLeast(0L), TimeUnit.MILLISECONDS).addTag(SOON).build()
+            try {
+                WorkManager.getInstance(context).enqueueUniqueWork(SOON, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+            } catch (_: IllegalStateException) {
+                // WorkManager isn't there (a test's context): nothing is enqueued.
+            }
+        }
+
+        /** Settings' switch turned back on: a pass soon where a song a lookup noted is due (no daily pass takes it on a
+         * paired phone). */
+        fun switchedOn(context: Context, phone: Phone = Caracole.phone(context)) {
+            if (phone.youtube != null && phone.youtubeAuto.notedDue()) soon(context, phone)
         }
 
         /** The daily work scheduled (KEEP) on a phone it belongs on, else cancelled; the switch off cancels both. */

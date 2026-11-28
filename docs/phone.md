@@ -103,7 +103,8 @@ keeps the sheet and deletes the audio. It works on Wi-Fi or mobile data.
 The phone also does it by itself, on Wi-Fi with the battery not low: a few minutes after a lookup
 finds no sheet on the sites, and once a day while charging on a phone that hasn't synced with a
 computer in 14 days. It takes only songs with no sheet at all, whose sites were asked, and stops at a
-block, near the day's limit of 50 runs, or after 8 minutes. Settings › **Find audio on YouTube by
+block, near the day's limit of 50 runs, or after 8 minutes, going on later with the songs it
+didn't reach. Settings › **Find audio on YouTube by
 itself** turns that off.
 
 Settings › **YouTube audio** says whether it can run, and how many of the day's runs of yt-dlp
