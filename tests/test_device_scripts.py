@@ -8,6 +8,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -484,6 +485,17 @@ def test_a_second_interrupt_during_the_stop_never_cuts_it_short(rig):
     assert "emulator-5554 didn't stop within 3 s of emu kill: killed it" in err
 
 
+@pytest.mark.parametrize("lines", [1, 2, 3])
+def test_a_reader_that_goes_away_still_stops_the_emulator_and_the_adb_server(rig, lines):
+    # `device-test.sh … 2>&1 | head -n N`: after N lines every write meets a closed pipe, the stop's own words too.
+    command = " ".join(shlex.quote(word) for word in rig.command("device-test.sh", "--area", "keys"))
+    done = subprocess.run(["bash", "-c", f"{command} 2>&1 | head -n {lines}"], env=rig.env(), capture_output=True,
+                          text=True, timeout=120)
+    assert rig.emulators() == {}, f"the emulator it started is left up; it said: {done.stdout!r}"
+    assert ["kill-server"] in rig.calls("adb"), f"it never stopped the adb server it started; it said: {done.stdout!r}"
+    assert not rig.server
+
+
 def test_sigterm_still_stops_the_emulator(rig):
     rig.server_up()
     proc = subprocess.Popen(rig.command("device-test.sh", "--area", "keys"), env=rig.env(FAKE_INSTRUMENT="hang"),
@@ -691,6 +703,22 @@ def test_stop_all_stops_every_free_pool_emulator_and_the_adb_server(stop_rig):
     assert stop_rig.adb_held_no_lock(), "no adb it runs holds a pool lock"
     again = stop_rig.run("stop-all.sh", CARACOLE_EMULATORS="3")
     assert again.returncode == 0 and "no emulator of the pool is running" in again.stdout, "idempotent"
+
+
+def test_stop_all_whose_reader_has_gone_still_stops_the_adb_server(stop_rig):
+    stop_rig.server_up()
+    stop_rig.emulator_up()
+    read, write = os.pipe()
+    os.close(read)  # a reader gone before its first line (`stop-all.sh | head`): every write meets a closed pipe
+    try:
+        done = subprocess.run(stop_rig.command("stop-all.sh"), env=stop_rig.env(), stdout=write,
+                              stderr=subprocess.PIPE, text=True, timeout=90)
+    finally:
+        os.close(write)
+    assert stop_rig.emulators() == {}
+    assert ["kill-server"] in stop_rig.calls("adb"), done.stderr
+    assert not stop_rig.server
+    assert done.returncode == 0, done.stderr
 
 
 def test_stop_all_without_gradle_leaves_the_daemons_and_says_they_idle_out(stop_rig):

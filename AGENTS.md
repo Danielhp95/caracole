@@ -5043,10 +5043,11 @@ nix flake check
   with `:ml`), every other run in the default one.
 - **Leave nothing running**, the owner's rule of 2026-11-27: "Ensure that emulators are properly killed when using them
   for testing or development. same thing for gradle biuld and adb servers."
-  - device-test.sh stops, as it ends on any path (a pass, a failure, an interrupt: an EXIT trap), the emulator it
-    started (`adb emu kill`, its process session waited for `CARACOLE_EMULATOR_STOP_WAIT` s, 60 by default, then
-    killed), while it still holds that emulator's lock, so no caller takes a dying one; one up already is someone
-    else's and is left up; `--keep-emulator` (or `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
+  - device-test.sh stops, as it ends on any path (a pass, a failure, an interrupt, a reader gone: an EXIT trap that
+    ignores them), the emulator it started (`adb emu kill`, its process session waited for
+    `CARACOLE_EMULATOR_STOP_WAIT` s, 60 by default, then killed), while it still holds that emulator's lock, so no
+    caller takes a dying one; one up already is someone else's and is left up; `--keep-emulator` (or
+    `CARACOLE_KEEP_EMULATOR=1`) keeps the one it started, to look at it.
     It stops the adb server it started once adb lists no device at all and no other caller holds a pool emulator,
     never one running before it nor while a phone is attached (tests/test_device_scripts.py). No adb it runs inherits
     the lock, and each adb call of a stop is bounded (`CARACOLE_ADB_TIMEOUT`, 10 s; no answer, then the kill). An
@@ -5054,7 +5055,8 @@ nix flake check
     caller and stays up until stop-all.sh runs.
   - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
     is left), and the adb server only when no device is listed, in any state, and no caller holds a pool lock, a line
-    for each thing stopped or left; this user's processes alone, matched by their own name and arguments. Gradle only
+    for each thing stopped or left (a reader gone, `| head`, cuts none of it short); this user's processes alone,
+    matched by their own name and arguments. Gradle only
     with `--gradle`: `gradle --stop` stops every daemon of that version for the user, other worktrees' running builds
     among them, so it refuses while `gradle --status` calls any daemon busy (or fails, or can't say; the check and
     the stop aren't atomic); without it, it says how many run, each stopping by itself after two idle minutes.

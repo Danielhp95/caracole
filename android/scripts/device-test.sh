@@ -85,13 +85,13 @@
 #
 # It leaves nothing it started running, the owner's rule of 2026-11-27 ("Ensure that emulators are properly killed
 # when using them for testing or development. same thing for gradle biuld and adb servers."): as it ends, on every
-# path (a pass, a failure, an interrupt, a second one during the stop), the emulator it started is stopped (adb emu
-# kill, then its process session waited for, CARACOLE_EMULATOR_STOP_WAIT seconds, 60 by default, then killed), while
-# it still holds that emulator's lock, so the next caller never takes a dying one; an emulator that was up already is
-# someone else's and is left up. An emulator left by a run that was SIGKILLed, or by a script older than this, reads
-# so to every later caller and stays up until android/scripts/stop-all.sh runs. The adb server it started is stopped
-# once adb lists no device at all, in any state, and no other caller holds an emulator of the pool; one running
-# before it is left. No adb it runs inherits the lock.
+# path (a pass, a failure, an interrupt, a second one during the stop, a reader gone), the emulator it started is
+# stopped (adb emu kill, then its process session waited for, CARACOLE_EMULATOR_STOP_WAIT seconds, 60 by default, then
+# killed), while it still holds that emulator's lock, so the next caller never takes a dying one; an emulator that was
+# up already is someone else's and is left up. An emulator left by a run that was SIGKILLed, or by a script older than
+# this, reads so to every later caller and stays up until android/scripts/stop-all.sh runs. The adb server it started
+# is stopped once adb lists no device at all, in any state, and no other caller holds an emulator of the pool; one
+# running before it is left. No adb it runs inherits the lock.
 # What it pushed (--data's folder, :ml's test APK's data) is removed first, the emulator still up, then it is stopped.
 set -euo pipefail
 
@@ -209,7 +209,9 @@ running_in() { [ -n "$1" ] && pgrep -s "$1" >/dev/null 2>&1; }
 # does what it runs.
 adb_bounded() { timeout -s KILL "${CARACOLE_ADB_TIMEOUT:-10}" "$adb_bin" "$@" 9>&-; }
 stop_ours() {
-    trap '' INT TERM HUP  # a second Ctrl-C never cuts the stop short, the lock let go with the emulator still up
+    # A second Ctrl-C never cuts the stop short, the lock let go with the emulator still up; nor does a reader gone
+    # (`... 2>&1 | head`): its words then fail quietly, and the adb server's part still runs.
+    trap '' INT TERM HUP PIPE
     set +e
     local s="emulator-$port" wait="${CARACOLE_EMULATOR_STOP_WAIT:-60}" t asked="emu kill"
     if [ -n "$started_sid" ] && [ "$keep" = 1 ]; then
@@ -338,9 +340,9 @@ cleanup() {
         adb_here shell svc wifi enable || true
     fi
 }
-# One EXIT trap, signals ignored from its start: first what this run pushed and the servers it started (the emulator
-# still up to remove the private data from), then the emulator and the adb server.
-trap 'trap "" INT TERM HUP; cleanup; stop_ours' EXIT
+# One EXIT trap, signals ignored from its start (PIPE too: a reader gone): first what this run pushed and the servers
+# it started (the emulator still up to remove the private data from), then the emulator and the adb server.
+trap 'trap "" INT TERM HUP PIPE; cleanup; stop_ours' EXIT
 
 # --data's folder, each file as itself (a link's target, under the link's name), into a folder of its own there.
 if [ -n "$data" ]; then
