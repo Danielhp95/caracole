@@ -218,6 +218,22 @@ def test_the_request_forms_line_says_the_lyrics_are_heard_only_where_this_caraco
     assert (heard in body, sites in body) == (hears, not hears)
 
 
+def test_with_transcribe_turned_off_the_request_forms_line_says_the_lyrics_sites_alone(able, queue, conn, monkeypatch):
+    import caracole.library_page as lp
+
+    monkeypatch.setattr(lp, "transcribe_reason", lambda cfg: None)  # this machine can transcribe
+    off = replace(able, autochords=replace(able.autochords, transcribe=False))  # [autochords] transcribe = false
+    add_song(conn, "Nick Cani", "Vikingos veganos")
+    body, data = page_data(app_for(off, queue))
+    # The card's Transcribe the lyrics is still offered with the setting off...
+    assert data["server"]["transcribe"]["ok"] is True
+    # ...but a sheet from a video hears nothing ("not transcribed: turned off"), so the form says the sites alone.
+    heard = '<p class="hint">Sheet made from the video, its lyrics heard from it when no site has them</p>'
+    sites = '<p class="hint">Sheet made from the video, its lyrics from the lyrics sites</p>'
+    assert heard not in body
+    assert sites in body
+
+
 def test_where_it_cant_the_request_form_says_why_and_offers_no_field(cfg, queue, conn, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     add_song(conn, "Nick Cani", "Vikingos veganos")
