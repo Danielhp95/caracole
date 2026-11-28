@@ -1,9 +1,10 @@
 import os
 import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote
 
-from caracole.db import kv_set, kv_set_json
+from caracole.db import kv_get_json, kv_set, kv_set_json
 from caracole.health import record_block
 from caracole.library import keep_file
 from caracole.normalize import slug_key
@@ -1155,13 +1156,40 @@ def test_the_todo_page_lists_the_songs_whisper_cant_read(conn, cfg, tmp_path):
     assert "- **Nick Cani - Vikingos veganos**: Whisper can't read its audio · RuntimeError: Failed to load audio: " \
            "moov atom" in section
     assert "--force" in section
+    other = Path(s.audio_path).with_name("other.m4a")
+    other.write_bytes(b"another video's audio")
     for change, back in (({"lyrics_status": "found"}, {"lyrics_status": "missing"}),
                          ({"status": "ignored"}, {"status": s.status}),
-                         ({"audio_mtime": (s.audio_mtime or 0) + 5}, {"audio_mtime": s.audio_mtime})):
+                         ({"audio_path": str(other), "audio_mtime": other.stat().st_mtime},
+                          {"audio_path": s.audio_path, "audio_mtime": s.audio_mtime})):
         update_song(conn, s.id, **change)
         assert WORDS_UNHEARD not in todo(conn, cfg), change
         update_song(conn, s.id, **back)
     assert WORDS_UNHEARD in todo(conn, cfg)
+
+
+def test_a_file_moved_is_listed_as_it_was_and_the_page_writes_nothing(conn, cfg, tmp_path):
+    # A record follows its audio by its bytes (the owner's "yes" of 2026-11-27): the to-do page answers so, and, a
+    # page build being a read, re-points nothing (the nightly pass and the scan do).
+    from test_autochords_transcript import youtube_song
+
+    from caracole.autochords.transcript import WHISPER_CANT_READ, note_hearing_failed, note_whisper_cant_read
+    from caracole.stamps import stamp
+
+    s = youtube_song(conn, tmp_path, "Nick Cani", "Vikingos veganos")
+    failing = youtube_song(conn, tmp_path, "Nick Cani", "Otra")
+    note_whisper_cant_read(conn, s, "2026-11-25T04:12:00Z", "RuntimeError: Failed to load audio: moov atom")
+    note_hearing_failed(conn, failing, stamp(NOW), "the GPU")
+    before = section_of(todo(conn, cfg), WORDS_UNHEARD)
+    for song in (s, failing):
+        moved = Path(song.audio_path).with_name(f"moved-{song.id}.m4a")
+        os.rename(song.audio_path, moved)
+        os.utime(moved, ((song.audio_mtime or 0) + 30, (song.audio_mtime or 0) + 30))
+        update_song(conn, song.id, audio_path=str(moved), audio_mtime=moved.stat().st_mtime)
+    kv = conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall()
+    assert section_of(todo(conn, cfg), WORDS_UNHEARD) == before
+    assert kv_get_json(conn, f"{WHISPER_CANT_READ}{s.id}")["audio"] != get_song(conn, s.id).audio_path
+    assert conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall() == kv
 
 
 # --- MuseScore: links and the inbox -------------------------------------------------------------
@@ -1495,7 +1523,9 @@ def test_the_todo_page_lists_the_songs_whose_hearing_failed_at_night(conn, cfg, 
     assert ("- **Nick Cani - Vikingos veganos**: its hearing failed · the separator can't run here (its vocals are "
             "3.5 s shorter)") in section
     assert "30 days or until their file changes" in section
-    update_song(conn, s.id, audio_mtime=(s.audio_mtime or 0) + 5)  # a new file: tried again, so not listed
+    other = Path(s.audio_path).with_name("other.m4a")
+    other.write_bytes(b"another video's audio")
+    update_song(conn, s.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)  # a new file: tried again
     assert WORDS_UNHEARD not in todo(conn, cfg)
 
 

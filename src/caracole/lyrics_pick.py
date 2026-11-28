@@ -66,12 +66,19 @@ NO_NEW = "no new lyrics"
 ELSEWHERE_UNREAD = ("its auto sheet was made on your other caracole and can't be laid out again here over these "
                     "lyrics (what was heard there can't be read here): ask for a new sheet here, from an audio file "
                     "or a video")
+# Its words for a sheet another caracole made whose ``heard`` reads but whose words are as they were: no re-lay due,
+# and words never run a model on another caracole's sheet (the design's R3).
+ELSEWHERE_SAME = "its words are as they were, so nothing was laid out again, and no model runs on it"
 NOTHING_KEPT = "; nothing kept"
 NO_LYRICS_NOW = " has no lyrics now"  # a record gone, its lyrics stage's words before NOTHING_KEPT: an answer, no wait
 KEPT_FAILED_AFTER = "Lyrics kept; the job failed after"  # the command's last line for a failure after the keep
 CLEARED = "Cleared the record you picked"  # how ``clear_pick``'s line begins, which caracole serve's request line reads
 # ``--clear``'s refusal, after the song's name
 NOTHING_TO_CLEAR = "has no lyrics record picked under [lyrics]: nothing to clear."
+# The phone's chords stage where it can't make the sheet now (it has no nightly run to make it later): its own words,
+# recorded in the conformance corpus (tests/test_conformance_lyrics_pick.py), used by nothing here.
+PHONE_NOT_HERE = "auto-chords isn't here ({problem}); pick these lyrics again once it is, and the sheet is made over them"
+PHONE_NOT_DOWNLOADED = "the chord models aren't downloaded: Settings › Chords from audio; then pick these lyrics again"
 
 
 @dataclass(frozen=True)
@@ -318,7 +325,8 @@ class _Pick(StagedRun):
     # --- chords, pdf --------------------------------------------------------------------------------------------
 
     def _heard_reads(self) -> bool:
-        """Whether the song's auto sheet's ``heard`` reads (autochords/sheet.py ``read_heard``): its words re-lay it."""
+        """Whether the song's auto sheet's ``heard`` reads (autochords/sheet.py ``read_heard``): words that change re-lay
+        it."""
         from caracole.autochords.sheet import read_heard
         from caracole.library import kept_files
         from caracole.songs import AUTO_SHEET
@@ -356,7 +364,7 @@ class _Pick(StagedRun):
             return relaid
         if auto_made_elsewhere(self.conn, self.song.id):  # words never run a model on another caracole's sheet (R3)
             return "skipped", (ELSEWHERE_UNREAD if not self._heard_reads()
-                               else f"its auto sheet is {MADE_ELSEWHERE}: its words re-lay it, no model")
+                               else f"its auto sheet is {MADE_ELSEWHERE}: {ELSEWHERE_SAME}")
         why = self._why_no_chords()
         if why is not None:
             return "skipped", why

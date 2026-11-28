@@ -28,12 +28,12 @@ val modelsTestData = tasks.register<Sync>("modelsTestData") {
 sourceSets {
     main {
         resources.srcDir("../../tests/conformance/data")
-        // The chord models' graph and pins are :ml's, the debug build's alone until the stage that ships them: never
-        // in the release through :core.
+        // The chord models' graph and pins are :ml's (the release's on an arm64 phone too): never carried through
+        // :core, so a build without :ml has none.
         resources.exclude("caracole/autochords/**")
     }
     test {
-        // core.models' tests read the pins and BTC's graph as the debug build's :ml puts them on the classpath: a
+        // core.models' tests read the pins and BTC's graph as :ml puts them on the classpath: a
         // folder of their own, so that the filter is theirs alone (a resources.include would filter every test
         // resource).
         resources.srcDir(modelsTestData)

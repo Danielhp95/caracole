@@ -123,6 +123,7 @@ from caracole.autochords.transcript import (
     LYRICS_SOURCE,
     UNREADABLE,
     Transcript,
+    follow_audio,
     hearing_failed,
     said_not_sung,
     transcript_of,
@@ -315,6 +316,7 @@ def autochords_pending(
     turns = _Turns(cfg, conn, overrides, between)
     listening = _Listening(hearing, transcriptions, asked=asked)
     for listed in turns.each(songs):
+        follow_audio(conn, listed)  # what was heard of its audio follows the bytes, a file moved since or touched
         song = listening.first(conn, cfg, listed, turns, stats, stamp, told)
         if song is None:  # left the book while its words were heard and a lookup went first
             continue

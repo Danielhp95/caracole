@@ -119,7 +119,7 @@ object HeatRules {
     const val COOL_MOST_MS = 5 * 60_000L
     const val COOLING = "waiting for the phone to cool"
     const val TOO_HOT = "the phone is too hot to work out chords now; try again once it cools"
-    const val CHARGE_FIRST = "Charge the phone first: chords from audio need more than 15 % of the battery."
+    const val CHARGE_FIRST = "Charge the phone first: chords from audio need at least 15 % of the battery."
 
     sealed class Verdict
     data class Go(val threads: Int) : Verdict()

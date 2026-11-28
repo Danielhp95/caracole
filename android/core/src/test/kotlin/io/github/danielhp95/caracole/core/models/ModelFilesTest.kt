@@ -23,6 +23,8 @@ class ModelFilesTest {
         assertEquals(listOf("btc-graph.onnx", "btc_model_large_voca.pt", "beat_this-final0-fp16.onnx"),
                      pins.files.map { it.name })
         assertEquals(listOf(1_405_441L, 12_229_576L, 42_677_145L), pins.files.map { it.bytes })
+        // What a download asks for: BTC's weights and beat_this's graph, never BTC's graph the APK carries (55 MB).
+        assertEquals(12_229_576L + 42_677_145L, pins.downloaded)
         assertEquals(From.App, pins.files[0].from)
         assertEquals(From.Blob("jayg996/BTC-ISMIR19", "2682317be668032e6e4b269ded36adaa2ad57df0",
                                "test/btc_model_large_voca.pt", "11c6edbaaaee33737aa7a41dcb9044191630326f"),
@@ -34,7 +36,7 @@ class ModelFilesTest {
 
     @Test fun carriedIsTheOneProbeOfWhetherThisBuildHasTheModels() {
         assertEquals(pins, ModelFiles.carried())
-        // A build whose classpath holds no models.json (the release's: :core ships none): null, never a throw.
+        // A build whose classpath holds no models.json (one without :ml: :core ships none): null, never a throw.
         val none = java.net.URLClassLoader(arrayOf(), null)
         assertNull(ModelFiles.carried(none))
         val e = kotlin.test.assertFailsWith<ModelsNotCarried> { ModelFiles.read(none) }

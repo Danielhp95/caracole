@@ -7,6 +7,8 @@ pages change with it, and the app doesn't need an update. With the computer's in
 songs on the sites with the computer off ([below](#search-with-the-computer-off)), and caracole's own rules on the
 phone look them up there, make their pages, songbooks and versions, file what you share to it and back it all up,
 for the next sync to give the computer ([Lookups on the phone](#lookups-on-the-phone) and the sections after it).
+It also makes a song's chord sheet from an audio file, heard on the phone, on an arm64 phone
+([Chords from audio](#chords-from-audio-a-sheet-from-a-file)).
 
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
@@ -118,25 +120,59 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
        caracole.release.storePassword=…
 
    (`caracole.release.keyAlias` is `caracole` and `caracole.release.keyPassword` the store's password unless
-   given.) Then:
+   given.) Then, in the `ml` shell, as the release carries the chord models (`:ml` and ONNX Runtime built from its
+   source, below):
 
-       nix develop ./android -c gradle -p android :app:assembleRelease
+       nix develop ./android#ml -c gradle -p android :app:assembleRelease
 
-   Without those properties the release APK is built unsigned.
-3. Add it to the repository and sign the index (the repository's own key and its passwords are
+   Without those properties the release APK is built unsigned. Outside the `ml` shell every packaging task of the
+   release (assemble, bundle, package, install) refuses before anything runs, so no `app-release.apk` without the chord
+   models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
+   over 100 MiB, the most the repository's Pages site takes (about 19.5 MB today). The chord models' libraries are
+   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
+   models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
+   ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, PFFFT's, which libsoxr is built with, BTC's and
+   beat_this's) are its assets `chords/licenses/`, as alphaTab's are `alphatab/licenses/`, with a README saying that
+   libsoxr is compiled into `libcaracole_soxr.so` and that caracole's, libsoxr's and the build's source is this
+   repository, github.com/Danielhp95/caracole. `android/scripts/release-check.sh` checks all of it.
+3. Before the first release that carries the chord models, and again whenever the runtime or `:ml` changes, install
+   that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
+   same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
+   release's R8 output and its arm64 libraries run nowhere else before it is published (the emulator takes debug
+   builds alone, the Chords bench is a debug build's).
+4. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
        cp android/app/build/outputs/apk/release/app-release.apk docs/fdroid/repo/io.github.danielhp95.caracole_<versionCode>.apk
        cd docs/fdroid && nix develop ../../android -c nix shell nixpkgs#fdroidserver -c fdroid update
 
-4. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
+   `docs/fdroid/config.yml` keeps the last four APKs in the repository (`archive_older: 4`, the older ones moved to
+   `archive/`, which isn't published), so that at about 20 MB an APK the Pages site stays far under its 1 GB.
+
+5. After a schema bump (`SCHEMA_VERSION`), publish the site catalogues once before releasing the APK, so that the new
    app finds a file of its own schema: update the laptop's service, run `sudo caracole-admin index publish
    /var/lib/caracole/publish`, then `publish-indexes /var/lib/caracole/publish` (docs/deploy.md, "Publishing the site
    indexes"). Until then the app says the published catalogues are for an older version.
-5. Commit `docs/fdroid/` whole and push `main`: `git add docs/fdroid` (its `.gitignore` keeps the keys and `tmp/`
+6. Commit `docs/fdroid/` whole and push `main`: `git add docs/fdroid` (its `.gitignore` keeps the keys and `tmp/`
    out). That includes what `fdroid update` writes besides the APK and the index: `repo/diff/` and the app's icon
    under `repo/io.github.danielhp95.caracole/`. The index names them, and F-Droid fails to update from the last
    index when they're missing. The app's page in F-Droid (its description, screenshots) is `docs/fdroid/metadata/`.
+
+The chord models themselves are no part of the APK: the app downloads beat_this's two converted graphs from this
+repository's GitHub prerelease `models`, and BTC's weights from its authors' repository, at a tap. The owner uploads the
+first with `publish-models`, by hand, once a model changes (it checks the two files against `models.json`'s pins,
+uploads each only once with beat_this's licence, `beat_this-LICENSE.txt`, and touches no other asset):
+
+    nix run .#publish-models -- "$(nix build --print-out-paths .#chord-models)"
+
+**For f-droid.org** (never done: the repository here is self-hosted), its build server would need, besides the Android
+SDK and the NDK r28c: ONNX Runtime 1.27.1's source as a srclib, the tree nixpkgs pins
+(`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, 702,144,272 bytes as a NAR), hosted somewhere it can fetch,
+since github.com/microsoft/onnxruntime answers 404; the 13 zips `cmake/deps.txt` names (each still on GitHub, pinned
+in `nix/onnxruntime-android.nix`); protoc 21.12, built from protobuf's own source; and a prebuild that runs
+`scripts/build-onnxruntime.sh` (java, native for arm64-v8a, aar) with no network and puts the AAR where
+`CARACOLE_ONNXRUNTIME` names it. Its Anti-Features would be NonFreeNet (the models' downloads) and, while BTC's weights
+have no licence, NonFreeAssets; no Tracking.
 
 Losing either key ends the updates: the release key's APKs install over no other, and F-Droid refuses an index
 signed with another key. Keep a copy of both outside the repository.
@@ -775,18 +811,39 @@ file once however many backups hold it. The indexes aren't backed up: they come 
 A backup, its daily one and a restore are requests like a lookup, one at a time in the Journal ("Backed up
 (by-hand)", "Restored the book of 2026-11-10 09:14"), never run beside a lookup.
 
-## Chords from audio: the models (debug build)
+## Chords from audio: the models
 
-The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.32.0 from Maven
-Central (`OrtModels`). It is the design's prototype, linked into the debug build alone (`debugImplementation`): the
-release carries no runtime until the owner chooses the one that ships. The AAR brings its native libraries for
-arm64-v8a, armeabi-v7a, x86 and x86_64; the debug APK keeps arm64-v8a and x86_64, about 81.5 MB of them uncompressed
-(36.4 MB and 45.1 MB).
+The chord model (BTC) and the beat model (beat_this) run on the phone in `:ml`, on ONNX Runtime 1.27.1 built from its
+source (`OrtModels`; the owner's Gate R of 2026-11-27, "Build 1.27.1"). Both builds carry it (stage S; the release its
+libraries for arm64-v8a alone, Release above), and only in the `./android#ml` shell: `../nix/onnxruntime-android.nix`
+builds it with no network, for arm64-v8a and x86_64, and makes an AAR of the two in a Maven folder of its own, which
+that shell names as `$CARACOLE_ONNXRUNTIME`. Without the variable `settings.gradle.kts` leaves `:ml` out, and the debug
+build has no chord models and no Chords bench (`src/ml`, `src/debugMl`, `src/testDebugMl` and `src/androidTestMl` come
+with `:ml`, `src/noMl` without it), so the other shells build and test the rest with no ONNX Runtime.
 
-The runtime phones home unless told not to: its AAR declares a content provider, `ai.onnxruntime.TelemetryInitializer`,
-which at the app's start gives the runtime's native telemetry (Microsoft's 1DS, `mobile.events.data.microsoft.com`)
-an HTTP client. `:ml`'s manifest removes it, `OrtModels` sets `ORT_DISABLE_TELEMETRY=1` before the first environment
-and turns its events off, and `NoTelemetryTest` checks that the installed app declares no provider of the runtime's.
+- The source is nixpkgs' pin of the tag v1.27.1 (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`), which
+  cache.nixos.org serves: github.com/microsoft/onnxruntime answers 404. Each CMake dependency is the zip `deps.txt`
+  names, pinned by its SHA-256 in a local mirror (CMake checks `deps.txt`'s SHA-1 too).
+- `scripts/build-onnxruntime.sh` compiles the Java bindings once (javac: ORT's own Java path runs Gradle, which
+  fetches), builds each ABI with the NDK r28c, and zips the AAR. Each ABI gets the CPU execution provider alone, the
+  kernels of the graphs' ops alone, and telemetry off (1.27.1's is opt-in, never set, and it has no Android telemetry
+  at all). Every path of the build is mapped, there is no build id, one date (`EPOCH`) and every zip's entries sorted,
+  so two folders give the same bytes. It runs at most 8 compile jobs, whatever Nix's `--cores` says.
+- The ops are `ml/onnxruntime-ops.config`, made by `scripts/onnxruntime-ops.sh` from `nix build .#chord-models`'
+  graphs, each as it is and as ONNX Runtime 1.27.1 optimizes it on x86_64 and on aarch64. The aarch64 run is
+  cache.nixos.org's build of it under qemu-user (`./android#onnxruntime-ops-aarch64`), so arm64's own fusions are in
+  the list. `onnxruntime-ops.sh --check` holds the committed list to the graphs. An op left out would fail loudly at
+  session load, never silently; the owner's bench on the phone is the last check.
+- It is built once a machine, about ten minutes an ABI, then kept in the store:
+  `nix build ./android#onnxruntime-android` builds it alone. Entering the `ml` shell roots it against Nix's garbage
+  collector (`$XDG_STATE_HOME/caracole/gcroots/onnxruntime-android`); `nix build ./android#onnxruntime-android -o PATH`
+  roots it at PATH instead.
+
+Its AAR declares no provider and no permission. `ApkScanTest` scans it in the `ml` shell's `gradle test` for what made
+Maven's AAR phone home: `mobile.events.data.microsoft.com`, `ai.onnxruntime.TelemetryInitializer` and
+`ai/onnxruntime/telemetry/`. Elsewhere that test is skipped, saying so. `gradle :app:apkScan` scans the release and
+debug APKs the same way. `OrtModels` still sets `ORT_DISABLE_TELEMETRY=1` before the first environment and turns its
+events off, and `NoTelemetryTest` checks that the installed app declares no provider of the runtime's.
 
 The models are the computer's own, `nix build .#chord-models` (`CARACOLE_CHORD_MODELS` in the `./android#ml` shell);
 the APK carries none of them. `ModelParityTest` runs them on the emulator over the computer's records
@@ -795,7 +852,9 @@ frame for frame, beat_this's fp32 logits, and the fp16-stored file's beats and d
 
     android/scripts/device-test.sh --ml --tcpdump /tmp/ml.pcap NoTelemetryTest
 
-`--ml` pushes the four files into the emulator's `/data/local/tmp/caracole-models` (again only when one changed) and
+`--ml`, `--models`, `--data` and the corpus's `autochords` area build in the `ml` shell (the debug build with `:ml`);
+every other run builds in the default one. `--ml` pushes the four files into the emulator's
+`/data/local/tmp/caracole-models` (again only when one changed) and
 runs `ModelParityTest` from `:ml`'s own test APK, which reports each model's load, each clip's time and its peak RSS,
 `DecoderTest` and `PipelineTest` (below), then the app's `ChordsBenchTest` (the Chords bench, below) over the same
 files.
@@ -820,20 +879,22 @@ Wi-Fi off and the rules in: `adb -s emulator-NNNN shell svc wifi enable`, and `s
 (and `ip6tables`) in `adb shell`. `:ml`'s test APK runs under AndroidJUnitRunner, not CaracoleTestRunner: it has no HTTP
 code, so `caracole.network=loopback` isn't set for it.
 
-BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so the debug
-build's alone; `:core`, whose resources are the rest of that folder, leaves them out. That nothing of this reaches the
-release is a check to run again:
+BTC's graph and `models.json` (`tests/conformance/data/caracole/autochords/`) are `:ml`'s resources, so a build with
+`:ml`'s alone; `:core`, whose resources are the rest of that folder, leaves them out. What the release carries, and
+what it doesn't, is a check to run again:
 
     android/scripts/release-check.sh
 
-It builds the release (unsigned without the release key: the same packaged output) and the debug build, reads each
-APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath names no
-`onnxruntime` and no `:ml`, and that its APK holds no `libonnxruntime*`, no class under `ai/onnxruntime/` or of `:ml`
-(dexdump), no `ChordsBench` or `BenchService` in its dex, nothing under `caracole/autochords/` or
-`assets/autochords/`, no `.onnx` or `.pt` file, and nothing of the runtime's telemetry or the bench in its manifest
-(aapt2). Every probe has a control that shows it can see what it looks for: the debug build's classpath and APK
-(which hold all of it but the provider, and none of the weights' files), the names of the files `.#chord-models`
-makes, and the runtime's own AAR, whose manifest declares the provider.
+It builds the release (unsigned without the release key: the same packaged output) and the debug build in the `ml`
+shell, reads each APK by the name its `output-metadata.json` gives, and checks that the release's runtime classpath
+names `onnxruntime` and `:ml`, and that its APK holds ONNX Runtime's and libsoxr's libraries for arm64-v8a alone,
+classes under `ai/onnxruntime/` and of `:ml` (dexdump), `caracole/autochords/` with one model file (BTC's graph, no
+weights), MlService in its `:ml` process, the licences under `assets/chords/licenses/` (each its source's bytes), and
+nothing of the Chords bench (its classes, Settings' row, `assets/autochords/`, its manifest's entries) or of the
+runtime's telemetry (aapt2), within 100 MiB. Every probe has a control that shows it can see what it looks for: the
+debug build's APK (which holds the bench and x86_64's libraries, and none of the weights' files), the names of the
+files `.#chord-models` makes, the runtime's own AAR, whose manifest declares no provider, the licences' probe telling
+two licences apart, and `gradle :app:apkScan`, whose own control finds each string it looks for where it would be.
 
 ## Chords from audio: the decoder
 
@@ -955,14 +1016,15 @@ phone), plus what grows with the song: BTC's features, 0.37 MB a minute (11 MB f
 690 MB), its mixdown (345 MB) and the 22,050 Hz pcm (159 MB), each gone once the next is made, the pcm once the beats
 are kept.
 
-## Chords from audio: a sheet from a file (debug build)
+## Chords from audio: a sheet from a file
 
-In the debug build the phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process
-(src/debug's `PhoneChords`; the release has none, and says auto-chords isn't on the phone). The models are those
-Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery when not charging,
-holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never together), and
-removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try again, and the app
-sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 or x86_64 processor.
+The phone's audio job (`caracole audio --upload=ID --song=…`) hears with the real `:ml` process (src/ml's
+`PhoneChords`, both builds of the `ml` shell; a build without `:ml` has none, and says auto-chords isn't on the phone).
+The models are those Settings' download installs in `files/state/models/c1/`. A hearing refuses under 15 % of battery
+when not charging, holds a partial wake lock while it runs, goes one at a time (a job's and the Chords bench's never
+together), and removes its checkpoints once the sheet's chords are heard; a hearing that failed keeps them for Try
+again, and the app sweeps those a day old as it starts. It asks for Android 13, 6 GB of memory and an arm64 processor
+(the release; a debug build x86_64 too, for the emulator).
 
 `ChordsEndToEndTest` runs it whole on the emulator: the models `device-test.sh` pushes installed by the phone's own
 models' job (nothing asked of GitHub), the committed 20 s clip `tests/fixtures/autochords/hearing.mp3` staged and its
@@ -974,9 +1036,33 @@ It asserts the job Ready, "chords over the lyrics", the sheet's chords at B1's W
 the clip, LRCLIB's requests alone, and that killing `:ml` mid-job fails it in words while the library page answers. On
 the emulator (2026-11-27): queued to Ready in 4.9-8.2 s, WCSR 1.0 (majmin and tetrads), beats F 1.0.
 
+**Settings › Chords from audio** (`ChordModelsRow`) says where the models stand: "Not downloaded · 55 MB",
+"Downloading · 21 of 55 MB", "Ready · 55 MB on the phone", "Not downloaded: why" (a phone that can't make chords, a
+download that failed), or "Waiting for your go-ahead (a metered network)". Download asks first (the size still to
+fetch: a file a failed download kept is none of it), then, on a metered network, again; then it queues the `models`
+job and follows its line. Remove asks, then deletes `files/state/models/` (refused while a sheet is being made from
+them). The debug build's Chords bench is the section's last button. `SettingsChordsTest` downloads the real files from
+a GitHub of its own on loopback (CaracoleTestRunner's `Caracole.modelsForTests`, port 8746), sees the library page's
+"+", then removes them:
+
+    android/scripts/device-test.sh --models SettingsChordsTest
+
+An audio file shared to caracole (a music app's or a file manager's Share) opens its page on the library screen, its
+guess in Artist and Title, Make sheet and Cancel; share one at a time (`ShareAudioTest`).
+
+The phone hears no words. Its job's Words step is skipped ("not transcribed here: the phone hears no words" where every
+lyrics site missed), the Journal's Ready then says "Chords only, no lyrics.", and the song's card says "No lyrics site
+has its words. The computer hears them from its own audio of this song." Its card's lyrics panel (Look them up under
+another name) searches the three lyrics sites under the name you type and takes the row you pick, as on the computer
+(`caracole lyrics --song --as`, `--record`, `--clear` on the phone's queue, LyricsRoutes); a pick lays the auto sheet
+out again from what was heard, with no model. The audio never leaves the phone (in `files/state/audio/`, never synced);
+the sheet syncs, naming the file, and the computer keeps it, unless it hears the words itself where every lyrics site
+missed ([docs/autochords.md](../docs/autochords.md#on-the-phone)).
+
 ### Gate B2 on your phone
 
-Once the library page offers the "+" (the audio routes, a later task): install a debug build
+The library page offers the "+" once the chord models are installed (the audio routes; `AudioRoutesOnDeviceTest`,
+through `device-test.sh --models`, uploads a clip over the app's own server and queues its sheet). Install a debug build
 (`android/scripts/phone-install.sh`), download the chord models in Settings › Chords from audio, charge the phone
 above 15 %, then on the library page tap "+", pick a song of yours whose lyrics LRCLIB has timed, and Make sheet.
 The gate: from the tap to Ready, with "chords over the lyrics", within 90 s. The Journal's entry gives the job's

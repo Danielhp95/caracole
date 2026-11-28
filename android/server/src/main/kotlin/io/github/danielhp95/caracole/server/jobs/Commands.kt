@@ -261,6 +261,21 @@ object JobCommands {
         listOf(Command("Searching LaCuerda",
                        listOf("lacuerda", "--search=$query", "--progress") + if (auto) listOf("--auto") else emptyList()))
 
+    /** Look a song's lyrics up now under [name] ("Artist - Title", the one typed): `caracole lyrics --song --as`,
+     * no `--progress` and no stages, its line its last line (jobs.lyrics_search_steps). */
+    fun lyricsSearchSteps(display: String, name: String): List<Command> =
+        listOf(Command("Looking for lyrics under “$name”", listOf("lyrics", "--song=$display", "--as=$name")))
+
+    /** Make a record of the song's kept lyrics search its lyrics now, and its auto sheet again over them: `caracole
+     * lyrics --song --record --progress`, one process for every stage (jobs.lyrics_pick_steps). */
+    fun lyricsPickSteps(display: String, record: String): List<Command> =
+        listOf(Command("Taking the lyrics", listOf("lyrics", "--song=$display", "--record=$record", "--progress")))
+
+    /** Take the record picked for a song's lyrics back now: `caracole lyrics --song --clear`, no request, no stages
+     * (jobs.lyrics_clear_steps). */
+    fun lyricsClearSteps(display: String): List<Command> =
+        listOf(Command("Clearing the lyrics record you picked", listOf("lyrics", "--song=$display", "--clear")))
+
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
         listOf(Command("Reading $name's page on harptabs", listOf("harptabs", "--artist=$path")))
@@ -342,6 +357,12 @@ object JobCommands {
 
     /** Whether a command makes a song's sheet from an audio file you gave (`caracole audio`). */
     fun sheetsFromAudio(args: List<String>): Boolean = first(args) == "audio"
+
+    /** jobs.uploads_named: the staged uploads (AudioStore's ids) the waiting and running jobs of [jobs] name
+     * (`--upload=`), which an upload never lets go of. */
+    fun uploadsNamed(jobs: List<Job>): Set<String> = jobs.filter { it.active }.flatMap { it.steps }
+        .filter { sheetsFromAudio(it.args) }.flatMap { it.args }.filter { it.startsWith("--upload=") }
+        .mapTo(HashSet()) { it.removePrefix("--upload=") }
 
     /** jobs._picks_lyrics: whether a command makes a record of a song's kept lyrics search its lyrics (`caracole
      * lyrics --pick` or `--record`). */

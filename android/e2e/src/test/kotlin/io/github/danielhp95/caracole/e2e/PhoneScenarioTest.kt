@@ -30,7 +30,9 @@ import io.github.danielhp95.caracole.server.lookups.Review
 import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
+import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.viewer.autochords.Relay
+import io.github.danielhp95.caracole.viewer.autochords.SheetHalf
 import io.github.danielhp95.caracole.viewer.progressions.Progressions
 import io.github.danielhp95.caracole.viewer.render.WrittenPages
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -1052,6 +1054,7 @@ class PhoneScenarioTest {
             assertEquals(JsonPrimitive("none"), raw["lyrics"])
             assertEquals(chords.heardOfClip.record(), raw["heard"])
             assertEquals(JsonPrimitive(RecordedChordModels.RUNTIME), raw["runtime"])
+            assertEquals(1L, autoVersions(phone, HEARD.key), "one auto version")
 
             val compared = compare(phone)
             assertEquals(mapOf(HEARD.unit to "mine"), compared.proposals, "the song made on the phone, no conflict")
@@ -1111,11 +1114,12 @@ class PhoneScenarioTest {
         assertEquals(twelve["heard"], raw["heard"], "what was heard, as heard")
         assertEquals(JsonPrimitive("synced"), raw["lyrics"])
         assertEquals("found", lyricsStatus(phone, HEARD.key))
-        val auto = phone.database.read { db ->
-            db.one("SELECT COUNT(*) FROM versions v JOIN songs s ON s.id = v.song_id " +
-                       "WHERE s.key = ? AND v.provider = 'auto'", HEARD.key) { it.long(0) }
+        val words = phone.database.read { db ->
+            SheetHalf.songLyricsKey(lyricsFromJson(Songs.byKey(db, HEARD.key)!!.lyricsJson))
         }
-        assertEquals(1L, auto, "one auto version")
+        assertTrue(words != null, "the song's words taken")
+        assertEquals(JsonPrimitive(words!!), raw["lyrics_key"], "laid out over the words the phone holds now")
+        assertEquals(1L, autoVersions(phone, HEARD.key), "one auto version")
         // The page the phone serves of it: the computer's, of the re-laid sheet (the mirror's at the unit's digest).
         val page = phone.mirror.manifest()!!.entries
             .single { it.unit == HEARD.unit && it.path.endsWith("/sheet (auto).html") }
@@ -1301,6 +1305,12 @@ class PhoneScenarioTest {
     } ?: fail("no $name kept for $key: ${keptFiles(phone, key)}")
 
     /** The raw record of the version the song of [key] keeps its auto sheet of. */
+    /** How many `auto` versions the song of [key] holds on the phone. */
+    private fun autoVersions(phone: ScenarioPhone, key: String): Long = phone.database.read { db ->
+        db.one("SELECT COUNT(*) FROM versions v JOIN songs s ON s.id = v.song_id WHERE s.key = ? AND v.provider = 'auto'",
+               key) { it.long(0) }!!
+    }
+
     private fun autoRaw(phone: ScenarioPhone, key: String): JsonObject = phone.database.read { db ->
         val song = Songs.byKey(db, key) ?: fail("no song $key")
         val file = Kept.keptFiles(db, song.id).firstOrNull { it.name == AUTO_SHEET } ?: fail("no auto sheet of $key")

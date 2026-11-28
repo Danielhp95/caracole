@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# What an APK's own native code must be, for each ABI (arm64-v8a, x86_64): libcaracole_soxr.so (autochords/native/,
-# packaged by :ml) and libqjs.so (QuickJS-NG's qjs, youtube/native/, packaged by :youtube), run inside
-# `nix develop ./android` after `gradle -p android :app:assembleDebug`:
+# What an APK's own native code must be: the chord models' (autochords/native/'s libcaracole_soxr.so, packaged by :ml,
+# and ONNX Runtime's libonnxruntime.so and libonnxruntime4j_jni.so, built from its source) and libqjs.so (QuickJS-NG's
+# qjs, youtube/native/, packaged by :youtube), run inside `nix develop ./android` after a build in the ml shell:
 #
 #   android/scripts/native-check.sh [--expect extracted|stored] [APK]
 #                                  # default: android/app/build/outputs/apk/debug/app-debug.apk
-#   android/scripts/native-check.sh --release APK      # the release's: none of ours today, which passes, saying so
+#   android/scripts/native-check.sh --release APK      # the release's: arm64-v8a's alone, and no other ABI's
 #
-# release-check.sh runs it on both APKs it builds. Each library (in the debug APK, both for arm64-v8a and x86_64, all
-# four required; in the release, any lib/*/libcaracole_*.so or libqjs.so it holds) must be:
+# release-check.sh runs it on both APKs it builds. Each library (in the debug APK the four for arm64-v8a and x86_64, in
+# the release the chord models' three for arm64-v8a, and its libqjs.so where it holds one, all required) must be:
 #
 # - either stored uncompressed and 16 KB aligned (zipalign -c -P 16), or compressed in an APK whose manifest says
 #   android:extractNativeLibs="true" (the debug build's useLegacyPackaging, app/build.gradle.kts: the package manager
@@ -51,16 +51,21 @@ aligned=$("$zipalign" -c -P 16 -v 4 "$apk" || true)
 manifest=$("$ANDROID_HOME/build-tools/36.0.0/aapt2" dump xmltree --file AndroidManifest.xml "$apk")
 extracted=0
 grep -qF 'android:extractNativeLibs(0x010104ea)=true' <<< "$manifest" && extracted=1
-ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/(libcaracole_[^/]*|libqjs)\.so$' || true)
+ours=$(unzip -Z1 "$apk" | grep -E '^lib/[^/]+/(libcaracole_[^/]*|libonnxruntime|libonnxruntime4j_jni|libqjs)\.so$' \
+  || true)
+libs="libcaracole_soxr.so libonnxruntime.so libonnxruntime4j_jni.so"
 if [ "$release" = 1 ]; then
-  entries=$ours
-  if [ -z "$entries" ]; then
-    echo "OK: no libcaracole_* or libqjs in the release"
-    exit 0
-  fi
+  abis="arm64-v8a"
+  # The release's chord models' libraries are arm64-v8a's alone (app/build.gradle.kts's releaseMlAbis); its libqjs,
+  # where it carries one, too.
+  others=$(grep -v '^lib/arm64-v8a/' <<< "$ours" || true)
+  [ -z "$others" ] || fail "the release carries another ABI's: $(tr '\n' ' ' <<< "$others")"
+  grep -qxF lib/arm64-v8a/libqjs.so <<< "$ours" && libs="$libs libqjs.so"
 else
-  entries=$(echo lib/{arm64-v8a,x86_64}/{libcaracole_soxr,libqjs}.so)
+  abis="arm64-v8a x86_64"
+  libs="$libs libqjs.so"
 fi
+entries=$(for abi in $abis; do for lib in $libs; do echo "lib/$abi/$lib"; done; done)
 
 for entry in $entries; do
   so=$work/$(tr / _ <<< "$entry")

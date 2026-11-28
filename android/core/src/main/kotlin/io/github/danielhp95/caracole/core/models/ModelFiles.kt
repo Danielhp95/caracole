@@ -17,13 +17,14 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.security.MessageDigest
 
-/** This build carries no chord models (no models.json on its classpath: the release's, until stage S): never a bug,
- * which [ModelFiles.carried] tells apart with no exception. */
+/** This build carries no chord models (no models.json on its classpath: a build without `:ml`, the default shell's):
+ * never a bug, which [ModelFiles.carried] tells apart with no exception. */
 class ModelsNotCarried : RuntimeException("This build carries no chord models.")
 
 /** Where a pinned file comes from. */
 sealed interface From {
-    /** The app's own: the debug build's `:ml` resource `caracole/autochords/<name>` (BTC's graph), no request. */
+    /** The app's own: `:ml`'s resource `caracole/autochords/<name>` (BTC's graph), in the release as in debug builds,
+     * no request. */
     data object App : From
 
     /** An asset of this repository's GitHub release [Pins.release], named [asset] (beat_this's converted file). */
@@ -45,8 +46,12 @@ data class Pins(val contract: Int, val release: String, val files: List<Pin>,
     /** The folder the files are installed in, `stateDir/models/c<contract>` (MlChordModels' `models`). */
     fun folder(stateDir: File): File = File(File(stateDir, ModelFiles.FOLDER), "c$contract")
 
-    /** The bytes of every file: what the Settings row says a download is. */
+    /** The bytes of every file, BTC's graph the app carries among them. */
     val bytes: Long get() = files.sumOf { it.bytes }
+
+    /** The bytes a download asks for, the files the app doesn't carry (BTC's weights, beat_this's graph: about
+     * 55 MB): what the Settings row and its question say. */
+    val downloaded: Long get() = files.filter { it.from !is From.App }.sumOf { it.bytes }
 }
 
 /**
@@ -62,7 +67,8 @@ data class Pins(val contract: Int, val release: String, val files: List<Pin>,
  * back).
  */
 object ModelFiles {
-    /** The pins on the classpath: the debug build's `:ml` puts them there (`:core` ships none, as the graph). */
+    /** The pins on the classpath: `:ml` puts them there, the release's as a debug build's (`:core` ships none, as the
+     * graph). */
     const val RESOURCE = "caracole/autochords/models.json"
 
     /** The models' folders' parent in the state directory. */
@@ -81,9 +87,8 @@ object ModelFiles {
 
     private const val MANIFEST_MOST = 64 * 1024
 
-    /** The one probe of whether this build has the chord models: models.json's pins from [loader]'s classpath (the
-     * debug build's `:ml` puts them there; `:core`, so the release, ships none), or null for a build that carries
-     * none. */
+    /** The one probe of whether this build has the chord models: models.json's pins from [loader]'s classpath (`:ml`
+     * puts them there, in both builds of the ml shell; `:core` ships none), or null for a build that carries none. */
     fun carried(loader: ClassLoader? = ModelFiles::class.java.classLoader): Pins? =
         loader?.getResourceAsStream(RESOURCE)?.use { it.readBytes() }?.let(::read)
 

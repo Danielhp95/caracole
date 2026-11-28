@@ -14,6 +14,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.PowerManager
 import android.os.RemoteException
+import android.util.Log
 import io.github.danielhp95.caracole.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.autochords.Checkpoints
 import io.github.danielhp95.caracole.autochords.ChordModels
@@ -78,12 +79,15 @@ class MlChordModels(
     @Volatile var lastPeakSplitKb: Pair<Long, Long>? = null
         private set
 
-    /** The checkpoints' folder of each audio file heard whole here, by its path, until [forget] lets it go. */
+    /** The checkpoints' folder of each audio file heard whole here, by its path, until [forget] lets it go (a job
+     * refused after its hearing never does: its entry stays for the process's life). */
     private val heardIn = ConcurrentHashMap<String, File>()
 
     /** The last song's stages that ran, each with its time in ns, in their order (Pipeline's [Pipeline.STAGES]). */
     @Volatile var lastStagesNanos: Map<String, Long> = emptyMap()
         private set
+
+    override fun phoneProblem(): String? = device()
 
     override fun ready(): String? {
         device()?.let { return it }
@@ -227,10 +231,13 @@ class MlChordModels(
     }
 
     /** [audio]'s checkpoints, heard whole here, deleted (the app's: [forgetHeard]) once the job kept its sheet and the
-     * process is gone, so nothing writes there after ([forgotten]). */
+     * process is gone, so nothing writes there after ([forgotten]). Never throws, as ChordModels says: it runs in the
+     * chords stage's `finally`, and what letting go throws is logged, the folder left for [sweepOld]. A job refused
+     * after a whole hearing (the song got a human sheet meanwhile) keeps no sheet and never calls it: its folder waits
+     * for the day-old sweep, and its entry in [heardIn] stays for the process's life. */
     override fun forget(audio: File) {
         val folder = heardIn.remove(audio.path) ?: return
-        if (forgetHeard) forgotten(folder, work, ::awaitEnded)
+        if (forgetHeard) forgotten(folder, work, { Log.w(TAG, "checkpoints of ${audio.name} kept", it) }, ::awaitEnded)
     }
 
     /** Waits, as a hearing does before it binds ([awaitGone], bounded by [PROCESS_GONE_MS]), for the `:ml` process of
@@ -275,8 +282,9 @@ class MlChordModels(
          * file in the app's files. */
         const val TURN = "chords.lock"
 
-        const val BUSY = "the chord models are hearing another song (a sheet being made, or the Chords bench's); " +
-            "try again once it's done"
+        /** Another hearing holds the turn: a sheet being made, or (a debug build's) the Chords bench's, which the
+         * words leave out, as the release has no bench. */
+        const val BUSY = "the chord models are hearing another song; try again once it's done"
 
         /**
          * [block], the hearing, run: refused first under the battery floor ([HeatRules.start] over [gauge]: nothing
@@ -332,19 +340,21 @@ class MlChordModels(
         private const val CANT_TAKE_TURN = "the chord models' turn can't be taken"
 
         /** The phone's reasons not to hear here (the design's §8.1), the first that holds: Android before 13 (API 33),
-         * no processor the app carries the libraries of ([ABIS]), under [LEAST_MEMORY] of memory; null for none. */
-        fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>): String? = when {
+         * no processor the app carries the libraries of ([carried]: [ABIS] in a debug build, arm64-v8a alone in the
+         * release), under [LEAST_MEMORY] of memory; null for none. */
+        fun deviceProblem(sdk: Int, totalMem: Long, abis: List<String>, carried: Set<String> = ABIS): String? = when {
             sdk < LEAST_SDK -> "chords from audio need Android 13 or later"
-            abis.none { it in ABIS } -> "no chord models for this phone's processor"
+            abis.none { it in carried } -> "no chord models for this phone's processor"
             totalMem < LEAST_MEMORY -> "chords from audio need 6 GB of memory or more"
             else -> null
         }
 
-        /** [deviceProblem] of this phone: its Android, its ABIs, its memory as ActivityManager tells it. */
-        fun deviceProblem(context: Context): String? {
+        /** [deviceProblem] of this phone: its Android, its ABIs against those the app [carried] the libraries of, its
+         * memory as ActivityManager tells it. */
+        fun deviceProblem(context: Context, carried: Set<String> = ABIS): String? {
             val memory = ActivityManager.MemoryInfo()
             context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
-            return deviceProblem(Build.VERSION.SDK_INT, memory.totalMem, Build.SUPPORTED_ABIS.toList())
+            return deviceProblem(Build.VERSION.SDK_INT, memory.totalMem, Build.SUPPORTED_ABIS.toList(), carried)
         }
 
         const val LEAST_SDK = 33
@@ -353,26 +363,34 @@ class MlChordModels(
          * modem's carve-outs left out), so the floor is 5 GiB. */
         const val LEAST_MEMORY = 5L shl 30
 
-        /** The ABIs the debug build carries the libraries of (app/build.gradle.kts's abiFilters). */
+        /** The ABIs a debug build carries the libraries of (app/build.gradle.kts's abiFilters); the release's are
+         * arm64-v8a alone (BuildConfig.ML_ABIS). */
         val ABIS = setOf("arm64-v8a", "x86_64")
 
         const val DAY_MS = 24 * 60 * 60_000L
 
+        /** The log's tag of what [forget] tells. */
+        const val TAG = "caracole-ml"
+
         /** [folder], a song's checkpoints in [work], deleted once [ended] says the process is gone; kept for the
          * start's sweep while it is still ending ([ChordsUnavailable]) or when the wait is interrupted (the thread's
-         * flag set again). Whether it went. */
-        internal fun forgotten(folder: File, work: File, ended: () -> Unit): Boolean {
-            if (folder.parentFile?.canonicalFile != work.canonicalFile) return false
+         * flag set again). Whether it went. Anything else it throws (a path that won't resolve, a bug in the wait)
+         * is [told] and kept, the folder left: it never throws. */
+        internal fun forgotten(folder: File, work: File, told: (Exception) -> Unit = {}, ended: () -> Unit): Boolean =
             try {
-                ended()
+                folder.parentFile?.canonicalFile == work.canonicalFile && run {
+                    ended()
+                    folder.deleteRecursively()
+                }
             } catch (e: ChordsUnavailable) {
-                return false
+                false
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
-                return false
+                false
+            } catch (e: Exception) {
+                told(e)
+                false
             }
-            return folder.deleteRecursively()
-        }
 
         /** The songs' checkpoint folders in [work] a hearing last wrote to a day or more before [now] (a killed app's,
          * or one whose job failed and was never tried again), deleted under the hearings' one turn ([turn] of

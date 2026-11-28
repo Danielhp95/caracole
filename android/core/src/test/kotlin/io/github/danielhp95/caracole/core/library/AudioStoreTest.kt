@@ -36,6 +36,15 @@ import kotlin.test.assertTrue
 class AudioStoreTest {
     @get:Rule val tmp = TemporaryFolder()
 
+    /** audio_store.given_sha16: a given file's digits read from its kept name alone, none for any other path. */
+    @Test fun aGivenFilesDigitsAreReadFromItsKeptNameAlone() {
+        assertEquals("0123456789abcdef", AudioStore.givenSha16("/var/lib/caracole/audio/12-0123456789abcdef.m4a"))
+        for (other in listOf(null, "", "/music/12-0123456789abcdef.m4a", "/state/audio/12-0123456789abcdeg.m4a",
+                             "/state/audio/12-0123456789abcdef.mkv", "/state/audio/.upload-0123456789abcdef.mp3")) {
+            assertEquals(null, AudioStore.givenSha16(other), "$other")
+        }
+    }
+
     @Test
     fun theReplay() {
         val misses = Misses("library/audio_store")

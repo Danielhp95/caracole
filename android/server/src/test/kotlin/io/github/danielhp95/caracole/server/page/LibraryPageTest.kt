@@ -100,12 +100,46 @@ class LibraryPageTest {
         assertEquals(listOf("csrf", "busy", "active", "removing", "jobs", "guitar", "youtube", "transcribe", "audio",
                             "lyricsSearch"),
                      member.keys.toList())
-        assertEquals(JsonPrimitive(false), member.getValue("lyricsSearch"))  // lyrics searched on the computer alone
+        assertEquals(JsonPrimitive(true), member.getValue("lyricsSearch"))  // lyrics searched under a name: LyricsRoutes
         assertEquals(listOf("ok", "why", "off"), member.getValue("youtube").jsonObject.keys.toList())
         assertEquals(listOf("ok", "why", "songs", "nothing", "unsung", "transcribed", "time"),
                      member.getValue("transcribe").jsonObject.keys.toList())
         assertEquals(obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0, "too_big" to ""),
                      member.getValue("audio"))
+    }
+
+    @Test
+    fun `where the phone makes sheets from audio files its server's audio is caracole serve's that does`() {
+        val python = io.github.danielhp95.caracole.core.testing.Corpus.records("web/audio_routes.jsonl")
+            .single { it.fn == "caracole.library_page.audio_member" }.out
+        val member = page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = null))
+            .getValue("server").jsonObject.getValue("audio")
+        assertEquals(python, member)
+        assertEquals(listOf("ok", "why", "limit", "too_big"), member.jsonObject.keys.toList())
+    }
+
+    @Test
+    fun `where it doesn't its server's audio says why, each of the design's reasons`() {
+        for (why in listOf("the chord models aren't downloaded (Settings › Chords from audio)",
+                           "chords from audio need Android 13 or later", "no chord models for this phone's processor",
+                           "chords from audio need 6 GB of memory or more", LibraryPage.AUDIO_PROBLEM)) {
+            val member = page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = why))
+                .getValue("server").jsonObject.getValue("audio")
+            assertEquals(obj("ok" to false, "why" to why, "limit" to 0, "too_big" to ""), member, why)
+        }
+    }
+
+    @Test
+    fun `the served page gives its script the audio member the "+" is drawn from`() {
+        val made = page.served(page.withServer(mirroredData(emptyList()), ServerControls("tok", audio = null)),
+                               ServerControls("tok", audio = null), "Tabs")
+        val data = Regex("""<script type="application/json" id="songs">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
+            .find(made)!!.groupValues[1]
+        val audio = kotlinx.serialization.json.Json.parseToJsonElement(data).jsonObject.getValue("server").jsonObject
+            .getValue("audio").jsonObject
+        assertEquals(JsonPrimitive(true), audio.getValue("ok"))
+        // library.js draws the bar's "+" (#add-audio) where server.audio.ok is true: its script is the page's own
+        assertTrue("server.audio.ok === true" in made && "plus.id = \"add-audio\"" in made)
     }
 
     @Test
@@ -124,7 +158,7 @@ class LibraryPageTest {
                                              "time" to ""),
                          "audio" to obj("ok" to false, "why" to LibraryPage.AUDIO_PROBLEM, "limit" to 0,
                                         "too_big" to ""),
-                         "lyricsSearch" to false),
+                         "lyricsSearch" to true),
                      served.getValue("server"))
         for (name in data.keys - "songs") assertEquals(data.getValue(name), served.getValue(name), name)
     }

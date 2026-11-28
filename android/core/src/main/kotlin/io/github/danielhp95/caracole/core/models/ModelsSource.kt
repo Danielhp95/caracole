@@ -65,6 +65,17 @@ class ModelsSource(
      * leaves [into] as it was and the folder being written deleted, the files it had downloaded and checked kept
      * beside it for the next try ([ModelFiles.KEPT]); no room for twice the download and [MARGIN] asks nothing.
      */
+    /** The bytes a [fetch] into [into] would ask GitHub for now: the pins neither the app's own nor found whole (by
+     * their size and SHA-256) in [into] or kept beside it by a fetch that failed ([ModelFiles.KEPT]), as [fetch] finds
+     * them; 0 for a folder installed. Reads the files (a hash of each found), asks nothing. */
+    fun toDownload(into: File): Long {
+        val pins = pins()
+        if (ModelFiles.installed(into, pins) == null) return 0
+        val kept = File(into.absoluteFile.parentFile, "." + into.name + ModelFiles.KEPT)
+        return pins.files.filter { pin -> pin.from !is From.App && listOf(into, kept).none { there(File(it, pin.name), pin) } }
+            .sumOf { it.bytes }
+    }
+
     fun fetch(http: Http, into: File, onProgress: (Long, Long) -> Unit): Installed {
         val pins = pins()
         val kept = File(into.absoluteFile.parentFile, "." + into.name + ModelFiles.KEPT)

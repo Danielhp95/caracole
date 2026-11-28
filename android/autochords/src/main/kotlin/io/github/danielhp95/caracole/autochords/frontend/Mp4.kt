@@ -33,9 +33,11 @@ object Mp4 {
     /** The sound track: its `mdhd` timescale and duration (or the `mvhd`'s, with no sound track), the movie's
      * timescale, its edits, its sample table's total length (`stbl/stts`: each entry's count times its delta, in the
      * media's timescale; null where none is read, or past a Long), and whether the file is [fragmented] (an `mvex` in
-     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty) and then its [fragments]' length. */
+     * its `moov`: its samples in `moof`s, the `mdhd` and `stts` commonly empty) and then its [fragments]' length;
+     * [sound] false for the `mvhd`'s of a file with no sound track (a video alone, which audio_store refuses). */
     data class Track(val timescale: Long, val duration: Long, val movieTimescale: Long, val edits: List<Edit>,
-                     val samples: Long? = null, val fragmented: Boolean = false, val fragments: Long? = null) {
+                     val samples: Long? = null, val fragmented: Boolean = false, val fragments: Long? = null,
+                     val sound: Boolean = true) {
         /** mutagen's length: `float(duration) / timescale`, 0 for a timescale of 0. */
         val seconds: Double get() = if (timescale == 0L) 0.0 else duration.toDouble() / timescale
 
@@ -99,7 +101,7 @@ object Mp4 {
             val fragments = mvex?.let { trackId(trak)?.let { id -> fragmentsLength(f, id, trexDuration(it, id)) } }
             return Track(mdhd.first, mdhd.second, movie.first, edits, stts, mvex != null, fragments)
         }
-        Track(movie.first, movie.second, movie.first, emptyList())
+        Track(movie.first, movie.second, movie.first, emptyList(), sound = false)
     }
 
     /** A `trak`'s `tkhd` track_ID, or null. */

@@ -408,7 +408,7 @@ def test_a_re_lay_keeps_who_made_it_and_from_what(conn, cfg, tmp_path):
     theirs = {**version.raw, "audio": "/data/user/0/phone/files/audio/7-0123456789abcdef.mp3", "made_on": "phone",
               "made_by": "0f1e2d3c4b5a6978",
               "models": {"chords": "btc_large_voca@aa", "beats": "beat_this final0 fp16@bb"},
-              "runtime": "onnxruntime 1.32.0", "audio_name": "river road.mp3", "audio_sha16": "0123456789abcdef"}
+              "runtime": "onnxruntime 1.27.1", "audio_name": "river road.mp3", "audio_sha16": "0123456789abcdef"}
     from caracole.versions import set_raw
 
     set_raw(conn, version.id, theirs)
@@ -566,21 +566,23 @@ def test_a_file_moved_with_its_mtime_kept_then_transcribed_gets_its_words(conn, 
     assert raw(conn, song)["audio"] != str(moved)  # who heard it and from what stays as it was
 
 
-def test_a_sheet_over_a_transcript_whose_file_moved_goes_back_to_its_chords_as_before(conn, cfg, tmp_path):
-    # Its transcript names the old path, so it is no transcript of the song's audio now (transcript.py
-    # ``transcript_of``): as before what was heard was kept (then by the models), the sheet goes back to its chords,
-    # and its transcription isn't "already" done any more.
-    from caracole.autochords.transcript import ALREADY_TRANSCRIBED, transcript_of, why_not_offered
+def test_a_sheet_over_a_transcript_whose_file_moved_keeps_its_words(conn, cfg, tmp_path):
+    # Its transcript names the old path, and follows the bytes (transcript.py ``of_audio``, the owner's "yes" of
+    # 2026-11-27): still the song's audio's, so nothing is laid out again, its raw untouched (a move rewrites no synced
+    # record), and the card offers what it did.
+    from caracole.autochords.transcript import transcript_of, why_not_offered
 
     song = _heard_sheet(conn, cfg, tmp_path, "transcript")
+    before = raw(conn, song)
+    why = why_not_offered(conn, cfg, song, Overrides())
     moved = Path(song.audio_path).with_name("moved.wav")
     Path(song.audio_path).rename(moved)
     update_song(conn, song.id, audio_path=str(moved))
     song = get_song(conn, song.id)
-    assert transcript_of(conn, song) is None
-    assert [s.id for s in relay_onto_sheets(conn, cfg)] == [song.id]
-    assert raw(conn, song)["lyrics"] == "none" and "la la la" not in sheet(cfg, song)
-    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) != ALREADY_TRANSCRIBED
+    assert transcript_of(conn, song) is not None
+    assert relay_onto_sheets(conn, cfg) == []
+    assert raw(conn, song) == before and "la la la" in sheet(cfg, song)
+    assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) == why
 
 
 def test_a_bug_laying_a_sheet_out_is_one_of_the_nightly_runs_errors(conn, cfg, tmp_path, monkeypatch):

@@ -116,6 +116,7 @@
         autochords = caracoleAutochords;
         autochords-cuda = caracoleAutochordsCuda;
         publish-indexes = pkgs.callPackage ./nix/publish-indexes.nix { inherit caracole; };
+        publish-models = pkgs.callPackage ./nix/publish-models.nix { };
         # BTC and beat_this as ONNX, for chords on the phone (nix/autochords-onnx.nix).
         chord-models = pkgs.callPackage ./nix/autochords-onnx.nix { };
         dev-python = devPython;

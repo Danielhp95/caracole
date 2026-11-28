@@ -232,6 +232,17 @@ def test_an_upload_gone_is_said_before_anything_and_exits_1(tmp_path, config, lr
     assert not (tmp_path / "state" / "caracole.lock").exists()
 
 
+def test_an_upload_that_cant_be_read_is_said_by_its_id(tmp_path, config, lrclib, models, monkeypatch):
+    def unreadable(cfg, upload_id):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(audio_store, "staged", unreadable)
+    result = invoke(config, "--upload", "0123456789abcdef", "--song", "Nick Cani - Vikingos veganos")
+    assert result.exit_code == 1, result.output
+    assert "can't read the upload 0123456789abcdef: Permission denied" in result.output
+    assert "None" not in result.output
+
+
 def test_without_auto_chords_it_says_so_before_anything_and_exits_1(tmp_path, config, lrclib, models, monkeypatch):
     monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
     given = write(tmp_path / "mine" / "track.wav", "WAV", 2.0)

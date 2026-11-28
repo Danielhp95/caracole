@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.page
 
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.server.http.LibraryName
@@ -20,13 +21,14 @@ import kotlinx.serialization.json.longOrNull
  * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab").
  * [youtube]: why the phone makes no sheet from a YouTube video (Phone.youtubeProblem, the design's §5.6), null where it
  * does: `server.youtube` and the request form's YouTube field; [youtubeOff]: YouTube turned off in the computer's
- * settings (`server.youtube.off`). */
+ * settings (`server.youtube.off`). [audio]: why the phone makes no sheet from an audio file (Phone.audioProblem), null
+ * where it does: `server.audio`. */
 data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
     val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
     val guitar: Boolean = false, val inApp: Boolean = false, val youtube: String? = LibraryPage.YOUTUBE_PROBLEM,
-    val youtubeOff: Boolean = true,
+    val youtubeOff: Boolean = true, val audio: String? = LibraryPage.AUDIO_PROBLEM,
 )
 
 /**
@@ -70,8 +72,10 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
      * Guitar Pro page, a sheet from YouTube where [ServerControls.youtube] says so, no lyrics transcribed
-     * ([TRANSCRIBE_PROBLEM]), none from an audio file on the phone, no lyrics looked up under another
-     * name (`lyricsSearch` false), and the tests' timers if any; and each song's
+     * ([TRANSCRIBE_PROBLEM]: where they are), a sheet from an audio file where [ServerControls.audio] says so
+     * (library_page.audio_member's shape: `ok`, `why`, `limit`, `too_big`, the "+" and a card's entry drawn by
+     * library.js where `ok`), lyrics looked up under another name (`lyricsSearch` true: LyricsRoutes), and the
+     * tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
      */
@@ -93,9 +97,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
-            put("audio", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(AUDIO_PROBLEM),
-                                          "limit" to JsonPrimitive(0), "too_big" to JsonPrimitive(""))))
-            put("lyricsSearch", JsonPrimitive(false))  // lyrics looked up under another name: the computer's alone
+            put("audio", audioMember(controls.audio))
+            put("lyricsSearch", JsonPrimitive(true))  // lyrics looked up under another name (LyricsRoutes)
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()
@@ -109,6 +112,17 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         }
         out.putIfAbsent("server", server)
         return JsonObject(out)
+    }
+
+    /** library_page.audio_member: whether the phone makes a song's sheet from an audio file, why not ([why]), the
+     * most an upload takes and the upload route's words for a file past it. */
+    private fun audioMember(why: String?): JsonObject = if (why != null) {
+        JsonObject(linkedMapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(why), "limit" to JsonPrimitive(0),
+                               "too_big" to JsonPrimitive("")))
+    } else {
+        JsonObject(linkedMapOf("ok" to JsonPrimitive(true), "why" to JsonNull,
+                               "limit" to JsonPrimitive(AudioStore.AUDIO_MAX),
+                               "too_big" to JsonPrimitive(AudioStore.WORDS.getValue("too_big"))))
     }
 
     private fun fetchable(song: JsonElement, controls: ServerControls): JsonElement {
@@ -140,11 +154,14 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             "placeholder=\"youtube.com/watch?v=…\"></label>"
         const val YOUTUBE_HINT = "<p class=\"hint\">Sheet made from the video, its lyrics from the lyrics sites</p>"
 
-        /** Why the phone transcribes no lyrics (the server member's `transcribe.why`): none is made on the phone, by
-         * design; the computer hears a song's words from its own audio (the chords lane's words, the same). */
-        const val TRANSCRIBE_PROBLEM = "No lyrics site has its words. The computer hears them from its own audio of this song."
+        /** Where the words of a song no lyrics site has are heard, the phone hearing none: the server member's
+         * `transcribe.why`, which library.js says on the card of a song with a chords-only auto sheet. */
+        const val TRANSCRIBE_PROBLEM =
+            "No lyrics site has its words. The computer hears them from its own audio of this song."
 
-        /** Why the phone makes no sheet from an audio file (the server member's `audio.why`): its page has no "+". */
+        /** Why a phone with nothing to hear with makes no sheet from an audio file (a build without `:ml`, the
+         * default shell's; AudioRunner.problemOf with no chords): the server member's `audio.why`, its page then with
+         * no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"
     }
 }

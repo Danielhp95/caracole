@@ -20,6 +20,15 @@ internal object SharedLink {
     private const val SHARE = "/share"
     private const val CANCEL = "/share/cancel"
 
+    /** The page of an audio file shared to the app (ShareRoutes' `/share/audio`, ShareActivity's). */
+    private const val AUDIO = "/share/audio"
+
+    /** The page of the audio file staged as [upload]. */
+    fun audioPage(upload: String): String = "$AUDIO?upload=${encode(upload)}"
+
+    /** The page of an audio file [name] where none was staged (the phone makes no sheet here: the page says why). */
+    fun audioPageOf(name: String): String = "$AUDIO?name=${encode(name)}"
+
     /** The share page of what an app sent: EXTRA_TEXT, EXTRA_SUBJECT, EXTRA_TITLE and the sender's package, each
      * left out when there is none. */
     fun page(text: String?, subject: String?, title: String?, from: String?): String {
@@ -29,15 +38,17 @@ internal object SharedLink {
         return SHARE + "?" + fields.joinToString("&") { (name, value) -> name + "=" + encode(value!!) }
     }
 
-    /** [page] when it is a share's page (the one page the library screen takes from an intent), else null. */
-    fun shown(page: String?): String? = page?.takeIf { it == SHARE || it.startsWith("$SHARE?") }
+    /** [page] when it is a share's page, a song's or an audio file's (the one page the library screen takes from an
+     * intent), else null. */
+    fun shown(page: String?): String? =
+        page?.takeIf { it == SHARE || it.startsWith("$SHARE?") || it == AUDIO || it.startsWith("$AUDIO?") }
 
     /** Whether [url], a link followed in the WebView, is the share page's Cancel at the phone's server ([origin]). */
     fun isCancel(url: String, origin: String?): Boolean = origin != null && pathAt(url, origin) == CANCEL
 
     /** Whether [url] is a share page of the phone's server at [origin]. */
     fun isSharePage(url: String?, origin: String?): Boolean =
-        url != null && origin != null && pathAt(url, origin) == SHARE
+        url != null && origin != null && pathAt(url, origin).let { it == SHARE || it == AUDIO }
 
     /** What logcat says of a share: every extra as it came, quoted (null: none), and the sender. */
     fun said(text: String?, subject: String?, title: String?, from: String?, type: String?): String =

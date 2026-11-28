@@ -10,7 +10,8 @@ import android.webkit.WebChromeClient
 /**
  * The page's file input (the sync sheet's Import a file, `#sync-file`) reaching Android's file picker:
  * WebChromeClient.onShowFileChooser asks [open], which opens ACTION_OPEN_DOCUMENT of any type (an export has no type
- * Android knows, and the input's `.caracole,.sqlite` are names, not types), and the activity's result comes back
+ * Android knows, and the input's `.caracole,.sqlite` are names, not types), or of the audio types where the input's
+ * `acceptTypes` ask for audio (the "+"'s input: AudioShare.chooser), and the activity's result comes back
  * through [result] to the page, the document's URI (the read permission the picker grants the app) or nothing for a
  * picker cancelled. One choice is open at a time: another asked for meanwhile ends the first with nothing.
  */
@@ -23,6 +24,10 @@ class FileChooser(private val activity: Activity) {
         waiting?.onReceiveValue(null)
         waiting = callback
         val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+        // An input that asks for audio (the "+", a card's Sheet from an audio file…): the audio types alone.
+        AudioShare.chooser(params?.acceptTypes)?.let { types ->
+            pick.setType("audio/*").putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+        }
         if (params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
             pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         }

@@ -72,6 +72,9 @@ When caracole gets it wrong, the card lets you say otherwise. A song in which no
 anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
 that audio again (a new file is heard once more).
 
+A file moved, renamed or touched is the same audio: its transcript, and these verdicts, follow its bytes. Only other
+bytes are a new file. A file touched (its time on the disk changed) still has its chords and beats worked out again.
+
 ## Install
 
 ```sh
@@ -98,15 +101,37 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 | `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
-On the phone, the debug build makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the
-models below: the lyrics sites first, then the chords. It hears no words and runs no nightly pass
-([the phone](phone.md#a-sheet-from-a-youtube-video-debug-build)). Details: [Audio from
-YouTube](usage.md#audio-from-youtube).
+Details: [Audio from YouTube](usage.md#audio-from-youtube).
+
+## On the phone
+
+The Android app makes a sheet from an audio file too, on the phone itself, with no computer
+([android/README.md](../android/README.md#chords-from-audio-a-sheet-from-a-file)). It needs an arm64 phone with
+Android 13 or later and 6 GB of memory; any other says why ("no chord models for this phone's processor" on an x86_64
+one).
+
+1. In Settings › **Chords from audio**, tap **Download**. The two models, about 55 MB, come once: beat_this's from
+   this repository's `models` release on GitHub, BTC's from its authors' own repository. On mobile data it asks
+   first. **Remove** deletes them; the sheets you made stay.
+2. Tap the **+** on the library page, or a song's Sheet from an audio file…, or share an audio file to caracole from
+   another app (one at a time). Check the artist and title, then **Make sheet**.
+
+As on the computer, it asks the lyrics sites first, then works out the chords and the beats, and lays the chords over
+the words. The phone hears no words: where every lyrics site missed, the sheet is chords only, and the card says that
+the computer can hear them from its own audio of the song. A song's card can look its lyrics up under another name on
+the phone too; picking one lays the sheet out again without the models.
+
+It won't start below 15 % of battery unless the phone is charging, and it waits while the phone is too hot. Your audio
+never leaves the phone: no audio is sent anywhere to make the sheet, and the file stays in the app's own storage, never
+synced. The sheet you sync names the file, its full path included, and goes only to your own other caracole, which
+keeps it, unless it hears the words itself where every lyrics site missed (above).
+
+The debug build also makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the same models:
+the lyrics sites first, then the chords ([the phone](phone.md#a-sheet-from-a-youtube-video-debug-build)).
 
 ## The models for the phone
 
-The phone runs both models in ONNX, in the debug build alone for now. `nix build .#chord-models`
-exports them.
+`nix build .#chord-models` exports both models to ONNX, the format the phone runs them in.
 
 | File | Size | What it is |
 |---|---|---|

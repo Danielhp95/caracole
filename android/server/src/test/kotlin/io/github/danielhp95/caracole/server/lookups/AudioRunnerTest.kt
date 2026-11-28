@@ -172,6 +172,23 @@ class AudioRunnerTest {
         assertFalse(phone.store.gone(upload))
     }
 
+    /** A phone that can't hear chords whatever the files (an x86_64 release, Android 12, under 6 GB) is told its own
+     * reason before "aren't downloaded": Settings offers it no download to make. */
+    @Test fun thePhonesOwnProblemComesBeforeTheModelsNotDownloaded() {
+        val x86 = object : Models() {
+            override fun ready(): String = "no chord models for this phone's processor"
+            override fun phoneProblem(): String = "no chord models for this phone's processor"
+        }
+        assertEquals("no chord models for this phone's processor",
+                     AudioRunner.problemOf(x86, "The chord models aren't on the phone."))
+        val phone = phone()
+        val job = run(phone, AudioRunner(phone.parts, x86, phone.store,
+                                         problem = { AudioRunner.problemOf(x86, "The chord models aren't on the phone.") }))
+        assertEquals("error: caracole makes no sheet from an audio file here: no chord models for this phone's processor",
+                     job.steps.single().output.single())
+        assertTrue(x86.heardOf.isEmpty())
+    }
+
     /** commands/audio.py's OSError reading the file before any stage: exit 1, "can't read …", never a bug. */
     @Test fun theKeptFileUnreadableBeforeAnyStageExitsOneInWords() {
         val phone = phone()
@@ -257,7 +274,8 @@ class AudioRunnerTest {
         }
         val job = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
         assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
-        assertEquals(listOf("hearing", "get Paper Boats", "heard"), log.take(3))
+        // One snapshot: take() reads the size, then copies, so the job's own song's lookup could slip in between.
+        assertEquals(listOf("hearing", "get Paper Boats", "heard"), log.toList().take(3))
         runBlocking { withTimeout(30_000) { while (log.size < 4) kotlinx.coroutines.delay(10) } }
         assertEquals("get River Road", log[3])  // the job's own song's, once the job was over
         val ends = ends(job)
@@ -353,6 +371,36 @@ class AudioRunnerTest {
         val song = phone.database.read { db -> Songs.byKey(db, "calla-lake/river-road")!! }
         assertEquals(listOf(phone.store.uploaded(song)!!), models.forgotten)
         assertTrue(models.kept.isEmpty())
+    }
+
+    /** The song's `autochords_mtime`, the last write of a keep (run.py `_keep`'s order), failing after the sheet was
+     * kept: the checkpoints stay, as for any keep that fails, so that Try again, which finds the sheet of no audio
+     * yet, lays it out from them with no hearing. */
+    @Test fun aKeepWhoseLastWriteFailsLeavesTheCheckpoints() {
+        val phone = phone()
+        val models = object : Models() {
+            var heardWhole = 0
+            val kept = HashMap<String, Heard>()
+            val forgotten = CopyOnWriteArrayList<File>()
+            override fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard =
+                kept[audio.path] ?: super.hear(audio, onStep, waiting).also { heardWhole++; kept[audio.path] = it }
+            override fun forget(audio: File) {
+                forgotten += audio
+                kept.remove(audio.path)
+            }
+        }
+        phone.database.writeBlocking { db ->
+            db.execute("CREATE TRIGGER no_mtime BEFORE UPDATE OF autochords_mtime ON songs " +
+                           "WHEN NEW.autochords_mtime IS NOT NULL BEGIN SELECT RAISE(ABORT, 'no mtime'); END")
+        }
+        val failed = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals(Job.FAILED, failed.state, "${ends(failed)}")
+        assertTrue(models.forgotten.isEmpty(), "the checkpoints kept")
+        phone.database.writeBlocking { db -> db.execute("DROP TRIGGER no_mtime") }
+        val again = run(phone, AudioRunner(phone.parts, models, phone.store, problem = { null }))
+        assertEquals(Job.DONE, again.state, "${ends(again)}")
+        assertEquals(1, models.heardWhole, "laid out from the checkpoints, never heard again")
+        assertEquals(1, models.forgotten.size)
     }
 
     /** The models removed after the job was queued (Settings' Remove, before the job held them): the hearing holds

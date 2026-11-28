@@ -1,6 +1,6 @@
-// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime (the design's §3.5 prototype), an
-// Android library linked into the debug app alone (app/build.gradle.kts's debugImplementation), so no release carries a
-// runtime before the owner chooses the one that ships. Its device test, ModelParityTest, holds the runtime's logits to
+// ml: caracole's chord model (BTC) and beat model (beat_this) on ONNX Runtime 1.27.1 built from its source (the
+// design's §3.5, Gate R), an Android library the app takes in both builds of flake.nix's ml shell (app/build.gradle.kts:
+// the release with its libraries for arm64-v8a alone). Its device test, ModelParityTest, holds the runtime's logits to
 // the computer's (tests/conformance/vectors/autochords/models.jsonl), DecoderTest its Decoder's PCM to the computer's
 // decode (decode.jsonl), and PipelineTest the whole hearing in the :ml process (Pipeline, MlService, MlChordModels) to
 // the computer's over the committed clips, each run by `android/scripts/device-test.sh --ml`.
@@ -11,9 +11,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-/** ONNX Runtime's Android build, from Maven Central; [OrtModels.RUNTIME] names it, and ModelParityTest checks the
+/** ONNX Runtime's Android build, from its source (../nix/onnxruntime-android.nix: its AAR in the Maven folder
+ * settings.gradle.kts reads, $CARACOLE_ONNXRUNTIME); [OrtModels.RUNTIME] names it, and ModelParityTest checks the
  * library loaded is this one. */
-val onnxRuntime = "1.32.0"
+val onnxRuntime = "1.27.1"
 
 android {
     namespace = "io.github.danielhp95.caracole.ml"
@@ -25,7 +26,7 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // The app's two ABIs (app/build.gradle.kts): ORT's AAR also brings 32-bit ARM and x86, which no APK keeps.
+        // The app's two ABIs (app/build.gradle.kts), the two the runtime is built for.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         buildConfigField("String", "ONNX_RUNTIME", "\"$onnxRuntime\"")
     }
@@ -52,7 +53,7 @@ android {
     // instrumentation's AssetManager as CorpusOnDeviceTest reads the rest of the corpus.
     sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/modelAssets"))
     // The runtime data of the models, caracole/autochords/ on the classpath (BTC's graph, models.json's pins):
-    // :ml's, so the debug build's alone, which :core leaves out (core/build.gradle.kts).
+    // :ml's, so a build with :ml's alone (the release's too), which :core leaves out (core/build.gradle.kts).
     sourceSets.getByName("main").resources.srcDir(layout.buildDirectory.dir("generated/modelData"))
 }
 
@@ -82,6 +83,38 @@ val copyModelData by tasks.registering(Sync::class) {
 tasks.matching { it.name.contains("JavaRes") || it.name.contains("JavaResource") || it.name.startsWith("lint") }
     .configureEach { dependsOn(copyModelData) }
 
+// The licences of what the chord models ship in the APK, as its assets `chords/licenses/` (as alphaTab's are
+// `alphatab/licenses/`, app/alphatab.gradle.kts): ONNX Runtime's (MIT) LICENSE and ThirdPartyNotices.txt from its
+// AAR's root, which packaging never takes; libsoxr's (LGPL-2.1+) LICENCE and COPYING.LGPL beside its source, and the
+// licence of PFFFT, which it is built with (pffft.c's own comment, verbatim in licenses/libsoxr-pffft-LICENSE), with
+// licenses/README saying where the source is; BTC's (MIT: its graph is in the APK, its weights downloaded) as
+// src/caracole/autochords vendors it; beat_this's (MIT: its converted graph downloaded), beat-this 1.1.0's LICENSE,
+// kept in licenses/. release-check.sh checks each is in the release APK, byte for byte.
+val onnxRuntimeAar = configurations.detachedConfiguration(
+    dependencies.create("io.github.danielhp95.caracole:onnxruntime-android:$onnxRuntime@aar"))
+val copyLicences by tasks.registering(Sync::class) {
+    into(layout.buildDirectory.dir("generated/licenceAssets"))
+    into("chords/licenses") {
+        from({ zipTree(onnxRuntimeAar.singleFile) }) {
+            include("LICENSE", "ThirdPartyNotices.txt")
+            rename { "onnxruntime-$it" }
+        }
+        from("../autochords/native/soxr") {
+            include("LICENCE", "COPYING.LGPL")
+            rename { "libsoxr-$it" }
+        }
+        from("../../src/caracole/autochords/LICENSE-BTC") { rename { "BTC-LICENSE" } }
+        from("licenses") { include("beat_this-LICENSE.txt", "libsoxr-pffft-LICENSE", "README") }
+    }
+}
+// A folder, and every task that reads the variants' assets made to wait for it: srcDir(a task) carries no dependency
+// on AGP's legacy source sets (an APK built from clean held none of them; release-check.sh caught it).
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/licenceAssets"))
+tasks.matching {
+    it.name != "copyLicences" && (it.name.endsWith("Assets") || it.name.contains("Lint") || it.name.startsWith("lint"))
+}
+    .configureEach { dependsOn(copyLicences) }
+
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
@@ -96,7 +129,7 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // Pcm (a WAV's or an AIFF's PCM, read with no codec), for Decoder.
     implementation(project(":autochords"))
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntime")
+    implementation("io.github.danielhp95.caracole:onnxruntime-android:$onnxRuntime")
     // The Chords bench's report (BenchReport), as the rest of the app writes JSON (:core's, the same version).
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 

@@ -213,6 +213,60 @@
                 android:textColor="@color/muted"
                 android:textSize="13sp" />
 
+            <!-- Chords from audio (ChordModelsRow, ModelsRunner's job): the models' line, "Not downloaded · 54 MB" or
+                 "Ready · 54 MB on the phone", Download (54 MB) and Remove; what they say under them. -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/chords_label"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/chords_line"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:accessibilityLiveRegion="polite"
+                android:textColor="@color/text"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/chords_download"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/chords_remove"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/chords_remove"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/chords_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:accessibilityLiveRegion="polite"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/chords_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/chords_hint"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
             <!-- YouTube audio (YouTubeRow, the phone-youtube design's §7): what sheets from a YouTube video stand on
                  now, "On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours"; gone in a build that carries no yt-dlp. -->
             <LinearLayout

@@ -192,7 +192,7 @@ object AudioSheetReplay : AreaReplay {
     /** The fake models' names and runtime, the phone's side of a sheet's maker. */
     val NAMES = linkedMapOf("chords" to "btc_large_voca@1673d23f8f9a55ae",
                             "beats" to "beat_this final0@8c328b45f59d8dd3 fp16")
-    const val RUNTIME = "onnxruntime 1.32.0"
+    const val RUNTIME = "onnxruntime 1.27.1"
 
     /** One `make_audio_sheet` record through the phone's runner. */
     private fun job(record: JsonObject, kw: JsonObject, done: JsonObject, apart: JsonObject, database: Database,

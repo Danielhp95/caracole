@@ -107,7 +107,7 @@ budget = 20
 delay = [2.5, 5]
 [providers.youtube]               # the audio of songs nobody has charted, for auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
-budget = 6                        # yt-dlp runs per run, each a search or a download
+budget = 50                       # yt-dlp runs per run, each a search or a download
 delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 [providers.ytimg]                 # YouTube's image host: a suggested video's thumbnail
 enabled = true                    # false: suggestions come without thumbnails
@@ -1013,10 +1013,12 @@ Makes row N of the song's last search (or the row that lists `SITE:ID`, such as 
 its lyrics, now, in place of whatever it had. Only a record that search listed can be taken, and only
 within its 7 days. LRCLIB's record comes from the search's own answer in the cache, with no request
 (one when the cache lost it); Megalobiz's and AZLyrics' cost one request each, at a lookup's pace.
-The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. A song with its
-audio gets its auto sheet made, or made again, over the new words at once where auto-chords is
-installed; otherwise tonight's run makes it (a chart already made takes the words as plain lyrics
-meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
+The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. An auto sheet that
+keeps what was heard is laid out again over the new words at once, with no model, whether
+auto-chords is installed or not; one another caracole made never goes to the models here (with the
+same words as before, nothing is laid out again). Any other song with its audio gets its auto sheet
+made, or made again, over the new words at once where auto-chords is installed; otherwise tonight's
+run makes it (a chart already made takes the words as plain lyrics meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
 
     Lyrics: timed lyrics from LRCLIB: 孟维来 - 野人 (野人, 3:46); in place of AZLyrics' plain lyrics.
     Chords: chords over the lyrics.
@@ -1034,7 +1036,8 @@ leaves the record noted and the old lyrics stored: pick it again.
     caracole lyrics --song "ARTIST - TITLE" --clear
 
 Takes the record you picked out of `[lyrics]`, keeping its `as`, with no request. The lyrics that
-record gave go with it (its auto sheet is made again at the next run), the sites' earlier misses are
+record gave go with it: an auto sheet that keeps what was heard is laid out again at once by the
+clear's render, as chords alone; an older one is made again at the next run. The sites' earlier misses are
 forgotten and the song is pending, so tonight's run, or a lookup, asks every site again under the
 name that holds. A song with no record picked exits 1 ("nothing to clear"). `--pick`, `--record`,
 `--clear` and `--as` go one at a time (exit 2), and `--progress` only with `--pick` or `--record`.
@@ -1439,7 +1442,14 @@ says so and exits 1.
 | 1 | Auto-chords can't work at all: the model files are missing or unusable, or it can't write a sheet into the library. |
 
 A song's sheet is made again when its audio changes, and when timed lyrics arrive after a sheet made
-over plain lyrics or none, so that each chord can go over its word.
+over plain lyrics or none, so that each chord can go over its word. A sheet that keeps what was heard
+(every sheet made now) is never given to the models again for its words: when they change, it is
+laid out again over them in seconds, with no model and no audio, as the first step of every render,
+and the run's last line counts it (`…, 1 laid out again over new words`). A sheet another caracole
+made (your phone's, taken at a sync) is never made again by this command over every song: only its
+words re-lay it, and only words heard here from your own audio of it, where no lyrics site has the
+song's, make it again here over chords alone. `--song` is your ask: it makes that song's sheet again
+here from your audio, whoever made it.
 
 An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as its frames say,
 for the chords, `caracole audio` and the lyrics sites alike; one libsndfile reads only in part is
@@ -1851,7 +1861,8 @@ lyrics missing at every lyrics site you have switched on, and not transcribed ye
   dropped.
 - The sheet says `Lyrics transcribed from the audio (Whisper), unverified`.
 - The words are kept as the song's transcript. Its lyrics stay missing, and lyrics a site has
-  later win.
+  later win. The transcript, and what caracole noted of the audio (nothing sung, unreadable),
+  follow the file's bytes: a file moved, renamed or touched keeps them; other bytes don't.
 - When nothing sung was heard, the auto sheet says `Instrumental: nothing sung was heard in the audio`
   and is made again once to say so; lyrics a site has later replace it.
 - It takes a couple of minutes on a GPU and up to half an hour on a CPU (`[autochords]
@@ -3012,7 +3023,7 @@ song keeps its own) and press **Make sheet**: a line under the bar, or the song'
 it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
 file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
 and the dialog says so. A file dropped anywhere else on the page is never opened in its place. The
-file on disk and the phone have no +.
+file on disk has no +.
 
 The file goes up in one
 request, 128 MiB at most (`caracole audio FILE` takes any size), and waits in the state folder's
@@ -3033,6 +3044,14 @@ meanwhile, the one queued is the answer and the second file is deleted.
 - Refused as it is sent: "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF).",
   "That file is too big: …", "That file is longer than 30 minutes.", "No room to keep it here.".
 - Where chords can't be made: "No sheets from audio files here: auto-chords isn't installed.".
+
+The phone does the same, in the release too, once Settings › Chords from audio has downloaded the
+models, and takes an audio file shared to it from another app too: the job is `caracole audio
+--upload ID --song …` there, its chords and beats heard on the phone. It needs an arm64 phone with
+Android 13 or later and 6 GB of memory; any other says why, before any download ("no chord models
+for this phone's processor" on an x86_64 one, "chords from audio need Android 13 or later", "chords
+from audio need 6 GB of memory or more"). It hears no words: Words is always skipped, and where every lyrics site missed
+the sheet is chords only ([On the phone](autochords.md#on-the-phone)).
 
 #### Lyrics under another name, from a card
 
@@ -3063,7 +3082,11 @@ none, and neither has a song while a request of it waits or runs.
   tonight's run asks every site again. Transcribe the lyrics is offered only once they have all
   answered.
 - A refusal is said in the panel ("Search again: that record isn't among its last search's, …").
-  The phone and the page opened as a file have no panel.
+  The page opened as a file has no panel.
+
+The phone's card has the same panel, its search, pick and clear the same commands on the phone's
+queue. A pick there lays an auto sheet out again from what was heard, with no model; with no words
+found, the phone offers no transcription (it hears none).
 
 #### Transcribing the lyrics from a card
 
@@ -3081,7 +3104,10 @@ has run against about how long it takes here, how far Whisper has heard the song
 transcribed lyrics.". If it fails, the Journal gives the reason ("no singing heard.", "the GPU
 failed: …") with Try again. One runs at a time per song, and never beside another transcription
 or a lookup. A song no longer offered one is refused ("… isn't offered a transcription: its lyrics
-are found."). Where caracole can't transcribe, no card offers it. The phone never offers it.
+are found."). Where caracole can't transcribe, no card offers it. The phone never offers it. There a
+song with an auto sheet of chords alone and no lyrics found says, in one line, "No lyrics site has
+its words. The computer hears them from its own audio of this song." (on a computer that can't
+transcribe, the card says why in the same place).
 
 Your word over caracole's goes on the card too. A song in which nothing sung was heard says so, with
 **Transcribe anyway** (`caracole transcribe --force`). One whose sheet is over its transcript has

@@ -249,6 +249,21 @@ class ModelsRunnerTest {
         assertNull(phone.runner.ready())
     }
 
+    /** The metered wait's size, and the row's, is what is left to download: a file a fetch that failed kept whole
+     * beside the folder (`.c1.kept`) is never counted (nor the app's own graph); one kept short, or changed, is. */
+    @Test fun theMeteredWaitCountsWhatIsLeftToDownloadNeverAFileKeptWhole() {
+        metered = true
+        val phone = phone()
+        assertEquals(800_000L, phone.runner.toDownload())
+        val kept = File(phone.folder.parentFile, "." + phone.folder.name + ModelFiles.KEPT).apply { mkdirs() }
+        File(kept, "beat_this-final0-fp16.onnx").writeBytes(beats)
+        File(kept, "btc_model_large_voca.pt").writeBytes(weights.copyOf(1000))
+        assertEquals(300_000L, phone.runner.toDownload())
+        assertEquals("0.3 MB to download: waiting for your go-ahead in Settings (a metered network)", detail(run(phone)))
+        assertEquals(emptyList(), github.asked)
+        assertNull(phone(null).runner.toDownload(), "a build that carries none")
+    }
+
     /** GitHub's hour spent is a wait with its time, never a failure: kept in kv models:not-before, and nothing asked
      * before it; a time further ahead than two hours (a clock that was wrong) passed over. */
     @Test fun githubsHourSpentIsAWaitWithItsTimeAndNothingIsAskedBeforeIt() {

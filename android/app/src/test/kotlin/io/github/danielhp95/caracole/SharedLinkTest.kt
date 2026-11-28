@@ -52,4 +52,39 @@ class SharedLinkTest {
         )
         assertEquals("from=? type=? text=null subject=null title=null", SharedLink.said(null, null, null, null, null))
     }
+
+    @Test
+    fun `an audio file's page is a share page the screen shows, its Cancel stepping back over it`() {
+        assertEquals("/share/audio?upload=0123456789abcdef", SharedLink.audioPage("0123456789abcdef"))
+        assertEquals("/share/audio?name=River%20Road%20%26%20Co.mp3", SharedLink.audioPageOf("River Road & Co.mp3"))
+        assertEquals("/share/audio?upload=0123456789abcdef", SharedLink.shown("/share/audio?upload=0123456789abcdef"))
+        assertNull(SharedLink.shown("/share/audio/cancel"))
+        assertTrue(SharedLink.isSharePage("$origin/share/audio?upload=0123456789abcdef", origin))
+        assertFalse(SharedLink.isSharePage("$origin/share/audio/cancel", origin))
+    }
+
+    @Test
+    fun `audio is told from the inbox's files by type, then by name, MIDI being a score's`() {
+        for ((type, name) in listOf("audio/mpeg" to "x.bin", "audio/x-m4a" to null, "audio/flac" to "a.flac",
+                                    "audio/opus" to "a.opus", "audio/x-aiff" to "a.aif", "audio/webm" to "a.weba",
+                                    "application/octet-stream" to "Song.MP3", null to "song.m4a", "*/*" to "a.wav",
+                                    "audio/*" to "a.ogg")) {
+            assertTrue(AudioShare.isAudio(type, name), "$type $name")
+        }
+        for ((type, name) in listOf("audio/midi" to "a.mid", "audio/x-midi" to "a.mp3", "application/pdf" to "a.mp3",
+                                    "application/x-guitar-pro" to "a.gp5", "application/octet-stream" to "a.gp5",
+                                    null to null, "*/*" to "a.mscz", "audio/*" to "a.mid")) {
+            assertFalse(AudioShare.isAudio(type, name), "$type $name")
+        }
+        assertEquals(13, AudioShare.TYPES.size)
+    }
+
+    @Test
+    fun `the picker takes the audio types for an input that asks for audio, any file else`() {
+        assertEquals(AudioShare.TYPES,
+                     AudioShare.chooser(arrayOf("audio/*", ".mp3", ".m4a", ".flac", ".wav", ".ogg", ".aif", ".aiff")))
+        assertNull(AudioShare.chooser(arrayOf(".caracole", ".sqlite")))
+        assertNull(AudioShare.chooser(arrayOf("")))
+        assertNull(AudioShare.chooser(null))
+    }
 }

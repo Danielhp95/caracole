@@ -82,9 +82,11 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
     if problem is not None:
         hint = f"; {NOT_BUILT}" if "built without" in problem else ""
         fail(NO_CHORDS.format(problem=problem + hint))
+    reading: object = file if upload is None else f"the upload {upload}"  # what an OSError couldn't read
     try:
         given = _given_already(cfg, upload, display)
         if given is not None:  # Try again past the Audio stage: the upload is the song's audio now
+            reading = given
             found = audio_store.examine(given)
             name, duration, tags = given.name, found.duration, found.tags
         elif upload is not None:
@@ -96,7 +98,7 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
     except audio_store.AudioError as e:
         fail(str(e), 2 if e.status == 400 else 1)
     except OSError as e:
-        fail(f"can't read {file}: {e.strerror or e}")
+        fail(f"can't read {reading}: {e.strerror or e}")
     if display is not None:
         artist, _, title = display.partition(" - ")
     else:

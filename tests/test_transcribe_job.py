@@ -237,6 +237,19 @@ class Hearing(Transcriber):
         return super().hear(mix, stem, first_sung_s)
 
 
+def test_a_song_whose_file_moved_since_it_was_transcribed_is_refused_as_transcribed_already(conn, cfg):
+    song = offered(conn, cfg)
+    result, _ = make(cfg)
+    assert result.ok, result
+    moved = Path(song.audio_path).with_name("renamed.wav")
+    os.rename(song.audio_path, moved)
+    update_song(conn, song.id, audio_path=str(moved), audio_mtime=moved.stat().st_mtime)
+    separator, transcriber = Separator(), Transcriber()
+    again, _ = make(cfg, separator=separator, transcriber=transcriber)
+    assert again.refused == "Nick Cani - Vikingos veganos isn't offered a transcription: already transcribed"
+    assert separator.calls == transcriber.calls == []
+
+
 @pytest.mark.parametrize("gpu,about", [(False, "~5 min"), (True, "~1 min")], ids=["cpu", "gpu"])
 def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, gpu, about):
     # The separator and Whisper take minutes, up to half an hour on a CPU: the song's line moves as they go (the
@@ -908,11 +921,11 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
 
 def other_audio(conn, cfg, song):
     """Another video's audio for the song, as a `caracole youtube --sheet --url` that took the lock after the lookups
-    would leave it."""
+    would leave it: other bytes (a second longer), so no record of the first follows them."""
     other = "oNOFfl3Hx3s"
-    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{other}.wav", 60.0)
+    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{other}.wav", 61.0)
     update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
-    _save(conn, song.id, Record(video=Video(other, song.title, "Nick Cani", 60.0), source="pasted", audio=str(audio)))
+    _save(conn, song.id, Record(video=Video(other, song.title, "Nick Cani", 61.0), source="pasted", audio=str(audio)))
 
 
 @pytest.mark.parametrize("before", ["words", "chords"])
@@ -1067,7 +1080,7 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None  # until the owner says it is
     # Their word is about that audio: a new file is a new start, offered a transcription again.
     other = Path(song.audio_path).with_name("other.wav")
-    wav(other, 60.0)
+    wav(other, 61.0)  # other bytes
     update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
 

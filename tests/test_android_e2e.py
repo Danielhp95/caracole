@@ -509,6 +509,7 @@ def a_sheet_made_on_the_phone(computer: Computer, port: int, dir: Path) -> None:
     render lays the sheet out again over them from what was heard (R2), its maker still the phone; the phone takes it
     back, lays out nothing more, and a third comparison finds nothing (phase 13). No conflict at any sync, one ``auto``
     version on either side, its digest the same."""
+    from caracole.autochords.sheet import lyrics_key
     from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE
     from helpers.fake_sites import CHORDS, Sites
 
@@ -540,6 +541,7 @@ def a_sheet_made_on_the_phone(computer: Computer, port: int, dir: Path) -> None:
     computer.caracole("render", "--song", twelve["display"])
     ((again, relaid),) = computer.auto_versions(key)
     assert again == tab and relaid["lyrics"] == "synced", relaid
+    assert relaid["lyrics_key"] == lyrics_key(Sites("chords").lrclib_record("hearing")["plainLyrics"]), relaid
     assert (relaid["made_on"], relaid["made_by"], relaid["heard"]) == ("phone", twelve["made_by"], twelve["heard"])
     laid = sheet.read_text(encoding="utf-8")
     assert laid != twelve["sheet"] and Sites("chords").lrclib_record("hearing")["plainLyrics"].splitlines()[0] in laid

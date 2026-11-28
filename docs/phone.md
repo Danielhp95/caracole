@@ -75,6 +75,10 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
   the site indexes.
 - **Fetch**: the phone looks a song up itself, over Wi-Fi or mobile data.
 - Making and editing songbooks, and choosing a sheet's version.
+- Looking a song's lyrics up under another name, from its card, and picking the ones to keep.
+- [Chords from audio](autochords.md#on-the-phone), on an arm64 phone: an audio file you pick
+  or share becomes the song's sheet, worked out on the phone once Settings › Chords from audio
+  has downloaded the models.
 - **Export PDF** opens Android's print dialog, to print or save as PDF.
 - Sharing to caracole from another app: a song from Spotify, Apple Music, TIDAL, YouTube, Deezer
   or Shazam to look it up, or a Guitar Pro file or score to file under its song.
@@ -89,7 +93,7 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
 A song no site has chords for can get a sheet made from a YouTube video, on the phone itself.
 For now this is in the [debug
 build](../android/README.md#a-sheet-from-a-youtube-video-debug-build) alone, and it needs the
-chord models on the phone.
+chord models on the phone: Settings › **Chords from audio** downloads them.
 
 Paste the video into the request form's YouTube field, or into a song's card and tap **Make
 sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone
@@ -110,9 +114,9 @@ sync.
 
 ## What stays on the computer
 
-The nightly run, building the site indexes, PDF files and iReal Pro charts, and, but for the
-debug build's sheet from a YouTube video, chords from audio. A song you add on the phone without
-fetching it is picked up by the computer's next nightly run, after a sync.
+The nightly run, building the site indexes, hearing the words of a song, PDF files and iReal Pro
+charts, and, but for the debug build's sheet from a YouTube video, YouTube. A song you add on the
+phone without fetching it is picked up by the computer's next nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
@@ -122,7 +126,9 @@ fetching it is picked up by the computer's next nightly run, after a sync.
 | Fetch one song now | Yes | Yes |
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |
 | PDF files | Yes | No, prints instead |
-| Chords from audio, YouTube | Optional | Debug build only, from a video |
+| Chords from audio | Optional | From a file you give it (an arm64 phone) |
+| YouTube | Optional | Debug build only, a sheet from a video |
+| Words heard from the audio | Optional | No |
 | iReal Pro charts | Yes | No |
 | Watch your `Music/` and `_inbox/` folders | Yes | No, share files to the app |
 | Share from another app | No | Yes |

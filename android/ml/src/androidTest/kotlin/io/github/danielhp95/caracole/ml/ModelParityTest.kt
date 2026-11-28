@@ -55,7 +55,7 @@ class ModelParityTest {
             assertEquals(name, pin.getLong("bytes"), file.length())
             assertEquals(name, pin.getString("sha256"), sha256(file))
         }
-        // :ml carries the graph on its classpath (caracole/autochords/, the debug build's alone): the one pinned.
+        // :ml carries the graph on its classpath (caracole/autochords/, in the release too): the one pinned.
         val graph = javaClass.classLoader!!.getResourceAsStream("caracole/autochords/${OrtModels.BTC_GRAPH}")!!
             .use { it.readBytes() }
         assertEquals(pins.getJSONObject("btc").getJSONObject("graph").getString("sha256"), sha256(graph))
@@ -73,7 +73,7 @@ class ModelParityTest {
             assertEquals("1", Os.getenv("ORT_DISABLE_TELEMETRY"))
             assertEquals(pins.getJSONObject("btc").getDouble("mean").toFloat(), ort.padding)
         }
-        // This test package carries :ml's manifest, which removes the runtime's TelemetryInitializer.
+        // This test package carries :ml's manifest and the runtime's AAR's, which declares no provider.
         val context = InstrumentationRegistry.getInstrumentation().context
         @Suppress("DEPRECATION")
         val info = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PROVIDERS)

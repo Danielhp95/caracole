@@ -85,9 +85,11 @@ import kotlin.concurrent.thread
  *   its state as the record gives it (a server on 127.0.0.1 of the replay's own, so that the device runs it too);
  * - [syncFileRoutes]: sync_file_routes.jsonl, Export and Import a file over a fixture of the sync corpus and the sync
  *   file corpus's files (SyncFileRoutes, and SyncRoutes' Sync on a file's comparison);
+ * - [audioRoutes]: audio_routes.jsonl, a sheet from an audio file's routes over each scene (AudioRoutesReplay);
  * - [downloads]: downloads.jsonl, files.py's kinds of file and download_names.py's names;
  * - [security]: security.jsonl, security.py's host, origin, own-page and token checks, and Python's `str.isdigit` and
  *   `str.isspace` over every code point (SecurityTest's);
+ * - [lyricsRoutes]: lyrics_routes.jsonl, a song's lyrics looked up under a name typed (LyricsRoutesReplay);
  * - [youtubeRoutes]: youtube_routes.jsonl, a sheet from a YouTube video, a pasted video's panel and its thumbnail
  *   (YouTubeRoutes, and LibraryRoutes' `POST /request` with `youtube`).
  *
@@ -104,10 +106,15 @@ object WebReplay : AreaReplay {
         jsonAnswers(misses)
         syncRoutes(misses)
         syncFileRoutes(misses)
+        audioRoutes(misses)
         downloads(misses)
         security(misses)
+        lyricsRoutes(misses)
         youtubeRoutes(misses)
     }
+
+    /** lyrics_routes.jsonl: the phone's LyricsRoutes over each scene (LyricsRoutesReplay). */
+    fun lyricsRoutes(misses: Misses) = LyricsRoutesReplay.replay(misses)
 
     /** youtube_routes.jsonl: a sheet from a YouTube video and a pasted video's panel (YouTubeRoutesReplay). */
     fun youtubeRoutes(misses: Misses) = YouTubeRoutesReplay.replay(misses)
@@ -887,6 +894,15 @@ object WebReplay : AreaReplay {
             socket.close()
             serving.join(5_000)
         }
+    }
+
+    // --- audio_routes.jsonl -----------------------------------------------------------------------------------------
+
+    /** audio_routes.jsonl: POST /audio/upload, /audio and /audio/drop over each scene, and the routes' limits
+     * (AudioRoutesReplay). */
+    fun audioRoutes(misses: Misses) {
+        AudioRoutesReplay.routes(misses)
+        AudioRoutesReplay.limits(misses)
     }
 
     // --- downloads.jsonl --------------------------------------------------------------------------------------------

@@ -196,6 +196,60 @@ object OverrideWriters {
         }
     }
 
+    /** overrides.set_lyrics_name: the name ("Artist - Title") the song's lyrics are asked under, its `[lyrics]`
+     * entry's `as`, or with null taken out, keeping the record you picked; whether the entry changed. */
+    fun setLyricsName(db: Db, display: String, name: String?): Boolean = setLyrics(db, display, asked = Part.Set(name))
+
+    /** [setLyricsName] of a name in its two parts, written "Artist - Title" as lyrics_search.py writes it. */
+    fun setLyricsNameParts(db: Db, display: String, name: Pair<String, String>?): Boolean =
+        setLyricsName(db, display, name?.let { "${it.first} - ${it.second}" })
+
+    /** overrides.set_lyrics_record: the lyrics record you picked for the song (`lrclib:ID`, `megalobiz:ID`,
+     * `azlyrics:ARTIST/SONG`), its `[lyrics]` entry's `record`, keeping the name it is asked under; whether the entry
+     * changed. */
+    fun setLyricsRecord(db: Db, display: String, record: String): Boolean =
+        setLyrics(db, display, record = Part.Set(record))
+
+    /** overrides.clear_lyrics_record: the record you picked taken out of the song's `[lyrics]` entry, keeping its
+     * `as` (the entry goes once none is left); whether there was one. */
+    fun clearLyricsRecord(db: Db, display: String): Boolean = setLyrics(db, display, record = Part.Set(null))
+
+    /** A part of a `[lyrics]` entry: left as it is ([Keep], overrides._KEEP), or set ([Set], null taking it out). */
+    private sealed interface Part {
+        data object Keep : Part
+        data class Set(val text: String?) : Part
+    }
+
+    /**
+     * overrides._set_lyrics: the parts of the song's `[lyrics]` entry given set, the other kept, the given ones checked
+     * first (a refusal writes nothing); the entry found by the song's key, under the name it is written under, or
+     * [display] for a song with none; the same again writes nothing, and the entry goes once neither part is left.
+     */
+    private fun setLyrics(db: Db, display: String, asked: Part = Part.Keep, record: Part = Part.Keep): Boolean {
+        val key = Addresses.overrideKey(display)
+        val where = "[lyrics] ${PyStr.repr(display)}"
+        val newAsked = (asked as? Part.Set)?.text?.let { Readers.lyricsAsked(JsonPrimitive(it), where, JsonPrimitive(it)) }
+        val newRecord = (record as? Part.Set)?.text?.let { Readers.lyricsRecord(JsonPrimitive(it), where, JsonPrimitive(it)) }
+        return db.savepoint("set_lyrics") {
+            val entry = Rows.get(db, "lyrics", key)
+            val before = entry?.let { Readers.lyricsPick(it.value, "[lyrics] ${PyStr.repr(it.written)}") }
+                ?: LyricsPick(null, null)
+            val now = LyricsPick(if (asked is Part.Set) newAsked else before.asked,
+                                 if (record is Part.Set) newRecord else before.record)
+            if (now == before) return@savepoint false
+            // overrides._lyrics_value: only the parts set.
+            val value = LinkedHashMap<String, JsonElement>()
+            now.asked?.let { (a, t) -> value["as"] = JsonPrimitive("$a - $t") }
+            now.record?.let { value["record"] = JsonPrimitive(it.text) }
+            when {
+                value.isEmpty() -> Rows.delete(db, "lyrics", key)
+                entry != null -> Rows.setValue(db, "lyrics", key, JsonObject(value))
+                else -> Rows.put(db, "lyrics", key, display, JsonObject(value))
+            }
+            true
+        }
+    }
+
     /** overrides._set_entry: the song's entry of [table] made [value], under the name it is written under, or under
      * [display] for a song with none; the same value again writes nothing. */
     private fun setEntry(db: Db, table: String, key: String, display: String, value: JsonElement) {

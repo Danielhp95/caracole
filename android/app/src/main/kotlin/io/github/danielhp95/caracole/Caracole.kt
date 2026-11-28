@@ -7,6 +7,8 @@ import android.os.Build
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
+import io.github.danielhp95.caracole.core.models.ModelFiles
+import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.http.RealTransport
 import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
@@ -84,11 +86,16 @@ object Caracole {
      * catalogues' job lists the release there, read each time it runs; GitHub's API itself when null. */
     @Volatile var cataloguesForTests: URI? = null
 
+    /** A test's GitHub for the chord models (CaracoleTestRunner's, a device test's server on loopback at
+     * [CaracoleTestRunner.MODELS_PORT]), read once as the phone starts: the models' job asks it, with no redirect
+     * hop; GitHub's API itself when null. */
+    @Volatile var modelsForTests: URI? = null
+
     /** A test's network, metered or not, read each time the catalogues' job asks; Android's when null. */
     @Volatile var meteredForTests: Boolean? = null
 
-    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none (every
-     * file refused, PhoneDeps.NO_EXAMINER) until the app has its own (the audio routes'). */
+    /** A device test's reader of an audio file's length and tags, read each time the audio store asks; none: the
+     * app's own (PhoneExaminer: `:autochords`' lengths and Android's tags in a build with `:ml`, none without). */
     @Volatile var examinerForTests: AudioStore.Examiner? = null
 
     /** A device test's yt-dlp (YouTubeEndToEndTest's ClipYtDlp, whose one download is the committed clip), read
@@ -132,9 +139,9 @@ object Caracole {
         phone ?: start(context.applicationContext, starting).also { phone = it }
     }
 
-    /** The chord models' process's name's end (the debug build's `:ml`, its MlService's): nothing of the phone's
-     * caracole (its database, its queue, its server) starts there, so the models' memory and their end are theirs
-     * alone. Named, never the class, which the release doesn't have. */
+    /** The chord models' process's name's end (`:ml`'s, its MlService's): nothing of the phone's caracole (its
+     * database, its queue, its server) starts there, so the models' memory and their end are theirs alone. Named,
+     * never the class, which a build without `:ml` doesn't have. */
     const val MODELS_PROCESS = ":ml"
 
     /** Whether the process [name] of [packageName] is the chord models' ([MODELS_PROCESS]). */
@@ -168,10 +175,14 @@ object Caracole {
                 transport = { _ -> transport() }, version = BuildConfig.VERSION_NAME, alerts = alerts,
                 searchesLacuerda = searchesLacuerdaForTests, catalogues = ::catalogues, metered = { metered(context) },
                 youtube = youtube(context)?.let(::withTestsProcess),
-                // The debug build's `:ml` (src/debug's PhoneChords), none in the release's; the models' source is
-                // PhoneDeps' own default, this build's pins (ModelFiles.carried: the release carries none).
+                // `:ml`'s chord models (src/ml's PhoneChords, both builds of the ml shell; src/noMl's none); the models'
+                // source this build's pins (ModelFiles.carried, `:ml`'s), asked of GitHub, or a test's.
                 chords = PhoneChords.of(context, state),
-                examiner = { file, format -> (examinerForTests ?: PhoneDeps.NO_EXAMINER).examine(file, format) },
+                models = ModelFiles.carried()?.let { pins ->
+                    modelsForTests?.let { ModelsSource(base = it, redirects = emptySet(), pins = { pins }) }
+                        ?: ModelsSource(pins = { pins })
+                },
+                examiner = { file, format -> (examinerForTests ?: PhoneExaminer).examine(file, format) },
             ))
             // A job the queue gets (a sync from the Sync tab, an add, a removal, a lookup) keeps the process going in
             // the foreground until none waits or runs: the queue tells, the service follows, a lookup's line the

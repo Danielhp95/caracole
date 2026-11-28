@@ -5,10 +5,9 @@ import java.io.IOException
 
 /**
  * The chord models, wherever they run (the design's §3.1; on the phone `:ml`'s MlChordModels, the models in a process
- * of their own). Here, in :viewer, beside [Heard], so that :server's AudioRunner, which the release ships, names it
- * with no part of `:autochords` (the front ends and their data, the debug build's alone until stage S: the release
- * may carry nothing under `caracole/autochords/`, android/scripts/release-check.sh); `:autochords` names it by a
- * typealias.
+ * of their own). Here, in :viewer, beside [Heard], so that :server's AudioRunner names it with no part of
+ * `:autochords` (the front ends and their data, which a build without `:ml` carries none of); `:autochords` names it
+ * by a typealias.
  *
  * - [ready]: null when the models can hear a song here, else why not in words (a file missing, one that isn't the one
  *   pinned).
@@ -22,10 +21,15 @@ import java.io.IOException
  * - [forget]: what [hear] kept of [audio] to go on from (its checkpoints, the design's §3.3) let go, called once the
  *   sheet heard of it is kept, never before: a keep that fails leaves them, so that Try again hears nothing again.
  *   Never throws; none to let go by default.
- * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.32.0"); null where it says none.
+ * - [phoneProblem]: [ready]'s answer of the phone itself, the files aside.
+ * - [runtime]: what runs them, an auto sheet's `raw["runtime"]` ("onnxruntime 1.27.1"); null where it says none.
  */
 interface ChordModels {
     fun ready(): String?
+
+    /** What keeps this phone from hearing chords whatever the models' files (its Android, its processor, its memory),
+     * or null: what Settings' row says in place of a download, where [ready] would say the files are missing. */
+    fun phoneProblem(): String? = null
     fun hear(audio: File, onStep: (String) -> Unit, waiting: () -> Unit): Heard
     fun forget(audio: File) {}
     val runtime: String? get() = null

@@ -43,8 +43,8 @@ artist or title, or one past 200 characters (400 "Which name? …"), an artist's
 cleans to nothing (400); a pick of a record that isn't a row of the song's kept search, or of a search over a week old
 (409 "Search again: …": the command checks it again as it runs), or of a site turned off (409); a clear of a song with
 no record picked (409, the command's "… nothing to clear."). A pick needs nothing this caracole may lack: without
-auto-chords its lyrics are kept all the same, the chords waiting for the nightly run. The phone has none of these
-routes (lyrics are searched and picked on the computer, for now) and its page offers no control for them.
+auto-chords its lyrics are kept all the same, the chords waiting for the nightly run. The phone answers the four
+alike (server/routes' LyricsRoutes, vectors/web/lyrics_routes.jsonl).
 """
 
 from __future__ import annotations

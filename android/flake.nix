@@ -65,6 +65,13 @@
       quickjsSrc = pkgs.fetchFromGitHub { inherit (pins.quickjs) owner repo rev hash; };
       # Chaquopy's buildPython (:youtube's pyc and pip) must be the app's Python's minor version, pins.json's.
       python = pkgs."python${lib.replaceStrings [ "." ] [ "" ] pins.python}";
+      # ONNX Runtime 1.27.1 built from its source for arm64-v8a and x86_64 (../nix/onnxruntime-android.nix), an AAR in
+      # a Maven folder of its own, which settings.gradle.kts reads as $CARACOLE_ONNXRUNTIME for :ml in Maven Central's
+      # place: in the ml shell alone, so the other shells build and test everything but :ml with no ONNX Runtime. Built
+      # once a machine (about 20 min, at most 8 compile jobs), then the store's, kept by the ml shell's GC root.
+      onnxruntime = pkgs.callPackage ../nix/onnxruntime-android.nix {
+        ndk = "${(sdkFor false).androidsdk}/libexec/android-sdk/ndk/${ndkVersion}";
+      };
 
       # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
       # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
@@ -97,13 +104,45 @@
           '';
         };
     in {
+      # `nix build ./android#onnxruntime-android` (and `.natives.arm64-v8a`, `.natives.x86_64`, `.java`, `.mirror`).
+      packages.${system} = {
+        onnxruntime-android = onnxruntime;
+        # ONNX Runtime 1.27.1's own Python (nixpkgs' python3Packages.onnxruntime, the same release as the phone's) and
+        # onnx, for scripts/onnxruntime-ops.sh, which derives ml/onnxruntime-ops.config from the graphs.
+        onnxruntime-ops-python = pkgs.python3.withPackages (ps: [ ps.onnx ps.onnxruntime ps.flatbuffers ]);
+        # The same Python and onnxruntime 1.27.1 built for aarch64 (cache.nixos.org's), run here under qemu-user, so
+        # that the optimizer fuses as it does on the phone's CPU: `onnxruntime-ops-aarch64 script.py …`.
+        onnxruntime-ops-aarch64 =
+          let
+            arm = nixpkgs.legacyPackages.aarch64-linux;
+            ps = arm.python3Packages;
+            modules = ps.requiredPythonModules [ ps.onnx ps.onnxruntime ];
+          in pkgs.writeShellScriptBin "onnxruntime-ops-aarch64" ''
+            export PYTHONPATH=${lib.concatMapStringsSep ":" (m: "${m}/${arm.python3.sitePackages}") modules}
+            exec ${pkgs.qemu-user}/bin/qemu-aarch64 ${arm.python3}/bin/python3 -B "$@"
+          '';
+      };
+
       devShells.${system} = {
         # Builds and tests the app: `nix develop ./android -c gradle -p android assembleDebug`.
         default = shellFor false;
         # The same, with the emulator and an Android ${platformVersion} system image (x86_64, Google APIs).
         emulator = shellFor true;
-        # The emulator's, with CARACOLE_CHORD_MODELS: the models' folder, for `scripts/device-test.sh --ml`.
-        ml = (shellFor true).overrideAttrs { CARACOLE_CHORD_MODELS = "${chordModels}"; };
+        # The emulator's, with CARACOLE_CHORD_MODELS (the models' folder) and CARACOLE_ONNXRUNTIME (the runtime built
+        # from source, so :ml and the debug build's chord models): `scripts/device-test.sh --ml`, `--models`,
+        # release-check.sh. Entering it roots the runtime's build against Nix's garbage collector, in
+        # $XDG_STATE_HOME/caracole/gcroots (an indirect root: delete the link to let it go).
+        ml = (shellFor true).overrideAttrs (old: {
+          CARACOLE_CHORD_MODELS = "${chordModels}";
+          CARACOLE_ONNXRUNTIME = "${onnxruntime}/maven";
+          shellHook = old.shellHook + ''
+            root="''${XDG_STATE_HOME:-$HOME/.local/state}/caracole/gcroots/onnxruntime-android"
+            if command -v nix-store >/dev/null && [ "$(readlink "$root" 2>/dev/null)" != "${onnxruntime}" ]; then
+              mkdir -p "$(dirname "$root")"
+              nix-store --add-root "$root" --indirect --realise ${onnxruntime} >/dev/null 2>&1 || true
+            fi
+          '';
+        });
       };
     };
 }

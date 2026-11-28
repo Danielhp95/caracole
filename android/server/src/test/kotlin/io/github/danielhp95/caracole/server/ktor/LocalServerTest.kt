@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server.ktor
 
 import io.github.danielhp95.caracole.server.http.Body
+import io.github.danielhp95.caracole.server.http.DocumentAnswer
+import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PostAnswer
 import io.github.danielhp95.caracole.server.http.Response
@@ -46,8 +48,22 @@ class LocalServerTest {
                 Response(200, Body.FromFile(file, file.length()), mutableListOf("Content-Type" to "application/octet-stream"))
             }),
             Route("GET", "/bug", "a bug", get = GetAnswer { error("a bug") }),
+            Route("POST", "/spool", "a body spooled: how many bytes came", body = Route.BYTES, limit = 1 shl 20,
+                  spool = true, document = DocumentAnswer { request, input ->
+                      spooledBodies++
+                      val n = (input as java.io.InputStream).readBytes().size
+                      assertTrue(request.body.isEmpty(), "a spooled body is never held whole")
+                      Response(200, Body.Bytes("$n".toByteArray()), mutableListOf("Content-Type" to "text/plain"))
+                  }),
+            Route("POST", "/spool/refuse", "a body refused at its first bytes", body = Route.BYTES, limit = 1 shl 20,
+                  spool = true, document = DocumentAnswer { _, input ->
+                      (input as java.io.InputStream).read(ByteArray(10))
+                      throw Refused(415, "Not taken", "Not an audio file.")
+                  }),
         )
     }
+
+    @Volatile private var spooledBodies = 0
 
     private class Answer(val status: Int, val headers: List<Pair<String, String>>, val body: ByteArray) {
         val text get() = body.toString(Charsets.UTF_8)
@@ -167,6 +183,84 @@ class LocalServerTest {
                 val pad = "x".repeat(50_000)
                 assertEquals("50000", post(port, "/echo/big", "csrf=${test.csrf}&pad=$pad", cookie).text)
                 assertEquals(413, post(port, "/echo/form", "csrf=${test.csrf}&pad=$pad", cookie).status)
+            }
+        }
+    }
+
+    private fun spoolHead(port: Int, path: String, cookie: String, csrf: String, length: Long, close: Boolean = true) =
+        ("POST $path HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\nContent-Type: application/octet-stream\r\n" +
+            "Origin: http://127.0.0.1:$port\r\nX-Caracole-Form-Token: $csrf\r\nContent-Length: $length\r\n" +
+            (if (close) "Connection: close\r\n" else "") + "\r\n").toByteArray()
+
+    @Test fun aSpooledBodyReachesItsRouteAsAStreamPastTheDefaultLimit() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val body = ByteArray(300_000) { (it % 251).toByte() }
+                val answer = raw(port, spoolHead(port, "/spool", cookie, test.csrf, body.size.toLong()) + body)
+                assertEquals(200, answer.status, answer.text)
+                assertEquals("300000", answer.text)
+            }
+        }
+    }
+
+    /** A spooled body the client ends before its Content-Length is never taken whole: server.py's 400, its words. */
+    @Test fun aSpooledBodyCutShortBeforeItsLengthIsRefused() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val said = Socket(InetAddress.getByName("127.0.0.1"), port).use { socket ->
+                    socket.soTimeout = 10_000
+                    socket.getOutputStream().apply {
+                        write(spoolHead(port, "/spool", cookie, test.csrf, 1000) + ByteArray(10))
+                        flush()
+                    }
+                    socket.shutdownOutput()  // the client ends it 990 bytes early
+                    socket.getInputStream().readBytes().toString(Charsets.ISO_8859_1)
+                }
+                assertTrue(said.startsWith("HTTP/1.1 400"), said.take(300))
+                assertTrue(said.endsWith("That body is shorter than it said it was.\n"), said.takeLast(300))
+            }
+        }
+    }
+
+    /** A body of [size] bytes with a request inside it, which must never be read as one. */
+    private fun smuggling(port: Int, cookie: String, size: Int): ByteArray {
+        val smuggled = "\r\n\r\nGET /echo/smuggled HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\n\r\n"
+            .toByteArray()
+        return ByteArray(size).also { smuggled.copyInto(it, 1000) }
+    }
+
+    @Test fun aSpooledBodyPastItsLimitIsRefusedUnreadByItsLength() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val size = (1 shl 20) + 1
+                val (said, _) = conversation(port, spoolHead(port, "/spool", cookie, test.csrf, size.toLong(),
+                                                             close = false), smuggling(port, cookie, size))
+                assertTrue(said.startsWith("HTTP/1.1 413"), said.take(300))
+                assertTrue("That is too long to send here.\n" in said, said.take(600))
+                assertTrue("Connection: close" in said.substringBefore("\r\n\r\n"), said.take(300))
+                // what is left of it CIO drops (never in the heap), never reading any of it as a request
+                assertTrue("smuggled" !in said, said.takeLast(300))
+                assertEquals(0, spooledBodies, "the route never asked")
+            }
+        }
+    }
+
+    @Test fun aSpooledBodyItsRouteRefusedMidWayIsNeverReadAsARequest() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val (said, _) = conversation(port, spoolHead(port, "/spool/refuse", cookie, test.csrf, 500_000,
+                                                             close = false), smuggling(port, cookie, 500_000))
+                assertTrue(said.startsWith("HTTP/1.1 415"), said.take(300))
+                assertTrue("Connection: close" in said.substringBefore("\r\n\r\n"), said.take(300))
+                assertTrue("smuggled" !in said, said.takeLast(300))
             }
         }
     }

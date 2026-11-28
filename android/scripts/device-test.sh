@@ -152,11 +152,17 @@ model_args=()
 [ "$areas" = all ] && areas=""
 [ -z "$tcpdump" ] || tcpdump="$(realpath -m "$tcpdump")"
 
-# 1. The build, outside the lock, so a lane that builds never holds the emulator.
+# 1. The build, outside the lock, so a lane that builds never holds the emulator. The chord models' runs (--ml,
+# --models, --data) and the corpus's autochords area (its libsoxr is :ml's) build in flake.nix's ml shell, whose
+# CARACOLE_ONNXRUNTIME brings :ml and the debug build's chord models (the source-built runtime, a one-off build a
+# machine); every other run in the default shell, whose debug build has no chord models and no Chords bench.
+shell=./android
+{ [ "$models_needed" = 1 ] || { [ "$want_areas" = 1 ] && { [ -z "$areas" ] || [[ ",$areas," == *,autochords,* ]]; }; }; } \
+    && shell=./android#ml
 tasks=(assembleDebug assembleDebugAndroidTest)
 [ "$ml_tests" = 1 ] && tasks+=(:ml:assembleDebugAndroidTest)
 [ "$want_youtube" = 1 ] && tasks+=(:youtube:assembleDebugAndroidTest)
-(cd "$repo" && nix develop ./android -c gradle -p android "${tasks[@]}" --console=plain -q)
+(cd "$repo" && nix develop "$shell" -c gradle -p android "${tasks[@]}" --console=plain -q)
 apk="$android/app/build/outputs/apk/debug/app-debug.apk"
 test_apk="$android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 ml_apk="$android/ml/build/outputs/apk/androidTest/debug/ml-debug-androidTest.apk"

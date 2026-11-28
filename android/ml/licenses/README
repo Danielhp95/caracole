@@ -1,0 +1,3 @@
+libsoxr 0.1.3 (LGPL-2.1+, with PFFFT: libsoxr-pffft-LICENSE) is compiled into lib/*/libcaracole_soxr.so. The complete
+source of caracole, of that libsoxr and of the build is at caracole's public repository, github.com/Danielhp95/caracole
+(android/autochords/native/).

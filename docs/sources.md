@@ -42,4 +42,14 @@ artist pages caracole has read. It leaves out your library, your searches on LaC
 path on the computer. To publish your own, see `caracole index publish` in
 [usage.md](usage.md#caracole-index-publish).
 
+## The chord models for the phone
+
+For [chords from audio on the phone](autochords.md#on-the-phone), Settings › Chords from audio downloads two models
+once, when you tap Download, through GitHub's API with caracole's own user agent. beat_this (MIT), converted for the
+phone, comes from this repository's `models` release. BTC comes from its authors' own repository, the file unchanged:
+caracole never republishes it. Each file is checked against its SHA-256 before it is kept. If GitHub says the hour's
+requests are spent, the app waits until then and asks nothing before. The owner uploads beat_this's two files to that
+release by hand, with `nix run .#publish-models -- DIR` (nix/publish-models.sh): each is checked against the app's
+pins first and uploaded only once, with beat_this's licence beside them.
+
 The sheets and lyrics are other people's work. Keep your library private.

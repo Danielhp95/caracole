@@ -48,7 +48,8 @@ class RelayTest {
                 assertTrue(failed.getValue("Unlaid Bug").startsWith("Nobody - Unlaid Bug: a bug in caracole: "))
                 // every other song due is re-laid all the same
                 assertEquals(setOf("Phone Made", "From A Video", "Made Elsewhere", "Transcribed Since", "Nothing Sung",
-                                   "Over A Transcript", "Columns", "Not Sung You Said", "Instrumental Since"),
+                                   "Over A Transcript", "Columns", "Not Sung You Said", "Given The Bytes Heard",
+                                   "Instrumental Since"),
                              relayed.songs.map { it.title }.toSet())
             }
         }

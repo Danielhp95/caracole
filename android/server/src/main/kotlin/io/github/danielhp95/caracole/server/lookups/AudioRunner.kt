@@ -2,13 +2,17 @@ package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.library.AudioStore
+import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.core.lookup.Lookup
 import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.SiteStages
+import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -25,6 +29,7 @@ import io.github.danielhp95.caracole.viewer.autochords.Heard
 import io.github.danielhp95.caracole.viewer.autochords.Maker
 import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.autochords.SheetHalf
+import io.github.danielhp95.caracole.viewer.render.InfoJson
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,6 +39,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.CancellationException
 
 /**
  * `caracole audio --progress --upload=ID --song="ARTIST - TITLE"` on the phone (commands/audio.py, audio_sheet.py):
@@ -204,10 +210,59 @@ class AudioRunner(
     }
 
     companion object {
+        /**
+         * run.py's `_generate` past the models and `_keep`: the sheet laid out from what was [heard], over the song's
+         * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
+         * `autochords_mtime` last; the chords stage's end, and info.json's failure in [INFO_FAILED]'s words (the
+         * sheet kept all the same). The audio job's and a lyrics pick's (LyricsPickJob) alike, every time [stamp],
+         * the job's own (its start's, as `autochords_pending(now=…)` is given the job's). Its [maker] the phone with the
+         * file the owner gave; a YouTube sheet's (StagedSheet's keep) its own, with the sheet's credit line ([source])
+         * and the video ([video]) and the version's address ([url]).
+         */
+        internal fun keepAutoSheet(parts: PhoneParts, store: AudioStore, chords: ChordModels,
+                                   names: () -> Map<String, String>, db: Db, s: SongRow, heard: Heard,
+                                   audio: File, stamp: String): Pair<Pair<String, String>, String?> =
+            keepAutoSheet(parts, db, s, heard, stamp, Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(),
+                                                           chords.runtime, store.givenName(db, s), sha16(audio)),
+                          "file://" + audio.absolutePath)
+
+        internal fun keepAutoSheet(parts: PhoneParts, db: Db, s: SongRow, heard: Heard, stamp: String, maker: Maker,
+                                   url: String, source: String? = null,
+                                   video: JsonObject? = null): Pair<Pair<String, String>, String?> {
+            val lyrics = lyricsFromJson(s.lyricsJson)
+            val made = SheetHalf.make(s, lyrics, heard, source = source)
+            val raw = SheetHalf.raw(s, lyrics, made, video = video, maker = maker)
+            db.savepoint("audio_sheet") {
+                val current = autoVersionOf(db, s.id)
+                val versionId = Versions.upsert(db, PROVIDER, current ?: s.id.toString(), s.id, "sheet", "auto", 0.0, 0,
+                                                1, null, url, raw, stamp)
+                Kept.keepFile(db, parts.store, s, versionId, Versions.SHEET_FILE_NAMES[1],
+                              made.text.toByteArray(Charsets.UTF_8), 1, stamp)
+                db.execute("DELETE FROM versions WHERE song_id = ? AND provider = ? AND id != ? AND NOT EXISTS " +
+                               "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, PROVIDER, versionId)
+                Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
+            }
+            val info = try {
+                InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
+                null
+            } catch (e: Exception) {  // the sheet is kept: said so, and made of this audio (no hearing again)
+                if (e is CancellationException) throw e
+                e.message ?: e.javaClass.simpleName
+            }
+            Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
+            return ("done" to holds(raw)) to info?.let { INFO_FAILED.replace("{held}", holds(raw)).replace("{why}", it) }
+        }
+
+        /** versions.auto_version_of: the tab id of the song's one auto version, the one a kept file names first. */
+        private fun autoVersionOf(db: Db, songId: Long): String? =
+            db.one("SELECT tab_id FROM versions v WHERE song_id = ? AND provider = ? ORDER BY EXISTS (SELECT 1 FROM " +
+                       "files f WHERE f.version_id = v.id) DESC, id LIMIT 1", songId, PROVIDER) { it.text(0) }
+
         const val COMMAND = "audio"
         const val DATA = "caracole/library/audio_sheet.json"
         private val KNOWN = setOf("--upload", "--song", "--progress")
         private const val SYNC_ID = StagedSheet.SYNC_ID
+        private const val PROVIDER = StagedSheet.AUTO_PROVIDER
 
         /** sheet.Maker's side, an auto sheet's `raw["made_on"]` made here. */
         const val MADE_ON = "phone"
@@ -223,13 +278,26 @@ class AudioRunner(
         const val INFO_FAILED = "the sheet was kept ({held}), but its info.json couldn't be written: {why}"
 
         /** Why this phone makes no sheet from an audio file now, or null: the one answer for the job and the audio
-         * routes (server.audio's `why`). No [chords] (the release, nothing wired): [LibraryPage.AUDIO_PROBLEM]; the
-         * models not installed ([modelsReady], ModelsRunner.ready's answer): [NOT_DOWNLOADED], the design's §8.1 words;
-         * else the chords' own reason ([ChordModels.ready]: "chords from audio need Android 13 or later", …). */
+         * routes (server.audio's `why`). No [chords] (nothing wired): [LibraryPage.AUDIO_PROBLEM]; what keeps the phone
+         * itself from hearing chords ([ChordModels.phoneProblem]: its processor, its Android, its memory), before the
+         * files, as Settings offers such a phone no download; the models not installed ([modelsReady],
+         * ModelsRunner.ready's answer): [NOT_DOWNLOADED], the design's §8.1 words; else the chords' own reason
+         * ([ChordModels.ready]). */
         fun problemOf(chords: ChordModels?, modelsReady: String?): String? = when {
             chords == null -> LibraryPage.AUDIO_PROBLEM
+            chords.phoneProblem() != null -> chords.phoneProblem()
             modelsReady != null -> NOT_DOWNLOADED
             else -> chords.ready()
+        }
+
+        /** audio_sheet.py `_unsheeted`'s refusal: [s] ignored (its row, or [overrides]' `ignore`), or with a human
+         * sheet kept, in the audio job's words; null where an auto sheet may be kept over it. The audio job's and the
+         * lyrics pick's check before they keep what the models heard. */
+        fun notOurs(db: Db, s: SongRow, overrides: Overrides): String? = when {
+            s.status == "ignored" || s.key in overrides.ignore -> Words.text("ignored").replace("{display}", s.display)
+            Kept.keptFiles(db, s.id).any { it.name == Versions.SHEET_FILE_NAMES[0] } ->
+                Words.text("has_sheet").replace("{display}", s.display)
+            else -> null
         }
 
         /** youtube_sheet.holds: what the auto sheet's version (its [raw]) says the sheet holds. */

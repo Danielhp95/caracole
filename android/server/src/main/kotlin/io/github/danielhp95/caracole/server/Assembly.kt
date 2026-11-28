@@ -62,6 +62,7 @@ import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
 import io.github.danielhp95.caracole.server.lookups.InboxRetry
 import io.github.danielhp95.caracole.server.lookups.InboxRunner
 import io.github.danielhp95.caracole.server.lookups.LaCuerdaRunner
+import io.github.danielhp95.caracole.server.lookups.LyricsRunner
 import io.github.danielhp95.caracole.server.lookups.RenderRunner
 import io.github.danielhp95.caracole.server.lookups.ReviewRunner
 import io.github.danielhp95.caracole.server.lookups.UgLinkRunner
@@ -73,6 +74,7 @@ import io.github.danielhp95.caracole.server.page.PageRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.page.ServerControls
 import io.github.danielhp95.caracole.server.page.SongbookSection
+import io.github.danielhp95.caracole.server.routes.AudioRoutes
 import io.github.danielhp95.caracole.server.routes.ExportRoutes
 import io.github.danielhp95.caracole.server.routes.YouTubeRoutes
 import io.github.danielhp95.caracole.server.routes.GuitarRoutes
@@ -89,6 +91,7 @@ import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.LyricsRoutes
 import io.github.danielhp95.caracole.server.routes.UgLinkRoutes
 import io.github.danielhp95.caracole.server.routes.sync.Exports
 import io.github.danielhp95.caracole.server.routes.sync.Imports
@@ -122,10 +125,12 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * now, read as the job runs (the app's ConnectivityManager; none metered by default). [youtube]: the app's yt-dlp (the
  * debug build's :youtube, `ProcessYtDlp` through `YtDlpClient`, one gate a run opened in the main process), null in a
  * build without it. [models]: where the chord
- * models' job downloads them from, with this build's pins (ModelFiles.carried(): the debug build's `:ml` puts them on
- * the classpath; a device test's GitHub on loopback and pins of its own), null for a build that carries none (the
- * release's), whose job and Settings say so. [chords]: the chord models that hear a song's audio (the debug app's
- * `:ml`, E22's), null where nothing can hear (the release, a test's): the audio job then refuses in its words.
+ * models' job downloads them from, with this build's pins (ModelFiles.carried(): `:ml` puts them on the classpath,
+ * the release's as a debug build's; a device test's GitHub on loopback and pins of its own), null for a build that
+ * carries none (one without `:ml`), whose job and Settings say so. [chords]: the chord models that hear a song's audio
+ * (`:ml`'s MlChordModels, E22's), null where nothing can hear (a build without `:ml`, a test's): the audio job then
+ * refuses in its words; a phone `:ml` can't hear on (x86_64, Android 12, little memory) says why through
+ * ChordModels.phoneProblem.
  * [examiner]: the reader of an audio file's length and tags the audio store needs (the app's, E24's); by default one
  * that reads none ([NO_EXAMINER]: every file refused as audio caracole doesn't read here).
  */
@@ -151,10 +156,12 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
- * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
- * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then YouTubeRoutes ([youtubeRoutes]: a sheet from a
- * YouTube video, a pasted video's panel), then the phone's own ShareRoutes (a song shared to
- * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
+ * box), LyricsRoutes (a song's lyrics looked up under a name typed), then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, AudioRoutes (a sheet from an audio file: the "+" and a
+ * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then YouTubeRoutes
+ * ([youtubeRoutes]: a sheet from a YouTube video, a pasted video's panel), then the phone's own ShareRoutes (a song
+ * shared to the app, a link alone read by asking its service once: ShareReader; an audio file shared, its page, through
+ * [audioRoutes]), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
  * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
@@ -237,6 +244,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio, problem = ::audioProblem,
                                                     names = models::names,
                                                     hold = { hearing -> models.holding(hearing) })
+        commands["lyrics"] = LyricsRunner(parts, deps.chords, audio, problem = ::audioProblem, names = models::names,
+                                          hold = { hearing -> models.holding(hearing) })
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
         commands[YouTubeSheetRunner.COMMAND] = YouTubeRunners(
             YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio, problem = ::youtubeProblem, names = models::names,
@@ -271,11 +280,20 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * and [ModelsRunner.ready]): the audio job's refusal, and the one answer E24's routes and `server.audio` give. */
     fun audioProblem(): String? = AudioRunner.problemOf(deps.chords, models.ready())
 
+    /** What keeps this phone from making chords whatever the models' files (its Android, its processor, its memory:
+     * ChordModels.phoneProblem), or null: Settings' row says it in place of a download (no chords at all: the
+     * release's LibraryPage.AUDIO_PROBLEM). */
+    fun chordsProblem(): String? = deps.chords.let { chords -> if (chords == null) LibraryPage.AUDIO_PROBLEM else chords.phoneProblem() }
+
     /** The kept audio files no song names deleted (audio_store.tidy, the computer's scan step's): at the phone's start
      * and after a sync's take, in a write of their own, never under the store's lock. */
     private fun tidyAudio() {
         deps.database.writeBlocking { db -> audio.tidy(db) }
     }
+
+    /** The audio routes (a sheet from an audio file: the "+", a card's entry), and an audio file shared to the app
+     * staged through them (AudioRoutes.stageShared, the app's ShareActivity) for ShareRoutes' `/share/audio`. */
+    val audioRoutes: AudioRoutes = AudioRoutes(parts, audio, ::audioProblem)
 
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
@@ -339,15 +357,19 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         LibraryRoutes(store, queue, cards, deps.database, youtube = youtubeRoutes::sheetFromYoutube),
         LookupRoutes(parts),
         UgLinkRoutes(parts),
+        LyricsRoutes(parts, fileLength = { path ->
+            java.io.File(path).takeIf { it.isFile }?.let { runCatching { audio.formatAndLength(it).second }.getOrNull() }
+        }),
         SongbookRoutes(parts),
         VersionsRoutes(parts, deps.csrf),
         HarmonicaRoutes(parts, deps.csrf),
         ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
+        audioRoutes,
         youtubeRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
-                    links = ShareReader(parts), youtube = youtubeRoutes),
+                    links = ShareReader(parts), youtube = youtubeRoutes, audio = audioRoutes),
     )
 
     val app: App = App(
@@ -498,6 +520,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
+            audio = audioProblem(),
             inApp = true, youtube = youtubeOffered(), youtubeOff = !config().provider("youtube").enabled,
         )
     }

@@ -16,7 +16,14 @@ from test_transcribe_job import MIX, STEM, WORDS, Built, Separator, Transcriber,
 from caracole.autochords import separate
 from caracole.autochords import transcribe as tx
 from caracole.autochords.hearing import OWNER, WORK_PREFIX, Hearing, HearingFailed, Kept, Nothing, sweep
-from caracole.autochords.transcript import HEARD_NOTHING, TRANSCRIPT, heard_nothing, transcript_of, why_not_offered
+from caracole.autochords.transcript import (
+    HEARD_NOTHING,
+    TRANSCRIPT,
+    audio_key,
+    heard_nothing,
+    transcript_of,
+    why_not_offered,
+)
 from caracole.db import kv_get, kv_get_json
 from caracole.overrides import Overrides
 from caracole.songs import get_song
@@ -79,8 +86,8 @@ def test_too_few_words_are_nothing_sung_and_noted_with_why(conn, cfg, words, why
     assert heard == Nothing(why)
     assert len(transcriber.calls) == 1  # Whisper heard them: too few to be lyrics
     assert kv_get(conn, f"{TRANSCRIPT}{song.id}") is None
-    assert noted(conn, song) == {"audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": STAMP, "why": why,
-                                 "by": "caracole"}
+    assert noted(conn, song) == {"audio": song.audio_path, "audio_mtime": song.audio_mtime,
+                                 **audio_key(song.audio_path, song.audio_mtime), "at": STAMP, "why": why, "by": "caracole"}
     assert heard_nothing(conn, song) and why_not_offered(conn, cfg, song, Overrides()) == "nothing sung was heard"
 
 
@@ -162,12 +169,14 @@ def test_audio_whisper_cant_read_is_noted_as_whispers_alone(conn, cfg):
     assert (failed.value.kind, failed.value.words) == ("audio", "Whisper can't read the audio")
     assert kv_get(conn, f"autochords:failed:{song.id}") is None
     assert kv_get_json(conn, f"{WHISPER_CANT_READ}{song.id}") == {
-        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": STAMP,
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, **audio_key(song.audio_path, song.audio_mtime), "at": STAMP,
         "error": "RuntimeError: Failed to load audio: moov atom not found"}
     song = get_song(conn, song.id)
     assert why_not_offered(conn, cfg, song, Overrides()) == "Whisper can't read its audio"
     assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None
-    changed = replace(song, audio_mtime=(song.audio_mtime or 0) + 5)
+    other = Path(song.audio_path).with_name("other.wav")
+    other.write_bytes(b"another video's audio")
+    changed = replace(song, audio_path=str(other), audio_mtime=other.stat().st_mtime)  # other bytes
     assert why_not_offered(conn, cfg, changed, Overrides()) is None
 
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- PipelineTest stands in for the app's server with a socket on loopback, and asks it while the :ml process is
+         killed; the app has INTERNET of its own. The runtime built from its source asks for no permission (Maven's AAR
+         brought INTERNET and ACCESS_NETWORK_STATE into this test APK). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

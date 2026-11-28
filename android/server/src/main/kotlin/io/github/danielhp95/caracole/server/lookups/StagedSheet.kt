@@ -16,7 +16,6 @@ import io.github.danielhp95.caracole.core.lookup.Progress
 import io.github.danielhp95.caracole.core.lookup.SiteStages
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
-import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
@@ -28,8 +27,6 @@ import io.github.danielhp95.caracole.viewer.autochords.ChordsUnavailable
 import io.github.danielhp95.caracole.viewer.autochords.Heard
 import io.github.danielhp95.caracole.viewer.autochords.Maker
 import io.github.danielhp95.caracole.viewer.autochords.Relay
-import io.github.danielhp95.caracole.viewer.autochords.SheetHalf
-import io.github.danielhp95.caracole.viewer.render.InfoJson
 import kotlinx.serialization.json.JsonObject
 import java.io.File
 import java.time.temporal.ChronoUnit
@@ -257,12 +254,7 @@ internal abstract class StagedSheet(
     /** `_still_ours`: `_unsheeted` (not ignored, with no human sheet); then the job's own rule ([stillOursHere]);
      * and, once the audio stage kept a file, the song's audio still that file (the design's §3.2). */
     private fun stillOurs(db: Db, s: SongRow) {
-        if (s.status == "ignored" || s.key in overrides.ignore) {
-            throw Stop(Words.text("ignored").replace("{display}", s.display))
-        }
-        if (Kept.keptFiles(db, s.id).any { it.name == Versions.SHEET_FILE_NAMES[0] }) {
-            throw Stop(Words.text("has_sheet").replace("{display}", s.display))
-        }
+        AudioRunner.notOurs(db, s, overrides)?.let { throw Stop(it) }
         stillOursHere(db, s)
         val kept = kept ?: return
         if (s.audioPath != kept.path) throw Stop(AudioRunner.AUDIO_CHANGED.replace("{display}", s.display))
@@ -353,7 +345,9 @@ internal abstract class StagedSheet(
             fail(Words.text("bug").replace("{error}", "${e::class.simpleName}: ${e.message.orEmpty()}"))
         } finally {
             // What the models kept to go on from goes once the sheet is kept, never before: a keep that failed
-            // leaves it, for Try again to lay the sheet out with no hearing.
+            // leaves it, for Try again to lay the sheet out with no hearing. A job refused after a whole hearing
+            // (`stillOurs`: the song got a human sheet meanwhile) keeps no sheet and never calls `forget`: the
+            // folder waits for the day-old sweep, and MlChordModels' entry of it stays for the process's life.
             if (sheetKept) chords.forget(audio)
         }
     }
@@ -382,44 +376,22 @@ internal abstract class StagedSheet(
         return "done" to AudioRunner.holds(Versions.get(db, now.versionId)!!.raw)
     }
 
-    /** run.py's `_generate` past the models and `_keep`: the sheet laid out from what was heard, over the song's
-     * lyrics now, kept under the song's one auto version, the song found, its info.json, then its
-     * `autochords_mtime` last; the chords stage's end. */
+    /** run.py's `_generate` past the models and `_keep` (AudioRunner.keepAutoSheet, with this job's [maker],
+     * [versionUrl], [source] and [video]): the sheet laid out from what was heard, over the song's lyrics now, kept
+     * under the song's one auto version, the song found, its info.json, then its `autochords_mtime` last; the chords
+     * stage's end. */
     private fun keepSheet(db: Db, heard: Heard, audio: File): Pair<String, String> {
         val s = again(db)
         stillOurs(db, s)
-        val lyrics = lyricsFromJson(s.lyricsJson)
-        val maker = maker(db, s, audio)
-        val made = SheetHalf.make(s, lyrics, heard, source = source())
-        val raw = SheetHalf.raw(s, lyrics, made, video = video(), maker = maker)
-        db.savepoint("audio_sheet") {
-            val current = autoVersionOf(db, s.id)
-            val versionId = Versions.upsert(db, AUTO_PROVIDER, current ?: s.id.toString(), s.id, "sheet", "auto", 0.0, 0,
-                                            1, null, versionUrl(audio), raw, stamp)
-            Kept.keepFile(db, parts.store, s, versionId, Versions.SHEET_FILE_NAMES[1],
-                          made.text.toByteArray(Charsets.UTF_8), 1, stamp)
-            db.execute("DELETE FROM versions WHERE song_id = ? AND provider = ? AND id != ? AND NOT EXISTS " +
-                           "(SELECT 1 FROM files f WHERE f.version_id = versions.id)", s.id, AUTO_PROVIDER, versionId)
-            Versions.refreshStatus(db, s.id, ignored = false, now = stamp)
-        }
+        val (ended, info) = AudioRunner.keepAutoSheet(parts, db, s, heard, stamp, maker(db, s, audio), versionUrl(audio),
+                                                      source(), video())
+        // Kept only now, the song's `autochords_mtime` its audio's (keepAutoSheet's last write): a write before it that
+        // fails leaves the checkpoints (the chords stage's `finally`), for Try again, which finds no sheet of this audio
+        // yet.
         sheetKept = true
-        val info = try {
-            InfoJson.write(db, parts.store.libraryDir, Songs.byId(db, s.id) ?: s)
-            null
-        } catch (e: Exception) {  // the sheet is kept: said so, and made of this audio (no hearing again)
-            if (e is CancellationException) throw e
-            e.message ?: e.javaClass.simpleName
-        }
-        Versions.updateSong(db, s.id, mapOf("autochords_mtime" to s.audioMtime), stamp)
         again(db)
-        info?.let { return fail(AudioRunner.INFO_FAILED.replace("{held}", AudioRunner.holds(raw)).replace("{why}", it)) }
-        return "done" to AudioRunner.holds(raw)
+        return info?.let { fail(it) } ?: ended
     }
-
-    /** versions.auto_version_of: the tab id of the song's one auto version, the one a kept file names first. */
-    private fun autoVersionOf(db: Db, songId: Long): String? =
-        db.one("SELECT tab_id FROM versions v WHERE song_id = ? AND provider = ? ORDER BY EXISTS (SELECT 1 FROM " +
-                   "files f WHERE f.version_id = v.id) DESC, id LIMIT 1", songId, AUTO_PROVIDER) { it.text(0) }
 
     // --- the pages ----------------------------------------------------------------------------------------------------
 

@@ -420,7 +420,7 @@ class BenchReportTest {
         assertEquals("QTI SM8550", out.str("soc"))
         assertEquals("14 (API 34)", out.str("android"))
         assertEquals(OrtModels.RUNTIME, out.str("runtime"))
-        assertEquals("onnxruntime 1.32.0", out.str("runtime"))
+        assertEquals("onnxruntime 1.27.1", out.str("runtime"))
         val p = out.getValue("parity").jsonObject
         assertTrue(p.getValue("pass").jsonPrimitive.boolean)
         assertEquals(1e-3, p.getValue("gates").jsonObject.num("btc_margin_under"), 0.0)
