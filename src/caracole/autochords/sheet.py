@@ -448,7 +448,10 @@ def relay_due(song: Song, raw: Mapping[str, object], noted: Noted | None = None)
     reasons run.py's ``_skip_reason`` gave before what was heard was kept, moved here as they were: a sheet that keeps
     ``heard`` is never due for the models for them. One more, which a pick taken back (lyrics_pick.py ``clear_pick``)
     gave by clearing the song's ``autochords_mtime``: a sheet over a site's words (one that kept their
-    ``lyrics_key``) whose song has none now, or a site's word that it is instrumental. ``noted`` defaults to what the
+    ``lyrics_key``) whose song has none now, or a site's word that it is instrumental; and one a pick gave so too: a
+    sheet laid over timed lyrics, keeping their words' key, whose song has other timed lyrics now (``synced_lyrics``
+    isn't its ``synced_key``: the same words timed otherwise, a record picked for another cut; none, untimed, is no
+    reason, nor is it for a sheet with no ``lyrics_key``). ``noted`` defaults to what the
     sheet was laid out with (``noted_in``): a caracole that knows of no transcript or verdict of its own. Lyrics stored
     that can't be read are none. Reads no file. Whether the sheet may be re-laid on this side at all is
     ``relays_here``'s, its callers' to ask first."""
@@ -481,6 +484,10 @@ def _relay_due(song: Song, raw: Mapping[str, object], noted: Noted, lyrics: Lyri
     if (words is not None and raw.get("lyrics") in ("synced", "plain") and raw.get("lyrics_source") != LYRICS_SOURCE
             and lyrics is None):
         return "its lyrics are gone, or a site says it is instrumental"
+    timed = raw.get("synced_lyrics")  # the timed lyrics a timed sheet was laid beside (raw_of's synced_key)
+    if (words is not None and raw.get("lyrics") == "synced" and raw.get("lyrics_source") != LYRICS_SOURCE
+            and isinstance(timed, str) and synced_key(song) not in (None, timed)):
+        return "its timed lyrics are others now"  # the same words timed otherwise; untimed now, it stays as it is
     if raw.get("lyrics") == "plain" and synced_key(song) not in (None, raw.get("synced_lyrics")):
         return "timed lyrics came to a plain sheet"
     if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and wider_lines(song):

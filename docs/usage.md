@@ -1016,7 +1016,7 @@ within its 7 days. LRCLIB's record comes from the search's own answer in the cac
 The record is noted under `[lyrics]` (its `as` kept) once the lyrics are written. An auto sheet that
 keeps what was heard is laid out again over the new words at once, with no model, whether
 auto-chords is installed or not; one another caracole made never goes to the models here (with the
-same words as before, nothing is laid out again). Any other song with its audio gets its auto sheet
+same words timed as before, nothing is laid out again). Any other song with its audio gets its auto sheet
 made, or made again, over the new words at once where auto-chords is installed; otherwise tonight's
 run makes it (a chart already made takes the words as plain lyrics meanwhile). A song with a human sheet gets its lyrics and its page, no chords. It says each stage:
 

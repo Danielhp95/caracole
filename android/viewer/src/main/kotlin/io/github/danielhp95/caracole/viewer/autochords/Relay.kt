@@ -67,7 +67,8 @@ object Relay {
     }
 
     /** sheet.relay_due: why the sheet ([raw], its version's) is to be laid out again from what was heard, its words
-     * alone having changed, or null. [noted] defaults to [notedIn]. Lyrics stored that can't be read are none. */
+     * alone having changed (or their timing: a timed sheet whose `synced_lyrics` isn't the song's syncedKey now), or
+     * null. [noted] defaults to [notedIn]. Lyrics stored that can't be read are none. */
     fun due(song: SongRow, raw: JsonObject, noted: Noted? = null): String? {
         val lyrics = try {
             lyricsFromJson(song.lyricsJson)
@@ -101,6 +102,12 @@ object Relay {
         if (onWords && key != null && !sameText(words, key)) return "its lyrics are other words now"
         if (onWords && lyrics == null) return "its lyrics are gone, or a site says it is instrumental"
         val synced = SheetHalf.syncedKey(stored)
+        val timed = raw["synced_lyrics"] // the timed lyrics a timed sheet was laid beside (SheetHalf.raw's syncedKey)
+        if (used == "synced" && !overTranscript && words != null && synced != null &&
+            timed is JsonPrimitive && timed.isString && timed.content != synced
+        ) {
+            return "its timed lyrics are others now" // untimed now, or no lyrics_key: as it is
+        }
         if (used == "plain" && synced != null && !sameText(raw["synced_lyrics"], synced)) {
             return "timed lyrics came to a plain sheet"
         }
