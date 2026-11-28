@@ -434,7 +434,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     /** A lookup done whose outcome is "Not on the sites" (Outcomes, as the Requests tab says it) notes its song for the
      * automatic pass, kv `youtube-wanted:<id>` (Due.WANTED_PREFIX), its time; whether it did. */
     private fun noteNoSheet(job: Job): Boolean {
-        if (job.state != Job.DONE || !job.looksUp) return false
+        if (deps.youtube == null || job.state != Job.DONE || !job.looksUp) return false  // no yt-dlp: no pass to note for
         val now = Instant.now()
         val song = deps.database.read { db ->
             val (id, facts) = SongFacts.ended(queue).songOf(db, job, parts.cards, now)

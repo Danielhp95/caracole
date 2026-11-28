@@ -442,7 +442,8 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
             }
             commands = commands.map { it.copy(args = withSongbooks(it.args)) }
             val picked = job.steps.any { it.args.firstOrNull() == "review" }  // after the song's own request
-            job.spec.copy(display = job.named, songId = job.songId, join = !picked, commands = commands)
+            // Try again is the owner's: asked for now, never automatic (no metered refusal, the lookup pace, told).
+            job.spec.copy(display = job.named, songId = job.songId, join = !picked, commands = commands, automatic = false)
         }
         return submit(spec).first
     }

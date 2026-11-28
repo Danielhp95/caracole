@@ -167,16 +167,29 @@ class SettingsActivity : Activity() {
                     }
                 }
             }
+            // The automatic pass's switch: as the phone holds it; a read that failed leaves it unknown (off, and not to
+            // be pressed), a write that fails puts it back and says so.
             val auto = findViewById<Switch>(R.id.youtube_auto)
             auto.setOnCheckedChangeListener(null)
-            auto.isChecked = read.getOrNull()?.second ?: true
-            auto.setOnCheckedChangeListener { _, on ->
+            val known = read.getOrNull()?.second
+            auto.isChecked = known == true
+            auto.isEnabled = known != null
+            var reverting = false
+            auto.setOnCheckedChangeListener { button, on ->
+                if (reverting) return@setOnCheckedChangeListener
                 scope.launch {
-                    withContext(Dispatchers.IO) {
+                    val kept = withContext(Dispatchers.IO) {
                         runCatching {
                             phone.parts.database.writeBlocking { db -> YouTubeAuto.set(db, on) }
                             YouTubeWorker.schedule(this@SettingsActivity, phone)
-                        }.onFailure { Log.w("caracole", "the automatic YouTube pass's switch couldn't be kept", it) }
+                        }
+                    }
+                    kept.onFailure { e ->
+                        Log.w("caracole", "the automatic YouTube pass's switch couldn't be kept", e)
+                        reverting = true
+                        button.isChecked = !on
+                        reverting = false
+                        findViewById<TextView>(R.id.youtube_line).text = getString(R.string.youtube_auto_failed, why(e))
                     }
                 }
             }

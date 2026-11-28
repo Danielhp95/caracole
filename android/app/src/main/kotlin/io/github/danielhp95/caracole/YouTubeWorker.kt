@@ -32,19 +32,27 @@ import java.util.concurrent.TimeUnit
  * build with no yt-dlp schedules nothing. The network is checked again before each run by the job itself.
  */
 class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        val phone = withContext(Dispatchers.IO) { Caracole.phone(applicationContext) }
-        if (phone.youtube == null) return Result.success()
-        if (DAILY in tags && withContext(Dispatchers.IO) { phone.parts.database.read { db -> !daily(db) } }) {
-            WorkManager.getInstance(applicationContext).cancelUniqueWork(DAILY)
-            return Result.success()
-        }
-        val ended = phone.youtubeAuto.pass()
-        Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}")
-        return Result.success()
-    }
+    override suspend fun doWork(): Result =
+        work(applicationContext, withContext(Dispatchers.IO) { Caracole.phone(applicationContext) }, DAILY in tags)
 
     companion object {
+        /** What a run of the work does, [daily] the daily one's: nothing in a build with no yt-dlp; the daily one on a
+         * phone it no longer belongs on (the switch off, or a sync within 14 days) lets itself go; else the pass. */
+        internal suspend fun work(context: Context, phone: Phone, daily: Boolean): Result {
+            if (phone.youtube == null) return Result.success()
+            if (daily && withContext(Dispatchers.IO) { phone.parts.database.read { db -> !daily(db) } }) {
+                WorkManager.getInstance(context).cancelUniqueWork(DAILY)
+                return Result.success()
+            }
+            val ended = phone.youtubeAuto.pass()
+            lastForTests = ended
+            Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}")
+            return Result.success()
+        }
+
+        /** What the last pass of this process came to, for a device test. */
+        @Volatile var lastForTests: YouTubeAuto.Ended? = null
+
         const val SOON = "youtube-soon"
         const val DAILY = "youtube-daily"
         private const val SOON_DELAY_MIN = 2L

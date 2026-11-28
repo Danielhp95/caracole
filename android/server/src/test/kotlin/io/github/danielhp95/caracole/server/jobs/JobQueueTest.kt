@@ -150,6 +150,17 @@ class JobQueueTest {
         gate.complete(Unit)
     }
 
+    /** Try again of an automatic job is the owner's: asked for now. */
+    @Test fun tryAgainOfAnAutomaticJobIsAskedForNow() = runTest {
+        val queue = queue()
+        val sheet = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", "youtube:oasis/wonderwall", "song",
+                                        emptyList(), commands = sheet, automatic = true)).first
+        queue.await(auto.id)
+        val again = queue.again(auto.id)
+        assertFalse(queue.job(again.id)!!.spec.automatic)
+    }
+
     @Test fun aFullQueueTakesNoNewJobButAJobThatJoinsNeedsNoRoom() = runTest {
         val queue = queue(limit = 2)
         val gate = CompletableDeferred<Unit>()

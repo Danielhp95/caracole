@@ -94,7 +94,9 @@ class YouTubeAuto(
          * default); the phone's own, kept by a restore (OwnRecords). */
         const val SWITCH = "phone:youtube-auto"
 
-        /** A pass stops at 8 minutes into its worker (WorkManager's 10 minutes, less the job it awaits). */
+        /** A pass queues no job after 8 minutes into its worker (WorkManager stops a worker at 10). The job it awaits
+         * may run longer (a song's hearing takes minutes): its worker may then be stopped while it waits, and the job goes
+         * on in the queue, whose foreground service keeps the process; the next pass takes the songs after it. */
         const val MOST_S = 8 * 60.0
 
         /** A song costs two runs (a search and a download): a pass stops with fewer left. */
