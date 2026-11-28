@@ -4547,8 +4547,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   file, `audio_path`, `audio_mtime`, the record's `audio`); else it stays `YouTubeAudio.KEPT_FOR` (3 days), swept at
   the next job and as the phone starts (a file a song links that its record doesn't name aged by its own time); its
   folder `stateDir/cache/youtube/`, the app's files folder, not Android's cacheDir, which may be cleared under a job
-  whose song still links it: the sweep and the let-go are what keep it small; a removal deletes it (`LibraryStore.youtubeDir`, removal.py's
-  `youtube_audio`).
+  whose song still links it: the sweep and the let-go are what keep it small; a removal deletes it
+  (`LibraryStore.youtubeDir`, removal.py's `youtube_audio`).
 - vectors/lookup/youtube_sheet.jsonl (`YouTubeSheetReplay`, area `youtube-sheet`): Python's job over FakeYtDlp, fake
   models and the fake lyrics sites, replayed through the runner with a `Plan` of the record's yt-dlp (its runs
   compared) and `at_yield` written at the chords' yield alone; compared apart: AudioSheetReplay's, plus
@@ -5251,9 +5251,9 @@ picks one).
 
 #### The one exception is YouTube
 
-- The one exception is YouTube, the owner's explicit choice for their own songs (a handful a night at first; up to 25 since 2026-11-27, the
-  budget's 50 runs): its robots.txt
-  closes `/results` and `/youtubei/` to crawlers, and yt-dlp uses both, against its terms too.
+- The one exception is YouTube, the owner's explicit choice for their own songs (a handful a night at first; up to 25
+  since 2026-11-27, the budget's 50 runs): its robots.txt closes `/results` and `/youtubei/` to crawlers, and yt-dlp
+  uses both, against its terms too.
 - Provider `youtube` (youtube.py) is the one place caracole runs yt-dlp, and only on these terms, for:
   - a song with no human sheet (`todo.songs_to_buy`);
   - or one the owner names with the video to take (`caracole youtube --song`, and its `--sheet`, which the library
@@ -5295,12 +5295,26 @@ picks one).
     (tests/test_youtube.py).
 - The debug build's YouTube bench (android/README.md, "The YouTube bench"), a few songs by hand on the owner's phone,
   keeps these terms on the phone's records, but for one: its cap of YouTube's budget (50 yt-dlp runs in any 24 hours,
-  6 before 2026-11-27) is lifted while the
-  feature is developed, the owner's choice of 2026-11-27 ("ignore the run limits while developing this feature. as
-  connection is patchy"; `DbLedger.DAY_CAP_LIFTED`, `false` puts it back): the run count alone, every run still
-  reserved, counted and reported; the pause, one run and one session at a time, a block and its cooldown, no retry,
-  the provider's switch, the gate's hosts and three songs a session stay. Nothing else's budget changes (`YtDlp`'s,
-  PhoneConfig's `youtube`, the computer's).
+  6 before 2026-11-27) is lifted while the feature is developed, the owner's choice of 2026-11-27 ("ignore the run
+  limits while developing this feature. as connection is patchy"; `DbLedger.DAY_CAP_LIFTED`, `false` puts it back):
+  the run count alone, every run still reserved, counted and reported; the pause, one run and one session at a time, a
+  block and its cooldown, no retry, the provider's switch, the gate's hosts and three songs a session stay. Nothing
+  else's budget changes (`YtDlp`'s, PhoneConfig's `youtube`, the computer's).
+- **On the phone too**, the owner's choice of 2026-11-26, answering the YouTube-on-Android study's seven questions: "1.
+  yes, 2. yes. 3. automatic is okay, 4 It's okay 5. acceptable, 6. I would 7. I don't want to go further with "ask the
+  computer route"". The exception holds on the phone on the computer's terms: the same arguments and block patterns,
+  read from the corpus's `data/caracole/youtube/youtube.json` (never retyped), and the same budget and pauses, counted
+  on the phone apart (Two caracoles, each its own politeness, below). yt-dlp, its challenge scripts and QuickJS-NG are
+  pinned in the APK (`android/youtube/pins.json`) and run in the app's `:youtube` process, in the debug build alone
+  until the owner's gate (the phone-youtube design's Y5); nothing updates itself, and a fix comes with a caracole
+  release (`android/scripts/bump-ytdlp.sh`). yt-dlp presents itself as its default clients do (an official app's: a
+  TV's, a Vision Pro's); nothing solves BotGuard or mints a PO token. Every run is given the app's loopback gate
+  (`HostGate`) as its `--proxy` and is refused without it (`YtDlpService`); the gate allows YouTube's own hosts and
+  refuses Google's attestation host by name, and the app's bytes are measured against the gate's: a check and a
+  measurement, not a wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. A pasted video's
+  title and thumbnail are read as it is pasted (`YouTubeVideoRunner`); nothing is downloaded before the owner asks, for
+  a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), on any network. That changes once
+  the automatic pass lands (the phone-youtube design's Y3), which takes audio by itself.
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.

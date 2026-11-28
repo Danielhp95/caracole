@@ -201,10 +201,10 @@ open in the browser, and so does a link to caracole serve.
 What needs a network: looking songs up, which asks the sites from the phone itself ([Lookups on the
 phone](#lookups-on-the-phone)) or a sheet's other version from Ultimate Guitar, and a sync with the computer. Making
 a songbook, Export PDF (which prints) and Make this my version, a backup, and filing a shared file all work with
-none. What isn't on the phone
-at all says so ("…: not on the phone yet."): a sheet from a YouTube video and YouTube's suggestions (the computer
-runs yt-dlp, the phone never does), and caracole serve's lookup page (the library page's search does its work). Use
-caracole serve in a browser for those.
+none. A sheet from a YouTube video needs a network too, and the debug build ([A sheet from a YouTube
+video](#a-sheet-from-a-youtube-video-debug-build)). What isn't on the phone at all says so ("…: not on the phone
+yet."): YouTube's suggested video for a search, and caracole serve's lookup page (the library page's search does its
+work). Use caracole serve in a browser for those.
 
 The pages come from the app's own server, with the same Content-Security-Policy and sandbox headers caracole serve
 sends, so the viewers run sandboxed as they do there.
@@ -694,6 +694,10 @@ which, with no request. When the service fails, blocks caracole or is turned off
 opens Edit. A link shared again is read from the cache, with no request. Each service is turned off on the computer,
 `[providers.spotify] enabled = false` (or `itunes`, `tidal`, `youtube-oembed`) in caracole.toml, which the phone takes
 at its next sync. Deezer's shares carry the song's names; a Navidrome or Subsonic link is never asked.
+
+A YouTube video shared to a debug build that makes sheets from YouTube also offers **Make its sheet from this video**
+for the song it names ([A sheet from a YouTube video](#a-sheet-from-a-youtube-video-debug-build)). Nothing downloads
+before you press it.
 
 **To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
 Each share is one line: the sending app's package (when Android gives it), and the text, the subject and the title
@@ -1200,12 +1204,18 @@ carry.
 
 ## A sheet from a YouTube video (debug build)
 
-Paste a video into the library page's request form (its YouTube field), use a card's Sheet from a YouTube video, or
-share a YouTube link to the app and press Make its sheet from this video: the phone takes the video's audio with its
-yt-dlp, asks the lyrics sites for the words, hears the chords with its own models and keeps the sheet, then lets the
-audio go. Nothing downloads before you press the button. Settings' **YouTube audio** row says where it stands: "On ·
-yt-dlp 2026.11.23 · 2 runs in the last 24 hours", "Off (the computer's settings)", "Needs the chord models", "Cooling
-down until …" or "Out of date: …" (`YouTubeRow`); a build without yt-dlp has no row.
+Paste a video into the library page's request form (its YouTube field), or into a song card's From a YouTube video
+and press Make sheet, or share a YouTube link to the app and press Make its sheet from this video: the phone takes the
+video's audio with its yt-dlp, asks the lyrics sites for the words, hears the chords with its own models and keeps the
+sheet, then lets the audio go. Nothing downloads before you press the button. A video pasted into the search box shows
+its title and thumbnail first: one yt-dlp run of its metadata, one request for the picture. It works on Wi-Fi or
+mobile data, on YouTube's terms as the computer keeps them (AGENTS.md, "The one exception is YouTube"): within
+YouTube's budget of 50 runs, one run at a time, a pause between two, a block honoured with no retry, audio alone.
+
+Settings' **YouTube audio** row says where it stands: "On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours", "Off
+(the computer's settings)", "Needs the chord models", "Cooling down until …" or "Out of date: …" (`YouTubeRow`); a
+build without yt-dlp has no row. When it says out of date, see [A release when YouTube
+changes](#a-release-when-youtube-changes).
 
 `YouTubeEndToEndTest` runs it whole on the emulator, with the real models and a yt-dlp of the test's own
 (`Caracole.youtubeForTests`: its one download the committed clip, `tests/fixtures/autochords/hearing.m4a`, nothing
@@ -1324,9 +1334,9 @@ not idle is set aside from them, named, and counts everywhere else.
 
 Three songs show no rate: what they can't decide is UNDECIDED, and the answer is more songs and, in time, more days.
 
-## YouTube's gate (not in the app yet)
+## YouTube's gate
 
-A song's audio from YouTube, on the phone, will come from yt-dlp run inside the app, reaching the network only through a
+A song's audio from YouTube, on the phone, comes from yt-dlp run inside the app, reaching the network only through a
 proxy of the app's own, `core.youtube.HostGate`: on 127.0.0.1 at a port of its own, with a user and a secret made for
 each run (its `--proxy`). It tunnels a CONNECT on port 443 to `youtube.com`, `www.`, `m.`, `music.` and
 `consent.youtube.com` and any `*.googlevideo.com`, and to nothing else: any other host gets 403, and

@@ -98,12 +98,15 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 | `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
-None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).
+On the phone, the debug build makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the
+models below: the lyrics sites first, then the chords. It hears no words and runs no nightly pass
+([the phone](phone.md#a-sheet-from-a-youtube-video-debug-build)). Details: [Audio from
+YouTube](usage.md#audio-from-youtube).
 
 ## The models for the phone
 
-Chords on the phone are not built yet. A first step is in: `nix build .#chord-models` exports both
-models to ONNX, the format the phone will run them in.
+The phone runs both models in ONNX, in the debug build alone for now. `nix build .#chord-models`
+exports them.
 
 | File | Size | What it is |
 |---|---|---|
