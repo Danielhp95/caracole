@@ -1688,7 +1688,8 @@ def _every_kind(conn, cfg) -> tuple[dict, dict]:
     overrides = {"ignore": [s["ignored by overrides.toml"].key],
                  "youtube": {s["a video pasted"].key: DUE_PASTE, s["pasted, found nothing lately"].key: DUE_PASTE,
                              s["declined"].key: None, s["pasted, unusable"].key: DUE_PASTE,
-                             s["YouTube's audio kept, a new paste"].key: DUE_PASTE}}
+                             s["YouTube's audio kept, a new paste"].key: DUE_PASTE},
+                 "lacuerda": {}}
     update_song(conn, s["ignored"].id, status="ignored")
     return s, overrides
 
@@ -1703,7 +1704,7 @@ def _partial_index(conn, cfg) -> tuple[dict, dict]:
          "on UG, its fetch due again": _due_song(conn, "Dirty", 8, match_decision="accept",
                                                  ug_checked_at="2026-11-20T00:00:00Z", ug_dirty=True)}
     _due_noted(conn, s["not on UG, the index partial"])
-    return s, {"ignore": [], "youtube": {}}
+    return s, {"ignore": [], "youtube": {}, "lacuerda": {}}
 
 
 def _complete_index(conn, cfg) -> tuple[dict, dict]:
@@ -1719,29 +1720,57 @@ def _lacuerda(conn, cfg) -> tuple[dict, dict]:
                                      lacuerda_checked_at="2026-11-20T00:00:00Z")}
     for song in s.values():
         _due_noted(conn, song)
-    return s, {"ignore": [], "youtube": {}}
+    return s, {"ignore": [], "youtube": {}, "lacuerda": {}}
+
+
+def _ug_and_lacuerda_checks(conn, cfg) -> tuple[dict, dict]:
+    """The rest of what keeps a song waiting for the sites (todo.songs_to_buy): a pick on LaCuerda not asked for yet,
+    an artist's UG page due again (ug/fetch.py ``fetch_due``), and a pinned match; UG's index read whole."""
+    from caracole.ug.lookup import remember_artist_url
+
+    db.kv_set(conn, "ug:index:built_at", "2026-11-01T00:00:00Z")
+    fetched = {"ug_checked_at": "2026-11-20T00:00:00Z", "ug_dirty": False}
+    s = {"pinned, fetched": _due_song(conn, "Pinned", 20, match_decision="pinned", **fetched),
+         "a LaCuerda pick not asked yet": _due_song(conn, "Picked", 19, match_decision="accept", **fetched),
+         "a LaCuerda pick asked": _due_song(conn, "Picked And Asked", 18, match_decision="accept",
+                                            lacuerda_checked_at="2026-11-21T00:00:00Z", **fetched),
+         "its artist's page due again": _due_song(conn, "Page Due", 17, match_decision="accept",
+                                                  match_step="artist_page", **fetched),
+         "its artist's page read lately": _due_song(conn, "Page Lately", 16, match_decision="accept",
+                                                    match_step="artist_page", **fetched),
+         "not found, its artist's page due": _due_song(conn, "Page Never Read", 15, artist="Blur"),
+         "not found, no artist page known": _due_song(conn, "No Page", 14, artist="Pulp")}
+    db.kv_set(conn, f"ug:artist_page_checked:{s["its artist's page due again"].id}", _at(days=31))
+    db.kv_set(conn, f"ug:artist_page_checked:{s["its artist's page read lately"].id}", _at(days=3))
+    remember_artist_url(conn, "blur", "https://www.ultimate-guitar.com/artist/blur_1")
+    for song in s.values():
+        _due_noted(conn, song)
+    picks = {s[name].key: {"artist": "radiohead", "song": name.split()[1], "version": None}
+             for name in ("a LaCuerda pick not asked yet", "a LaCuerda pick asked")}
+    return s, {"ignore": [], "youtube": {}, "lacuerda": picks}
 
 
 def _nothing(conn, cfg) -> tuple[dict, dict]:
-    return {}, {"ignore": [], "youtube": {}}
+    return {}, {"ignore": [], "youtube": {}, "lacuerda": {}}
 
 
 DUE_SCENES = [("every kind of song", _every_kind), ("UG's index read part-way", _partial_index),
               ("UG's index read whole", _complete_index), ("LaCuerda still to ask", _lacuerda),
-              ("an empty library", _nothing)]
+              ("UG's and LaCuerda's other checks", _ug_and_lacuerda_checks), ("an empty library", _nothing)]
 
 
 def _due_out(tmp_path, n: int, case: str, build) -> tuple[dict, dict]:
     """A scene's record, and its songs by name."""
     from helpers.corpus import dump_fixture
 
-    from caracole.overrides import Overrides
+    from caracole.overrides import LaCuerdaPick, Overrides
 
     conn, cfg = _due_db(tmp_path, n)
     songs, given = build(conn, cfg)
     conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", ("2026-11-01T00:00:00Z",) * 2)  # not the clock's
     conn.execute("UPDATE files SET created_at = ?", ("2026-11-01T00:00:00Z",))
-    overrides = Overrides(ignore=frozenset(given["ignore"]), youtube=given["youtube"])
+    overrides = Overrides(ignore=frozenset(given["ignore"]), youtube=given["youtube"],
+                          lacuerda={k: LaCuerdaPick(**v) for k, v in given["lacuerda"].items()})
     due = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=False)]
     paired = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=True)]
     computer = [s.id for s in youtube_fetch.songs_for_youtube(conn, overrides, DUE_NOW)]
@@ -1772,4 +1801,6 @@ def test_the_due_cases_come_to_what_they_say(tmp_path):
     assert by["UG's index read whole"]["names"] == ["not on UG, the index complete", "on UG, fetched, no sheet"]
     assert by["UG's index read whole"]["paired_names"] == ["not on UG, the index complete"]
     assert by["LaCuerda still to ask"]["names"] == ["LaCuerda asked"]
+    assert by["UG's and LaCuerda's other checks"]["names"] == [
+        "pinned, fetched", "a LaCuerda pick asked", "its artist's page read lately", "not found, no artist page known"]
     assert by["an empty library"]["due"] == [] and by["an empty library"]["fixture"]

@@ -6,7 +6,9 @@ purchase is linked), when it isn't ignored, and when its search didn't find noth
 the last 30 days. A video pasted under ``[youtube]`` in overrides.toml is used instead of
 a search, also for a song whose search found nothing; one pasted for a song whose audio
 came from another video replaces it; "none" never takes the song's audio from YouTube,
-and lets go of any it has. Newest first, as far as the budget goes.
+and lets go of any it has. Newest first, as far as the budget goes. A song whose auto sheet another caracole made
+is none of them where no pass here would make it again (R3, ``_left_elsewhere``; R5's words aside), a video pasted
+for it too: a paste is no ask, where ``caracole youtube --sheet`` (R3's exception, a sheet from a video) makes it again.
 
 For each, yt-dlp (youtube.py) searches ``ytsearch8:<artist> <title>`` and ``choose``
 picks the video, or the pasted or earlier pick is taken; the download goes to a folder of
