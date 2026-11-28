@@ -5473,7 +5473,8 @@ picks one).
   the provider's budget (50) of yt-dlp runs in any 24 hours, every run of the phone's counted (`DayBudget`: `events`
   and the runs reserved before their gate opens, the bench's too, as one set); only on an unmetered network, checked
   before each run (`YouTubeSearchRunner.METERED`, "waiting for Wi-Fi", the song left noted), and while the battery
-  isn't low; only for a song with no sheet at all whose sites were asked (`Due.songs`); only once the chord models are
+  isn't low; only for a song with no sheet at all whose sites were asked (`Due.songs`, and the job again as it reads the song at each stage,
+  `YouTubeSheetRunner.HAS_SHEET`); only once the chord models are
   on it. After a lookup that left its song "Not on the sites" (kv `youtube-wanted:<id>`, `Phone.onNoSheet`; on a
   paired phone, those songs alone), and daily while charging on a phone that has not synced with a computer in 14 days
   (`YouTubeAuto.paired`, the app's `YouTubeWorker`: `youtube-soon`, `youtube-daily`); a pass stops at 8 minutes, at

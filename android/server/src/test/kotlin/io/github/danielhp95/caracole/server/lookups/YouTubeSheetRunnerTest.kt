@@ -414,4 +414,30 @@ class YouTubeSheetRunnerTest {
         }
         assertEquals(emptyList(), told)
     }
+
+    /** Byoutube-4. An automatic job checks again, as it reads its song, that the song keeps no sheet (Due.songs' rule,
+     * R1 as amended: "never for a song with any auto sheet"): one whose song got another caracole's auto sheet between
+     * the pass's pick and the job's run (a sync's take queued before it) is refused in its song stage, no yt-dlp run,
+     * the sheet as it was. Here the sheet is made "elsewhere" by giving this side another id after a first job made it. */
+    @Test fun anAutomaticJobTakesNoAudioForASongThatKeepsAnotherCaracolesAutoSheet() {
+        val phone = phone()
+        val ytdlp = Downloader()
+        val first = run(phone, runner(phone, ytdlp))
+        assertEquals(Job.DONE, first.state, "${first.steps.single().output}")
+        assertEquals(1, ytdlp.ran.size)
+        fun madeBy() = phone.database.read { db ->
+            db.one("SELECT raw FROM versions WHERE song_id = 1 AND provider = 'auto'") { it.text(0) }
+        }.orEmpty().substringAfter("\"made_by\"").take(24)
+        val before = madeBy()
+        phone.database.writeBlocking { db -> db.kvSet("sync:id", "ffffffffffffffff") }
+        val job = runBlocking {
+            withTimeout(60_000) {
+                phone.queue.await(phone.queue.submit(YouTubeAuto.spec(display, "calla-lake/river-road")).first.id)
+            }
+        }
+        assertEquals(1, ytdlp.ran.size, "the automatic job ran yt-dlp; its stages: ${ends(job)}")
+        assertEquals(Job.FAILED to YouTubeSheetRunner.HAS_SHEET.replace("{display}", display), ends(job)["song"])
+        assertEquals(Job.SKIPPED, ends(job)["audio"]?.first)
+        assertEquals(before, madeBy(), "the other caracole's auto sheet was replaced")
+    }
 }

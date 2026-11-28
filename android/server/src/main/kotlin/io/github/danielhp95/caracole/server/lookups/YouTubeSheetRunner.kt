@@ -84,7 +84,8 @@ import java.util.logging.Logger
  *
  * - `song`: as [AudioRunner]'s (found or added), and refused where the song has audio of its own (an upload in
  *   [store], or an `audio_path` that isn't its `youtube:` record's: youtube_sheet.py `_still_ours`), or `[youtube]`
- *   says "none" with no video given; the video given is written under `[youtube]` ([OverrideWriters.addYoutube]) and
+ *   says "none" with no video given; an automatic job (JobContext.automatic) also where the song keeps any sheet,
+ *   read again at every stage ([HAS_SHEET]); the video given is written under `[youtube]` ([OverrideWriters.addYoutube]) and
  *   said ("; noted under [youtube]: URL").
  * - `audio`: [YouTubeAudio.sweep] first; the song's video's audio kept already, "has the audio of URL already";
  *   YouTube cooling down, skipped in the runner's words; else youtube_fetch.py's `_one` for this song through the app's
@@ -176,10 +177,17 @@ class YouTubeSheetRunner(
             return said + Words.text("noted").replace("{url}", watch(overrides.youtube[s.key] ?: ""))
         }
 
-        /** youtube_sheet.py `_still_ours`, after `_unsheeted`: no audio of its own, an upload or a purchase's. */
+        /** youtube_sheet.py `_still_ours`, after `_unsheeted`: no audio of its own, an upload or a purchase's. An
+         * automatic job ([JobContext.automatic]) also takes a song with no sheet at all, human or auto, whoever made
+         * it (Due.songs' rule, R1 as amended), read again with the song at every stage: the pass checked it once,
+         * and a sync's take queued before the job may have brought the computer's auto sheet since. Its own sheet is
+         * kept after the last of these checks (keepSheet), and Try again is never automatic. */
         override fun stillOursHere(db: Db, s: SongRow) {
             if (store.uploaded(s) != null || (!s.audioPath.isNullOrEmpty() && YouTubeAudio.youtubeAudio(db, s) == null)) {
                 throw Stop(Words.text("own_audio").replace("{display}", s.display))
+            }
+            if (context.automatic && Kept.keptFiles(db, s.id).any { it.name in Versions.SHEET_FILE_NAMES }) {
+                throw Stop(HAS_SHEET.replace("{display}", s.display))
             }
         }
 
@@ -569,6 +577,9 @@ class YouTubeSheetRunner(
         const val NOT_STARTED = "yt-dlp didn't start ({why}); try again in a moment"
         const val GAVE_UP_PASTED = "it waits for another video under [youtube]"
         const val GAVE_UP_SEARCHED = "the next run picks another"
+
+        /** An automatic job's song that keeps a sheet now (a sync's take brought one after the pass picked it). */
+        const val HAS_SHEET = "{display} keeps a sheet already: the automatic pass takes no audio for it"
 
         /** Why this phone makes no sheet from a YouTube video now, or null, the design's §5.6 in order: YouTube off in
          * the computer's settings, the chords' reasons ([AudioRunner.problemOf]), no yt-dlp, one that can't run. */
