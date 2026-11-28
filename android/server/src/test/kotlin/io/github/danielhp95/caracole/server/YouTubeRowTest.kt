@@ -71,6 +71,10 @@ class YouTubeRowTest {
             assertNull(YouTubeRow.of(db, true, null, "2026.11.23", now).outdated, "another version's")
             assertEquals("2026.08.19", YouTubeRow.of(db, true, null, "2026.08.19", now).outdated)
         }
+        database.writeBlocking { db ->
+            db.kvSet("youtube-outdated", """{"version": "2026.08.19", "at": "2026-11-20T12:00:00Z", "reason": "x"}""")
+        }
+        database.read { db -> assertNull(YouTubeRow.of(db, true, null, "2026.08.19", now).outdated, "7 days on") }
         database.writeBlocking { db -> db.kvSet("youtube-outdated", "not json") }
         database.read { db -> assertNull(YouTubeRow.of(db, true, null, "2026.08.19", now).outdated) }
         database.writeBlocking { db -> Health.recordBlock(db, "youtube", now.minusSeconds(3600), "blocked") }

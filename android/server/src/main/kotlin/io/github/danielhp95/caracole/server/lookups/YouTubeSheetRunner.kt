@@ -27,6 +27,7 @@ import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.youtube.ExtractorOutdated
 import io.github.danielhp95.caracole.core.youtube.GateRefused
 import io.github.danielhp95.caracole.core.youtube.NotSent
+import io.github.danielhp95.caracole.core.youtube.Outdated
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.Record
 import io.github.danielhp95.caracole.core.youtube.Records
@@ -238,6 +239,13 @@ class YouTubeSheetRunner(
                 return "done" to Words.text("audio_already").replace("{url}", made.url)
             }
             cooling?.let { return "skipped" to it }
+            // yt-dlp out of date (Outdated): an automatic job never comes here (YouTubeAuto stops first); one asked for
+            // now runs, saying so first.
+            parts.database.read { db -> Outdated.state(db, engine.version, now) }?.let {
+                val warning = io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(engine.version!!)
+                context.say(warning)
+                doing("audio", warning)
+            }
             doing("audio", Words.text(if (pasted != null) "downloading" else "looking"))
             val config = parts.config()
             val policy = config.provider(PROVIDER)
@@ -262,9 +270,17 @@ class YouTubeSheetRunner(
                 return "failed" to NOT_STARTED.replace("{why}", e.msg.orEmpty())
             } catch (e: RunHeldBack) {  // the phone's own: no run, no error of the video's or the song's, still noted
                 return "failed" to (e.msg ?: YouTubeSearchRunner.METERED)
-            } catch (e: ExtractorOutdated) {  // yt-dlp's or the gate's, never the video's: counted against nothing
+            } catch (e: ExtractorOutdated) {  // yt-dlp's, never the video's: counted against nothing
                 failed(e)
-                return "failed" to (e.msg ?: e.message.orEmpty())
+                val reason = e.msg ?: e.message.orEmpty()
+                // Two videos within 24 hours set the phone's out of date (the design's §7), told once a version.
+                val version = engine.version
+                if (parts.database.writeBlocking { db -> Outdated.note(db, version, e.url ?: SEARCH, reason, now) }) {
+                    parts.alerts.outdated(version!!, io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(version))  // note() sets none without one
+                }
+                if (version == null) return "failed" to reason  // no version known: yt-dlp's own words
+                context.say(reason)
+                return "failed" to io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(version)
             } catch (e: GateRefused) {
                 failed(e)
                 return "failed" to (e.msg ?: e.message.orEmpty())

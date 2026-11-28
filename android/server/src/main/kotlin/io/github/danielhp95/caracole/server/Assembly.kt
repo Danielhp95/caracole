@@ -42,6 +42,7 @@ import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.Outcomes
 import io.github.danielhp95.caracole.server.jobs.SongFacts
 import io.github.danielhp95.caracole.core.youtube.Due
+import io.github.danielhp95.caracole.core.youtube.Outdated
 import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
@@ -423,7 +424,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     }
 
     /** The automatic YouTube pass (the design's §5.3): what the app's YouTubeWorker runs. */
-    val youtubeAuto: YouTubeAuto = YouTubeAuto(parts, ::youtubeProblem, deps.metered)
+    val youtubeAuto: YouTubeAuto = YouTubeAuto(parts, ::youtubeProblem, deps.metered,
+                                               outdated = { db, now -> Outdated.state(db, deps.youtube?.version, now) })
 
     /** Told after a lookup left its song "Not on the sites" (noted for the automatic pass): the app's YouTubeWorker
      * .soon; nothing by default. Never inside a job: a lookup never runs yt-dlp. */

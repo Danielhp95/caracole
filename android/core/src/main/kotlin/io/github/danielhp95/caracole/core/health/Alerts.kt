@@ -11,6 +11,9 @@ interface Alerts {
     fun blocked(provider: String, until: Instant?, message: String)
     fun failed(title: String, line: String)
 
+    /** yt-dlp [version] out of date (core.youtube's Outdated, [words] its line): the app tells it once a version. */
+    fun outdated(version: String, words: String) {}
+
     companion object {
         /** Tells no one. */
         val NONE: Alerts = object : Alerts {

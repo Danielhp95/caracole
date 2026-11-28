@@ -28,7 +28,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * - [blocked]: a block a lookup met, titled as the computer's ntfy alert is ("caracole: Ultimate Guitar blocked"),
  *   saying when its cooldown ends: once a cooldown, so a second block within it (the same cooldown's end) posts none,
  *   even after the app starts again (the cooldown posted is kept in [PREFS]);
- * - [failed]: a job that failed while the app was in the background, by its line, as the Requests tab says it. In the
+ * - [outdated]: the app's yt-dlp out of date (Outdated), once a version;
+ * - [failed]: a job that failed while the app was in the background, none for a quiet one (an automatic job's: the
+ *   phone's afterJob asks none), by its line, as the Requests tab says it. In the
  *   background means no screen of the app's is started, by the activities' lifecycle; a screen that started before
  *   this was made (the phone is made on another thread as the library screen opens) is counted by the process being
  *   in the foreground then, until a screen stops.
@@ -89,6 +91,15 @@ class AndroidAlerts(context: Context) : Alerts {
         post(BLOCKED_ID + (provider.hashCode() and 0x3ff), title, text)
     }
 
+    /** yt-dlp out of date: once a version (the version told kept in [PREFS]), its words the row's and the job's. */
+    override fun outdated(version: String, words: String) {
+        synchronized(this) {
+            if (prefs.getString(OUTDATED, null) == version) return
+            prefs.edit().putString(OUTDATED, version).apply()
+        }
+        post(OUTDATED_ID, context.getString(R.string.alert_outdated), words)
+    }
+
     override fun failed(title: String, line: String) {
         if (inForeground()) return
         post(FAILED_ID + (failures.getAndIncrement() and 0x3ff), title, line)
@@ -122,6 +133,8 @@ class AndroidAlerts(context: Context) : Alerts {
         /** Where the cooldown each provider's last block alert was for is kept. */
         const val PREFS = "alerts"
         private const val BLOCKED = "blocked:"
+        private const val OUTDATED = "outdated"
+        private const val OUTDATED_ID = 3000
 
         private const val BLOCKED_ID = 1000
         private const val FAILED_ID = 2000

@@ -57,6 +57,11 @@ object Outcomes {
     /** A lookup's word for a song no site has a sheet of (outcome.py's _not_found). */
     const val NOT_ON_THE_SITES = "Not on the sites"
 
+    /** The phone's own words for its yt-dlp out of date (the phone-youtube design's §7; core.youtube's Outdated), which
+     * a YouTube sheet's audio stage, so its outcome, Settings' row and the alert say; the computer's outcome.py has
+     * none. */
+    fun outdated(version: String): String = "YouTube changed what yt-dlp $version reads: caracole's next release brings a fix"
+
     /** A lookup's steps (get.py's STAGES), each a name and the stages it stands for. */
     val LOOKUP_STEPS: List<Pair<String, List<String>>> = listOf(
         "Song" to listOf("song"), "Match" to listOf("match"), "Sheet" to listOf("sheet"), "PDF" to listOf("pdf"),

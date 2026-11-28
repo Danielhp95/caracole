@@ -132,4 +132,12 @@ class YouTubeAutoTest {
         assertEquals(before, phone.database.read { db -> db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0) to it.text(1) } })
         assertEquals(0, phone.parts.queue.snapshot().size)
     }
+
+    /** Out of date (Outdated.state) stops the pass until a new yt-dlp or 7 days. */
+    @Test fun outOfDateStopsThePass() {
+        val phone = phone(listOf("One"))
+        val ended = runBlocking { YouTubeAuto(phone.parts, { null }, { false }, outdated = { _, _ -> "nsig extraction failed" }).pass() }
+        assertEquals(YouTubeAuto.Stop.OUTDATED, ended.stopped)
+        assertEquals(emptyList(), phone.asked)
+    }
 }

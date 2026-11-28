@@ -3,13 +3,11 @@ package io.github.danielhp95.caracole.server
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Health
-import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.youtube.DayBudget
+import io.github.danielhp95.caracole.core.youtube.Outdated
 import io.github.danielhp95.caracole.core.youtube.YtDlp
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
 
 /**
@@ -22,7 +20,8 @@ import java.time.Instant
  * - "Needs the chord models": the models not downloaded (AudioRunner.NOT_DOWNLOADED), else the chords' own reason or
  *   the engine's, capitalised ("Chords from audio need Android 13 or later");
  * - "Cooling down until 2026-11-28 13:00 UTC": YouTube refused caracole, asked again after that;
- * - "Out of date: …": the app's yt-dlp no longer reads YouTube (kv `youtube-outdated` naming this version: Y3.6);
+ * - "Out of date: …": the app's yt-dlp no longer reads YouTube (Outdated.state: kv `youtube-outdated` naming this
+ *   version, within 7 days), its words Outcomes.outdated;
  * - "On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours": the version, and the yt-dlp runs of a rolling 24
  *   hours (`events` of provider `youtube` that ran: ok, error or blocked, and the runs reserved no row followed; a
  *   budget's refusal ran nothing), the bench's among them, of the day's budget (DayBudget: the count and the limit the
@@ -37,7 +36,7 @@ object YouTubeRow {
     const val OFF = "Off (the computer's settings)"
     const val NEEDS_MODELS = "Needs the chord models"
     const val COOLING = "Cooling down until {when}"
-    const val OUTDATED = "Out of date: YouTube changed what yt-dlp {version} reads: caracole's next release brings a fix"
+    const val OUTDATED = "Out of date: {words}"
 
     /** The row's line, null for no row. */
     fun line(s: State): String? = when {
@@ -46,7 +45,7 @@ object YouTubeRow {
         s.problem == AudioRunner.NOT_DOWNLOADED -> NEEDS_MODELS
         s.problem != null -> s.problem.replaceFirstChar { if (it in 'a'..'z') it - 32 else it }
         s.coolingUntil != null -> COOLING.replace("{when}", s.coolingUntil)
-        s.outdated != null -> OUTDATED.replace("{version}", s.outdated)
+        s.outdated != null -> OUTDATED.replace("{words}", io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(s.outdated))
         else -> listOfNotNull("On", s.version?.let { "yt-dlp $it" }, runs(s.runs, s.budget)).joinToString(" · ")
     }
 
@@ -62,23 +61,13 @@ object YouTubeRow {
      * read before the database. */
     fun of(db: Db, engine: Boolean, problem: String?, version: String?, now: Instant): State {
         val cooling = if (Health.isCooling(db, PROVIDER, now)) YtDlp.coolingUntil(db) else null
-        return State(engine, problem, cooling, outdated(db.kvGet(OUTDATED_KV), version), version, runsSince(db, now),
+        return State(engine, problem, cooling, version?.takeIf { Outdated.state(db, it, now) != null }, version,
+                     runsSince(db, now),
                      PhoneConfig.read(db).provider(PROVIDER).budget)
     }
 
     /** The yt-dlp runs of the 24 hours before [now]: the phone's day's count, DayBudget.runs. */
     fun runsSince(db: Db, now: Instant): Long = DayBudget.runs(db, now).toLong()
 
-    /** kv `youtube-outdated` ([kv], `{version, at, reason}`) when it names this [version], its version; null else, and
-     * for a record that won't read. */
-    fun outdated(kv: String?, version: String?): String? {
-        val said = kv?.let { text ->
-            ((runCatching { PyJson.loads(text) }.getOrNull() as? JsonObject)?.get("version") as? JsonPrimitive)
-                ?.takeIf { it.isString }?.content
-        }
-        return said?.takeIf { it == version }
-    }
-
     private const val PROVIDER = "youtube"
-    private const val OUTDATED_KV = "youtube-outdated"
 }

@@ -111,7 +111,7 @@ class YouTubeSheetRunnerTest {
         override fun close() = closed.countDown()
     }
 
-    private class Engine(val process: YtDlpProcess, val cache: File) : YouTubeEngine {
+    private class Engine(val process: YtDlpProcess, val cache: File, override val version: String? = null) : YouTubeEngine {
         override fun ready(): String? = null
         override fun process(): YtDlpProcess = process
         override fun gate(): YtDlpGate = object : YtDlpGate {
@@ -318,5 +318,56 @@ class YouTubeSheetRunnerTest {
         assertEquals(Job.FAILED, job.state)
         assertEquals(Job.FAILED to "audio the phone can't read: its fragments can't be read", ends(job)["chords"])
         assertEquals(listOf("1-$video.m4a"), folder(phone).listFiles().orEmpty().map { it.name })
+    }
+
+    /** yt-dlp out of date (the design's §7): two videos it can't read within 24 hours set it for this version, told
+     * once; the audio stage says the phone's words, and so does the job's outcome; a job asked for now still runs, its
+     * audio stage warning first. */
+    @Test fun twoVideosYtDlpCantReadSetOutOfDateToldOnceAndAskedNowStillRuns() {
+        val phone = phone()
+        val told = CopyOnWriteArrayList<String>()
+        val alerts = object : io.github.danielhp95.caracole.core.health.Alerts {
+            override fun blocked(provider: String, until: java.time.Instant?, message: String) {}
+            override fun failed(title: String, line: String) {}
+            override fun outdated(version: String, words: String) { told += "$version: $words" }
+        }
+        val parts = PhoneParts(phone.parts.database, phone.parts.store, phone.parts.stateDir, phone.parts.config,
+                               phone.parts.queue, phone.parts.cards, phone.parts.clients, phone.parts.pages,
+                               phone.parts.songbooks, alerts, phone.parts.pacing, phone.parts.searchesLacuerda)
+        val outdated = object : YtDlpProcess {
+            override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit) =
+                Ran(1, "", "ERROR: [youtube] x: Unable to extract yt initial data\n")
+        }
+        val words = "YouTube changed what yt-dlp 2026.11.23 reads: caracole's next release brings a fix"
+        fun runner(process: YtDlpProcess) = YouTubeSheetRunner(parts, Engine(process, File(parts.stateDir, "cache"), "2026.11.23"),
+                                                               Models(heard), phone.store, problem = { null }, chordsProblem = { null })
+        fun sheet(id: String): Job = runBlocking {
+            phone.runners[YouTubeSheetRunner.COMMAND] = runner(if (id == "ok") Downloader() else outdated)
+            val target = "https://www.youtube.com/watch?v=" + if (id == "ok") video else id
+            val commands = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--url=$target",
+                                                                     "--song=$display")))
+            val spec = JobSpec("Sheet from YouTube: $display", JobCommands.YOUTUBE_SHEET + "calla-lake/river-road", "song",
+                               JobCommands.stages(commands.map { it.args }), display = display, commands = commands)
+            withTimeout(60_000) { phone.queue.await(phone.queue.submit(spec).first.id) }
+        }
+        val first = sheet("FirstVideo1")
+        assertEquals(Job.FAILED to words, ends(first)["audio"])
+        assertEquals(emptyList(), told, "one video: not yet")
+        val second = sheet("SecondVid02")
+        assertEquals(Job.FAILED to words, ends(second)["audio"])
+        assertEquals(listOf("2026.11.23: $words"), told)
+        val outcome = io.github.danielhp95.caracole.server.jobs.Outcomes.outcome(
+            second, io.github.danielhp95.caracole.server.jobs.JobViews.line(second))
+        assertTrue(words in outcome.reason, "$outcome")
+        phone.database.read { db ->
+            assertEquals("Unable to extract yt initial data".let { "[youtube] x: $it" },
+                         io.github.danielhp95.caracole.core.youtube.Outdated.state(db, "2026.11.23", java.time.Instant.now()))
+        }
+        sheet("ThirdVideo3")
+        assertEquals(1, told.size, "told once a version")
+        // Asked for now, a job still runs, warning first.
+        val now = sheet("ok")
+        assertEquals("done", ends(now)["audio"]?.first, "${now.steps.single().output}")
+        assertTrue(words in now.steps.single().output, "${now.steps.single().output}")
     }
 }

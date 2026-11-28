@@ -37,7 +37,9 @@ data class Ran(val exit: Int, val stdout: String, val stderr: String, val timedO
  * shows); [process] a yt-dlp of the app's, one run at a time across the app (the debug bench's runs among them);
  * [gate] a fresh gate for one run, opened in this, the main process, in the one mode the app decides
  * (`caracole.network`'s), its rule YOUTUBE's, which the runner closes once it has read the run's log; [qjs] the
- * JavaScript runtime the argv names; [cacheDir] the runner's folder (yt-dlp's cache under it, `runner.cache_folder`).
+ * JavaScript runtime the argv names; [cacheDir] the runner's folder (yt-dlp's cache under it, `runner.cache_folder`);
+ * [version] the packaged yt-dlp's (pins.json's, the app's BuildConfig), which out of date goes by ([Outdated]), null
+ * when unknown.
  */
 interface YouTubeEngine {
     fun ready(): String?
@@ -49,4 +51,6 @@ interface YouTubeEngine {
     val qjs: java.io.File
 
     val cacheDir: java.io.File
+
+    val version: String? get() = null
 }
