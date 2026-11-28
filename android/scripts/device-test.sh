@@ -10,7 +10,7 @@
 #                   empty list: every one
 #   --app           the app's classes: EndToEndTest, PinchTest, SyncSheetTest, ExportImportTest and
 #                   PhoneEndToEndTest, each against a computer of its own (tests.helpers.e2e_library in a fresh
-#                   folder)
+#                   folder, on the host's loopback alone)
 #   CLASS[=DIR]     a class of app/src/androidTest (NoSitesTest, LocalServerTest..., or in full:
 #                   io.github.danielhp95.caracole.NoSitesTest), with DIR its computer's folder
 #   --computer DIR  one computer for every class that names none
@@ -365,7 +365,9 @@ start_computer() {
     port="$(free_port)"
     while [ "$port" = 8737 ]; do port="$(free_port)"; done
     mkdir -p "$dir"
-    (exec 9>&-; cd "$repo" && exec nix develop -c python -m tests.helpers.e2e_library serve "$dir" "$port") \
+    # On the host's loopback alone (the emulator's 10.0.2.2): caracole serve has no sign-in, never on the LAN.
+    (exec 9>&-; cd "$repo" && exec nix develop -c python -m tests.helpers.e2e_library serve "$dir" "$port" \
+        --address 127.0.0.1) \
         >"$logs/computer-$port.log" 2>&1 &
     servers+=($!)
     for _ in $(seq 1 900); do

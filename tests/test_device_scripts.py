@@ -163,6 +163,22 @@ for line in os.environ.get("FAKE_PS_EXTRA", "").splitlines():
     print(line)
 '''
 
+# python, for device-test.sh's start_computer (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT
+# ...`): its argv kept in computers/<port>.json with its pid, then a listener on 127.0.0.1:PORT until killed.
+COMPUTER = r'''
+import json, os, socket, sys
+from pathlib import Path
+here = Path(__file__).resolve().parent
+argv = sys.argv[1:]
+port = int(argv[argv.index("serve") + 2])
+(here / "computers").mkdir(exist_ok=True)
+(here / "computers" / f"{port}.json").write_text(json.dumps({"pid": os.getpid(), "argv": argv}))
+s = socket.create_server(("127.0.0.1", port))
+while True:
+    c, _ = s.accept()
+    c.close()
+'''
+
 STATUS = """   PID STATUS   INFO
 {lines}
 
@@ -278,6 +294,23 @@ def stop_rig(tmp_path):
     made.close()
 
 
+@pytest.fixture
+def computer_rig(tmp_path):
+    """The rig with a stand-in `python` for the computers device-test.sh starts; each one killed at the end."""
+    made = Rig(tmp_path)
+    tool = made.bin / "python"
+    tool.write_text(f"#!{sys.executable}\n{COMPUTER}", encoding="utf-8")
+    tool.chmod(0o755)
+    yield made
+    folder = made.bin / "computers"
+    for record in folder.glob("*.json") if folder.exists() else []:
+        try:
+            os.kill(json.loads(record.read_text())["pid"], signal.SIGKILL)
+        except (OSError, ValueError, KeyError):
+            pass
+    made.close()
+
+
 # device-test.sh
 
 
@@ -319,6 +352,19 @@ def test_a_failing_test_still_stops_the_emulator(rig):
     assert "FAIL CorpusOnDeviceTest" in done.stdout
     assert rig.emulators() == {}
     assert "stopped emulator-5554" in done.stderr
+
+
+def test_a_computer_it_starts_listens_on_the_hosts_loopback_alone(computer_rig, tmp_path):
+    """caracole serve has no sign-in: a test's computer is never on the LAN (android/README.md); the emulator reaches
+    the host's loopback at 10.0.2.2."""
+    computer_rig.server_up()
+    done = computer_rig.run("device-test.sh", f"NoSitesTest={tmp_path / 'computer'}")
+    assert done.returncode == 0, done.stderr
+    records = [json.loads(f.read_text()) for f in (computer_rig.bin / "computers").glob("*.json")]
+    assert len(records) == 1, done.stderr
+    argv = records[0]["argv"]
+    assert argv[:3] == ["-m", "tests.helpers.e2e_library", "serve"]
+    assert "--address" in argv and argv[argv.index("--address") + 1] == "127.0.0.1", f"started as {argv}"
 
 
 def test_an_interrupt_still_stops_the_emulator(rig):
