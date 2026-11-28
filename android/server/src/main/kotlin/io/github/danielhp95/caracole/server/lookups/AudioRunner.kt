@@ -15,6 +15,8 @@ import io.github.danielhp95.caracole.core.lookup.SiteStages
 import io.github.danielhp95.caracole.core.lyrics.lyricsFromJson
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyFormat
+import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.Video
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.http.caracoleResource
 import io.github.danielhp95.caracole.server.jobs.CommandExit
@@ -23,6 +25,7 @@ import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.server.page.LibraryPage
 import io.github.danielhp95.caracole.viewer.autochords.AudioUnreadable
+import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.ChordsUnavailable
 import io.github.danielhp95.caracole.viewer.autochords.Heard
@@ -230,6 +233,22 @@ class AudioRunner(
                                s: SongRow, audio: File): Maker =
             Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, store.givenName(db, s),
                   sha16(audio))
+
+        /** The maker of a sheet made here from the audio this phone took from a YouTube video ([audio]): this phone,
+         * its sync id, the models' names and runtime, no given name, the file's SHA-256's 16 digits. The YouTube job's
+         * and a lyrics pick's over that audio alike. */
+        internal fun videoMaker(chords: ChordModels, names: () -> Map<String, String>, db: Db, audio: File): Maker =
+            Maker(MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, null, sha16(audio))
+
+        /** [keepAutoSheet] of the audio this phone took from [video] (YouTubeAudio.youtubeAudio), as run.py's
+         * `_generate` keeps a sheet of `youtube_audio`: the sheet's credit line (AutoSheet.youtubeCredit), the video
+         * as `raw["youtube"]` (Records.videoJson) and its address as the version's. A lyrics pick's keep
+         * (LyricsPickJob) over such audio. */
+        internal fun keepVideoSheet(parts: PhoneParts, chords: ChordModels, names: () -> Map<String, String>, db: Db,
+                                    s: SongRow, heard: Heard, audio: File, stamp: String,
+                                    video: Video): Pair<Pair<String, String>, String?> =
+            keepAutoSheet(parts, db, s, heard, stamp, videoMaker(chords, names, db, audio), video.url,
+                          AutoSheet.youtubeCredit(video.title, video.channel, video.id), Records.videoJson(video))
 
         internal fun keepAutoSheet(parts: PhoneParts, db: Db, s: SongRow, heard: Heard, stamp: String, maker: Maker,
                                    url: String, source: String? = null,

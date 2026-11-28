@@ -17,6 +17,7 @@ import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.JobContext
 import io.github.danielhp95.caracole.core.library.AudioStore
+import io.github.danielhp95.caracole.core.youtube.YouTubeAudio
 import io.github.danielhp95.caracole.viewer.autochords.AudioUnreadable
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.ChordsUnavailable
@@ -38,7 +39,10 @@ import java.util.concurrent.CancellationException
  *   it in its own words (lyrics_pick.py's PHONE_NOT_HERE and PHONE_NOT_DOWNLOADED, read from audio_sheet.json: it has no nightly
  *   run); a sheet up to date of the
  *   audio as it is, run.py's UP_TO_DATE with no model; else the phone's own audio heard by [chords] (the lookups
- *   queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]);
+ *   queued meanwhile going first) and the sheet kept as AudioRunner keeps one ([AudioRunner.keepAutoSheet]), or, where that audio is the phone's
+ *   download of a YouTube video (YouTubeAudio.youtubeAudio, run.py's `youtube_audio`), as the YouTube job keeps one
+ *   ([AudioRunner.keepVideoSheet]: the video credited, `raw.youtube`, its address), that audio let go after the pages
+ *   (§5.4);
  * - `pdf` and `pages`: the song's pages (PhoneParts.pages, PhoneRender), get.py's words for a caracole that makes no
  *   PDF, [LookupWords.LIBRARY_PAGE].
  *
@@ -63,6 +67,7 @@ internal class LyricsPickJob(
     private lateinit var overrides: Overrides
     private lateinit var picked: LyricsPickCommands.Picked
     private var song: SongRow? = null
+    private var videoKept = false  // the chords stage kept a sheet of the audio this phone took from YouTube
 
     private class Stop(message: String) : Exception(message)
 
@@ -107,7 +112,7 @@ internal class LyricsPickJob(
                 "lyrics" -> lyrics()
                 "chords" -> chords()
                 "pdf" -> pdf()
-                "pages" -> "done" to LookupWords.LIBRARY_PAGE
+                "pages" -> ("done" to LookupWords.LIBRARY_PAGE).also { letGoVideoAudio() }
                 else -> error("no stage $name")
             }
         } catch (e: Stop) {
@@ -234,12 +239,29 @@ internal class LyricsPickJob(
             overrides = LookupJobs.overrides(db)  // what the lookups that went first wrote: an `ignore`, say
             AudioRunner.notOurs(db, s, overrides)?.let { throw Stop(it) }
             if (s.audioPath != audio.path) throw Stop(AudioRunner.AUDIO_CHANGED.replace("{display}", s.display))
-            val (ended, info) = AudioRunner.keepAutoSheet(parts, store!!, models!!, names, db, s, heard, audio,
-                                                          Stamps.of(now))
+            // run.py `_generate`: audio the phone took from YouTube is kept as the YouTube job keeps its sheet.
+            val video = YouTubeAudio.youtubeAudio(db, s)
+            val (ended, info) = if (video != null) {
+                AudioRunner.keepVideoSheet(parts, models!!, names, db, s, heard, audio, Stamps.of(now), video)
+            } else {
+                AudioRunner.keepAutoSheet(parts, store!!, models!!, names, db, s, heard, audio, Stamps.of(now))
+            }
+            videoKept = video != null
             models.forget(audio)
             again(db)
             info?.let { fail(it) } ?: ended
         }
+    }
+
+    /** The sheet kept of the audio this phone took from YouTube: that audio goes once the pages are made (the
+     * design's §5.4), as YouTubeSheetRunner's `afterPages` lets it go; the song's link and its record's with it. */
+    private fun letGoVideoAudio() {
+        if (!videoKept) return
+        parts.database.writeBlocking { db ->
+            val s = Songs.byId(db, song!!.id) ?: return@writeBlocking
+            YouTubeAudio.letGo(db, YouTubeAudio.folder(File(parts.stateDir, CACHE)), s, Stamps.of(now))
+        }
+        videoKept = false
     }
 
     /** run.py `_skip_reason`'s up to date: the auto sheet already made of the song's audio as it is now
@@ -303,6 +325,7 @@ internal class LyricsPickJob(
     }
 
     private companion object {
+        const val CACHE = "cache"
         const val MAKING = "its lyrics were picked"
         const val MADE_ELSEWHERE = "made by another caracole from your audio there"
         const val ELSEWHERE_SAME = "its words are as they were, so nothing was laid out again, and no model runs on it"
