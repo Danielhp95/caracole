@@ -3059,11 +3059,12 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     none the three files (BTC's graph and weights, beat_this fp16) by models.json's sizes and SHA-256, hashed once a
     process (the bench's folder, device-test.sh's push); `runtime` is `OrtModels.RUNTIME`. `hear` asks `ready()`,
     then (`guarded`, `HearingGuardTest` on the JVM) refuses under the battery floor (`HeatRules.start` over its
-    `gauge`, before any process), takes the one turn of the app's processes (`turn`, an flock of `files/chords.lock`:
-    a job's hearing and the Chords bench's, which bind the same `:ml`, never at once; `BUSY` in words) and holds
-    `caracole:chords`'s partial wake lock (its 10 minutes begun again each step and minute), both let go on every
-    path and what it throws thrown as itself; waits for an earlier `:ml` to end (`awaitGone`: 10 s, then refused in
-    words, `STILL_ENDING`), binds the service, sends paths over a
+    `gauge`, before any process), takes the one turn of the app's processes (`turn`, a POSIX record lock of
+    `files/chords.lock`, held once a process: a second ask here refused before the file is opened, as any close of it
+    would give the lock back, TurnHeldOnceAProcessTest; a job's hearing and the Chords bench's, which bind the same
+    `:ml`, never at once; `BUSY` in words) and holds `caracole:chords`'s partial wake lock (its 10 minutes begun again
+    each step and minute), both let go on every path and what it throws thrown as itself; waits for an earlier `:ml` to
+    end (`awaitGone`: 10 s, then refused in words, `STILL_ENDING`), binds the service, sends paths over a
     `Messenger` (`MlProtocol`), polls its replies a second at a time calling `waiting`, cancels on its way out
     unanswered (the unbind ending `:ml` at its next chunk), and reads a dead process as `ChordsUnavailable`
     (`MlChordModels.DIED`). With `forgetHeard` (the app's) a song's checkpoints go once it is heard and its process

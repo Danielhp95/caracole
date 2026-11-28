@@ -307,32 +307,58 @@ class MlChordModels(
             }
         }
 
-        /** The turn of [file]'s lock, taken (closed to give it back), or null while another holds it: another process
-         * (an flock, which its end gives back), or another hearing of this process. */
+        /** The turns this process holds, by their lock file's canonical path ([turn]); guarded by itself. */
+        private val held = HashSet<String>()
+
+        /** The turn of [file]'s lock, taken (closed to give it back; closed again, nothing), or null while another
+         * holds it: another process, or another hearing of this one. The lock is a POSIX record lock
+         * (`FileChannel.tryLock`, `fcntl`), not an flock: it is the process's, and ANY close of the file by this
+         * process gives it back, so a turn this process holds already ([held]) is refused before the file is opened
+         * again, and a refused channel is closed only where this process holds no lock on the file to lose. */
         internal fun turn(file: File): AutoCloseable? {
-            val channel = try {
-                file.parentFile?.mkdirs()
-                RandomAccessFile(file, "rw").channel
-            } catch (e: IOException) {
-                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
-            }
-            val lock = try {
-                channel.tryLock()
-            } catch (e: OverlappingFileLockException) {
-                null
-            } catch (e: IOException) {
-                channel.close()
-                throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
-            }
-            if (lock == null) {
-                channel.close()
-                return null
-            }
-            return AutoCloseable {
-                try {
-                    lock.release()
-                } finally {
+            synchronized(held) {
+                val key = try {
+                    file.parentFile?.mkdirs()
+                    file.canonicalPath
+                } catch (e: IOException) {
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                if (key in held) return null
+                val channel = try {
+                    RandomAccessFile(file, "rw").channel
+                } catch (e: IOException) {
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                val lock = try {
+                    channel.tryLock()
+                } catch (e: OverlappingFileLockException) {
+                    // Something of this process locks the file outside turn (nothing does): refused, and the channel
+                    // left open, as closing it would give that lock back.
+                    return null
+                } catch (e: IOException) {
                     channel.close()
+                    throw ChordsUnavailable("$CANT_TAKE_TURN (${e.message})", e)
+                }
+                if (lock == null) {
+                    channel.close()  // another process holds it: this one holds no lock on the file to lose
+                    return null
+                }
+                held += key
+                var closed = false
+                return AutoCloseable {
+                    synchronized(held) {
+                        if (closed) return@AutoCloseable
+                        closed = true
+                        try {
+                            lock.release()
+                        } finally {
+                            try {
+                                channel.close()
+                            } finally {
+                                held -= key
+                            }
+                        }
+                    }
                 }
             }
         }
