@@ -2540,7 +2540,9 @@ It is rows.js's, shared by both pages:
 - remeasure.py, `remeasure_once`, at `autochords_pending(remeasure=True)`'s start (the bulk `caracole autochords`
   over every song, never a staged job about one song, nor `--song`), once ever (kv `autochords:remeasured`): every
   song with no human sheet, not ignored, whose MP3 names no length and whose guess (`mpeg_frames.Count`'s `guessed`)
-  is `DISAGREES_S` off its frames' length: its auto sheet made due again (`autochords_mtime` cleared); read short, its
+  is `DISAGREES_S` off its frames' length: its auto sheet made due again (`autochords_mtime` cleared), unless another
+  caracole made it (`sheet_lyrics.auto_made_elsewhere`: never made again here by itself, so neither touched nor said
+  made again); read short, its
   transcript (`transcript:`) and caracole's nothing-sung verdict (`transcribe:none:` by "caracole") dropped, heard
   from a cut-short mix, so it is offered its words again, the owner's not-sung (`by` "you"), `transcribe:failed:`
   (its setup's) and `transcribe:unreadable:` (Whisper's own, whole read) kept; where its wanted.txt line is exactly as
