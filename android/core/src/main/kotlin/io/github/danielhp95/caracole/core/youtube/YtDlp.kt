@@ -48,6 +48,11 @@ class GateRefused(provider: String, url: String?, val host: String, msg: String)
  * video. */
 class NotSent(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
 
+/** The phone's: a run that started and was then cut off by the phone itself (the `:youtube` process gone unasked, as
+ * when the phone runs out of memory; its connection broken): something may have been sent, so it is counted in the
+ * hour and the day and logged as an error, never a miss, and nothing counted against the video. */
+class RunCutOff(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
+
 /** The phone's: [YtDlp]'s `beforeRun` refused the run in its words (the metered check): no process, nothing spent, no
  * event. An error, never a miss. */
 class RunHeldBack(provider: String, url: String?, msg: String) : ProviderError(provider, url, null, msg)
@@ -341,7 +346,7 @@ class YtDlp(
         val again = when (e) {
             is InterruptedException -> InterruptedException(said)
             is java.util.concurrent.CancellationException -> java.util.concurrent.CancellationException(said)
-            else -> ProviderError(PROVIDER, target, null, said)
+            else -> RunCutOff(PROVIDER, target, said)
         }
         again.stackTrace = e.stackTrace
         return again

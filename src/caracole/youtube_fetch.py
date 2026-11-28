@@ -67,9 +67,10 @@ WANTED_PREFIX = "youtube-wanted:"  # + song id, in songs._PER_SONG_KV: the phone
 AUDIO_FOLDER = "youtube"  # in cache_dir
 RECHECK_AFTER = timedelta(days=30)  # a song whose search found nothing that fits
 GIVE_UP_AFTER = 3  # downloads of one video that failed, the network aside, before it is given up
-# yt-dlp's words for a network that failed, rather than the video: no count against it.
+# yt-dlp's words for a network that failed, rather than the video: no count against it. Through a proxy (the phone's
+# gate) a host it couldn't resolve or connect is the tunnel's 502, or 504 in time: "Tunnel connection failed: 502 …".
 _NETWORK = re.compile(r"\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable"
-                      r"|Remote end closed|HTTP Error 5\d\d", re.IGNORECASE)
+                      r"|Remote end closed|HTTP Error 5\d\d|Tunnel connection failed: 5\d\d", re.IGNORECASE)
 _PART_PREFIX = ".part-"  # a download's own folder, until its file is in place
 
 # Where a song without a human sheet stands, for the to-do page and index.html.

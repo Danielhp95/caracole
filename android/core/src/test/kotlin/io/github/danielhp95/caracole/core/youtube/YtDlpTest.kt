@@ -291,7 +291,7 @@ class YtDlpTest {
         val yt = freshRunner(db, fake, gates)
         yt.search("ok")
         assertFailsWith<YouTubeData.Refused> { yt.search("a NUL \u0000 in it") }
-        assertFailsWith<ProviderError> { yt.search("broken") }
+        assertFailsWith<RunCutOff> { yt.search("broken") }  // started, then cut off: the phone's own, said so
         assertFailsWith<ProviderError> { yt.search("not started") }
         assertFailsWith<ProviderError> { yt.search("slow") }
         assertFailsWith<GateRefused> { yt.search("refused") }

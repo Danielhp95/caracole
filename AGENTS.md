@@ -4687,8 +4687,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `<id>-<video>.m4a` and linked. A video that can't be had (unavailable, or `PassedOver`: no m4a stream) is unusable
   pasted and into `skip` searched, the stage failed; a run never started (`NotSent`: the bench's run going) a wait in
   the phone's words, counted against nothing; yt-dlp out of date (`ExtractorOutdated`) or the gate's refusal
-  (`GateRefused`), a host's problem, the stage failed in their words, a wait, counted against nothing; any other error
-  counted against the video (the data's `network` pattern aside), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
+  (`GateRefused`), a host's problem, the stage failed in their words, a wait, counted against nothing; a run the
+  phone cut off (`RunCutOff`: the `:youtube` process gone unasked) an error, counted against nothing; any other error
+  counted against the video (the data's `network` pattern aside, the gate's tunnel that couldn't connect, 502 or 504,
+  among it), given up at `give_up_after`; a stop of the queue closes the process (`ProcessYtDlp.close`) and keeps
   nothing. A download the decoder refuses fails the chords "audio the phone can't read: …".
 - chords as `AudioRunner`'s, credited to the video (`AutoSheet.youtubeCredit`), the version's `raw.youtube` and
   `url` the video's, the maker the phone's with no `audio_name`; the decoded length said beside yt-dlp's (the job's
