@@ -119,6 +119,13 @@ class HearingGuardTest {
         assertEquals("no chord models for this phone's processor",
                      MlChordModels.deviceProblem(34, big, listOf("x86_64"), carried = release))
         assertNull(MlChordModels.deviceProblem(34, big, listOf("arm64-v8a", "armeabi-v7a"), carried = release))
+        // An x86_64 phone that translates arm64 installs the APK's x86_64 libraries, its primary ABI's (the first of
+        // SUPPORTED_ABIS), as PhoneYouTube.carries says: a release has no chord models there.
+        assertEquals("no chord models for this phone's processor",
+                     MlChordModels.deviceProblem(34, big, listOf("x86_64", "arm64-v8a"), carried = release))
+        // A phone that tells no ABI has none of them.
+        assertEquals("no chord models for this phone's processor",
+                     MlChordModels.deviceProblem(34, big, emptyList(), carried = release))
         // Android's version first, then the processor, then the memory.
         assertEquals("chords from audio need Android 13 or later",
                      MlChordModels.deviceProblem(30, 1L shl 30, listOf("armeabi-v7a")))

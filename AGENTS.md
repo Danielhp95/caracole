@@ -2933,7 +2933,8 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   src/androidTestMl, so the other shells build and test the rest with no ONNX Runtime; any release packaging task
   (assemble, bundle, package, install) refuses there as the task graph is ready, before anything runs. The release carries the chord models' libraries for arm64-v8a alone (app/build.gradle.kts `releaseMlAbis`,
   `BuildConfig.ML_ABIS`; SQLite's for both): `MlChordModels.deviceProblem(carried=)` says "no chord models for this
-  phone's processor" on an x86_64 phone; `checkApkSize` (after every release build) fails an APK over 100 MiB.
+  phone's processor" on an x86_64 phone, one that translates arm64 too (the primary ABI, `SUPPORTED_ABIS`' first, is
+  the one whose libraries are installed, as `PhoneYouTube.carries` asks); `checkApkSize` (after every release build) fails an APK over 100 MiB.
   - The runtime: nix/onnxruntime-android.nix, with no network: nixpkgs' pin of the v1.27.1 source
     (`sha256-i2u/JnfbJ/srsZY3ATb2YsBBXEhTGhatsr3+9eHVV3M=`, cache.nixos.org's: github.com/microsoft/onnxruntime answers
     404), its CMake dependencies deps.txt's zips by SHA-256 in a local mirror; android/scripts/build-onnxruntime.sh's

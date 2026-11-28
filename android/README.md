@@ -129,8 +129,9 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    release (assemble, bundle, package, install) refuses before anything runs, so no `app-release.apk` without the chord
    models is ever written (the app would say auto-chords isn't on the phone). Every release build ends with `checkApkSize`, which fails an APK
    over 100 MiB, the most the repository's Pages site takes (about 28.8 MB today). The chord models' libraries are
-   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone gets SQLite's and no chords, saying "no chord
-   models for this phone's processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
+   arm64-v8a's alone in the release (`releaseMlAbis`): an x86_64 phone (one that translates arm64 too: Android
+   installs its primary ABI's libraries) gets SQLite's and no chords, saying "no chord models for this phone's
+   processor". The licences of what the chord models ship (ONNX Runtime's LICENSE and
    ThirdPartyNotices.txt, libsoxr's LICENCE and COPYING.LGPL, PFFFT's, which libsoxr is built with, BTC's and
    beat_this's) are its assets `chords/licenses/`, as alphaTab's are `alphatab/licenses/`, with a README saying that
    libsoxr is compiled into `libcaracole_soxr.so` and that caracole's, libsoxr's and the build's source is this
