@@ -385,6 +385,14 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
 - youtube_fetch.py: the step.
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
     one-song card asks of its song alone.
+  - `songs_for_youtube` passes over a song whose auto sheet another caracole made and no pass here would make again
+    (`_left_elsewhere`, autochords/run.py `left_as_made_elsewhere`: R3), unless it is chords alone, no site has the
+    words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing.
+  - `phone_due(conn, overrides, now, paired=)`: the songs a phone takes the audio of by itself (its automatic pass),
+    within `songs_for_youtube`: no audio of their own, no sheet at all (either side's); on a paired phone only those
+    it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held by
+    vectors/youtube/due.jsonl (fixture libraries, tests/test_conformance_youtube.py), which core.youtube's port
+    replays.
 - youtube_sheet.py is no step but `caracole youtube --sheet`: one song's auto sheet from a video now.
   - Its stages song, audio, lyrics, vocals, words, chords, pdf, pages (`STAGES`), reported as a lookup's (staged.py's
     `StagedRun`).

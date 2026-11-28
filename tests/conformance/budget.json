@@ -1,5 +1,5 @@
 {
- "vectors_total": 90820000,
+ "vectors_total": 90860000,
  "data_total": 12000000,
  "areas": {
   "autochords": 7300000,
@@ -28,6 +28,6 @@
   "unicode": 4000000,
   "viewer": 12000000,
   "web": 20000000,
-  "youtube": 300000
+  "youtube": 340000
  }
 }

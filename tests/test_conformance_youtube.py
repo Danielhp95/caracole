@@ -119,6 +119,7 @@ import random
 import re
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from helpers.corpus import DATA, VECTORS, check, jsonl
@@ -1585,3 +1586,190 @@ def test_the_video_command_cases_come_to_what_they_say(tmp_path, monkeypatch):
     assert by["a thumbnail kept already"]["out"]["asked"] == []
     assert by["not a video's link"]["out"]["exit"] == 2 and by["not a video's link"]["out"]["runs"] == []
     assert VKEY in json.loads(by["an error"]["out"]["kv"][youtube_search.FAILED_KEY])
+
+
+# --- due.jsonl ----------------------------------------------------------------------------------------------------
+#
+# youtube_fetch.py's ``phone_due``: the songs a phone takes the audio of from YouTube by itself, over a fixture library a
+# record (helpers.corpus's ``dump_fixture``, no library file: the rule reads the ``files`` table alone), with
+# ``overrides`` (``ignore``'s keys, ``youtube``'s video ids or null for "none") and ``now``: ``due`` on a phone with no
+# computer, ``paired`` on one that syncs with one, the songs' ids in order. Each song's ``case`` names it by its id.
+
+DUE_NOW = NOW
+DUE_PHONE = "0f1e2d3c4b5a6978"  # another caracole's sync:id, an auto sheet's maker
+DUE_VIDEO, DUE_PASTE = "XFkzRNyygfk", "oNOFfl3Hx3s"
+
+
+def _due_db(tmp_path, n: int):
+    from types import SimpleNamespace
+
+    root = tmp_path / f"due-{n}"
+    conn = db.connect(root / "caracole.sqlite")
+    fixed = Path("/home/owner/caracole")  # the paths a song's audio names: the record's, whatever the test's folder
+    return conn, SimpleNamespace(library_dir=root / "lib", music_dir=fixed / "Music", state_dir=fixed / "state",
+                                 cache_dir=fixed / "cache")
+
+
+def _due_song(conn, title: str, day: int, *, artist: str = "Radiohead", **cols):
+    from caracole.songs import get_song, update_song, upsert_song
+
+    song_id, _ = upsert_song(conn, artists=[artist], title=title, album=None, duration_ms=239000, isrc=None,
+                             source="wanted", source_id=f"{artist}/{title}",
+                             added_at=f"2026-11-{day:02d}T00:00:00Z")
+    update_song(conn, song_id, **{"match_decision": "not_found", **cols})
+    return get_song(conn, song_id)
+
+
+def _due_sheet(conn, cfg, song, name: str, raw: dict) -> None:
+    from caracole.library import keep_file
+    from caracole.songs import update_song
+    from caracole.versions import upsert_version
+
+    auto = name == "sheet (auto).txt"
+    v = upsert_version(conn, provider="auto" if auto else "ug", tab_id=str(1000 + song.id), song_id=song.id,
+                       slot="sheet", kind="auto" if auto else "chords", rating=0, votes=0, version=1, label=None,
+                       url="x", raw=raw, now="2026-11-01T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name=name, data=b"[C]x", rank=1)
+    update_song(conn, song.id, status="found", match_decision="accept" if not auto else song.match_decision,
+                ug_checked_at="2026-11-01T00:00:00Z")
+
+
+def _due_kv(conn, key: str, value) -> None:
+    db.kv_set_json(conn, key, value)
+
+
+def _due_record(conn, song_id: int, **fields) -> None:
+    _due_kv(conn, f"{youtube_fetch.RECORD_PREFIX}{song_id}", fields)
+
+
+def _due_noted(conn, song) -> None:
+    _due_kv(conn, f"{youtube_fetch.WANTED_PREFIX}{song.id}", _at(days=1))
+
+
+def _every_kind(conn, cfg) -> tuple[dict, dict]:
+    """A library of every kind of song the rule weighs, and its overrides."""
+    from caracole.songs import update_song
+
+    s = {}
+    for day, (name, cols) in enumerate([
+        ("noted", {}), ("not noted", {}), ("noted, its last try failed", {}), ("its last try failed", {}),
+        ("noted, older", {}), ("found nothing 3 days ago", {}), ("found nothing 31 days ago", {}),
+        ("a video pasted", {}), ("pasted, found nothing lately", {}), ("declined", {}), ("pasted, unusable", {}),
+        ("YouTube's audio kept, a new paste", {}), ("YouTube's audio kept", {}), ("an upload", {}),
+        ("a purchase", {}), ("not matched yet", {"match_decision": None}),
+        ("in review", {"match_decision": "review"}), ("matched, not fetched yet", {"match_decision": "accept"}),
+        ("a human sheet", {}), ("an auto sheet the computer made", {}), ("an auto sheet the phone made", {}),
+        ("noted, with an auto sheet", {}), ("ignored", {}), ("ignored by overrides.toml", {}),
+        ("ignored song", {"status": "ignored"}),
+    ]):
+        s[name] = _due_song(conn, name.title(), 28 - day, **cols)
+    for name in ("noted", "noted, its last try failed", "noted, older", "noted, with an auto sheet"):
+        _due_noted(conn, s[name])
+    for name in ("noted, its last try failed", "its last try failed"):
+        _due_record(conn, s[name].id, error="ERROR: HTTP Error 502: Bad Gateway", error_at=_at(days=1))
+    _due_record(conn, s["found nothing 3 days ago"].id, missing_at=_at(days=3), query="x")
+    _due_record(conn, s["found nothing 31 days ago"].id, missing_at=_at(days=31), query="x")
+    _due_record(conn, s["pasted, found nothing lately"].id, missing_at=_at(days=3), query="x")
+    _due_record(conn, s["pasted, unusable"].id, unusable=DUE_PASTE, unusable_reason="Private video")
+    for name in ("YouTube's audio kept, a new paste", "YouTube's audio kept"):
+        path = str(cfg.cache_dir / "youtube" / f"{s[name].id}-{DUE_VIDEO}.m4a")
+        update_song(conn, s[name].id, audio_path=path, audio_mtime=1.0)
+        _due_record(conn, s[name].id, video={"id": DUE_VIDEO, "url": watch_url(DUE_VIDEO)}, source="search",
+                    audio=path, downloaded_at=_at(days=2))
+    update_song(conn, s["an upload"].id, audio_path=str(cfg.state_dir / "audio" / f"{s['an upload'].id}-ab.mp3"),
+                audio_mtime=1.0)
+    update_song(conn, s["a purchase"].id, audio_path=str(cfg.music_dir / "Radiohead - A Purchase.flac"),
+                audio_mtime=1.0)
+    _due_sheet(conn, cfg, s["a human sheet"], "sheet.txt", {})
+    _due_sheet(conn, cfg, s["an auto sheet the computer made"], "sheet (auto).txt", {"lyrics": "none"})
+    _due_sheet(conn, cfg, s["an auto sheet the phone made"], "sheet (auto).txt",
+               {"lyrics": "none", "made_on": "phone", "made_by": DUE_PHONE})
+    _due_sheet(conn, cfg, s["noted, with an auto sheet"], "sheet (auto).txt", {"lyrics": "none"})
+    overrides = {"ignore": [s["ignored by overrides.toml"].key],
+                 "youtube": {s["a video pasted"].key: DUE_PASTE, s["pasted, found nothing lately"].key: DUE_PASTE,
+                             s["declined"].key: None, s["pasted, unusable"].key: DUE_PASTE,
+                             s["YouTube's audio kept, a new paste"].key: DUE_PASTE}}
+    update_song(conn, s["ignored"].id, status="ignored")
+    return s, overrides
+
+
+def _partial_index(conn, cfg) -> tuple[dict, dict]:
+    """UG's index read part-way: a song it lacks may be in the sitemaps not read yet, so none is settled."""
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                 "VALUES (1, 'oasis', 'wonderwall', 'chords', 's1', '2026-11-01T00:00:00Z', 'tab/oasis/wonderwall')")
+    s = {"not on UG, the index partial": _due_song(conn, "Not On Ug", 10),
+         "on UG, fetched, no sheet": _due_song(conn, "Fetched", 9, match_decision="accept",
+                                               ug_checked_at="2026-11-20T00:00:00Z", ug_dirty=False),
+         "on UG, its fetch due again": _due_song(conn, "Dirty", 8, match_decision="accept",
+                                                 ug_checked_at="2026-11-20T00:00:00Z", ug_dirty=True)}
+    _due_noted(conn, s["not on UG, the index partial"])
+    return s, {"ignore": [], "youtube": {}}
+
+
+def _complete_index(conn, cfg) -> tuple[dict, dict]:
+    s, o = _partial_index(conn, cfg)
+    db.kv_set(conn, "ug:index:built_at", "2026-11-01T00:00:00Z")
+    return {k.replace("partial", "complete"): v for k, v in s.items()}, o
+
+
+def _lacuerda(conn, cfg) -> tuple[dict, dict]:
+    """LaCuerda still to ask for a song that looks Spanish; asked already for another."""
+    s = {"LaCuerda not asked yet": _due_song(conn, "De Música Ligera", 10, artist="Soda Stereo"),
+         "LaCuerda asked": _due_song(conn, "Persiana Americana", 9, artist="Soda Stereo",
+                                     lacuerda_checked_at="2026-11-20T00:00:00Z")}
+    for song in s.values():
+        _due_noted(conn, song)
+    return s, {"ignore": [], "youtube": {}}
+
+
+def _nothing(conn, cfg) -> tuple[dict, dict]:
+    return {}, {"ignore": [], "youtube": {}}
+
+
+DUE_SCENES = [("every kind of song", _every_kind), ("UG's index read part-way", _partial_index),
+              ("UG's index read whole", _complete_index), ("LaCuerda still to ask", _lacuerda),
+              ("an empty library", _nothing)]
+
+
+def _due_out(tmp_path, n: int, case: str, build) -> tuple[dict, dict]:
+    """A scene's record, and its songs by name."""
+    from helpers.corpus import dump_fixture
+
+    from caracole.overrides import Overrides
+
+    conn, cfg = _due_db(tmp_path, n)
+    songs, given = build(conn, cfg)
+    conn.execute("UPDATE songs SET created_at = ?, updated_at = ?", ("2026-11-01T00:00:00Z",) * 2)  # not the clock's
+    conn.execute("UPDATE files SET created_at = ?", ("2026-11-01T00:00:00Z",))
+    overrides = Overrides(ignore=frozenset(given["ignore"]), youtube=given["youtube"])
+    due = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=False)]
+    paired = [s.id for s in youtube_fetch.phone_due(conn, overrides, DUE_NOW, paired=True)]
+    computer = [s.id for s in youtube_fetch.songs_for_youtube(conn, overrides, DUE_NOW)]
+    record = {"case": case, "now": DUE_NOW.strftime("%Y-%m-%dT%H:%M:%SZ"), "overrides": given,
+              "songs": {str(song.id): name for name, song in songs.items()}, "fixture": dump_fixture(conn),
+              "due": due, "paired": paired}
+    conn.close()
+    return record, {"songs": songs, "computer": computer}
+
+
+def test_the_due_corpus(tmp_path):
+    records = [_due_out(tmp_path, n, case, build)[0] for n, (case, build) in enumerate(DUE_SCENES)]
+    check(VECTORS / "youtube" / "due.jsonl", jsonl(records, corpus="youtube/due", made_by=MADE_BY))
+
+
+def test_the_due_cases_come_to_what_they_say(tmp_path):
+    by = {}
+    for n, (case, build) in enumerate(DUE_SCENES):
+        record, seen = _due_out(tmp_path, n, case, build)
+        assert set(record["due"]) <= set(seen["computer"]) and set(record["paired"]) <= set(record["due"]), case
+        by[case] = {**record, "names": [record["songs"][str(i)] for i in record["due"]],
+                    "paired_names": [record["songs"][str(i)] for i in record["paired"]]}
+    every = by["every kind of song"]
+    assert every["names"] == ["noted", "noted, older", "not noted", "found nothing 31 days ago", "a video pasted",
+                              "pasted, found nothing lately", "noted, its last try failed", "its last try failed"]
+    assert every["paired_names"] == ["noted", "noted, older", "noted, its last try failed"]
+    assert by["UG's index read part-way"]["names"] == ["on UG, fetched, no sheet"]  # a song UG lacks may come yet
+    assert by["UG's index read whole"]["names"] == ["not on UG, the index complete", "on UG, fetched, no sheet"]
+    assert by["UG's index read whole"]["paired_names"] == ["not on UG, the index complete"]
+    assert by["LaCuerda still to ask"]["names"] == ["LaCuerda asked"]
+    assert by["an empty library"]["due"] == [] and by["an empty library"]["fixture"]

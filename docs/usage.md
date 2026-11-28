@@ -1733,6 +1733,9 @@ caracole keeps to these terms:
 - It takes audio only for a song with no human sheet: those the buy list would list, or one you
   name with its video. A purchase in Music/ comes first, and a human sheet found later replaces
   the auto sheet.
+- It takes none for a song whose auto sheet another caracole (the phone) made, since the nightly
+  run never makes that sheet again; unless the sheet is chords alone, no lyrics site has the
+  words, and words heard here would replace it.
 - It runs yt-dlp only where auto-chords can make chords of the audio. A caracole without
   auto-chords (the default package) or its model files runs none, and the to-do page says why.
 - A night's budget is 50 yt-dlp runs (a search or a download each), one at a time, 3.75–7.5

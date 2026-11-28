@@ -61,6 +61,7 @@ from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, s
 log = logging.getLogger(__name__)
 
 RECORD_PREFIX = "youtube:"  # + song id, in songs._PER_SONG_KV
+WANTED_PREFIX = "youtube-wanted:"  # + song id, in songs._PER_SONG_KV: the phone's note of a song for its own pass
 AUDIO_FOLDER = "youtube"  # in cache_dir
 RECHECK_AFTER = timedelta(days=30)  # a song whose search found nothing that fits
 GIVE_UP_AFTER = 3  # downloads of one video that failed, the network aside, before it is given up
@@ -312,9 +313,27 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
     return songs_to_buy(conn, songs, overrides, now)[0]
 
 
+def _left_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
+    """Whether the song keeps an auto sheet another caracole made that no pass here would make again from audio this
+    side took (autochords/run.py ``left_as_made_elsewhere``: R3, but for words heard here, R5): its audio would be
+    for nothing."""
+    if not _kept(conn, song.id, AUTO_SHEET):
+        return False
+    from caracole.autochords.run import left_as_made_elsewhere
+
+    return left_as_made_elsewhere(conn, song)
+
+
 def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
-    after the others, so they never hold up the rest (see the module docstring)."""
+    after the others, so they never hold up the rest (see the module docstring). A song whose
+    auto sheet another caracole made, which no pass here would make again (``_left_elsewhere``),
+    is none of them."""
+    return [song for song, _ in _due(conn, overrides, now)]
+
+
+def _due(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[tuple[Song, bool]]:
+    """``songs_for_youtube``'s songs in its order, each with whether its last try failed."""
     now = stamps.utc(now)
     songs = list_songs(conn)
     buy = {s.id for s in _to_buy(conn, songs, overrides, now)}
@@ -338,7 +357,26 @@ def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datet
                 due.append(song)
         elif not _recent(record.missing_at, now):
             due.append(song)
-    return sorted(due, key=lambda s: s.id in failed)  # stable: newest first within each
+    due = [song for song in due if not _left_elsewhere(conn, song)]
+    return [(song, song.id in failed) for song in sorted(due, key=lambda s: s.id in failed)]  # stable: newest first
+
+
+def phone_due(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *, paired: bool) -> list[Song]:
+    """The songs a phone takes the audio of from YouTube by itself (its automatic pass), recorded for it: those of
+    ``songs_for_youtube`` with no audio of their own (no upload, no YouTube audio kept: ``audio_path`` none) and no
+    sheet at all, human or auto, whoever made it; on a ``paired`` phone (one that syncs with a computer) only those it
+    noted (kv ``youtube-wanted:<id>``, a lookup that ended "Not on the sites"), the rest being the computer's nightly
+    work. The noted first, then the rest, newest first in each; those whose last try failed after the others, the
+    noted first among them."""
+    due = []
+    for song, failed in _due(conn, overrides, now):
+        if song.audio_path or _kept(conn, song.id, HUMAN_SHEET) or _kept(conn, song.id, AUTO_SHEET):
+            continue
+        wanted = conn.execute("SELECT 1 FROM kv WHERE key = ?", (f"{WANTED_PREFIX}{song.id}",)).fetchone() is not None
+        if paired and not wanted:
+            continue
+        due.append((failed, not wanted, song))
+    return [song for _, _, song in sorted(due, key=lambda d: d[:2])]  # stable: newest first within each
 
 
 # --- a pass -------------------------------------------------------------------------------------------
