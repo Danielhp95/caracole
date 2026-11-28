@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.YouTubeRow
+import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
@@ -50,7 +51,7 @@ import java.time.Instant
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
  * its start tried again as the screen comes back. YouTube audio ([YouTubeRow], the phone-youtube design's §7) says
- * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours", off, the chord
+ * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours", off, the chord
  * models needed, a cooldown, out of date), none in a build without yt-dlp. The library screen's bar has the same sync
  * button.
  * No item's text ends in "…".
@@ -161,11 +162,25 @@ class SettingsActivity : Activity() {
                     val problem = phone.youtubeProblem()
                     phone.parts.database.read { db ->
                         YouTubeRow.line(YouTubeRow.of(db, engine = true, problem = problem,
-                                                      version = BuildConfig.YTDLP_VERSION, now = Instant.now()))
+                                                      version = BuildConfig.YTDLP_VERSION, now = Instant.now())) to
+                            YouTubeAuto.on(db)
                     }
                 }
             }
-            val line = read.getOrElse { e ->
+            val auto = findViewById<Switch>(R.id.youtube_auto)
+            auto.setOnCheckedChangeListener(null)
+            auto.isChecked = read.getOrNull()?.second ?: true
+            auto.setOnCheckedChangeListener { _, on ->
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            phone.parts.database.writeBlocking { db -> YouTubeAuto.set(db, on) }
+                            YouTubeWorker.schedule(this@SettingsActivity, phone)
+                        }.onFailure { Log.w("caracole", "the automatic YouTube pass's switch couldn't be kept", it) }
+                    }
+                }
+            }
+            val line = read.map { it.first }.getOrElse { e ->
                 Log.w("caracole", "Settings' YouTube audio row couldn't be read", e)
                 getString(R.string.youtube_failed, why(e))
             }

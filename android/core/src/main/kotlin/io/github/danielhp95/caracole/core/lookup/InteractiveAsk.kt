@@ -71,12 +71,12 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
      * pace's), given [policy] after. */
     fun client(provider: String, policy: ProviderPolicy? = null): Client {
         made[provider]?.let { client ->
-            if (policy != null) client.policy = policy
+            if (policy != null && !bulk) client.policy = policy
             return client
         }
         val client = make?.invoke(provider, policy)
-            ?: if (bulk) clients.bulk(db, provider, runId).also { if (policy != null) it.policy = policy }
-               else clients.interactive(db, provider, runId, policy)
+            // Bulk work keeps the provider's own policy: a caller's (a lookup stage's) is a lookup's, never taken here.
+            ?: if (bulk) clients.bulk(db, provider, runId) else clients.interactive(db, provider, runId, policy)
         made[provider] = client
         return client
     }
@@ -97,7 +97,8 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
         } catch (e: BudgetExhausted) {
             owed(provider)
             val p = config.provider(e.provider)
-            if (bulk) Asked.Spent(hour = false, keptForSheets = false, bulk = true)
+            // The day's per_day met when it cut the client's budget below the provider's own (Pace.withinTheDay).
+            if (bulk) Asked.Spent(hour = false, keptForSheets = false, bulk = true, day = client.policy.budget < p.budget)
             else Asked.Spent(hour = e.provider !in keptForSheets && client.policy.budget < p.lookupRequests,
                              keptForSheets = e.provider in keptForSheets)
         } catch (e: ProviderError) {

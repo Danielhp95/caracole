@@ -91,7 +91,9 @@ data class Download(val path: File, val video: Video)
  * - before each run, a cooldown recorded by an earlier job (`Health.isCooling`) refuses it: `ProviderBlocked` in the
  *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
  *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no
- *   budget spent, no event);
+ *   budget spent, no event); then the run is reserved ([DayBudget.reserve], one write before its gate opens), so the
+ *   day counts it whatever ends it, its slot given back ([DayBudget.release]) for a run that never started
+ *   ([NotSent]);
  * - before the first, the pause after the last run this side sent ([Pace.pauseAfterLastRequest], kv
  *   `http:last_request:youtube`); before each later one, `_pause`'s: a draw of [policy]'s delay from [rng], less the
  *   time since the last run ended on [clock]'s monotonic clock;
@@ -213,8 +215,18 @@ class YtDlp(
         }
         refused?.let { throw it }
         beforeRun()?.let { throw RunHeldBack(PROVIDER, target, it) }
+        val reserved = writes.use { db -> DayBudget.reserve(db, clock.clock()) }  // counted whatever ends it
+        val opened = try {
+            gate()
+        } catch (e: Exception) {  // no gate, no run
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
+        }
         try {
-            return gate().use { opened -> runThrough(opened, what, target, timeout, into) }
+            return opened.use { runThrough(it, what, target, timeout, into) }
+        } catch (e: NotSent) {
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt() // kept, once the gate is closed (its close joins its threads)
             throw e

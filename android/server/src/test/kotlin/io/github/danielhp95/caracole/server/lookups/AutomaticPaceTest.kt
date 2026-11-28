@@ -78,7 +78,8 @@ class AutomaticPaceTest {
                         val runners: MutableMap<String, CommandRunner>, val draws: List<Pair<Double, Double>>,
                         val asked: List<String>)
 
-    private fun phone(seed: (io.github.danielhp95.caracole.core.db.Db, Instant) -> Unit = { _, _ -> }): Phone {
+    private fun phone(answer: (String) -> HttpAnswer? = { null },
+                      seed: (io.github.danielhp95.caracole.core.db.Db, Instant) -> Unit = { _, _ -> }): Phone {
         val dir = tmp.newFolder()
         val database = TestDb.fresh(dir).also { opened += it }
         val runners = HashMap<String, CommandRunner>()
@@ -89,6 +90,7 @@ class AutomaticPaceTest {
         val refusing = object : Transport {
             override fun send(request: HttpRequest): HttpAnswer {
                 asked += request.url
+                answer(request.url)?.let { return it }
                 throw TransportError("refused", "no site from a test: ${request.url}")
             }
         }
@@ -164,7 +166,7 @@ class AutomaticPaceTest {
 
     @Test fun anAutomaticJobsLyricsAskUnderARunOfItsOwnAtTheBulkPaceOutsideTheHoursLookups() {
         // The hour's lookups of LRCLIB spent: a lookup would ask it nothing, the automatic job still does.
-        val phone = phone { db, now -> seedLookups(db, now, "lrclib", PhoneConfig.DEFAULTS.provider("lrclib").lookupPerHour) }
+        val phone = phone(seed = { db, now -> seedLookups(db, now, "lrclib", PhoneConfig.DEFAULTS.provider("lrclib").lookupPerHour) })
         val job = run(phone, automatic = true)
         assertEquals("done", job.stages.first { it.name == "song" }.state, "${job.steps.single().output}")
         val events = events(phone)
@@ -186,14 +188,27 @@ class AutomaticPaceTest {
 
     @Test fun megalobizsDayStillCountsAnAutomaticJobsRequests() {
         val perDay = PhoneConfig.DEFAULTS.provider("megalobiz").perDay!!
-        val phone = phone { db, now -> seedLookups(db, now, "megalobiz", perDay, run = "seed") }
-        run(phone, automatic = true)
+        // LRCLIB has none (404s), so Megalobiz is the stage's next ask, and what stopped it its words.
+        val phone = phone(answer = { url -> when {
+                              "lrclib.net/api/get" in url -> HttpAnswer(404, emptyList(), ByteArray(0))
+                              "lrclib.net/api/search" in url -> HttpAnswer(200, emptyList(), "[]".toByteArray())
+                              else -> null
+                          } },
+                          seed = { db, now -> seedLookups(db, now, "megalobiz", perDay, run = "seed") })
+        val job = run(phone, automatic = true)
         val events = events(phone)
         assertTrue(events.none { it.first == "megalobiz" && it.third in Pace.SENT }, "$events")
         assertTrue(phone.asked.none { "megalobiz" in it }, "${phone.asked}")
         assertTrue(phone.asked.any { "lrclib" in it }, "${phone.asked}")
-        // Its words, true on the phone (no nightly run to promise).
-        assertEquals(StageEnd("skipped", "no asks of Megalobiz left today ($perDay spent); a later lookup asks"),
+        // Its words, true on the phone (no nightly run to promise): the day's limit, the one it met.
+        val lyrics = job.stages.first { it.name == "lyrics" }.detail
+        assertTrue("no asks of Megalobiz left today ($perDay spent); a later lookup asks" in lyrics, lyrics)
+    }
+
+    /** A run's own budget spent is said as that, never as the day's. */
+    @Test fun aBulkClientsOwnBudgetSpentIsSaidAsItsOwn() {
+        val p = PhoneConfig.DEFAULTS.provider("megalobiz")
+        assertEquals(StageEnd("skipped", "this job's ${p.budget} asks of Megalobiz are spent; a later lookup asks"),
                      LookupWords.end(PhoneConfig.DEFAULTS, "megalobiz", Asked.Spent(false, false, bulk = true)))
     }
 

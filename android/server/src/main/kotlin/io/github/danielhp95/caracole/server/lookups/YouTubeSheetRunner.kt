@@ -23,12 +23,14 @@ import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.youtube.Choose
+import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.youtube.ExtractorOutdated
 import io.github.danielhp95.caracole.core.youtube.GateRefused
 import io.github.danielhp95.caracole.core.youtube.NotSent
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.Record
 import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.RunHeldBack
 import io.github.danielhp95.caracole.core.youtube.Video
 import io.github.danielhp95.caracole.core.youtube.VideoUnavailable
 import io.github.danielhp95.caracole.core.youtube.Videos
@@ -112,6 +114,7 @@ class YouTubeSheetRunner(
     private val stages: SiteStages = SiteStages.ALL,
     private val hold: (() -> Heard) -> Heard = { it() },
     private val chordsProblem: () -> String? = { AudioRunner.problemOf(chords, null) },
+    private val metered: () -> Boolean = { false },
 ) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
         val line = LookupJobs.line(args, setOf("--song", "--url"))
@@ -131,7 +134,7 @@ class YouTubeSheetRunner(
         val process = engine!!.process()
         try {
             Job(parts, engine, process, store, chords!!, context, artist, title, line.options["--url"], names,
-                readOverrides, stages, hold, chordsProblem).run()
+                readOverrides, stages, hold, chordsProblem, metered).run()
         } finally {
             (process as? Closeable)?.close()
         }
@@ -142,7 +145,7 @@ class YouTubeSheetRunner(
         parts: PhoneParts, val engine: YouTubeEngine, val process: YtDlpProcess, val store: AudioStore,
         chords: ChordModels, context: JobContext, artist: String, title: String, val url: String?,
         names: () -> Map<String, String>, readOverrides: (Db) -> Overrides, stages: SiteStages,
-        hold: (() -> Heard) -> Heard, problem: () -> String?,
+        hold: (() -> Heard) -> Heard, problem: () -> String?, val metered: () -> Boolean,
     ) : StagedSheet(parts, chords, context, artist, title, names, readOverrides, stages, hold, problem) {
         private val folder = YouTubeAudio.folder(File(parts.stateDir, CACHE))
         private var video: Video? = null
@@ -238,8 +241,13 @@ class YouTubeSheetRunner(
             doing("audio", Words.text(if (pasted != null) "downloading" else "looking"))
             val config = parts.config()
             val policy = config.provider(PROVIDER)
+            // An automatic job (the design's §5.3): the day's runs left its budget, and no run on a metered network,
+            // checked again before each (a job queued on Wi-Fi may run after the phone left it).
+            val automatic = context.automatic
+            val budget = if (automatic) parts.database.read { db -> DayBudget.left(db, config, now) } else policy.budget.toInt()
             val runner = YtDlp(Yielding(process, context), policy, engine.cacheDir, engine.qjs.path, engine::gate,
-                               writes, pacing(), budget = policy.budget.toInt(), runId = stamp)
+                               writes, pacing(), budget = budget, runId = stamp,
+                               beforeRun = { if (automatic && metered()) YouTubeSearchRunner.METERED else null })
             val outcome = try {
                 one(runner, pasted)
             } catch (e: ProviderBlocked) {
@@ -252,6 +260,8 @@ class YouTubeSheetRunner(
                 Outcome.SPENT
             } catch (e: NotSent) {  // nothing was sent: no error of the video's, no record of it
                 return "failed" to NOT_STARTED.replace("{why}", e.msg.orEmpty())
+            } catch (e: RunHeldBack) {  // the phone's own: no run, no error of the video's or the song's, still noted
+                return "failed" to (e.msg ?: YouTubeSearchRunner.METERED)
             } catch (e: ExtractorOutdated) {  // yt-dlp's or the gate's, never the video's: counted against nothing
                 failed(e)
                 return "failed" to (e.msg ?: e.message.orEmpty())
@@ -338,6 +348,8 @@ class YouTubeSheetRunner(
             } catch (e: ProviderBlocked) {
                 throw e
             } catch (e: NotSent) {
+                throw e
+            } catch (e: RunHeldBack) {
                 throw e
             } catch (e: ExtractorOutdated) {  // a host's problem, not the video's (YtDlp's KDoc): not counted
                 throw e

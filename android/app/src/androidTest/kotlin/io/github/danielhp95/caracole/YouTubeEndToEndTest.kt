@@ -56,7 +56,7 @@ import java.time.Instant
  *   app's own: `--proxy` the gate's, the video after `--`);
  * - the video's audio gone after Ready (no file in `cache/youtube/`, the song's `audio_path` and its record's `audio`
  *   none), the sheet credited to the video (`raw.youtube.id`);
- * - Settings' YouTube audio row then "On · yt-dlp <the pinned version> · N runs in the last 24 hours", one run more
+ * - Settings' YouTube audio row then "On · yt-dlp <the pinned version> · N of 50 runs in the last 24 hours", one run more
  *   than before (a rolling 24 hours: no midnight between the two reads can move it).
  */
 @RunWith(AndroidJUnit4::class)
@@ -128,9 +128,8 @@ class YouTubeEndToEndTest {
         // Settings' YouTube audio row says it, one run more in the last 24 hours.
         val runs = runsToday(phone)
         assertEquals(runsBefore + 1, runs)
-        val expected = YouTubeRow.line(YouTubeRow.State(true, null, null, null, BuildConfig.YTDLP_VERSION, runs))
-        assertEquals("On · yt-dlp ${BuildConfig.YTDLP_VERSION} · $runs run${if (runs == 1L) "" else "s"} in the last 24 hours",
-                     expected)
+        val expected = YouTubeRow.line(YouTubeRow.State(true, null, null, null, BuildConfig.YTDLP_VERSION, runs, 50))
+        assertEquals("On · yt-dlp ${BuildConfig.YTDLP_VERSION} · $runs of 50 runs in the last 24 hours", expected)
         ActivityScenario.launch(SettingsActivity::class.java).use { settings ->
             var said = ""
             waitUntil("Settings' YouTube audio row", 30_000) {

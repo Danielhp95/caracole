@@ -68,4 +68,31 @@ class DayBudgetTest {
         assertEquals(budget + 2, DayBudget.runs(db, now))
         assertEquals(0, DayBudget.left(db, cfg, now))
     }
+
+    /** The bench's stamps (kv `ytbench:runs`) and the product's reservations (kv `youtube-runs`) counted with `events`
+     * as one set: a stamp its run's row follows is that one run; a stamp no row follows (a run in flight, or one whose
+     * process died before its row) is one more. */
+    @Test fun theDayIsTheUnionOfTheRowsAndTheReservationsNoRowFollowed() = db { db ->
+        val cfg = PhoneConfig.read(db)
+        val budget = cfg.provider("youtube").budget.toInt()
+        db.kvSet(DayBudget.BENCH, """["2026-11-26T11:00:00Z", "2026-11-26T11:30:00Z"]""")
+        run(db, Instant.parse("2026-11-26T11:00:40Z"), "ok", runId = "ytbench:x")  // the first stamp's row
+        val stamp = DayBudget.reserve(db, Instant.parse("2026-11-26T11:50:00Z"))
+        run(db, Instant.parse("2026-11-26T11:50:30Z"), "ok")  // the reservation's row
+        DayBudget.reserve(db, Instant.parse("2026-11-26T11:58:00Z"))  // in flight: no row yet
+        run(db, Instant.parse("2026-11-26T09:00:00Z"), "error")  // a row of no reservation (an older app's)
+        assertEquals("2026-11-26T11:50:00Z", stamp)
+        // rows 11:00:40, 11:50:30, 09:00 = 3; the unmatched stamps 11:30 (the bench's, its process died) and 11:58
+        assertEquals(5, DayBudget.runs(db, now))
+        assertEquals(budget - 5, DayBudget.left(db, cfg, now))
+    }
+
+    @Test fun aReservationReleasedGivesItsSlotBackAndOnesOlderThanADayAreDropped() = db { db ->
+        DayBudget.reserve(db, now.minus(Duration.ofHours(30)))
+        val stamp = DayBudget.reserve(db, now.minusSeconds(5))
+        assertEquals(1, DayBudget.runs(db, now))
+        assertEquals("[\"${now.minusSeconds(5)}\"]", db.kvGet(DayBudget.RESERVED))
+        DayBudget.release(db, stamp)
+        assertEquals(0, DayBudget.runs(db, now))
+    }
 }

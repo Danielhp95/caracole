@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.testing.replays
 
+import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
@@ -371,7 +372,8 @@ object AudioSheetReplay : AreaReplay {
 
     internal fun kv(db: Db, leftOut: List<String>): Map<String, String> =
         db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0)!! to it.text(1)!! }
-            .filter { (k, _) -> k != "sync:id" && !k.startsWith(Reads.READ) && leftOut.none { k.startsWith(it) } }.toMap()
+            .filter { (k, _) -> k != "sync:id" && !k.startsWith(Reads.READ) && k != DayBudget.RESERVED &&  // the phone's own
+                leftOut.none { k.startsWith(it) } }.toMap()
 
     internal fun files(library: File, leftOut: Set<String>): Map<String, String> = library.walkTopDown()
         .filter { it.isFile && it.name !in leftOut }

@@ -39,6 +39,10 @@ import io.github.danielhp95.caracole.server.jobs.JobHistory
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.Outcomes
+import io.github.danielhp95.caracole.server.jobs.SongFacts
+import io.github.danielhp95.caracole.core.youtube.Due
+import io.github.danielhp95.caracole.server.lookups.YouTubeAuto
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.jobs.PhoneKinds
 import io.github.danielhp95.caracole.server.jobs.QueueFull
@@ -235,7 +239,8 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
         commands[YouTubeSheetRunner.COMMAND] = YouTubeRunners(
             YouTubeSheetRunner(parts, deps.youtube, deps.chords, audio, problem = ::youtubeProblem, names = models::names,
-                               hold = { hearing -> models.holding(hearing) }, chordsProblem = ::audioProblem),
+                               hold = { hearing -> models.holding(hearing) }, chordsProblem = ::audioProblem,
+                               metered = deps.metered),
             YouTubeVideoRunner(parts, deps.youtube, routeWhy = ::youtubeProblem),
             YouTubeSearchRunner(parts, deps.youtube, routeWhy = ::youtubeProblem, metered = deps.metered),
         )
@@ -399,7 +404,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * shared to the app that wait for a song tried again ([InboxRetry]). */
     private fun afterJob(job: Job) {
         search.invalidate()
-        if (job.state == Job.FAILED) {
+        if (job.state == Job.FAILED && !job.quiet) {
             deps.alerts.failed(job.display, JobViews.line(job).text)
         }
         if (job.state == Job.DONE && job.spec.kind != PhoneKinds.RENDER.kind && deps.database.read { db ->
@@ -414,6 +419,28 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
             }
         }
         inbox.afterJob(job)
+        if (noteNoSheet(job)) onNoSheet()
+    }
+
+    /** The automatic YouTube pass (the design's §5.3): what the app's YouTubeWorker runs. */
+    val youtubeAuto: YouTubeAuto = YouTubeAuto(parts, ::youtubeProblem, deps.metered)
+
+    /** Told after a lookup left its song "Not on the sites" (noted for the automatic pass): the app's YouTubeWorker
+     * .soon; nothing by default. Never inside a job: a lookup never runs yt-dlp. */
+    @Volatile var onNoSheet: () -> Unit = {}
+
+    /** A lookup done whose outcome is "Not on the sites" (Outcomes, as the Requests tab says it) notes its song for the
+     * automatic pass, kv `youtube-wanted:<id>` (Due.WANTED_PREFIX), its time; whether it did. */
+    private fun noteNoSheet(job: Job): Boolean {
+        if (job.state != Job.DONE || !job.looksUp) return false
+        val now = Instant.now()
+        val song = deps.database.read { db ->
+            val (id, facts) = SongFacts.ended(queue).songOf(db, job, parts.cards, now)
+            val outcome = Outcomes.outcome(job, JobViews.line(job, facts = facts), facts, id)
+            id.takeIf { outcome.word == Outcomes.NOT_ON_THE_SITES }
+        } ?: return false
+        deps.database.writeBlocking { db -> db.kvSetJson(Due.WANTED_PREFIX + song, JsonPrimitive(Stamps.of(now))) }
+        return true
     }
 
     /**

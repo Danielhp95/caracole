@@ -131,12 +131,12 @@ object LookupWords {
         return "$spent; tonight's run does the rest"
     }
 
-    /** The phone's own words for bulk work's client spent (an automatic YouTube job's lyrics, Clients.bulk): the
-     * provider's `per_day` when it has one (Megalobiz's, which every run counts), else its budget; no nightly run on the
-     * phone to promise, a later lookup asks. */
-    fun bulkSpent(provider: String, policy: ProviderPolicy): String {
-        val spent = policy.perDay?.let { "no asks of ${name(provider)} left today ($it spent)" }
-            ?: "no asks of ${name(provider)} left (${policy.budget} spent)"
+    /** The phone's own words for bulk work's client spent (an automatic YouTube job's lyrics, Clients.bulk), by the
+     * limit it met: the day's `per_day` ([day]: Megalobiz's, which every run counts), else the provider's budget for
+     * one run; no nightly run on the phone to promise, a later lookup asks. */
+    fun bulkSpent(provider: String, policy: ProviderPolicy, day: Boolean): String {
+        val spent = if (day) "no asks of ${name(provider)} left today (${policy.perDay} spent)"
+                    else "this job's ${policy.budget} asks of ${name(provider)} are spent"
         return "$spent; a later lookup asks"
     }
 
@@ -159,7 +159,7 @@ object LookupWords {
         is Asked.Off -> StageEnd("skipped", asked.why)
         is Asked.Cooling -> StageEnd("skipped", cooling(provider, asked.until))
         is Asked.Blocked -> StageEnd("skipped", blocked(asked.error, asked.state.cooldownUntil))
-        is Asked.Spent -> StageEnd("skipped", if (asked.bulk) bulkSpent(provider, config.provider(provider))
+        is Asked.Spent -> StageEnd("skipped", if (asked.bulk) bulkSpent(provider, config.provider(provider), asked.day)
                                             else spent(provider, config.provider(provider), asked.hour, asked.keptForSheets))
         is Asked.Failed -> StageEnd("failed", failed(asked.error))
     }

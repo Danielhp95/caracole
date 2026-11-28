@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.testing.replays
 
+import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -214,7 +215,8 @@ object YouTubeVideoReplay : AreaReplay {
     /** The kv texts a job may change, those compared apart left out. */
     private fun kv(db: Db, apart: List<String>): Map<String, String> =
         db.query("SELECT key, value FROM kv ORDER BY key") { it.text(0)!! to it.text(1)!! }
-            .filter { (k, _) -> apart.none { k.startsWith(it) } }.toMap()
+            // DayBudget's reservations are the phone's own (Python's runner reserves none).
+            .filter { (k, _) -> k != DayBudget.RESERVED && apart.none { k.startsWith(it) } }.toMap()
 
     /** A gate that lets yt-dlp reach no host: the plan answers every run itself. */
     private object NoHost : YtDlpGate {

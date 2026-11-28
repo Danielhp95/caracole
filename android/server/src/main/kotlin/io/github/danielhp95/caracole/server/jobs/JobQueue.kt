@@ -193,6 +193,10 @@ class Job internal constructor(val id: Int, spec: JobSpec, queuedAt: Instant = I
     val fetching: Boolean get() = spec.fetching
     val note: String get() = spec.note
 
+    /** Whether its failure tells nobody (no "failed" alert): an automatic job's ([JobSpec.automatic]), the design's
+     * §5.3, said in the Journal alone. */
+    val quiet: Boolean get() = spec.automatic
+
     /** Whether it waits or runs. */
     val active: Boolean get() = state == QUEUED || state == RUNNING
 

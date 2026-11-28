@@ -548,9 +548,9 @@ class BenchReportTest {
         sentBefore(past)
         val s = bench().session(listOf("A - T", "B - U", "C - V"), false)
         assertEquals(6, s.runs.size)
-        // The day's count is the larger of events' and the bench's own stamps, as ever: the rows before, then each
-        // run's row; and each run's stamp, kept by its reservation before it ran.
-        assertEquals((past until past + 6).toList(), countedDuring)
+        // The day's count is the union of events' rows and the reservations no row followed yet (DayBudget.runs): the
+        // rows before, then each run counted from its reservation, before its gate opened, so while it runs too.
+        assertEquals((past + 1..past + 6).toList(), countedDuring)
         assertEquals(6, db.read { d -> kotlinx.serialization.json.Json.parseToJsonElement(d.kvGet(DbLedger.RUNS)!!) }
             .jsonArray.size)
         assertEquals(past, s.budgetBefore)

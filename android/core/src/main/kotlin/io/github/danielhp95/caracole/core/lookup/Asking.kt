@@ -18,14 +18,15 @@ import java.time.Instant
  * its work's value ([Done]), or why it sent nothing more: the provider turned off ([Off]), cooling down ([Cooling]),
  * blocked just now ([Blocked], with the cooldown it began), the lookup's or the hour's budget spent ([Spent], and
  * whether what is left is kept for sheets, `get.SHEETS_SHARE`; [Spent.bulk] for bulk work's client, whose budget is
- * the provider's own and the day's), or a provider's error ([Failed]). Never a miss.
+ * the provider's own and the day's, [Spent.day] when the day's `per_day` is the limit it met), or a provider's error ([Failed]). Never a miss.
  */
 sealed interface Asked<out T> {
     data class Done<T>(val value: T) : Asked<T>
     data class Off(val why: String) : Asked<Nothing>
     data class Cooling(val until: Instant?) : Asked<Nothing>
     data class Blocked(val error: ProviderBlocked, val state: ProviderState) : Asked<Nothing>
-    data class Spent(val hour: Boolean, val keptForSheets: Boolean, val bulk: Boolean = false) : Asked<Nothing>
+    data class Spent(val hour: Boolean, val keptForSheets: Boolean, val bulk: Boolean = false,
+                     val day: Boolean = false) : Asked<Nothing>
     data class Failed(val error: ProviderError) : Asked<Nothing>
 }
 

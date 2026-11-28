@@ -5313,8 +5313,21 @@ picks one).
   refuses Google's attestation host by name, and the app's bytes are measured against the gate's: a check and a
   measurement, not a wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. A pasted video's
   title and thumbnail are read as it is pasted (`YouTubeVideoRunner`); nothing is downloaded before the owner asks, for
-  a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), on any network. That changes once
-  the automatic pass lands (the phone-youtube design's Y3), which takes audio by itself.
+  a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), on any network, but by the
+  automatic pass below.
+- The phone takes audio by itself ("automatic is okay"; and of its default: "1. yes and allow that setting"): at most
+  the provider's budget (50) of yt-dlp runs in any 24 hours, every run of the phone's counted (`DayBudget`: `events`
+  and the runs reserved before their gate opens, the bench's too, as one set); only on an unmetered network, checked
+  before each run (`YouTubeSearchRunner.METERED`, "waiting for Wi-Fi", the song left noted), and while the battery
+  isn't low; only for a song with no sheet at all whose sites were asked (`Due.songs`); only once the chord models are
+  on it. After a lookup that left its song "Not on the sites" (kv `youtube-wanted:<id>`, `Phone.onNoSheet`; on a
+  paired phone, those songs alone), and daily while charging on a phone that has not synced with a computer in 14 days
+  (`YouTubeAuto.paired`, the app's `YouTubeWorker`: `youtube-soon`, `youtube-daily`); a pass stops at 8 minutes, at
+  fewer than 2 runs left, at a block or at out of date. Its jobs are `JobSpec.automatic`: their budget the day's runs
+  left, quiet (`Job.quiet`: no failed alert; a block's alert still once a cooldown), and their lyrics stage at the
+  bulk pace and budget, under a run of its own (`youtube-auto:`), never within `lookup_per_hour`. Settings' switch
+  "Find audio on YouTube by itself" (kv `phone:youtube-auto`, on by default) turns the pass alone off. A sheet from a
+  video you paste or share is asked for now, on any network. No route asks the computer to do it.
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.

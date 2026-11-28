@@ -31,6 +31,7 @@ class YouTubeRowTest {
         assertEquals("On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours", YouTubeRow.line(on))
         assertEquals("On · yt-dlp 2026.11.23 · 1 run in the last 24 hours", YouTubeRow.line(on.copy(runs = 1)))
         assertEquals("On · yt-dlp 2026.11.23 · no runs in the last 24 hours", YouTubeRow.line(on.copy(runs = 0)))
+        assertEquals("On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours", YouTubeRow.line(on.copy(budget = 50)))
         assertEquals("Off (the computer's settings)", YouTubeRow.line(on.copy(problem = YouTubeSheetRunner.OFF)))
         assertEquals("Needs the chord models", YouTubeRow.line(on.copy(problem = AudioRunner.NOT_DOWNLOADED)))
         assertEquals("Chords from audio need Android 13 or later",
@@ -60,7 +61,7 @@ class YouTubeRowTest {
                            "200, 'ok')", "2026-11-27T11:30:00Z")
         }
         database.read { db ->
-            assertEquals(YouTubeRow.State(true, null, null, null, "2026.11.23", 3),
+            assertEquals(YouTubeRow.State(true, null, null, null, "2026.11.23", 3, 50),
                          YouTubeRow.of(db, engine = true, problem = null, version = "2026.11.23", now = now))
         }
         database.writeBlocking { db ->

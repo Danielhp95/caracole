@@ -183,6 +183,10 @@ object Caracole {
             this.working = working
             // The phone's own start-time jobs (its pages made again for a new build), once the service hears them.
             phone.start()
+            // The automatic YouTube pass (YouTubeWorker): soon after a lookup left its song with no sheet, and daily on
+            // a phone with no computer.
+            phone.onNoSheet = { guarded("asking YouTube's pass for soon") { YouTubeWorker.soon(context, phone) } }
+            guarded("scheduling YouTube's daily pass") { YouTubeWorker.schedule(context, phone) }
             // A hearing's checkpoints a killed app left a day ago; a failure logged, the start going on.
             guarded("sweeping the chord models' old checkpoints") { PhoneChords.sweep(context, state) }
             return phone

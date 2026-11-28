@@ -94,11 +94,16 @@ chord models on the phone.
 Paste the video into the request form's YouTube field, or into a song's card and tap **Make
 sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone
 downloads the audio with yt-dlp, asks the lyrics sites for the words, works out the chords,
-keeps the sheet and deletes the audio. Nothing is downloaded before you tap. It works on Wi-Fi
-or mobile data.
+keeps the sheet and deletes the audio. It works on Wi-Fi or mobile data.
 
-Settings › **YouTube audio** says whether it can run, and how many times it ran yt-dlp in the
-last 24 hours. The phone keeps the computer's limits, counted on its own, and the same caveat:
+The phone also does it by itself, on Wi-Fi with the battery not low: a few minutes after a lookup
+finds no sheet on the sites, and once a day while charging on a phone that hasn't synced with a
+computer in 14 days. It takes only songs with no sheet at all, whose sites were asked, and stops at a
+block, near the day's limit of runs, or after 8 minutes. Settings › **Find audio on YouTube by
+itself** turns that off.
+
+Settings › **YouTube audio** says whether it can run, and how many of the day's runs of yt-dlp
+it used in the last 24 hours. The phone keeps the computer's limits, counted on its own, and the same caveat:
 taking audio from YouTube goes against its terms ([the sites caracole reads](sources.md)).
 `[providers.youtube] enabled = false` on the computer turns it off on the phone at the next
 sync.

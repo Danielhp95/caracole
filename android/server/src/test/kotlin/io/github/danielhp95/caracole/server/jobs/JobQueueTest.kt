@@ -131,6 +131,25 @@ class JobQueueTest {
         assertEquals(listOf(false), seen)
     }
 
+    /** The join path (web/jobs.py's _join): a request asked for now that joins a waiting automatic job's commands
+     * makes it asked for now. */
+    @Test fun anAskedNowRequestThatJoinsAWaitingAutomaticJobMakesItAskedForNow() = runTest {
+        val queue = queue()
+        val gate = CompletableDeferred<Unit>()
+        queue.submit(spec("blur/song 2") { gate.await() })
+        runCurrent()
+        val sheet = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--song=Oasis - Wonderwall")))
+        val auto = queue.submit(JobSpec("Sheet from YouTube: Oasis - Wonderwall", "oasis/wonderwall", "song", emptyList(),
+                                        commands = sheet, automatic = true)).first
+        val (joined, new) = queue.submit(JobSpec("Get Oasis - Wonderwall", "oasis/wonderwall", "song", emptyList(),
+                                                 commands = JobCommands.lookupSteps("Oasis", "Wonderwall"), fetching = true))
+        assertFalse(new)
+        assertEquals(auto.id, joined.id)
+        assertTrue(queue.job(auto.id)!!.steps.size > 1, "joined: ${queue.job(auto.id)!!.steps.map { it.args }}")
+        assertFalse(queue.job(auto.id)!!.spec.automatic)
+        gate.complete(Unit)
+    }
+
     @Test fun aFullQueueTakesNoNewJobButAJobThatJoinsNeedsNoRoom() = runTest {
         val queue = queue(limit = 2)
         val gate = CompletableDeferred<Unit>()
