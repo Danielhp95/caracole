@@ -3,13 +3,13 @@ package io.github.danielhp95.caracole.server
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.youtube.YtDlp
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 /**
  * Settings' row "YouTube audio" (the phone-youtube design's §7): its one line, what this phone's sheets from a YouTube
@@ -24,7 +24,7 @@ import java.time.temporal.ChronoUnit
  * - "Out of date: …": the app's yt-dlp no longer reads YouTube (kv `youtube-outdated` naming this version: Y3.6);
  * - "On · yt-dlp 2026.11.23 · 2 runs in the last 24 hours": the version, and the yt-dlp runs of a rolling 24 hours
  *   (`events` of provider `youtube` that ran: ok, error or blocked; a budget's refusal ran nothing), the bench's among
- *   them. No limit is said: the phone's day of runs is Y3.3's to settle.
+ *   them (DayBudget.runs, the count the phone's day of runs goes by). No limit is said.
  */
 object YouTubeRow {
     /** What the line is made of ([of] reads it; a test gives it). [engine]: PhoneDeps.youtube is there; [problem]:
@@ -61,10 +61,8 @@ object YouTubeRow {
         return State(engine, problem, cooling, outdated(db.kvGet(OUTDATED_KV), version), version, runsSince(db, now))
     }
 
-    /** The yt-dlp runs of the 24 hours before [now]: `events` of provider `youtube` that ran (ok, error or blocked). */
-    fun runsSince(db: Db, now: Instant): Long =
-        db.one("SELECT COUNT(*) FROM events WHERE provider = ? AND at >= ? AND decision IN ('ok', 'error', 'blocked')",
-               PROVIDER, now.truncatedTo(ChronoUnit.SECONDS).minusSeconds(DAY_S).toString()) { it.long(0) } ?: 0
+    /** The yt-dlp runs of the 24 hours before [now]: the phone's day's count, DayBudget.runs. */
+    fun runsSince(db: Db, now: Instant): Long = DayBudget.runs(db, now).toLong()
 
     /** kv `youtube-outdated` ([kv], `{version, at, reason}`) when it names this [version], its version; null else, and
      * for a record that won't read. */
@@ -78,5 +76,4 @@ object YouTubeRow {
 
     private const val PROVIDER = "youtube"
     private const val OUTDATED_KV = "youtube-outdated"
-    private const val DAY_S = 24 * 3600L
 }

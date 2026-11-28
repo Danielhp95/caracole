@@ -3173,8 +3173,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     design's §7, `BuildConfig.YTDLP_VERSION` pins.json's): no row without an engine (a release), whatever
     `youtubeProblem` says; else "Off (the computer's settings)", "Needs the chord models", "Cooling down until …",
     "Out of date: …" (kv `youtube-outdated` of this version), or "On · yt-dlp 2026.11.23 · N runs in the last 24 hours"
-    (a rolling 24 hours of `events` of `youtube` that ran: ok, error or blocked, never budget; no limit said until
-    Y3.3 settles the phone's day); a read that fails said in the row and logged; YouTubeRowTest on the JVM.
+    (core.youtube's `DayBudget.runs`, the phone's day's one count: a rolling 24 hours of `events` of `youtube` that
+    ran, ok, error or blocked, never budget; no limit said); a read that fails said in the row and logged;
+    YouTubeRowTest on the JVM.
     `process()` is a `ProcessYtDlp`, core's `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with
     it: the argv the runner built, its folders read off the templates; `Ran` its exit, stdout and stderr (its first 64
     KiB, then the client's tail); `NotStarted` for nothing sent (no bind, a refusal, another process's run, a stop
@@ -3649,6 +3650,14 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `events`; none while `Health.isCooling`; its own failure or 3 within the hour, kv `youtube-search:failed`,
     `recordFailure`; YouTube off in PhoneConfig, or `routeWhy`, the phone's own reason it makes no sheet from a
     video), `suggestion` (/api/search's `youtube`) and `sheetOnScreen`;
+  - `Due` (Y3.3): youtube_fetch.py's `phone_due`, `songs(db, overrides, now, paired)`: `songs_for_youtube`'s songs
+    (todo.songs_to_buy's rule, core.todo's `Todo.songsToBuy`, which the cards' buy links read too) with no
+    `audio_path` and no sheet kept, human or auto; on a paired phone the noted alone (kv `youtube-wanted:<id>`); the
+    noted first, failures last;
+  - `DayBudget` (Y3.3): the phone's day, `left(db, config, now)`, `PhoneConfig.provider("youtube").budget` less
+    `runs`, every yt-dlp run of the last 24 hours (`events` of `youtube` decided ok, error or blocked: asked-now runs
+    and the bench's too, a `budget` row none), which Settings' row and the bench's ledger count by; YtDlp's `budget`
+    wins over its policy's, the caller's to give (an automatic job's the day's left);
   - `Records` (Y1.4): kv `youtube:<song id>` (`Record`), `load` and `save` as `load_record` and `_save`, the text
     byte for byte (youtube.json's `record`); a removal takes it and `youtube-wanted:<song id>`, the phone's note of a
     song for its automatic pass (songs.py `_PER_SONG_KV`, SongKv.kt), and a restore keeps `youtube-search:`,
@@ -3657,7 +3666,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     names, limits and frame markers): `fetch` one request through the caller's PoliteClient (robots' rules: `/sb/`
     closed), kept as `<cache>/youtube-thumbs/<id>.jpg` when `checkedJpeg` reads a JPEG, the record of its key said
     `thumb`; `get` and `read` checked again; `SearchGate.kvKey`, `forgetFailure`, `run`;
-  - vectors/youtube/argv, classify, parse, choose, runs, gate and record.jsonl (`YouTubeReplay`, area `youtube`;
+  - vectors/youtube/argv, classify, parse, choose, runs, gate, record and due.jsonl (`YouTubeReplay`, area `youtube`;
     runs.jsonl the computer's `YtDlp` over FakeYtDlp, replayed over `FakeYtDlpProcess` through a loopback HostGate),
     and video_cmd.jsonl's `checked_jpeg` records (synthetic JPEG heads, seeded edits of them).
 

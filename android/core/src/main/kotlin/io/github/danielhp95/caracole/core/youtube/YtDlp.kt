@@ -85,7 +85,9 @@ data class Download(val path: File, val video: Video)
  * - the database reached through [writes], each touch of it a [Writes.use] of its own (a cooldown read, an event
  *   written, a block recorded): none is held across a run or a pause, so a job that lets queued work have the
  *   database meanwhile (its pauses' [Pacing.sleep] and its process's wait yielding) can;
- * - [budget] runs at most ([requestsMade] counts them), then `BudgetExhausted`, the `budget` event written once;
+ * - [budget] runs at most ([requestsMade] counts them), then `BudgetExhausted`, the `budget` event written once:
+ *   [budget] wins, [policy]'s `budget` is never read here (the caller gives the job's own: the day's left,
+ *   [DayBudget.left], for an automatic job);
  * - before each run, a cooldown recorded by an earlier job (`Health.isCooling`) refuses it: `ProviderBlocked` in the
  *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
  *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no

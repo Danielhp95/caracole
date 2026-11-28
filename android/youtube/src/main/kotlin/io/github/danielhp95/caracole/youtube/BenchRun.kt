@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.youtube.Choose
 import io.github.danielhp95.caracole.core.youtube.Classify
+import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.youtube.HostGate
 import io.github.danielhp95.caracole.core.youtube.Videos
 import io.github.danielhp95.caracole.core.youtube.YouTubeData
@@ -650,14 +651,11 @@ object DbLedger {
                               Pace.lastRequest(db, PROVIDER), served, jobs, running, capLifted)
     }
 
-    /** The sent runs of the last 24 hours before [now]: the larger of the bench's own stamps and `events`'. */
+    /** The sent runs of the last 24 hours before [now]: the larger of the bench's own stamps and `events`' (the phone's
+     * day's count, DayBudget.runs). */
     fun runs(db: Db, now: Instant): Int {
         val since = utc(now.minus(DAY))
-        val sent = db.one("SELECT COUNT(*) FROM events WHERE provider = ? AND at >= ? AND decision IN " +
-                          "(${Pace.SENT.joinToString(", ") { "?" }})", PROVIDER, since, *Pace.SENT.toTypedArray()) {
-            it.long(0)
-        }!!.toInt()
-        return maxOf(sent, stamps(db).count { it >= since })
+        return maxOf(DayBudget.runs(db, now), stamps(db).count { it >= since })
     }
 
     private fun cooling(db: Db, now: Instant): String? = if (Health.isCooling(db, PROVIDER, now)) {

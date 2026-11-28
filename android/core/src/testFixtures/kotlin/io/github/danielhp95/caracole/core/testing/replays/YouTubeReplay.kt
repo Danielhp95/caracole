@@ -10,6 +10,10 @@ import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.SiteArtist
 import io.github.danielhp95.caracole.core.search.SiteHit
 import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.Due
+import io.github.danielhp95.caracole.core.library.LaCuerdaPick
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.youtube.SearchGate
 import io.github.danielhp95.caracole.core.youtube.Thumbs
 import kotlinx.serialization.json.JsonPrimitive
@@ -72,6 +76,8 @@ import kotlinx.serialization.json.jsonPrimitive
  *   events on a fresh database, YouTube on or off in the phone's settings; recordFailure's kv text byte for byte; and
  *   sheetOnScreen of each record's hits;
  * - record.jsonl: Records.load of each stored text, then Records.save, its kv text byte for byte;
+ * - due.jsonl: Due.songs over each scene's fixture library and overrides (`ignore`, `youtube`, `lacuerda`) at its
+ *   `now`, unpaired (`due`) and paired (`paired`), the songs' ids in Python's order;
  * - video_cmd.jsonl's `checked_jpeg` records: Thumbs.checkedJpeg of each synthetic head (its command's records are
  *   :server's YouTubeVideoReplay's).
  */
@@ -81,7 +87,7 @@ object YouTubeReplay : AreaReplay {
     override fun replay(misses: Misses) {
         val counts = mapOf("argv" to argv(misses), "classify" to classify(misses), "parse" to parse(misses),
             "choose" to choose(misses), "runs" to runs(misses), "gate" to gate(misses), "record" to record(misses),
-            "video_cmd" to jpegs(misses))
+            "video_cmd" to jpegs(misses), "due" to due(misses))
         for ((name, n) in counts) misses.check(n > 0) { "youtube/$name.jsonl holds no record" }
     }
 
@@ -432,6 +438,33 @@ object YouTubeReplay : AreaReplay {
 
     /** video_cmd.jsonl's `checked_jpeg` records (its command's records are :server's, YouTubeVideoReplay): Thumbs'
      * reading of each head with its trailing zeros, kept or not as Python's. */
+    private fun due(misses: Misses): Int {
+        var n = 0
+        for (r in records("due")) {
+            n++
+            val case = text(r, "case")!!
+            val o = r.getValue("overrides").jsonObject
+            val overrides = Overrides(
+                ignore = o.getValue("ignore").jsonArray.map { it.jsonPrimitive.content }.toSet(),
+                youtube = o.getValue("youtube").jsonObject.mapValues { (_, v) -> v.jsonPrimitive.contentOrNull },
+                lacuerda = o.getValue("lacuerda").jsonObject.mapValues { (_, v) ->
+                    val p = v.jsonObject
+                    LaCuerdaPick(text(p, "artist")!!, text(p, "song")!!, p["version"]?.jsonPrimitive?.intOrNull)
+                },
+            )
+            val now = Instant.parse(text(r, "now")!!)
+            PoliteDb.with { db ->
+                Fixtures.loadRecords(db, r.getValue("fixture").jsonArray.map { it.jsonObject }, name = case)
+                for ((key, paired) in listOf("due" to false, "paired" to true)) {
+                    val want = r.getValue(key).jsonArray.map { it.jsonPrimitive.long }
+                    val got = Due.songs(db, overrides, now, paired).map { it.id }
+                    misses.check(got == want) { "due $case, paired $paired: $got, Python's $want" }
+                }
+            }
+        }
+        return n
+    }
+
     private fun jpegs(misses: Misses): Int {
         var n = 0
         for (r in records("video_cmd").filter { it["fn"]?.jsonPrimitive?.content == "checked_jpeg" }) {

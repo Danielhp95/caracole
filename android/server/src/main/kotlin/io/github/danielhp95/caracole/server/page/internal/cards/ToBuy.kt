@@ -2,42 +2,19 @@ package io.github.danielhp95.caracole.server.page.internal.cards
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.keys.Normalize
-import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSheets
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SongRow
-import io.github.danielhp95.caracole.core.match.Matcher
 import io.github.danielhp95.caracole.core.py.PyUrl
-import io.github.danielhp95.caracole.core.ug.UgFetch
+import io.github.danielhp95.caracole.core.todo.Todo
 import java.time.Instant
 
 /**
- * What a card's buy links rest on: todo.songs_to_buy (the to-do page's buy list), over :core's ports of what it asks
- * (ug/fetch.py's fetch_due, UgFetch.fetchDue; ug/index.py's index_state, Matcher.indexState; lacuerda_fetch.may_ask,
- * LaCuerdaSheets.mayAsk), and todo.search_links.
+ * What a card's buy links rest on: todo.songs_to_buy (the to-do page's buy list, :core's Todo), and todo.search_links.
  */
 internal object ToBuy {
-    /**
-     * todo.songs_to_buy's buy list: the wanted songs (not ignored, no audio linked) whose next step is buying the track,
-     * once nothing caracole will still do may find them a sheet: matched and fetched, or not found with the index read
-     * whole; no fetch due, no LaCuerda check due, no pick on LaCuerda still to come. By id, in [songs]' order.
-     */
+    /** todo.songs_to_buy's buy list, :core's Todo.songsToBuy ([audio] the songs' linked audio, by id). */
     fun songsToBuy(db: Db, songs: List<SongRow>, overrides: Overrides, now: Instant, audio: Map<Long, String?>):
-        List<SongRow> {
-        val partial = Matcher.indexState(db) == "partial"
-        val buy = ArrayList<SongRow>()
-        for (s in songs) {
-            if (s.status != "wanted" || !audio[s.id].isNullOrEmpty() || s.key in overrides.ignore) continue
-            if (s.matchDecision !in listOf("accept", "pinned", "not_found")) continue
-            val unfetched = s.matchDecision != "not_found" && s.ugCheckedAt.isNullOrEmpty()
-            val picked = s.key in overrides.lacuerda && s.lacuerdaCheckedAt == null
-            if (unfetched || UgFetch.fetchDue(db, s, overrides, now) || lacuerdaDue(s) || picked) continue
-            if (!(partial && s.matchDecision == "not_found")) buy += s
-        }
-        return buy
-    }
-
-    /** todo._lacuerda_due: LaCuerda never answered for the song, and may have it. */
-    private fun lacuerdaDue(song: SongRow): Boolean = song.lacuerdaCheckedAt == null && LaCuerdaSheets.mayAsk(song)
+        List<SongRow> = Todo.songsToBuy(db, songs, overrides, now, songs.associate { it.id to audio[it.id] })
 
     /** todo.search_links: where to look for what caracole won't do itself: buying, Chordify, Songsterr, YouTube. */
     fun searchLinks(artist: String, title: String): Map<String, String> {
