@@ -256,9 +256,11 @@ What needs a network: looking songs up, which asks the sites from the phone itse
 phone](#lookups-on-the-phone)) or a sheet's other version from Ultimate Guitar, and a sync with the computer. Making
 a songbook, Export PDF (which prints) and Make this my version, a backup, and filing a shared file all work with
 none. A sheet from a YouTube video needs a network too, and an arm64 phone ([A sheet from a YouTube
-video](#a-sheet-from-a-youtube-video)). What isn't on the phone at all says so ("…: not on the phone
-yet."): YouTube's suggested video for a search, and caracole serve's lookup page (the library page's search does its
-work). Use caracole serve in a browser for those.
+video](#a-sheet-from-a-youtube-video)), and so does YouTube's first video for a search with no sheet on the sites,
+which an arm64 phone suggests as the computer's page does, on an unmetered network alone (`YouTubeSearchRunner`,
+`POST /youtube/search`): its row fills the request form, and nothing downloads until you send it. What isn't on the
+phone at all says so ("…: not on the phone yet."): caracole serve's lookup page (the library page's search does its
+work). Use caracole serve in a browser for it.
 
 The pages come from the app's own server, with the same Content-Security-Policy and sandbox headers caracole serve
 sends, so the viewers run sandboxed as they do there.
@@ -311,7 +313,8 @@ merge's words ("the file was exported at schema version 14…": export it again 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
 artist's songs. LaCuerda's own search goes from the phone itself, as on the computer ([Lookups on the
-phone](#lookups-on-the-phone)); YouTube's suggestions need the computer. A link to an Ultimate Guitar tab or artist
+phone](#lookups-on-the-phone)), and so does YouTube's first video for a search with no sheet on the sites, on an arm64
+phone and an unmetered network (above). A link to an Ultimate Guitar tab or artist
 page pasted into the box is no search: its panel reads that page from the phone itself, once, at a lookup's pace (the
 tab's page, then its artist's lists), so the next search finds every song of that artist, and its Fetch this version
 keeps the tab you pasted.
