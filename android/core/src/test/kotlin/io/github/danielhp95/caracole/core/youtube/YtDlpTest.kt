@@ -173,6 +173,24 @@ class YtDlpTest {
         assertEquals(1, yt.requestsMade)
     }
 
+    /** The network asked again once the run's pauses are over, right before its process (Byoutube-5): a network that
+     * became metered while the run paused holds it back, with no process and no event, its day's slot given back. */
+    @Test
+    fun aNetworkThatBecameMeteredDuringTheRunsPauseHoldsItBackAndGivesItsSlotBack() = db { db ->
+        var from = Int.MAX_VALUE  // the pauses slept before the second run: metered once one more is slept
+        val fake = FakeYtDlpProcess.of(ok(), ok())
+        val yt = runner(db, fake, beforeRun = { if (slept.size > from) "waiting for Wi-Fi" else null })
+        yt.search("a")
+        from = slept.size
+        val e = assertFailsWith<RunHeldBack> { yt.search("b") }
+        assertEquals("youtube: ytsearch8:b: waiting for Wi-Fi", e.message)
+        assertTrue(slept.size > from, "the second run paused before it was held back")
+        assertEquals(1, fake.argvs.size, "no process for the run held back")
+        assertEquals(1, yt.requestsMade)
+        assertEquals(listOf("ok"), events(db).map { it[2] })
+        assertEquals(1, DayBudget.runs(db, started), "the held-back run's reservation given back")
+    }
+
     @Test
     fun theBudgetsEventIsWrittenOnce() = db { db ->
         val yt = runner(db, FakeYtDlpProcess.of(ok()), budget = 1)

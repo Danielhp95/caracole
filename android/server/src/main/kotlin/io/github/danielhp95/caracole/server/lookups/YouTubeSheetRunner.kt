@@ -97,6 +97,9 @@ import java.util.logging.Logger
  *   budget; a video that can't be had (unavailable, or no m4a stream: [io.github.danielhp95.caracole.core.youtube
  *   .PassedOver]) is unusable when pasted and passed over into `skip` when searched, and the stage fails; a run that
  *   never started (another of the app's going, the debug bench's) is a wait counted against nothing ([NOT_STARTED]);
+ *   a run held back for a metered network (an automatic job's, the network checked again before each run, after its
+ *   pauses) is a wait too, and the job ends there, every stage after it skipped in those words ("waiting for Wi-Fi"),
+ *   so no lyrics site is asked on that network;
  *   any other error is counted against the video (the network's aside: the data's `network` pattern) and given up at
  *   `give_up_after`. A stop of the queue mid-download stops yt-dlp ([ProcessYtDlp][Closeable.close]) and keeps nothing.
  * - `chords`: [AudioRunner]'s over the video's audio, the sheet credited to the video (AutoSheet.youtubeCredit) and
@@ -152,6 +155,7 @@ class YouTubeSheetRunner(
         private val folder = YouTubeAudio.folder(File(parts.stateDir, CACHE))
         private var video: Video? = null
         private var sheetOfVideo = false  // the song's auto sheet is of the video asked for, made here: no audio needed
+        private var heldBack: String? = null  // the run held back (an automatic job on a metered network): the job ends there
 
         /** The song its request named, should the job add it (JobContext.adds: a sheet from a video asked for by
          * name), its album and length as wanted.txt's line keeps them on the computer: `_the_song(album=,
@@ -184,6 +188,8 @@ class YouTubeSheetRunner(
         }
 
         override fun madeOfThisAudio(s: SongRow): Boolean = sheetOfVideo || super.madeOfThisAudio(s)
+
+        override fun stopAfter(name: String): String? = heldBack.takeIf { name == "audio" }
 
         override fun maker(db: Db, s: SongRow, audio: File): Maker = AudioRunner.videoMaker(chords, names, db, audio)
 
@@ -268,8 +274,11 @@ class YouTubeSheetRunner(
                 Outcome.SPENT
             } catch (e: NotSent) {  // nothing was sent: no error of the video's, no record of it
                 return "failed" to NOT_STARTED.replace("{why}", e.msg.orEmpty())
-            } catch (e: RunHeldBack) {  // the phone's own: no run, no error of the video's or the song's, still noted
-                return "failed" to (e.msg ?: YouTubeSearchRunner.METERED)
+            } catch (e: RunHeldBack) {  // the phone's own: no run, no error of the video's or the song's, still noted;
+                // an automatic job's alone (its `beforeRun`), which ends here: no lyrics site asked on that network
+                val why = e.msg ?: YouTubeSearchRunner.METERED
+                heldBack = why
+                return "failed" to why
             } catch (e: ExtractorOutdated) {  // yt-dlp's, never the video's: counted against nothing
                 failed(e)
                 val reason = e.msg ?: e.message.orEmpty()

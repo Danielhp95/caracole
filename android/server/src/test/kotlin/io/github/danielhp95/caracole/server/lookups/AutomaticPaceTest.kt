@@ -222,14 +222,25 @@ class AutomaticPaceTest {
     }
 
     /** A metered network met before a run (the job queued on Wi-Fi): an automatic job sends nothing, its audio stage
-     * "waiting for Wi-Fi", nothing counted against the video or the song, no run reserved; asked for now, it goes. */
+     * "waiting for Wi-Fi", nothing counted against the video or the song, no run reserved; and it ends there, every
+     * stage after the audio skipped in those words, so no lyrics site is asked on that network (Byoutube-5). Asked for
+     * now, it goes. */
     @Test fun aMeteredNetworkStopsAnAutomaticJobBeforeItsRunAndCountsNothing() {
         val phone = phone()
         val job = run(phone, automatic = true, metered = { true })
         assertEquals(Job.FAILED to YouTubeSearchRunner.METERED,
                      job.stages.first { it.name == "audio" }.let { it.state to it.detail })
+        assertEquals(emptyList(), phone.asked,
+                     "the automatic job held back asked the lyrics sites on the metered network; its lyrics stage: " +
+                         job.stages.first { it.name == "lyrics" }.let { it.state to it.detail })
+        val after = YouTubeSheetRunner.Words.stages.map { it.first }.dropWhile { it != "audio" }.drop(1)
+        assertEquals(after.associateWith { Job.SKIPPED to YouTubeSearchRunner.METERED },
+                     job.stages.filter { it.name in after }.associate { it.name to (it.state to it.detail) })
         phone.database.read { db ->
             assertEquals(0L, db.one("SELECT COUNT(*) FROM events WHERE provider = 'youtube'") { it.long(0) })
+            assertEquals(0L, db.one("SELECT COUNT(*) FROM events WHERE provider IN ('lrclib', 'megalobiz', 'azlyrics')") {
+                it.long(0)
+            })
             val record = io.github.danielhp95.caracole.core.youtube.Records.load(db, 1)
             assertEquals(null, record.error)
             assertEquals(emptyMap(), record.failures)
@@ -238,5 +249,6 @@ class AutomaticPaceTest {
         val asked = phone()
         val now = run(asked, automatic = false, metered = { true })
         assertEquals("done", now.stages.first { it.name == "audio" }.state, "${now.steps.single().output}")
+        assertTrue(asked.asked.isNotEmpty(), "asked for now, its lyrics stage asks the sites as ever")
     }
 }
