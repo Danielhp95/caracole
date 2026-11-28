@@ -32,7 +32,8 @@ import java.io.IOException
  *
  * One model at a time ([graphs]: each opened at its stage's start and closed at its end, BTC's first, so the first
  * checkpoint after the pcm comes soonest). The steps are told to [say] as they start, in run.py's words ([STEPS]); the
- * heat ([HeatRules]) is read before each stage (waited out there, "waiting for the phone to cool") and before each
+ * heat ([HeatRules]) is read before each stage (waited out there, "waiting for the phone to cool", the stage's step
+ * told again once the wait is over) and before each
  * chunk and window batch (stopping there when critical), where [cancelled] is asked too ([Cancelled]), as it is in
  * the decode's, the mixdown's and the resample's loops and at each reading of a heat waited out. [most] caps
  * the threads the heat allows (0: none). One hearing at a time under a work folder: [hear] first sweeps what a
@@ -74,12 +75,12 @@ class Pipeline(
         var pcm = points.parsed(Checkpoints.PCM_META, Checkpoints::readPcm)
         // The samples are wanted while a model's stage is left; the meta always (its length).
         if (pcm == null || ((chords == null || beats == null) && !points.pcmWhole(pcm))) {
-            threads(say)
+            threads(STEPS[0], say)
             pcm = pcm(audio, points, timed)
         }
         if (chords == null) {
             say(STEPS[1])
-            val threads = threads(say)
+            val threads = threads(STEPS[1], say)
             val file = points.file(Checkpoints.PCM)
             chords = time(CHORDS, timed) {
                 graphs.chords(threads).use { Stages.chords(file, pcm.btcSamples, it, ::check) }
@@ -88,7 +89,7 @@ class Pipeline(
         }
         if (beats == null) {
             say(STEPS[2])
-            val threads = threads(say)
+            val threads = threads(STEPS[2], say)
             beats = time(BEATS, timed) {
                 graphs.beats(threads).use { Stages.beats(points.file(Checkpoints.PCM), it, ::check) }
             }
@@ -110,9 +111,13 @@ class Pipeline(
         if (cancelled()) throw Cancelled()
     }
 
-    private fun threads(say: (String) -> Unit): Int {
+    /** The threads the stage of [step] takes, the heat waited out first; [step] told again once a wait ended, so the
+     * stage never runs under the wait's words. */
+    private fun threads(step: String, say: (String) -> Unit): Int {
         stop()
-        val allowed = HeatRules.cool(gauge, sleep, clock, say, ::stop)
+        var waited = false
+        val allowed = HeatRules.cool(gauge, sleep, clock, { waited = true; say(it) }, ::stop)
+        if (waited) say(step)
         return if (most > 0) minOf(most, allowed) else allowed
     }
 
