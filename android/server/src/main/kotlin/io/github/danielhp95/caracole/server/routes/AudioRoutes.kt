@@ -265,7 +265,6 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
         }
     }
 
-    /** The raw record of the song's auto version that names a kept file (its sheet), or null for none. */
     /**
      * The share's page of an upload a keep moved into place ([AudioStore.marked]: Back from the Journal after Make
      * sheet loads it again): the song it is the audio of, while that song's row names the kept file, or its keep is
@@ -281,6 +280,7 @@ class AudioRoutes(val parts: PhoneParts, val store: AudioStore, private val prob
                               journal = job?.let { "/#tab=requests&job=${it.id}" })
     }
 
+    /** The raw record of the song's auto version that names a kept file (its sheet), or null for none. */
     private fun autoRaw(db: Db, song: SongRow): JsonObject? =
         db.one("SELECT v.raw FROM versions v WHERE v.song_id = ? AND v.provider = ? AND EXISTS (SELECT 1 FROM files f " +
                    "WHERE f.version_id = v.id) ORDER BY v.id LIMIT 1", song.id, AUTO) { it.text(0) }

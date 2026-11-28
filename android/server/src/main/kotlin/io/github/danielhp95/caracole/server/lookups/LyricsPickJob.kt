@@ -209,7 +209,7 @@ internal class LyricsPickJob(
 
     private fun chords(): Pair<String, String> {
         if (states["lyrics"] != "done") return "skipped" to LyricsPickCommands.NO_NEW
-        parts.database.writeBlocking { db -> relaid(db) }?.let { return it }
+        parts.database.writeBlocking { db -> relaid(db)?.also { videoKept = youtubeAudioHeld(db) } }?.let { return it }
         val why = parts.database.writeBlocking { db -> elsewhere(db) ?: whyNoChords(db) }
         if (why != null) return "skipped" to why
         val models = chords
@@ -220,7 +220,7 @@ internal class LyricsPickJob(
         }
         context.yieldToQueued()  // the models take a minute: the lookups queued meanwhile go first
         parts.database.writeBlocking { db -> whyNoChords(db.also { again(it) }) }?.let { return "skipped" to it }
-        parts.database.read { db -> upToDate(db) }?.let { return it }
+        parts.database.writeBlocking { db -> upToDate(db)?.also { videoKept = youtubeAudioHeld(db) } }?.let { return it }
         val audio = File(song!!.audioPath!!)
         val heard = try {
             hold {
@@ -252,6 +252,10 @@ internal class LyricsPickJob(
             info?.let { fail(it) } ?: ended
         }
     }
+
+    /** Whether the song's audio is the file the phone took from YouTube: a sheet already made of it (re-laid, or up to
+     * date) lets it go too, as a keep does ([letGoVideoAudio]). */
+    private fun youtubeAudioHeld(db: Db): Boolean = YouTubeAudio.youtubeAudio(db, again(db)) != null
 
     /** The sheet kept of the audio this phone took from YouTube: that audio goes once the pages are made (the
      * design's §5.4), as YouTubeSheetRunner's `afterPages` lets it go; the song's link and its record's with it. */

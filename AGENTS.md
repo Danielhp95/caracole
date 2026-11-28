@@ -5075,7 +5075,8 @@ nix flake check
     The servers it starts (a class's computer, the fake sites, the clip's server, the capture's listener) run each in a
     session of its own, stopped whole as it ends (TERM, then KILL after 5 s), and the folders it made are removed. An
     emulator left by a run that was SIGKILLed, or by a script older than this, reads as someone else's to every later
-    caller and stays up until stop-all.sh runs.
+    caller and stays up until stop-all.sh runs; such a run leaves its test computers and servers running too, which
+    stop-all.sh doesn't look for (its header says so).
   - `android/scripts/stop-all.sh`, at a task's end: every pool emulator whose lock is free (one another caller holds
     is left), and the adb server only when no device is listed, in any state, and no caller holds a pool lock, a line
     for each thing stopped or left (a reader gone, `| head`, cuts none of it short); this user's processes alone,

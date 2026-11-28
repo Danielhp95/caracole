@@ -94,7 +94,8 @@ class YouTubeAuto(
      * ([Ended.left]), stopped for a reason that passes by itself: [MOST_S] or a metered network [AGAIN_SOON] on
      * (the work's own constraint waits for Wi-Fi), a full queue [AGAIN_QUEUE_FULL], a cooldown its end and fewer than
      * [LEAST_RUNS] runs the moment two are free again (DayBudget.freesAt), each [AGAIN_SOON] after. Never for a song
-     * the pass tried (its job's failure waits for the next lookup that notes it, or the daily pass), nor for the
+     * this pass tried (its job's failure waits for the next lookup that notes it, or the daily pass; a later pass may
+     * try a failed song again, bounded by `give_up_after` and the day's budget), nor for the
      * switch off, the route not offered, out of date or overrides.toml unreadable. On a paired phone there is no
      * daily pass, so without this the songs left would wait for the next lookup that finds no sheet. */
     fun again(ended: Ended): Duration? {

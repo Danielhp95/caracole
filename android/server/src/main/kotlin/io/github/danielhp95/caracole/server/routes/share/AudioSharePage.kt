@@ -49,7 +49,7 @@ internal object AudioSharePage {
         "lyrics site has them."
 
     /** Where the upload its job kept is shown again (Back from the Journal after Make sheet): [AudioShareView.kept]. */
-    const val KEPT = "This file is now the audio of {song}: the Journal shows its sheet made from it."
+    const val KEPT = "This file is now the audio of {song}: the Journal says how its sheet goes."
 
     /** The Journal, where no job of the upload is listed any more. */
     const val JOURNAL = "/#tab=requests"

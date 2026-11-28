@@ -146,6 +146,26 @@ class LyricsPickYouTubeAudioTest {
                     assertEquals(video.id, record.video?.id, "the record keeps its video")
                 }
                 assertFalse(audio.exists(), "the video's audio file is deleted")
+                // The same audio back (a sheet of it already made: the pick has nothing to hear), picked again: the
+                // sheet being up to date lets the video's audio go too, as the keep path does.
+                audio.writeBytes(ByteArray(64))
+                database.writeBlocking { db ->
+                    db.execute("UPDATE songs SET audio_path = ?, audio_mtime = autochords_mtime", audio.path)
+                    Records.save(db, 1L, Records.load(db, 1L).copy(audio = audio.path))
+                    assertNotNull(YouTubeAudio.youtubeAudio(db, Songs.byId(db, 1L)!!), "its audio is YouTube's again")
+                }
+                heardFrom = null
+                val again = Told()
+                runBlocking {
+                    LyricsRunner(parts, chords, AudioStore(state, { _, _ -> error("no file examined") })).run(
+                        JobCommands.lyricsPickSteps("Nick Cani - Vikingos veganos", "megalobiz:5001").single().args, again)
+                }
+                assertNull(heardFrom, "nothing was heard again: ${again.details}")
+                assertEquals("done", again.states["chords"], "${again.details}")
+                database.read { db ->
+                    assertNull(Songs.byId(db, 1L)!!.audioPath, "the video's audio is let go on the up-to-date path too")
+                }
+                assertFalse(audio.exists(), "the video's audio file is deleted again")
             }
         } finally {
             scope.cancel()

@@ -343,7 +343,7 @@ start_server() {
 # Every server's session: TERM, up to 5 s for it to end, then KILL.
 stop_servers() {
     local sid t up
-    for sid in "${servers[@]:-}"; do [ -n "$sid" ] && kill -TERM -- "-$sid" 2>/dev/null; done
+    for sid in "${servers[@]:-}"; do [ -n "$sid" ] && pkill -TERM -s "$sid" 2>/dev/null; done
     for ((t = 0; t < 50; t++)); do
         up=0
         for sid in "${servers[@]:-}"; do running_in "$sid" && up=1; done
@@ -352,7 +352,7 @@ stop_servers() {
     done
     for sid in "${servers[@]:-}"; do
         running_in "$sid" || continue
-        kill -KILL -- "-$sid" 2>/dev/null
+        pkill -KILL -s "$sid" 2>/dev/null
         echo "device-test.sh: a server it started (session $sid) didn't stop on TERM: killed it" >&2
     done
 }
