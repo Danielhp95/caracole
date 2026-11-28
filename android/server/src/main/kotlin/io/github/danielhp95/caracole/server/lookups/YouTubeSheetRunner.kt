@@ -185,9 +185,7 @@ class YouTubeSheetRunner(
 
         override fun madeOfThisAudio(s: SongRow): Boolean = sheetOfVideo || super.madeOfThisAudio(s)
 
-        override fun maker(db: Db, s: SongRow, audio: File): Maker =
-            Maker(AudioRunner.MADE_ON, db.kvGet(SYNC_ID)?.ifEmpty { null }, names(), chords.runtime, null,
-                  AudioRunner.sha16(audio))
+        override fun maker(db: Db, s: SongRow, audio: File): Maker = AudioRunner.videoMaker(chords, names, db, audio)
 
         override fun source(): String? = video?.let { AutoSheet.youtubeCredit(it.title, it.channel, it.id) }
         override fun video(): JsonObject? = video?.let(Records::videoJson)
