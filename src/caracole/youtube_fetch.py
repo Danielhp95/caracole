@@ -7,7 +7,7 @@ the last 30 days. A video pasted under ``[youtube]`` in overrides.toml is used i
 a search, also for a song whose search found nothing; one pasted for a song whose audio
 came from another video replaces it; "none" never takes the song's audio from YouTube,
 and lets go of any it has. Newest first, as far as the budget goes. A song whose auto sheet another caracole made
-is none of them where no pass here would make it again (R3, ``_left_elsewhere``; R5's words aside), a video pasted
+is none of them where no pass here would make it again (R3, ``left_elsewhere``; R5's words aside), a video pasted
 for it too: a paste is no ask, where ``caracole youtube --sheet`` (R3's exception, a sheet from a video) makes it again.
 
 For each, yt-dlp (youtube.py) searches ``ytsearch8:<artist> <title>`` and ``choose``
@@ -315,7 +315,7 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
     return songs_to_buy(conn, songs, overrides, now)[0]
 
 
-def _left_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
+def left_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
     """Whether the song keeps an auto sheet another caracole made that no pass here would make again from audio this
     side took (autochords/run.py ``left_as_made_elsewhere``: R3, but for words heard here, R5): its audio would be
     for nothing."""
@@ -329,7 +329,7 @@ def _left_elsewhere(conn: sqlite3.Connection, song: Song) -> bool:
 def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
     after the others, so they never hold up the rest (see the module docstring). A song whose
-    auto sheet another caracole made, which no pass here would make again (``_left_elsewhere``),
+    auto sheet another caracole made, which no pass here would make again (``left_elsewhere``),
     is none of them."""
     return [song for song, _ in _due(conn, overrides, now)]
 
@@ -359,7 +359,7 @@ def _due(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[
                 due.append(song)
         elif not _recent(record.missing_at, now):
             due.append(song)
-    due = [song for song in due if not _left_elsewhere(conn, song)]
+    due = [song for song in due if not left_elsewhere(conn, song)]
     return [(song, song.id in failed) for song in sorted(due, key=lambda s: s.id in failed)]  # stable: newest first
 
 

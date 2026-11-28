@@ -390,8 +390,9 @@ iReal Pro's forum, forums.irealpro.com (XenForo), the owner's choice of 2026-11-
   - `song_states`: where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a
     one-song card asks of its song alone.
   - `songs_for_youtube` passes over a song whose auto sheet another caracole made and no pass here would make again
-    (`_left_elsewhere`, autochords/run.py `left_as_made_elsewhere`: R3), unless it is chords alone, no site has the
-    words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing.
+    (`left_elsewhere`, autochords/run.py `left_as_made_elsewhere`: R3), unless it is chords alone, no site has the
+    words and words heard here would replace it (R5, the words still to hear): its audio would be for nothing. `caracole youtube
+    --song` refuses such a song too (commands/youtube.py `_one_song`, `MADE_THERE`), pointing at `--sheet`.
   - `phone_due(conn, overrides, now, paired=)`: the songs a phone takes the audio of by itself (its automatic pass),
     within `songs_for_youtube`: no audio of their own, no sheet at all (either side's); on a paired phone only those
     it noted (kv `youtube-wanted:<id>`, `WANTED_PREFIX`); the noted first, failures last. Held by
