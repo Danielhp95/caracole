@@ -3011,8 +3011,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     3.31.6): `libcaracole_soxr.so`, 16 KB aligned, stripped, no debug information (`-g0`), its reproducibility flags
     the CMakeLists' (§7: `-ffile-prefix-map` of the source and the binary folders, `--build-id=none`,
     `--hash-style=gnu`, `.comment` removed), `-ffp-contract=off`, every symbol but the JNI's hidden;
-    `android/scripts/native-check.sh` checks the debug APK's, and `:youtube`'s `libqjs.so` (stored and aligned or, the
-    debug build extracting its libraries, compressed; segments 16 KB aligned, stripped, no build path, its SHA-256).
+    `android/scripts/native-check.sh` checks the debug APK's, and `:youtube`'s `libqjs.so` (stored and aligned or,
+    every build extracting its libraries since Y5.1, compressed; segments 16 KB aligned, stripped, no build path, its
+    SHA-256).
   - **The decoder** (stage B1, E7): `Decoder.decode(file, into)`, audio.py `load_mono` at the file's own rate, into
     interleaved little-endian float32 written a buffer at a time, `into` deleted on any failure, every failure
     `UndecodableAudio` in words. `Decoded`: rate, frames, channels, the codec, what was trimmed, and `durationS`, the
@@ -3133,18 +3134,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   model's length) and `StagesHeapTest` (15 minutes at 48 kHz heard in a 40 MB heap, where the old one-call resample
   runs out of memory).
 - `:youtube` (Android library, stage Y0 of the phone-youtube design): yt-dlp under Chaquopy's Python, the engine and
-  its process, which no route runs yet; the app's `debugImplementation` alone until stage Y5,
-  so no release carries Python. Every piece is `youtube/pins.json`'s (Chaquopy 17.2.0, its plugin from Maven Central in
-  settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and SHA-256; QuickJS-NG's source by its
-  tag's commit and the NAR hash of its tree, never GitHub's generated archive), which android/flake.nix reads: the
-  wheels fetched fixed-output into `CARACOLE_YTDLP_WHEELS`, QuickJS-NG's tree (`fetchFromGitHub`) into
-  `CARACOLE_QUICKJS_SRC`, `python3.13` on PATH as Chaquopy's `buildPython`, a build without any of them failing, naming
-  it (in `checkEngine`, which `:youtube`'s Chaquopy, CMake and test tasks run first, so another module builds without
-  them); pip `--no-index --no-deps` from that folder alone. `caracole_ytdlp.py`: `version()`, `run(argv, out_path,
-  err_path)` (`yt_dlp.main`, `sys.stdout` and `sys.stderr` line-buffered into the files, never fds 1 and 2; one run a
-  process; `SystemExit` its status, any other Exception its traceback in the err file and 1, never raised). `qjs`,
-  QuickJS-NG's command (MIT), is youtube/native/CMakeLists.txt's: upstream's `qjs_exe` sources (`gen/`'s committed
-  bytecode, no host `qjsc` step) by the NDK for both ABIs, libsoxr's reproducibility flags, 16 KB pages, a PIE
+  its process; an `implementation` of both builds since Y5.1, the release's Python, Chaquopy's assets and `libqjs.so`
+  for arm64-v8a alone (`releaseYoutubeAbis`, `DropPythonAbis`). Every piece is `youtube/pins.json`'s (Chaquopy 17.2.0,
+  its plugin from Maven Central in settings.gradle.kts; Python 3.13; the yt-dlp and yt-dlp-ejs wheels by URL and
+  SHA-256; QuickJS-NG's source by its tag's commit and the NAR hash of its tree, never GitHub's generated archive),
+  which android/flake.nix reads: the wheels fetched fixed-output into `CARACOLE_YTDLP_WHEELS`, QuickJS-NG's tree
+  (`fetchFromGitHub`) into `CARACOLE_QUICKJS_SRC`, `python3.13` on PATH as Chaquopy's `buildPython`, a build without any
+  of them failing, naming it (in `checkEngine`, which `:youtube`'s Chaquopy, CMake and test tasks run first, so another
+  module builds without them); pip `--no-index --no-deps` from that folder alone. `caracole_ytdlp.py`: `version()`,
+  `run(argv, out_path, err_path)` (`yt_dlp.main`, `sys.stdout` and `sys.stderr` line-buffered into the files, never fds
+  1 and 2; one run a process; `SystemExit` its status, any other Exception its traceback in the err file and 1, never
+  raised). `qjs`, QuickJS-NG's command (MIT), is youtube/native/CMakeLists.txt's: upstream's `qjs_exe` sources (`gen/`'s
+  committed bytecode, no host `qjsc` step) by the NDK for both ABIs, libsoxr's reproducibility flags, 16 KB pages, a PIE
   executable named `libqjs.so`, run from the app's native library folder (`Qjs.path(context)`), which needs
   `useLegacyPackaging`, the debug variants' alone (app/build.gradle.kts, and the module's test APK): every native
   library then compressed in the APK and extracted at install (21.0 MB more installed on arm64); yt-dlp is told of it
@@ -3232,11 +3233,11 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     `Caracole.youtubeForTests` is set (the engine's gate, readiness and folder kept: YouTubeEndToEndTest's yt-dlp of
     the committed clip, `device-test.sh --models --sites chords YouTubeEndToEndTest`: Ready, "chords over the lyrics",
     requests LRCLIB's and its own, the audio gone after). Settings' YouTube audio row (server's `YouTubeRow`, the
-    design's §7, `BuildConfig.YTDLP_VERSION` pins.json's): no row without an engine (a release), whatever
-    `youtubeProblem` says; else "Off (the computer's settings)", "Needs the chord models", "Cooling down until …",
-    "Out of date: …" (kv `youtube-outdated` of this version), or "On · yt-dlp 2026.11.23 · N runs in the last 24 hours"
-    (core.youtube's `DayBudget.runs`, the phone's day's one count: a rolling 24 hours of `events` of `youtube` that
-    ran, ok, error or blocked, never budget; no limit said); a read that fails said in the row and logged;
+    design's §7, `BuildConfig.YTDLP_VERSION` pins.json's): no row without an engine (an x86_64 phone of the release),
+    whatever `youtubeProblem` says; else "Off (the computer's settings)", "Needs the chord models", "Cooling down
+    until …", "Out of date: …" (kv `youtube-outdated` of this version), or "On · yt-dlp 2026.11.23 · N runs in the last
+    24 hours" (core.youtube's `DayBudget.runs`, the phone's day's one count: a rolling 24 hours of `events` of `youtube`
+    that ran, ok, error or blocked, never budget; no limit said); a read that fails said in the row and logged;
     YouTubeRowTest on the JVM.
     `process()` is a `ProcessYtDlp`, core's `YtDlpProcess` over `YtDlpClient`, a client of its own a run, closed with
     it: the argv the runner built, its folders read off the templates; `Ran` its exit, stdout and stderr (its first 64
@@ -5454,13 +5455,13 @@ picks one).
   computer route"". The exception holds on the phone on the computer's terms: the same arguments and block patterns,
   read from the corpus's `data/caracole/youtube/youtube.json` (never retyped), and the same budget and pauses, counted
   on the phone apart (Two caracoles, each its own politeness, below). yt-dlp, its challenge scripts and QuickJS-NG are
-  pinned in the APK (`android/youtube/pins.json`) and run in the app's `:youtube` process, in the debug build alone
-  until the owner's gate (the phone-youtube design's Y5); nothing updates itself, and a fix comes with a caracole
-  release (`android/scripts/bump-ytdlp.sh`). yt-dlp presents itself as its default clients do (an official app's: a
-  TV's, a Vision Pro's); nothing solves BotGuard or mints a PO token. Every run is given the app's loopback gate
-  (`HostGate`) as its `--proxy` and is refused without it (`YtDlpService`); the gate allows YouTube's own hosts and
-  refuses Google's attestation host by name, and the app's bytes are measured against the gate's: a check and a
-  measurement, not a wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. A pasted video's
+  pinned in the APK (`android/youtube/pins.json`) and run in the app's `:youtube` process, in both builds, the release's
+  on an arm64 phone alone (an x86_64 one says "this phone's caracole has no yt-dlp"); nothing updates itself, and a fix
+  comes with a caracole release (`android/scripts/bump-ytdlp.sh`). yt-dlp presents itself as its default clients do (an
+  official app's: a TV's, a Vision Pro's); nothing solves BotGuard or mints a PO token. Every run is given the app's
+  loopback gate (`HostGate`) as its `--proxy` and is refused without it (`YtDlpService`); the gate allows YouTube's own
+  hosts and refuses Google's attestation host by name, and the app's bytes are measured against the gate's: a check and
+  a measurement, not a wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. A pasted video's
   title and thumbnail are read as it is pasted (`YouTubeVideoRunner`); nothing is downloaded before the owner asks, for
   a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), on any network, but by the
   automatic pass below.

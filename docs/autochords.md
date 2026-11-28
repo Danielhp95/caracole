@@ -126,8 +126,8 @@ never leaves the phone: no audio is sent anywhere to make the sheet, and the fil
 synced. The sheet you sync names the file, its full path included, and goes only to your own other caracole, which
 keeps it, unless it hears the words itself where every lyrics site missed (above).
 
-The debug build also makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the same models:
-the lyrics sites first, then the chords ([the phone](phone.md#a-sheet-from-a-youtube-video-debug-build)).
+On an arm64 phone the app also makes a sheet from a YouTube video you paste or share, with its own yt-dlp and the same
+models: the lyrics sites first, then the chords ([the phone](phone.md#a-sheet-from-a-youtube-video)).
 
 ## The models for the phone
 

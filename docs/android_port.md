@@ -34,7 +34,7 @@ The sync protocol it builds on is designed in
   checked by the Kotlin one, holds the two together.
 - **What stays on the computer:** the nightly run, building the site indexes, ChordPro's PDFs and words heard from the
   audio. Chords from an audio file came later, on the phone too ([below](#built-chords-from-audio)), and a sheet from
-  a YouTube video, in the debug build alone for now ([below](#built-a-sheet-from-a-youtube-video-debug-build)).
+  a YouTube video, in the release for arm64 phones ([below](#built-a-sheet-from-a-youtube-video)).
 - **The first useful milestone is small.** The phone searches the indexes with the computer off, and syncs songs
   both ways. Lookups and the page builder come after.
 
@@ -403,7 +403,7 @@ through `CorpusOnDeviceTest`, under Android's runtime (AGENTS.md, "android/", ha
 **What is left:**
 
 - YouTube's first video for a search: its route says so ("…: not on the phone yet."); a sheet from a video and a
-  pasted video are built in the debug build ([below](#built-a-sheet-from-a-youtube-video-debug-build));
+  pasted video are built ([below](#built-a-sheet-from-a-youtube-video));
 - caracole serve's lookup page (`GET /lookup`): the library page's search does its work on the phone;
 - ChordPro's PDFs, the nightly run, building the indexes, Music/ and the to-do page: the computer's;
 - a score's MusicXML header read on the phone (a score is placed by its name alone);
@@ -431,7 +431,7 @@ vocals and Whisper stay the computer's.
 - The release carries the models' runtime, ONNX Runtime 1.27.1 built from its source, for arm64 phones alone (stage
   S); a debug build for the emulator's x86_64 too.
 
-### Built: a sheet from a YouTube video (debug build)
+### Built: a sheet from a YouTube video
 
 Built on 2026-11-27, after the table above said no: the phone runs yt-dlp itself, in Python (Chaquopy) inside the
 app's `:youtube` process, with QuickJS-NG for YouTube's challenges and every run through the app's loopback gate

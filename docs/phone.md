@@ -84,16 +84,16 @@ something reads the same on both: "Shared · 1 change left as it was", its Outpu
   or Shazam to look it up, or a Guitar Pro file or score to file under its song.
 - Backups, daily and before each sync (Settings › Backups).
 - Pinch to change the text size.
-- In the debug build, a search with no sheet on the sites suggests YouTube's first video, as the
+- On an arm64 phone, a search with no sheet on the sites suggests YouTube's first video, as the
   computer's page does, on Wi-Fi only: its row fills the request form, and nothing goes until you
   send it.
 
-## A sheet from a YouTube video (debug build)
+## A sheet from a YouTube video
 
-A song no site has chords for can get a sheet made from a YouTube video, on the phone itself.
-For now this is in the [debug
-build](../android/README.md#a-sheet-from-a-youtube-video-debug-build) alone, and it needs the
-chord models on the phone: Settings › **Chords from audio** downloads them.
+A song no site has chords for can get a sheet made from a YouTube video, on the phone itself
+([more](../android/README.md#a-sheet-from-a-youtube-video)). It needs an arm64 phone (on any other
+the app says "this phone's caracole has no yt-dlp") and the chord models: Settings › **Chords from
+audio** downloads them.
 
 Paste the video into the request form's YouTube field, or into a song's card and tap **Make
 sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone
@@ -103,7 +103,7 @@ keeps the sheet and deletes the audio. It works on Wi-Fi or mobile data.
 The phone also does it by itself, on Wi-Fi with the battery not low: a few minutes after a lookup
 finds no sheet on the sites, and once a day while charging on a phone that hasn't synced with a
 computer in 14 days. It takes only songs with no sheet at all, whose sites were asked, and stops at a
-block, near the day's limit of runs, or after 8 minutes. Settings › **Find audio on YouTube by
+block, near the day's limit of 50 runs, or after 8 minutes. Settings › **Find audio on YouTube by
 itself** turns that off.
 
 Settings › **YouTube audio** says whether it can run, and how many of the day's runs of yt-dlp
@@ -115,8 +115,8 @@ sync.
 ## What stays on the computer
 
 The nightly run, building the site indexes, hearing the words of a song, PDF files and iReal Pro
-charts, and, but for the debug build's sheet from a YouTube video, YouTube. A song you add on the
-phone without fetching it is picked up by the computer's next nightly run, after a sync.
+charts. A song you add on the phone without fetching it is picked up by the computer's next
+nightly run, after a sync.
 
 | | Computer | Phone |
 |---|---|---|
@@ -127,7 +127,7 @@ phone without fetching it is picked up by the computer's next nightly run, after
 | Sheets, songbooks, versions, Guitar Pro | Yes | Yes |
 | PDF files | Yes | No, prints instead |
 | Chords from audio | Optional | From a file you give it (an arm64 phone) |
-| YouTube | Optional | Debug build only, a sheet from a video |
+| YouTube | Optional | A sheet from a video (an arm64 phone) |
 | Words heard from the audio | Optional | No |
 | iReal Pro charts | Yes | No |
 | Watch your `Music/` and `_inbox/` folders | Yes | No, share files to the app |

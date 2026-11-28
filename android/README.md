@@ -137,7 +137,7 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    repository, github.com/Danielhp95/caracole. It carries the app's yt-dlp too (`:youtube`: Chaquopy's Python, yt-dlp,
    `libqjs.so`), for arm64-v8a alone (`releaseYoutubeAbis`: Python's x86_64 libraries and Chaquopy's x86_64 assets left
    out, `DropPythonAbis`), with its notices under `licenses/youtube/`
-   ([below](#youtube-on-the-phone-the-engine-debug-build)), and extracts every native library at install
+   ([below](#youtube-on-the-phone-the-engine)), and extracts every native library at install
    (`useLegacyPackaging`, so Android runs qjs). That makes the release 28.8 MB, 9.3 MB more than chords alone (19.6 MB),
    and 55.6 MB installed on an arm64 phone (its 26.8 MB of libraries extracted beside the APK), 36.0 MB more (34.4 MiB);
    Chaquopy unpacks its standard library into the app's files at Python's first start, on top. Two builds of the same
@@ -154,8 +154,10 @@ A release is a signed APK in the F-Droid repository at `docs/fdroid/`, which Git
    that signed release once on an arm64 phone (`adb install -r --user 0 …/app-release.apk`, over F-Droid's own: the
    same key), download the models in Settings › Chords from audio and make one song's sheet from an audio file. The
    release's R8 output and its arm64 libraries run nowhere else before it is published (the emulator takes debug
-   builds alone, the Chords bench is a debug build's). Its yt-dlp likewise: paste one video and make its sheet, on
-   Wi-Fi, within the day's runs.
+   builds alone, the Chords bench is a debug build's). Its yt-dlp likewise, before the first release that carries it
+   and again whenever `youtube/pins.json` or `:youtube` changes: paste one video and take it to Ready on Wi-Fi, and the
+   next day read in the Journal one sheet the phone made by itself (after a lookup found no sheet on the sites, or its
+   daily pass). Both fit in the day's 50 runs.
 4. Add it to the repository and sign the index (the repository's own key and its passwords are
    `docs/fdroid/keystore.p12` and `docs/fdroid/config.yml`, kept out of git):
 
@@ -253,8 +255,8 @@ open in the browser, and so does a link to caracole serve.
 What needs a network: looking songs up, which asks the sites from the phone itself ([Lookups on the
 phone](#lookups-on-the-phone)) or a sheet's other version from Ultimate Guitar, and a sync with the computer. Making
 a songbook, Export PDF (which prints) and Make this my version, a backup, and filing a shared file all work with
-none. A sheet from a YouTube video needs a network too, and the debug build ([A sheet from a YouTube
-video](#a-sheet-from-a-youtube-video-debug-build)). What isn't on the phone at all says so ("…: not on the phone
+none. A sheet from a YouTube video needs a network too, and an arm64 phone ([A sheet from a YouTube
+video](#a-sheet-from-a-youtube-video)). What isn't on the phone at all says so ("…: not on the phone
 yet."): YouTube's suggested video for a search, and caracole serve's lookup page (the library page's search does its
 work). Use caracole serve in a browser for those.
 
@@ -747,8 +749,8 @@ opens Edit. A link shared again is read from the cache, with no request. Each se
 `[providers.spotify] enabled = false` (or `itunes`, `tidal`, `youtube-oembed`) in caracole.toml, which the phone takes
 at its next sync. Deezer's shares carry the song's names; a Navidrome or Subsonic link is never asked.
 
-A YouTube video shared to a debug build that makes sheets from YouTube also offers **Make its sheet from this video**
-for the song it names ([A sheet from a YouTube video](#a-sheet-from-a-youtube-video-debug-build)). Nothing downloads
+A YouTube video shared to a phone that makes sheets from YouTube (an arm64 phone) also offers **Make its sheet from
+this video** for the song it names ([A sheet from a YouTube video](#a-sheet-from-a-youtube-video)). Nothing downloads
 before you press it.
 
 **To see what an app sends**, connect the phone with adb and run `adb logcat -s caracole-share` while you share.
@@ -1215,7 +1217,7 @@ songs (B1) button runs it.
    WCSR and F against each threshold, `failures`, `pass`, the samples and frames each model read beside the
    computer's, `frames_differ` and where, `seconds`, `rtf`, `stages_seconds`, `ml_peak_mb`); `over_all` (`pass`,
    each score's least and its mean by length, `rtf_max`, `ml_peak_mb_max`); `unmatched`; and `pass`.
-## YouTube on the phone: the engine (debug build)
+## YouTube on the phone: the engine
 
 A song's audio from YouTube on the phone runs yt-dlp itself, in Python, inside the app: `:youtube`, Chaquopy's Python
 3.13 with yt-dlp and yt-dlp-ejs, linked into both builds (stage Y5.1), the release's for arm64-v8a alone: an x86_64
@@ -1309,7 +1311,7 @@ meriyah, ISC, and astring, MIT) and QuickJS-NG's. Setuptools' (MIT) and pyelftoo
 bootstrap beside their code. The app's `NoticesTest` holds each to its source, and (`gradle :app:apkScan`,
 release-check.sh's) both APKs to that folder.
 
-## A sheet from a YouTube video (debug build)
+## A sheet from a YouTube video
 
 Paste a video into the library page's request form (its YouTube field), or into a song card's From a YouTube video
 and press Make sheet, or share a YouTube link to the app and press Make its sheet from this video: the phone takes the
