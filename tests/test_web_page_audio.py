@@ -247,12 +247,15 @@ def test_a_file_chosen_uploads_with_the_token_and_shows_its_guess(able, live, br
 
 
 @pytest.mark.parametrize("member, hint, title", [
-    ({**CANNOT, "ok": True, "why": None, "time": "up to half an hour"},
+    ({**CANNOT, "ok": True, "why": None, "hears": True, "time": "up to half an hour"},
      HEARD_HINT + "A few minutes, up to half an hour when they're heard.", HEARD_TITLE),
-    ({**CANNOT, "ok": True, "why": None, "time": "a couple of minutes"}, HEARD_HINT + "A few minutes.", HEARD_TITLE),
+    ({**CANNOT, "ok": True, "why": None, "hears": True, "time": "a couple of minutes"},
+     HEARD_HINT + "A few minutes.", HEARD_TITLE),
+    ({**CANNOT, "ok": True, "why": None, "hears": False, "time": "a couple of minutes"},
+     SITES_ONLY_HINT, SITES_ONLY_TITLE),
     (CANNOT, SITES_ONLY_HINT, SITES_ONLY_TITLE),
     (None, SITES_ONLY_HINT, SITES_ONLY_TITLE),
-], ids=["cpu", "gpu", "cannot", "no-member"])
+], ids=["cpu", "gpu", "transcribe-off", "cannot", "no-member"])
 def test_the_dialog_and_the_cards_entry_say_heard_only_where_this_caracole_transcribes(able, live, browser, tmp_path,
                                                                                        monkeypatch, member, hint,
                                                                                        title):

@@ -3024,7 +3024,7 @@ song keeps its own) and press **Make sheet**: a line under the bar, or the song'
 it goes. **Cancel** or Escape deletes the file sent; a refusal says why, with **Choose another
 file**, and a file dropped on the dialog is a new choice. Of several files only the first is used,
 and the dialog says so. Its line says the lyrics come from the lyrics sites, and are heard from the file where
-none has them only where this caracole transcribes. A file dropped anywhere else on the page is never opened in its place. The
+none has them only where this caracole transcribes and `[autochords] transcribe` is on. A file dropped anywhere else on the page is never opened in its place. The
 file on disk has no +.
 
 The file goes up in one

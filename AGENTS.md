@@ -2148,7 +2148,8 @@ It is rows.js's, shared by both pages:
   - Offered only on the served page, from served-only data: library_page.py `server.transcribe` (`transcribe_member`:
     `ok`, `why`, `songs`, `nothing` and `unsung` (Transcribe anyway, heard nothing or the owner's mark, its hint "You
     said it isn't sung.") and `transcribed` (Not sung: chords only), all four `transcript.offers` when `ok`, `time`
-    `transcribe_time` when `ok`, else `[]` and `""`; the phone's LibraryPage.kt the same shape), the cards' own data
+    `transcribe_time` when `ok`, else `[]` and `""`, and `hears`, `ok` with `[autochords] transcribe` on, which the
+    dialogs' lines read; the phone's LibraryPage.kt the same shape, `hears` false), the cards' own data
     unchanged (the phone writes the same cards, and its member says it can't); library.js `transcribeOffer` (and
     `overrideOffer`, Transcribe anyway or Not sung) on a card, and requests.js on the newest request that ended Ready of
     a song offered one (matched by `display`, the name a song's requests go by, none while a request of it waits or
@@ -2201,7 +2202,7 @@ It is rows.js's, shared by both pages:
     415), its count `aria-hidden` beside the live region, which says only its start and its outcome; a file past
     `limit` refused unsent in `too_big`'s words; of several files the first, the dialog saying so; a file dropped on
     the open dialog a new choice; the guess in Artist and Title, the library's song and what the file replaces; its
-    hint, and a card's entry's title, saying the words heard from the file only where `server.transcribe.ok` (never
+    hint, and a card's entry's title, saying the words heard from the file only where `server.transcribe.hears` (never
     the phone); Make sheet through `sendRequest`, the request form's own path (the line under the bar, `track`); Cancel or
     Escape `POST /audio/drop`. A card's Sheet from an audio file… (not ignored, no human sheet by its `files`, a
     purchase or YouTube's audio no matter: the cards' data unchanged) opens it for that song, its names not to edit,
@@ -4764,7 +4765,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   …"); form routes, so App's cross-origin check and token hold. `server.youtube` `{ok, why, off}` and the request
   form's YouTube field where ok (`ServerControls.youtube`: `Phone.youtubeOffered()`, the design's §5.6, YouTube
   cooling down after the problem's reasons, `YouTubeRoutes.COOLING`), its line "its lyrics from the lyrics sites"
-  (library_page.py's `_request_form(hears=)`: the lyrics heard from the video only where `server.transcribe.ok`,
+  (library_page.py's `_request_form(hears=)`: the lyrics heard from the video only where `server.transcribe.hears`,
   never on the phone, whose `transcribe.why` is "No lyrics site has its words. The computer hears them from its own
   audio of this song.", `LibraryPage.TRANSCRIBE_PROBLEM`; library.js says so in Make sheet's title too). vectors/web/youtube_routes.jsonl (`WebReplay.youtubeRoutes`,
   YouTubeRoutesReplay: each answer's member order too, the song the job adds against wanted.txt's line there),

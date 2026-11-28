@@ -506,14 +506,18 @@ def transcribe_member(conn: sqlite3.Connection, cfg: Config, overrides: Override
     ``youtube_fetch.transcribe_reason``), the songs offered one (``songs``), those offered Transcribe anyway, heard to
     have nothing sung (``nothing``) or said not sung by the owner (``unsung``), and those with a transcript kept,
     offered Not sung: chords only (``transcribed``), all four ``transcript.offers``, read with no model; and how long
-    one takes here (``time``, ``transcribe_time``); none offered and no time where it can't. The phone's
+    one takes here (``time``, ``transcribe_time``); none offered and no time where it can't; and whether a sheet from
+    a video or an audio file hears its words (``hears``: this caracole transcribes and ``[autochords] transcribe`` is
+    on, as youtube_sheet.py's ``_why_not_heard`` answers), which the dialogs' lines say. The phone's
     (LibraryPage.kt) is the same shape."""
     from caracole.autochords.transcript import offers
 
     why = transcribe_reason(cfg)
     if why is not None:
-        return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": ""}
-    return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg)}
+        return {"ok": False, "why": why, "songs": [], "nothing": [], "unsung": [], "transcribed": [], "time": "",
+                "hears": False}
+    return {"ok": True, "why": None, **offers(conn, cfg, overrides), "time": transcribe_time(cfg),
+            "hears": cfg.autochords.transcribe}
 
 
 def audio_member(cfg: Config) -> dict[str, Any]:

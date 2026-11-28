@@ -158,7 +158,7 @@ def server_member(controls: WebControls) -> dict[str, Any]:
             "removing": sorted(controls.removing), "jobs": list(controls.jobs), "guitar": False,
             "youtube": {"ok": False, "why": YOUTUBE_PROBLEM, "off": True},
             "transcribe": {"ok": False, "why": TRANSCRIBE_PROBLEM, "songs": [], "nothing": [], "unsung": [],
-                           "transcribed": [], "time": ""},
+                           "transcribed": [], "time": "", "hears": False},
             "audio": {"ok": False, "why": AUDIO_PROBLEM, "limit": 0, "too_big": ""},
             "lyricsSearch": controls.lyrics_search}
 

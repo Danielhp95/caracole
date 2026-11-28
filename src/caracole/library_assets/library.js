@@ -459,9 +459,10 @@
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from this video");
-    // The lyrics heard from the audio only where this caracole transcribes (``server.transcribe.ok``: never the
-    // phone); on a CPU alone, the time says so (``server.transcribe.time``).
-    const hears = Boolean(server && server.transcribe && server.transcribe.ok === true);
+    // The lyrics heard from the audio only where a sheet hears them (``server.transcribe.hears``: this caracole
+    // transcribes and [autochords] transcribe is on, never the phone); on a CPU alone, the time says so
+    // (``server.transcribe.time``).
+    const hears = Boolean(server && server.transcribe && server.transcribe.hears === true);
     const slow = hears && String(server.transcribe.time || "").indexOf("half an hour") >= 0;
     go.title = "Chords from its audio; lyrics from the lyrics sites" + (hears ? ", else heard from the audio" : "") +
       ". A few minutes." + (slow ? " (up to half an hour when they're heard)" : "");
@@ -491,8 +492,8 @@
     go.type = "button";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from an audio file");
-    // The lyrics heard from the file only where this caracole transcribes (``server.transcribe.ok``: never the phone).
-    const hears = Boolean(server && server.transcribe && server.transcribe.ok === true);
+    // The lyrics heard from the file only where a sheet hears them (``server.transcribe.hears``, never the phone).
+    const hears = Boolean(server && server.transcribe && server.transcribe.hears === true);
     go.title = "Chords from the file; lyrics from the lyrics sites" + (hears ? ", else heard from it" : "") + ".";
     go.addEventListener("click", () => openAudio(s, form, go));
     form.appendChild(go);
@@ -669,9 +670,9 @@
           for (const n of names) n.addEventListener("input", () => (make.disabled = same()));
         }
       }
-      // The lyrics heard from the file only where this caracole transcribes (never the phone); on a CPU alone, the
-      // time says so (``server.transcribe.time``).
-      const hears = Boolean(TRANSCRIBE && TRANSCRIBE.ok === true);
+      // The lyrics heard from the file only where a sheet hears them (``server.transcribe.hears``, never the phone);
+      // on a CPU alone, the time says so (``server.transcribe.time``).
+      const hears = Boolean(TRANSCRIBE && TRANSCRIBE.hears === true);
       const slow = hears && String(TRANSCRIBE.time || "").indexOf("half an hour") >= 0;
       form.appendChild(el("p", "hint", "Chords from the file; lyrics from the lyrics sites" +
         (hears ? ", else heard from it" : "") + ". " +

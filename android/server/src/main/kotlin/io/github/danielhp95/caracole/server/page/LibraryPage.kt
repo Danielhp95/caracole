@@ -96,7 +96,8 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(TRANSCRIBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
-                                               "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
+                                               "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""),
+                                               "hears" to JsonPrimitive(false))))
             put("audio", audioMember(controls.audio))
             put("lyricsSearch", JsonPrimitive(true))  // lyrics looked up under another name (LyricsRoutes)
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
