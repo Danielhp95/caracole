@@ -1455,8 +1455,8 @@ An MP3 that names no length (no Xing or VBRI header: a recorder's) is as long as
 for the chords, `caracole audio` and the lyrics sites alike; one libsndfile reads only in part is
 read through FFmpeg, with a warning naming the file. The first `caracole autochords` over every
 song after this came in (the nightly one; never a sheet made for one song) makes again, once, what
-was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it; if
-it was read short, words heard from the part read are dropped and the song is offered them again
+was made from such a file whose length was guessed wrong: its auto sheet, over the whole of it (not
+one another caracole made, which wasn't heard from your file); if it was read short, words heard from the part read are dropped and the song is offered them again
 (your own "it isn't sung" stays). Each song is a warning
 (`Artist - Title: its MP3 is 7:20 long, not the 3:56 its length was guessed at …`), the run's last
 line names them (`…; remeasured 2 whose MP3 names no length, made again: …`), and so does the to-do

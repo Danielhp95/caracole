@@ -11,8 +11,10 @@ pass; never a staged job about one song), goes through every song once, kv ``aut
 A song with no human sheet, not ignored, whose audio is such an MP3 whose guess is more than ``audio.DISAGREES_S`` off
 its frames' length (``mpeg_frames.count``: its ``guessed``, every reader's guess, against its ``seconds``):
 
-- its auto sheet, if it has one, is due again (``autochords_mtime`` cleared, so ``run._skip_reason`` finds its audio
-  new), the chords made over the whole of it, the lyrics fitted to its real length;
+- its auto sheet, if it has one this caracole made, is due again (``autochords_mtime`` cleared, so
+  ``run._skip_reason`` finds its audio new), the chords made over the whole of it, the lyrics fitted to its real
+  length; one another caracole made (sheet_lyrics.py ``auto_made_elsewhere``) wasn't heard from this file, is never
+  made again here by itself (R3, ``run.MADE_ELSEWHERE``), and is neither touched nor said made again;
 - read short (the guess below its length), its transcript (kv ``transcript:``) is dropped, and caracole's verdict that
   nothing is sung (``transcribe:none:`` by "caracole"): both heard from the part read, words.py keeping no word past
   the mix's end. The song is offered its words again (the nightly pass hears it within its cap; its card offers
@@ -39,6 +41,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from caracole.autochords.audio import DISAGREES_S
+from caracole.autochords.sheet_lyrics import auto_made_elsewhere
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get, kv_get_json, kv_set, savepoint
 from caracole.library import kept_files
@@ -76,8 +79,8 @@ def _remeasured(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Ov
         return False
     done: list[str] = []
     with savepoint(conn, "remeasure"):
-        if AUTO_SHEET in kept:
-            update_song(conn, song.id, autochords_mtime=None)
+        if AUTO_SHEET in kept and not auto_made_elsewhere(conn, song.id):  # another caracole's: never made here by
+            update_song(conn, song.id, autochords_mtime=None)              # itself (R3, run.py ``MADE_ELSEWHERE``)
             done.append("its auto sheet is made again over the whole of it")
         if found.guessed < found.seconds and _words_dropped(conn, song):
             done.append("its words heard from the part read are dropped, to be heard again whole")
