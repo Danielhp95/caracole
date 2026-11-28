@@ -16,6 +16,7 @@ import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.viewer.autochords.Relay
 import io.github.danielhp95.caracole.viewer.render.InfoJson
 import io.github.danielhp95.caracole.viewer.render.OwnVersions
 import io.github.danielhp95.caracole.viewer.render.PhoneRender
@@ -41,7 +42,7 @@ import java.nio.file.Files
  * - [lyricsKeys]: PlainLyrics.lyricsKey is sheet_lyrics.lyrics_key, text for text (the key both sides write into an
  *   auto sheet's version, so into the song's unit);
  * - [facts]: each fixture library's first pass as far as no page is built: the lyrics put on its auto sheets
- *   (PlainLyrics), the own versions as they play now (OwnVersions), then each song's info.json (InfoJson) and unit's
+ *   (PlainLyrics), those that keep what was heard laid out again (Relay), the own versions as they play now (OwnVersions), then each song's info.json (InfoJson) and unit's
  *   digest as Python had them after that pass;
  * - [passes]: every step of each record, its fixture loaded into a fresh database and library folder, each render
  *   PhoneRender.render of its songs (every song for null; the record's build, `corpus-build`): the failures, every
@@ -103,6 +104,7 @@ object RenderReplay : AreaReplay {
                 database.writeBlocking { db ->
                     LibraryStore(library).ensureCurrentKeys(db)
                     PlainLyrics.onto(db, library, Overrides.read(db), only = ids(db, first))
+                    Relay.onto(db, library, Overrides.read(db), only = ids(db, first))
                     OwnVersions.upgraded(db, library, Overrides.read(db))
                     for ((path, text) in out.getValue("info").jsonObject) {
                         val song = Songs.list(db).firstOrNull { infoOf(library, it) == path }
@@ -193,6 +195,7 @@ object RenderReplay : AreaReplay {
                 misses.check(mine == text) { "$case: kv $key is\n$mine\nPython's\n$text" }
             }
             checkUnits(db, case, out, misses)
+            checkRaws(db, case, out, misses)
             for ((path, text) in out.getValue("info").jsonObject) {
                 val mine = File(library, path).takeIf { it.isFile }?.readText()
                 misses.check(mine == text.jsonPrimitive.content) { "$case: $path is\n$mine\nPython's\n${text.jsonPrimitive.content}" }
@@ -206,6 +209,22 @@ object RenderReplay : AreaReplay {
         misses.check(got.keys == want.keys) { "$case: units ${got.keys}, Python's ${want.keys}" }
         for ((unit, digest) in want) {
             misses.check(got[unit] == digest.jsonPrimitive.content) { "$case: $unit is ${got[unit]}, Python's $digest" }
+        }
+    }
+
+    /** Each auto version's raw text by its SHA-256 (16 hex), where the record holds them (its `raws`): the units'
+     * canonical digests are blind to a raw's member order, which says whether the plain lyrics went on a heard sheet
+     * before its re-lay (PlainLyrics, then Relay) or after. */
+    private fun checkRaws(db: Db, case: String, out: JsonObject, misses: Misses) {
+        val want = out["raws"]?.jsonObject ?: return
+        val got = db.query("SELECT song_id, tab_id, raw FROM versions WHERE provider = 'auto' ORDER BY song_id, tab_id") {
+            "${it.long(0)}/${it.text(1)}" to Canonical.sha256Hex(it.text(2)!!.toByteArray(Charsets.UTF_8)).take(16)
+        }.toMap()
+        misses.check(got.keys == want.keys) { "$case: auto versions ${got.keys}, Python's ${want.keys}" }
+        for ((version, digest) in want) {
+            misses.check(got[version] == digest.jsonPrimitive.content) {
+                "$case: auto version $version's raw is ${got[version]}, Python's $digest"
+            }
         }
     }
 

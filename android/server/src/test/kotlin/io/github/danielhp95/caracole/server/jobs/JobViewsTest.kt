@@ -567,6 +567,67 @@ class JobViewsTest {
         assertEquals("catalogues", JobCommands.kindOf("catalogues:", emptyList(), listOf("catalogues")))
     }
 
+    /** The chord models' job (§8.4): its line in every state, the kind's words as ModelsRunner fills them. */
+    @Test fun theChordModelsSayWhatTheyDoTheirSizeAndWhyNot() = runTest {
+        val queue = queue()
+        val kind = PhoneKinds.MODELS
+        assertEquals(kind, PhoneKinds.ALL["models"])
+        val blocker = CompletableDeferred<Unit>()
+        val held = queue.submit(JobSpec("Hold", "hold", "add", emptyList()) { blocker.await() }).first
+        val step = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        val job = phoneJob(queue, kind, "") { context ->
+            context.stage("models", "running")
+            step.await()
+            context.stage("models", "running", PhoneKinds.fill(kind.running, "doing" to "Downloading the chord models · 21 of 54 MB"))
+            gate.await()
+            context.stage("models", "done", PhoneKinds.fill(kind.done, "size" to "54 MB"))
+        }
+        runCurrent()
+        assertEquals(Line("queued", "Queued · 1 request ahead…"), JobViews.line(queue.job(job.id)!!, 1))
+        blocker.complete(Unit)
+        runCurrent()
+        assertEquals(Job.DONE, queue.job(held.id)!!.state)
+        assertEquals(Line("running", "Chord models…"), JobViews.line(queue.job(job.id)!!))  // nothing filled yet
+        step.complete(Unit)
+        runCurrent()
+        assertEquals(Line("running", "Downloading the chord models · 21 of 54 MB"), JobViews.line(queue.job(job.id)!!))
+        // A request queued behind it says what it waits for, the line's words.
+        val behind = queue.submit(JobSpec("Add q", "q", "add", emptyList()) {}).first
+        assertEquals("Queued · after downloading the chord models · 21 of 54 MB",
+                     JobViews.line(queue.job(behind.id)!!, 1, behind = JobViews.behind(queue.job(behind.id)!!,
+                                                                                       queue.snapshot())).text)
+        gate.complete(Unit)
+        runCurrent()
+        val over = queue.job(job.id)!!
+        assertEquals(Line("ready", "Chord models ready · 54 MB"), JobViews.line(over))
+        assertEquals(JsonPrimitive("models"), JobViews.view(over, queue)["kind"])
+        assertEquals(listOf(Chip("Chord models", "done")), Outcomes.steps(over))
+        // Two waits: a metered network's (the catalogues' words) and GitHub's hour spent (its time).
+        val metered = phoneJob(queue, kind, "go") { context ->
+            context.stage("models", "done", PhoneKinds.fill(kind.otherwise!!, "size" to "54 MB"))
+        }
+        val hour = "Try again after 14:05 — GitHub has answered this network's share of requests for the hour."
+        val limited = phoneJob(queue, kind, "limited") { context -> context.stage("models", "done", hour) }
+        runCurrent()
+        assertEquals(Line("waiting", "54 MB to download: waiting for your go-ahead in Settings (a metered network)",
+                          details = "#tab=requests&job=${metered.id}"), JobViews.line(queue.job(metered.id)!!))
+        assertEquals(Line("waiting", hour, details = "#tab=requests&job=${limited.id}"), JobViews.line(queue.job(limited.id)!!))
+        assertEquals(false, kind.waits("Chord models ready · 54 MB"))
+        assertEquals(false, PhoneKinds.CATALOGUES.waits(hour), "a catalogue's hour spent stays its failure")
+        val failed = phoneJob(queue, kind, "failed") { context ->
+            val line = PhoneKinds.fill(kind.failed, "why" to "This build carries no chord models.")
+            context.stage("models", "failed", line)
+            throw CommandExit(1, line)
+        }
+        runCurrent()
+        assertEquals(Line("failed", "Not downloaded: This build carries no chord models.",
+                          details = "#tab=requests&job=${failed.id}"), JobViews.line(queue.job(failed.id)!!))
+        // A job read back from the history is of its kind by its key.
+        assertEquals("models", JobCommands.kindOf("models:", emptyList(), listOf("models")))
+        assertEquals("models", JobCommands.kindOf("models:go", emptyList(), listOf("models")))
+    }
+
     @Test fun thePhonesIndexImportSaysTheComputersIndexNotAnotherCaracolesPages() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()

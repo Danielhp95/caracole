@@ -153,6 +153,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
     pyyaml
     # Whisper, for the lyrics of a song no lyrics site has (large-v3, on the GPU where there is one).
     openai-whisper
+    # export.py writes BTC and beat_this as ONNX graphs, for the phone.
+    onnx
   ];
 
   makeWrapperArgs = [

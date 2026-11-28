@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.testing
 
 import io.github.danielhp95.caracole.core.testing.AreaReplay
+import io.github.danielhp95.caracole.server.testing.replays.AudioSheetReplay
 import io.github.danielhp95.caracole.server.testing.replays.CardsReplay
 import io.github.danielhp95.caracole.server.testing.replays.ChoicesReplay
 import io.github.danielhp95.caracole.server.testing.replays.ExportReplay
@@ -20,5 +21,5 @@ import io.github.danielhp95.caracole.server.testing.replays.WebReplay
 object ServerReplays {
     val all: List<AreaReplay> = listOf(WebReplay, LibraryNameReplay, QueueReplay, JobViewsReplay, RequestsReplay,
                                        LookupRoutesReplay, CardsReplay, SongbookTabReplay, ChoicesReplay, GuitarReplay,
-                                       ExportReplay, ReviewReplay, UgLinkReplay)
+                                       ExportReplay, ReviewReplay, UgLinkReplay, AudioSheetReplay)
 }

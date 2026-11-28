@@ -69,7 +69,7 @@ _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressio
                 "ug:blocked:", "youtube:", "youtube-wanted:", "transcript:", "transcribe:none:",
                 "transcribe:unreadable:", "transcribe:failed:",
                 "sheet_versions:same:",
-                "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:")
+                "sheet_versions:yours:", "sheet_versions:unkeepable:", "lyrics-search:", "audio:name:")
 
 
 def utc_now_iso() -> str:
@@ -531,6 +531,11 @@ def _given_audio(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
     conn.execute("UPDATE songs SET audio_path = ?, audio_mtime = ? WHERE id = ?",
                  (other.audio_path, other.audio_mtime, keep.id))
     keep.audio_path, keep.audio_mtime = other.audio_path, other.audio_mtime
+    name = kv_get(conn, f"audio:name:{other.id}")  # audio_store.NAME_KEY: the name goes with its file
+    if name:
+        kv_set(conn, f"audio:name:{keep.id}", name)
+    else:
+        kv_delete(conn, f"audio:name:{keep.id}")
 
 
 def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], key: str) -> None:

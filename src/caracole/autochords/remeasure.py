@@ -25,7 +25,7 @@ its frames' length (``mpeg_frames.count``: its ``guessed``, every reader's guess
   been asked with the wrong length, its lyrics, where none were found, are asked again at the next lyrics pass
   (``lyrics_at`` cleared, a miss's re-check due; Megalobiz's miss forgotten, as it is asked with the length too;
   AZLyrics asks with none). Lyrics found are kept: their timing is fitted to the real length as the sheet is made
-  again (run.py ``_synced_for``: as they are, shifted, else the plain ones).
+  again (sheet.py ``synced_for``: as they are, shifted, else the plain ones).
 
 Each song is a WARNING naming both lengths and what was done, and the run's summary and the to-do page name them
 (run.py ``AutoStats.remeasured``); a song with a human sheet, or a file every reader agrees on, is left as it is.

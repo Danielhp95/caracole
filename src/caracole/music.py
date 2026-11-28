@@ -27,7 +27,7 @@ from rapidfuzz import fuzz
 
 from caracole.audio_store import kept_in
 from caracole.normalize import clean_title, identity_key, name_forms
-from caracole.songs import Song, list_songs, update_song
+from caracole.songs import Song, get_song, list_songs, update_song
 
 AUDIO_EXTENSIONS = (
     ".mp3", ".flac", ".m4a", ".mp4", ".aac", ".ogg", ".oga", ".opus", ".wav", ".aiff", ".aif",
@@ -276,8 +276,12 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path, *, uploads: Path | Non
     with no audio at all, or no folder, is taken for a disk that isn't there
     tonight, so nothing is unlinked. A song whose audio is a file you gave it,
     kept in ``uploads`` (audio_store.py's folder), keeps it: no purchase takes
-    an upload's place (the owner's decision of 2026-11-25).
+    an upload's place (the owner's decision of 2026-11-25). A song linked again
+    (its file moved, renamed or touched) takes what was heard of its audio with
+    it where the bytes are the same (transcript.py ``follow_audio``).
     """
+    from caracole.autochords.transcript import follow_audio
+
     stats = ScanStats()
     if not music_dir.is_dir():
         return stats
@@ -315,4 +319,5 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path, *, uploads: Path | Non
         af = next((f for f in files if str(f.path) == s.audio_path), files[0])
         if s.audio_path != str(af.path) or s.audio_mtime != af.mtime:
             update_song(conn, s.id, audio_path=str(af.path), audio_mtime=af.mtime)
+            follow_audio(conn, get_song(conn, s.id))  # what was heard of the same bytes moved or touched follows them
     return stats

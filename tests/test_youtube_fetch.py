@@ -583,3 +583,18 @@ def test_a_record_that_isnt_one_is_no_record(conn, ycfg):
     song = to_buy(conn)
     kv_set_json(conn, f"youtube:{song.id}", ["not", "a", "record"])
     assert yf.song_state(conn, song, Overrides(), NOW).state == yf.QUEUED
+
+
+@pytest.mark.slow
+def test_youtubes_audio_beside_a_sheet_another_caracole_made_waits_for_no_chords(conn, ycfg, fake):
+    # Its sheet stays another caracole's (autochords/run.py MADE_ELSEWHERE): the pages say its chords are done, never
+    # that auto-chords works them out next.
+    creep = to_buy(conn)
+    creep_results(fake)
+    run(conn, ycfg, Overrides(), songs=[get_song(conn, creep.id)])
+    assert yf.song_states(conn, Overrides(), NOW)[creep.id].state == yf.DOWNLOADED
+    auto_sheet(conn, ycfg, get_song(conn, creep.id))
+    conn.execute("UPDATE versions SET raw = json_set(raw, '$.made_by', '0f1e2d3c4b5a6978') WHERE song_id = ?",
+                 (creep.id,))
+    update_song(conn, creep.id, autochords_mtime=None)  # as a take leaves it
+    assert yf.song_states(conn, Overrides(), NOW)[creep.id].state == yf.CHORDS

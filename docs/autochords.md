@@ -18,6 +18,19 @@ proper sheet later, caracole uses that one.
 An MP3 that never says its length (a recorder's, with no Xing or VBRI header) is measured by its frames and heard
 whole, and a sheet an older caracole made from only its first part is made again once, by itself.
 
+Each sheet remembers what was heard (the chords with their times, the beats, the song's length), which caracole
+made it, from which file (its name and a hash of its bytes) and with which models. A song has one
+sheet from audio, whichever of your caracoles made it. A sheet made before this remembers none of it, and is left as
+it is.
+
+A sheet made on your other device (taken at a sync) is kept as it is: the nightly run here never makes it again, even
+from audio of the song this computer has or gets later. New words lay it out again, as below. To replace it, ask for a
+sheet here: an audio file, a video, `caracole autochords --song`, or Transcribe the lyrics. The sheet is then this
+computer's. One exception: if every lyrics site missed and this computer hears the words in its own audio, its sheet
+over them replaces a chords-only one from the other device. A copied database given a new id (`caracole peer new-id`)
+counts every sheet made before as the other caracole's. If both devices made one before a sync, the sync asks which
+to keep, and says of each who made it, from what, and over which words.
+
 Taking audio from YouTube goes against its robots.txt and its terms of service. That is your
 call. `[providers.youtube] enabled = false` in caracole.toml turns it off, and the add-on then
 works from your own files only. caracole never tries to get around a block.
@@ -27,9 +40,10 @@ More on this: [the sites caracole reads](sources.md).
 
 When a site has the lyrics, the chords go over the words. If the lyrics were timed for a
 recording of another length, caracole shifts them to fit and says so on the sheet.
-If the song's lyrics later become other words, the sheet is made again over them, once; the same
-words retimed (other times on a sheet already timed) change nothing. A sheet made before caracole kept track of its
-words isn't made again for this.
+When lyrics arrive after the sheet was made, or become other words, the sheet is laid out again over them in seconds
+from what was heard, without listening to the song again; the same words retimed (other times on a sheet already
+timed) change nothing. A sheet made before caracole kept what was heard is made again by the models instead, as
+before, and one made before caracole kept track of its words isn't made again for other words.
 
 When no site has them and the song has audio of its own (YouTube's, a purchase's or a file you gave it),
 **Transcribe the lyrics** on the song's card (or `caracole transcribe`) writes them down from the audio with Whisper.
@@ -58,6 +72,9 @@ When caracole gets it wrong, the card lets you say otherwise. A song in which no
 anyway**; one whose sheet is over its transcript has **Not sung: chords only**, which drops the words and never hears
 that audio again (a new file is heard once more).
 
+A file moved, renamed or touched is the same audio: its transcript, and these verdicts, follow its bytes. Only other
+bytes are a new file. A file touched (its time on the disk changed) still has its chords and beats worked out again.
+
 ## Install
 
 ```sh
@@ -84,4 +101,48 @@ to half an hour on a CPU and a couple of minutes on a GPU.
 | `caracole transcribe --song "Artist - Title" --force` / `--none` | It is sung after all / it isn't sung |
 | `caracole audio FILE [--song "Artist - Title"]` | Makes that song's sheet from an audio file of yours, now |
 
-None of this runs on the phone. Details: [Audio from YouTube](usage.md#audio-from-youtube).
+Details: [Audio from YouTube](usage.md#audio-from-youtube).
+
+## On the phone
+
+The Android app makes a sheet from an audio file too, on the phone itself, with no computer
+([android/README.md](../android/README.md#chords-from-audio-a-sheet-from-a-file)). It needs an arm64 phone with
+Android 13 or later and 6 GB of memory; any other says why ("no chord models for this phone's processor" on an x86_64
+one).
+
+1. In Settings › **Chords from audio**, tap **Download**. The two models, about 55 MB, come once: beat_this's from
+   this repository's `models` release on GitHub, BTC's from its authors' own repository. On mobile data it asks
+   first. **Remove** deletes them; the sheets you made stay.
+2. Tap the **+** on the library page, or a song's Sheet from an audio file…, or share an audio file to caracole from
+   another app (one at a time). Check the artist and title, then **Make sheet**.
+
+As on the computer, it asks the lyrics sites first, then works out the chords and the beats, and lays the chords over
+the words. The phone hears no words: where every lyrics site missed, the sheet is chords only, and the card says that
+the computer can hear them from its own audio of the song. A song's card can look its lyrics up under another name on
+the phone too; picking one lays the sheet out again without the models.
+
+It won't start below 15 % of battery unless the phone is charging, and it waits while the phone is too hot. Your audio
+never leaves the phone: no audio is sent anywhere to make the sheet, and the file stays in the app's own storage, never
+synced. The sheet you sync names the file, its full path included, and goes only to your own other caracole, which
+keeps it, unless it hears the words itself where every lyrics site missed (above).
+
+## The models for the phone
+
+`nix build .#chord-models` exports both models to ONNX, the format the phone runs them in.
+
+| File | Size | What it is |
+|---|---|---|
+| `btc-graph.onnx` | 1.4 MB | BTC, the chords model, without its weights |
+| `btc_model_large_voca.pt` | 12.2 MB | BTC's weights: its authors' own file, unchanged. The graph reads them from it |
+| `beat_this-final0.onnx` | 83.2 MB | beat_this, the beats model |
+| `beat_this-final0-fp16.onnx` | 42.7 MB | the same, its weights stored at half precision |
+
+caracole never republishes BTC's weights; the graph only points into its authors' file. Two builds
+give the same bytes. beat_this's graph works out its attentions one slice at a time: the same answers, to
+the bit, in about half the memory (a phone's limit is 1 GB).
+
+BTC's graph takes the raw features and normalizes them itself. Its metadata gives the mean and
+standard deviation it uses (`mean`, `std`) and the SHA-256 of the weights file it expects
+(`weights_sha256`). Check the file against that hash before running the graph. Pad the frames
+after the end of the audio with that mean, never with 0, or the chords of the last 10 seconds
+come out wrong.

@@ -17,6 +17,7 @@ import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.routes.search.Looked
 import io.github.danielhp95.caracole.server.routes.search.SearchQuery
+import io.github.danielhp95.caracole.server.routes.share.AudioSharePage
 import io.github.danielhp95.caracole.server.routes.share.SharePage
 import io.github.danielhp95.caracole.server.routes.share.ShareView
 import io.github.danielhp95.caracole.server.routes.share.SongLine
@@ -33,6 +34,11 @@ import kotlinx.serialization.json.JsonPrimitive
  *     POST /share                                    Read the link: the share's fields again (text, subject,
  *                                                    extra_title, from) with the form token, its link's service asked
  *     GET /share/cancel                              Cancel: the library page (303); the app leaves the share instead
+ *     GET /share/audio?upload=ID                     an audio file shared to the app (ShareActivity staged it), its
+ *                                                    page: the file, its guess, Make sheet (POST /audio); with no
+ *                                                    upload (`name=`: a phone that makes no sheet here), why not
+ *     POST /share/audio/cancel                       its Cancel: the upload dropped (the form token, `upload`), then
+ *                                                    /share/cancel (303), which the app takes as leaving the share
  *
  * The names come of the text (SharedText, then SongNames.readNames, the one parser of a free text), and the search
  * is /api/search's (SearchRoutes.answer: your library and the offline indexes). A text that names no song but a link
@@ -48,7 +54,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * pace, once the owner taps it.
  */
 class ShareRoutes(private val database: Database, private val search: SearchRoutes, private val csrf: String,
-                  private val libraryName: () -> String = { "" }, private val links: LinkReader = LinkReader.NONE) :
+                  private val libraryName: () -> String = { "" }, private val links: LinkReader = LinkReader.NONE,
+                  private val audio: AudioRoutes? = null) :
     RouteModule {
     /** What a shared link's service says of it ([ShareLinks.Read]): what is known with no request (the service off,
      * the cache's answer), else, when [ask], the service asked once; null for none known and none asked. [NONE] asks
@@ -72,6 +79,21 @@ class ShareRoutes(private val database: Database, private val search: SearchRout
         }),
         Route("GET", SharePage.CANCEL, "the share left: the library page",
               get = GetAnswer { Response(303, Body.Empty, mutableListOf("Location" to "/")) }),
+    ) + (audio?.let { audioRoutes(it) } ?: emptyList())
+
+    /** An audio file shared to the app: its page, and its Cancel (the chords-on-the-phone design's §8.2). */
+    private fun audioRoutes(audio: AudioRoutes): List<Route> = listOf(
+        Route("GET", AudioSharePage.PATH, "an audio file shared to the app (upload; or name): the file, its guess, " +
+                  "Make sheet", get = GetAnswer {
+            val asked = PyUrl.query(it.target)
+            val upload = field(asked, "upload").ifEmpty { null }
+            AudioSharePage.page(audio.shareView(upload, field(asked, "name")), csrf, LibraryName.phone(libraryName()))
+        }),
+        Route("POST", AudioSharePage.CANCEL, "an audio file shared to the app let go (upload): the share left",
+              page = "the share's page", post = PostAnswer { _, form ->
+            audio.cancelShared(Py.strip(form["upload"].orEmpty()))
+            Response(303, Body.Empty, mutableListOf("Location" to SharePage.CANCEL))
+        }),
     )
 
     /**

@@ -114,6 +114,40 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         return result()
     }
 
+    /** The audio's length the lyrics sites are asked with: a staged job's ([lyricsAlone]), none for a lookup. */
+    private var length: Double? = null
+
+    /**
+     * The lyrics stage alone, over the song of [songId] ([Lookup.lyrics]): reported as it starts and ends, LRCLIB
+     * and Megalobiz asked with [length], at the lookup's pace through its envelope, each provider that answered and
+     * never blocked a good run at its end; the song's own stage none (the caller's), nor `lookup:songs`.
+     */
+    fun lyricsAlone(songId: Long, length: Double?): LookupResult {
+        overrides = try {
+            lookup.readOverrides(db)
+        } catch (e: OverridesError) {
+            refused = "Can't read overrides.toml: ${e.message}"  // the caller's to say: no stage was reported
+            return result()
+        }
+        this.length = length
+        try {
+            val song = Songs.byId(db, songId) ?: return result().copy(refused = "no song $songId in the book")
+            found = song
+            songId(song)
+            stage("lyrics", ::lyrics)
+            ask.recordAnswers()
+        } finally {
+            requests = LinkedHashMap(ask.requests)
+            ask.close()
+        }
+        return result()
+    }
+
+    private fun songId(song: SongRow) {
+        this.songId = song.id
+        display = song.display
+    }
+
     private fun result(): LookupResult =
         LookupResult(songId, display, LinkedHashMap(states), LinkedHashMap(details), files, secondsToSheet,
                      pacing.monotonic() - started, requests, bug, refused)
@@ -310,7 +344,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         found = current
         return try {
             stage.run(StageContext(db, current, overrides, lookup.cfg, lookup.store, asking, now,
-                                  lookup.clients.cacheDir) { askedUnderName = true })
+                                  lookup.clients.cacheDir, length) { askedUnderName = true })
                 .let { if (nothing) it else done(it) }
         } catch (e: SharedFolder) {
             StageEnd("failed", LookupWords.sharedFolder(e))

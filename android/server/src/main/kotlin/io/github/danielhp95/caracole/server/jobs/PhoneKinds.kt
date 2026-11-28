@@ -1,10 +1,12 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.catalogues.Limited
+
 /**
  * The phone's own job kinds, which Python never queues, their key, names, stage and words, one table that JobViews
  * reads (AGENTS.md records them as the phone's; the plan's §5.3): the render job (the phone's pages made again by a
  * new build, or after a take), a file shared to the app filed, a backup made and one restored, and the site catalogues
- * downloaded and imported (CataloguesRunner). Each line's `{…}`
+ * downloaded and imported (CataloguesRunner), and the chord models downloaded (ModelsRunner). Each line's `{…}`
  * blanks are filled by whoever queues or runs the job ([fill]).
  */
 object PhoneKinds {
@@ -13,9 +15,11 @@ object PhoneKinds {
      * request kept in the history may still say) and failed. */
     data class Kind(val kind: String, val key: String, val title: String, val display: String,
                     val stage: Pair<String, String>, val running: String, val done: String, val failed: String,
-                    val otherwise: String? = null, val formerly: List<String> = emptyList()) {
-        /** Whether [line] is the kind's second way to end ([otherwise], or one of its [formerly] words, filled). */
-        fun waits(line: String): Boolean = (listOfNotNull(otherwise) + formerly).any { fits(line, it) }
+                    val otherwise: String? = null, val formerly: List<String> = emptyList(),
+                    val pauses: List<String> = emptyList()) {
+        /** Whether [line] is the kind's second way to end ([otherwise], one of its [formerly] words, or of its other
+         * waits, [pauses], filled). */
+        fun waits(line: String): Boolean = (listOfNotNull(otherwise) + formerly + pauses).any { fits(line, it) }
     }
 
     val RENDER = Kind("render", "render:", "Remake the pages", "The phone's pages", "render" to "Making the pages",
@@ -40,7 +44,21 @@ object PhoneKinds {
                           formerly = listOf("{size} to download: waiting for Wi-Fi or your go-ahead",
                                             "{size} to download: waiting for your go-ahead to use mobile data"))
 
-    val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE, CATALOGUES).associateBy { it.kind }
+    /** The chord models downloaded (the design's §8.4): its stage's words while it runs are what it is doing
+     * (`{doing}`: "Asking GitHub for the chord models…", "Downloading the chord models · 21 of 55 MB", "Checking the
+     * chord models…"), {size} the bytes on the phone once done; its [Kind.otherwise] the catalogues' metered stop, in
+     * the catalogues' words, and its other wait ([Kind.pauses]) GitHub's hour spent, core.catalogues' [LIMITED]
+     * words, whose {time} is when it may be asked again. */
+    val MODELS = Kind("models", "models:", "Download the chord models", "The chord models", "models" to "Chord models",
+                      "{doing}", "Chord models ready · {size}", "Not downloaded: {why}",
+                      otherwise = "{size} to download: waiting for your go-ahead in Settings (a metered network)",
+                      pauses = listOf(LIMITED))
+
+    /** core.catalogues' Limited, its words as a template ([Limited.WORDS]): GitHub's share of the hour spent, {time} the
+     * minute after which it may be asked again. */
+    const val LIMITED = Limited.WORDS
+
+    val ALL: Map<String, Kind> = listOf(RENDER, INBOX, BACKUP, RESTORE, CATALOGUES, MODELS).associateBy { it.kind }
 
     /** Whether [line] is [template] with its `{name}` blanks filled (each blank any text): its words between the blanks,
      * in their order, the first at its start and the last at its end. */

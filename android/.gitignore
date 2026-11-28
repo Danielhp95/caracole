@@ -1,6 +1,8 @@
 .gradle/
 .kotlin/
 build/
+# The Android Gradle plugin's CMake builds (ml's externalNativeBuild).
+.cxx/
 local.properties
 *.keystore
 *.jks

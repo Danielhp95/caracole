@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from caracole.config import Config
 
 NOT_BUILT = "use the flake's packages.autochords"
+NO_CHORDS = "caracole makes no sheet from an audio file here: {problem}"  # refused before anything is read
+REFUSED = "No sheet made"  # the last line's start for a job that didn't make its sheet
 
 
 def register(app: typer.Typer) -> None:
@@ -79,10 +81,12 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
     problem = autochords_problem(cfg)
     if problem is not None:
         hint = f"; {NOT_BUILT}" if "built without" in problem else ""
-        fail(f"caracole makes no sheet from an audio file here: {problem}{hint}")
+        fail(NO_CHORDS.format(problem=problem + hint))
+    reading: object = file if upload is None else f"the upload {upload}"  # what an OSError couldn't read
     try:
         given = _given_already(cfg, upload, display)
         if given is not None:  # Try again past the Audio stage: the upload is the song's audio now
+            reading = given
             found = audio_store.examine(given)
             name, duration, tags = given.name, found.duration, found.tags
         elif upload is not None:
@@ -94,7 +98,7 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
     except audio_store.AudioError as e:
         fail(str(e), 2 if e.status == 400 else 1)
     except OSError as e:
-        fail(f"can't read {file}: {e.strerror or e}")
+        fail(f"can't read {reading}: {e.strerror or e}")
     if display is not None:
         artist, _, title = display.partition(" - ")
     else:
@@ -104,7 +108,7 @@ def _audio(cfg: Config, file: Path | None, upload: str | None, display: str | No
     with _Lines(cfg.library_dir, show=False, json_lines=progress, ticker=None if progress else ticker()) as reporter:
         result = make_audio_sheet(cfg, request, reporter)
         sent = ", ".join(plural(n, f"{provider_name(p)} request") for p, n in result.requests.items() if n)
-        staged_end(reporter, result, progress=progress, refused="No sheet made",
+        staged_end(reporter, result, progress=progress, refused=REFUSED,
                    done=f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
 
 

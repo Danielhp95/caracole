@@ -237,6 +237,19 @@ class Hearing(Transcriber):
         return super().hear(mix, stem, first_sung_s)
 
 
+def test_a_song_whose_file_moved_since_it_was_transcribed_is_refused_as_transcribed_already(conn, cfg):
+    song = offered(conn, cfg)
+    result, _ = make(cfg)
+    assert result.ok, result
+    moved = Path(song.audio_path).with_name("renamed.wav")
+    os.rename(song.audio_path, moved)
+    update_song(conn, song.id, audio_path=str(moved), audio_mtime=moved.stat().st_mtime)
+    separator, transcriber = Separator(), Transcriber()
+    again, _ = make(cfg, separator=separator, transcriber=transcriber)
+    assert again.refused == "Nick Cani - Vikingos veganos isn't offered a transcription: already transcribed"
+    assert separator.calls == transcriber.calls == []
+
+
 @pytest.mark.parametrize("gpu,about", [(False, "~5 min"), (True, "~1 min")], ids=["cpu", "gpu"])
 def test_each_long_stage_says_how_far_it_is_as_it_runs(conn, cfg, monkeypatch, gpu, about):
     # The separator and Whisper take minutes, up to half an hour on a CPU: the song's line moves as they go (the
@@ -382,20 +395,25 @@ def test_a_second_transcription_in_the_first_ones_hand_over_leaves_its_stem_alon
     assert not list(cfg.cache_dir.glob("transcribe-*"))  # both went with their jobs
 
 
-def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_transcript(conn, cfg):
+@pytest.mark.parametrize("kept", [True, False], ids=["heard kept", "made before"])
+def test_a_song_with_an_auto_sheet_over_no_lyrics_gets_it_made_again_over_its_transcript(conn, cfg, kept):
     # The example's own way: `caracole youtube --sheet` made a chart with no words, and then its lyrics are
-    # transcribed.
+    # transcribed. A chart that keeps what was heard is laid out again over them, no model; one made before, by them.
+    from test_lyrics_pick import before_heard
+
     from caracole.autochords.run import autochords_pending
 
     song = offered(conn, cfg)
     autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+    if not kept:
+        before_heard(conn, song)
     before = auto_sheet(cfg, conn, song).read_text(encoding="utf-8")
     assert NOTE not in before.splitlines() and "Somos vikingos de prueba" not in before
     recognizer = Recognizer()
     result, heard = make(cfg, recognizer=recognizer)
     assert result.ok, result
     assert heard.ends()["chords"] == ("done", "chords over the transcribed lyrics")
-    assert recognizer.calls == [Path(song.audio_path)]
+    assert recognizer.calls == ([] if kept else [Path(song.audio_path)])
     lines = auto_sheet(cfg, conn, song).read_text(encoding="utf-8").splitlines()
     assert NOTE in lines and "Somos vikingos de prueba" in lines
 
@@ -410,8 +428,11 @@ def test_try_again_after_the_chords_failed_makes_the_sheet_over_the_transcript_k
     from caracole.autochords.run import autochords_pending
 
     song = offered(conn, cfg)
-    if chart_before:
+    if chart_before:  # one made before what was heard was kept: the models' (one that keeps it is re-laid, no model)
+        from test_lyrics_pick import before_heard
+
         autochords_pending(conn, cfg, recognizer=Recognizer(), beats_fn=beats, only={song.id})
+        before_heard(conn, song)
     keep_sheet = ac_run._keep
 
     def full_disk(*args, **kwargs):
@@ -900,11 +921,11 @@ def test_a_song_a_lookup_changed_while_it_had_the_lock_ends_the_job_as_a_refusal
 
 def other_audio(conn, cfg, song):
     """Another video's audio for the song, as a `caracole youtube --sheet --url` that took the lock after the lookups
-    would leave it."""
+    would leave it: other bytes (a second longer), so no record of the first follows them."""
     other = "oNOFfl3Hx3s"
-    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{other}.wav", 60.0)
+    audio = wav(cfg.cache_dir / "youtube" / f"{song.id}-{other}.wav", 61.0)
     update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
-    _save(conn, song.id, Record(video=Video(other, song.title, "Nick Cani", 60.0), source="pasted", audio=str(audio)))
+    _save(conn, song.id, Record(video=Video(other, song.title, "Nick Cani", 61.0), source="pasted", audio=str(audio)))
 
 
 @pytest.mark.parametrize("before", ["words", "chords"])
@@ -1034,7 +1055,7 @@ def test_force_hears_the_whole_song_where_no_singing_was_found(conn, cfg, monkey
 
 def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     # Whisper's words over a pad passed the rules: the owner says it isn't sung. Its transcript goes, the song noted
-    # not sung by their word, and its sheet is made again of its chords alone; neither model runs.
+    # not sung by their word, and its sheet is laid out again of its chords alone from what was heard: no model runs.
     from caracole.autochords.transcript import NOT_SUNG, SAID_NOT_SUNG, SILENT
 
     song = offered(conn, cfg)
@@ -1048,7 +1069,7 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert ends["words"] == ("done", "transcript dropped")
     assert ends["chords"] == ("done", "chords only: you said it isn't sung")  # the owner's word, not what was heard
     assert ends["pdf"] == ("done", "made")
-    assert separator.calls == transcriber.calls == [] and recognizer.calls
+    assert separator.calls == transcriber.calls == recognizer.calls == []
     assert kept(conn, song) is None and not result.transcript_kept
     noted = kv_get_json(conn, f"{HEARD_NOTHING}{song.id}")
     assert (noted["why"], noted["by"]) == ("you said so", "you")
@@ -1059,9 +1080,27 @@ def test_none_drops_the_transcript_and_makes_the_chords_alone(conn, cfg):
     assert why_not_offered(conn, cfg, song, Overrides(), anyway=True) is None  # until the owner says it is
     # Their word is about that audio: a new file is a new start, offered a transcription again.
     other = Path(song.audio_path).with_name("other.wav")
-    wav(other, 60.0)
+    wav(other, 61.0)  # other bytes
     update_song(conn, song.id, audio_path=str(other), audio_mtime=other.stat().st_mtime)
     assert why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+
+
+def test_none_makes_a_sheet_made_before_heard_was_kept_again_by_the_models_of_its_chords_alone(conn, cfg):
+    # The pre-``heard`` path, as it was: the transcript dropped, the models make the sheet again with no words.
+    from test_lyrics_pick import before_heard
+
+    from caracole.autochords.transcript import NOT_SUNG
+
+    song = offered(conn, cfg)
+    assert make(cfg)[0].ok and kept(conn, song) is not None
+    before_heard(conn, song)
+    separator, transcriber, recognizer = Separator(), Transcriber(), Recognizer()
+    result, heard = make(cfg, separator=separator, transcriber=transcriber, recognizer=recognizer, none=True)
+    assert result.ok, result
+    assert heard.ends()["chords"] == ("done", "chords only: you said it isn't sung")
+    assert separator.calls == transcriber.calls == [] and recognizer.calls == [Path(song.audio_path)]
+    sheet = auto_sheet(cfg, conn, get_song(conn, song.id)).read_text(encoding="utf-8")
+    assert NOT_SUNG in sheet and NOTE not in sheet and "Somos" not in sheet
 
 
 def test_none_still_runs_for_a_kept_transcript_once_a_record_is_picked_and_a_transcription_is_refused(conn, cfg):

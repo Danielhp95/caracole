@@ -17,13 +17,14 @@ load audio or build a recognizer, so this module imports in any environment.
 
 from __future__ import annotations
 
+import functools
 import warnings
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from caracole.autochords.audio import load_librosa, load_mono
+from caracole.autochords.audio import file_stem, load_librosa, load_mono, sha16
 from caracole.autochords.merge import NO_CHORD, ChordSegment
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ BINS_PER_OCTAVE = 24
 HOP_LENGTH = 2048
 TIMESTEP = 108  # frames per model window: one 10 s chunk
 FRAME_SECONDS = CHUNK_SECONDS / TIMESTEP
+LOG_FLOOR = 1e-6  # upstream's: log(|CQT| + LOG_FLOOR)
 
 ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 _QUALITIES = (
@@ -122,6 +124,23 @@ def frames_to_segments(
     return segs
 
 
+# The published weights' files, by the name each model goes by in an auto sheet's raw (``model_name``).
+_NAMES = {"btc_model_large_voca": "btc_large_voca", "btc_model": "btc"}
+
+
+def model_name(path: Path | str) -> str:
+    """The name a BTC weights file goes by in an auto sheet's raw (``models["chords"]``): ``btc_large_voca@<16 hex of
+    the file's SHA-256>``, the file's own name for one not published (no folder: never a path of this machine).
+    Hashed once a process."""
+    return _model_name(str(path))
+
+
+@functools.cache
+def _model_name(path: str) -> str:
+    stem = file_stem(path)
+    return f"{_NAMES.get(stem, stem)}@{sha16(path)}"
+
+
 def load_audio(path: Path | str) -> np.ndarray:
     """Mono float32 samples at 22,050 Hz, like upstream's ``librosa.load(sr=22050, mono=True)``, from any file
     libsndfile or FFmpeg decodes, such as the AAC in an iTunes Store or YouTube .m4a (audio.py ``load_mono``)."""
@@ -146,7 +165,7 @@ def cqt_features(y: np.ndarray) -> np.ndarray:
         start += chunk
     if len(y) - start >= HOP_LENGTH or not parts:
         parts.append(_cqt(y[start:]))
-    return np.log(np.abs(np.concatenate(parts, axis=1)) + 1e-6).T
+    return np.log(np.abs(np.concatenate(parts, axis=1)) + LOG_FLOOR).T
 
 
 def _cqt(y: np.ndarray) -> np.ndarray:
@@ -204,6 +223,8 @@ class BTCRecognizer:
             raise ValueError(f"{weights} is not a BTC checkpoint: {e}") from e
         self.device = torch.device(device)
         self.model = model.to(self.device).eval()
+        self.name = model_name(weights)  # an auto sheet's raw: which weights heard it, and on what
+        self.runtime = f"torch {torch.__version__}"
 
     def recognize(self, audio_path: Path | str) -> list[ChordSegment]:
         """The chords of an audio file, in common names, with "N" where none is played."""

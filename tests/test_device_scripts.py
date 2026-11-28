@@ -93,11 +93,13 @@ if argv == ["kill-server"]:
 serial, rest = (argv[1], argv[2:]) if argv[:1] == ["-s"] else ("", argv)
 if rest == ["emu", "kill"] and "emu" in hang:
     time.sleep(600)
+if rest[:3] == ["shell", "rm", "-rf"] and "rm" in hang and (here / "instrumenting").exists():
+    time.sleep(600)  # the cleanup's, after the run
 if rest == ["emu", "kill"]:
     (state / (serial.removeprefix("emulator-") + ".kill")).write_text("")
     print("OK: killing emulator, bye bye")
     sys.exit(0)
-if rest[:1] == ["install"]:
+if rest[:1] in (["install"], ["push"]):
     print("Success")
     sys.exit(0)
 if rest[:3] == ["shell", "getprop", "sys.boot_completed"]:
@@ -477,6 +479,110 @@ def test_an_adb_that_hangs_in_the_stop_is_cut_off_and_the_emulator_killed_all_th
     assert ["kill-server"] not in rig.calls("adb")
     with open(rig.lock, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released
+
+
+# device-test.sh: the chords lane's --data, --models, --ml and --tcpdump
+
+
+DATA = "/data/local/tmp/caracole-data"
+MODELS = "/data/local/tmp/caracole-models"
+
+
+def lane_env(rig, tmp_path, **env):
+    models = tmp_path / "models"
+    models.mkdir(exist_ok=True)
+    (models / "btc-graph.onnx").write_bytes(b"onnx")
+    (models / "beats.onnx").write_bytes(b"onnx")
+    return {"CARACOLE_CHORD_MODELS": str(models), **env}
+
+
+def data_folder(tmp_path):
+    data = tmp_path / "songs"
+    data.mkdir(exist_ok=True)
+    (data / "a.m4a").write_bytes(b"audio")
+    (data / "meta.json").write_text("{}")
+    return data
+
+
+def index_of(calls, call):
+    return max(i for i, c in enumerate(calls) if c == call)
+
+
+def assert_data_removed_before_the_emulator_stopped(rig):
+    calls = rig.calls("adb")
+    rm = ["-s", "emulator-5554", "shell", "rm", "-rf", DATA]
+    clear = ["-s", "emulator-5554", "shell", "pm", "clear", "io.github.danielhp95.caracole.ml.test"]
+    kill = ["-s", "emulator-5554", "emu", "kill"]
+    assert index_of(calls, rm) < index_of(calls, kill), "the private data goes while the emulator is still up"
+    assert index_of(calls, clear) < index_of(calls, kill)
+    assert rig.emulators() == {}
+
+
+@pytest.mark.parametrize("how, code", [("ok", 0), ("fail", 1)])
+def test_data_is_removed_before_the_emulator_it_started_is_stopped(rig, tmp_path, how, code):
+    rig.server_up()
+    done = rig.run("device-test.sh", "--data", str(data_folder(tmp_path)),
+                   **lane_env(rig, tmp_path, FAKE_INSTRUMENT=how))
+    assert done.returncode == code, done.stderr
+    assert ["-s", "emulator-5554", "push", str(tmp_path / "songs" / "a.m4a"), f"{DATA}/a.m4a"] in rig.calls("adb")
+    assert_data_removed_before_the_emulator_stopped(rig)
+    assert "stopped emulator-5554, which it started" in done.stderr
+
+
+def test_an_interrupt_removes_the_data_before_the_emulator_is_stopped(rig, tmp_path):
+    rig.server_up()
+    proc = subprocess.Popen(rig.command("device-test.sh", "--data", str(data_folder(tmp_path))),
+                            env=rig.env(**lane_env(rig, tmp_path, FAKE_INSTRUMENT="hang")),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        until(lambda: (rig.bin / "instrumenting").exists(), timeout=60)
+        os.killpg(proc.pid, signal.SIGINT)
+        _, err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    assert proc.returncode != 0
+    assert_data_removed_before_the_emulator_stopped(rig)
+    assert "stopped emulator-5554" in err
+
+
+def test_a_hung_adb_in_the_data_cleanup_never_keeps_the_emulator_up(rig, tmp_path):
+    rig.server_up()
+    done = rig.run("device-test.sh", "--data", str(data_folder(tmp_path)),
+                   **lane_env(rig, tmp_path, FAKE_ADB_HANG="rm", CARACOLE_ADB_TIMEOUT="2"))
+    assert done.returncode == 0, done.stderr
+    assert rig.emulators() == {}
+    assert "stopped emulator-5554, which it started" in done.stderr
+
+
+@pytest.mark.parametrize("flags", [["--models", "--area", "keys"], ["--ml"]])
+def test_the_model_cache_is_left_on_the_emulator(rig, tmp_path, flags):
+    rig.server_up()
+    done = rig.run("device-test.sh", *flags, **lane_env(rig, tmp_path))
+    assert done.returncode == 0, done.stderr
+    assert ["-s", "emulator-5554", "push", str(tmp_path / "models" / "btc-graph.onnx"),
+            f"{MODELS}/btc-graph.onnx"] in rig.calls("adb")
+    assert not any("rm" in c and any(MODELS in w for w in c) for c in rig.calls("adb")), "a cache for the next run"
+    assert not any(c[-1:] == [DATA] for c in rig.calls("adb")), "no --data, nothing of it"
+    assert rig.emulators() == {}
+
+
+def test_tcpdump_parses_and_a_run_that_stops_on_it_still_stops_the_emulator(rig, tmp_path):
+    rig.server_up()
+    done = rig.run("device-test.sh", "--tcpdump", str(tmp_path / "out.pcap"), "--area", "keys")
+    assert done.returncode == 3
+    assert "--tcpdump needs a rooted emulator" in done.stderr
+    assert rig.emulators() == {}
+    assert "stopped emulator-5554, which it started" in done.stderr
+
+
+def test_an_unknown_option_prints_the_usage_with_every_flag(rig):
+    done = rig.run("device-test.sh", "--nope")
+    assert done.returncode == 2
+    for flag in ("--ml", "--models", "--data DIR", "--tcpdump FILE", "--keep-emulator", "--sites"):
+        assert flag in done.stdout
+    assert rig.calls("nix") == []
 
 
 # stop-all.sh

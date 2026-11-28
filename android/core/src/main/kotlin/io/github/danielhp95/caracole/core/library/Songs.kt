@@ -18,6 +18,7 @@ data class SongRow(
     val matchScore: Double?, val matchArtistKey: String?, val matchSongKey: String?, val matchCandidates: String,
     val matchedAt: String?, val ugDirty: Boolean, val ugCheckedAt: String?, val lyricsStatus: String,
     val lyricsJson: String?, val lyricsAt: String?, val lacuerdaCheckedAt: String?, val createdAt: String,
+    val audioPath: String? = null, val audioMtime: Double? = null, val autochordsMtime: Double? = null,
 ) {
     /** song.display: "Artist - Clean Title", as overrides.toml and the to-do page write it. */
     val display: String get() = Normalize.displayKey(artist, title)
@@ -59,5 +60,7 @@ object Songs {
         ugDirty = r.long("ug_dirty")!! != 0L, ugCheckedAt = r.text("ug_checked_at"),
         lyricsStatus = r.text("lyrics_status")!!, lyricsJson = r.text("lyrics_json"), lyricsAt = r.text("lyrics_at"),
         lacuerdaCheckedAt = r.text("lacuerda_checked_at"), createdAt = r.text("created_at")!!,
+        audioPath = r.text("audio_path"), audioMtime = r.double("audio_mtime"),
+        autochordsMtime = r.double("autochords_mtime"),
     )
 }

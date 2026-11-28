@@ -1,0 +1,64 @@
+--- a/src/cr-core.c
++++ b/src/cr-core.c
+@@ -80,7 +80,7 @@
+   #define DEFINED_X86 0
+ #endif
+ 
+-#if defined(__arm__) || defined(__arm64__)
++#if defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+   #define DEFINED_ARM 1
+ #else
+   #define DEFINED_ARM 0
+--- a/src/dev32s.h
++++ b/src/dev32s.h
+@@ -31,7 +31,7 @@
+   v4_t t = vAdd(_mm_movehl_ps(b, b), b);
+   _mm_store_ss(a, vAdd(t, _mm_shuffle_ps(t,t,1)));}
+ 
+-#elif defined(__arm__) || defined(__arm64__)
++#elif defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+ 
+ #include <arm_neon.h>
+ 
+--- a/src/pffft.c
++++ b/src/pffft.c
+@@ -157,7 +157,7 @@
+ /*
+   ARM NEON support macros
+ */
+-#elif !defined(PFFFT_SIMD_DISABLE) && (defined(__arm__) || defined(__arm64__))
++#elif !defined(PFFFT_SIMD_DISABLE) && (defined(__arm__) || defined(__arm64__) || defined(__aarch64__))
+ #  include <arm_neon.h>
+ typedef float32x4_t v4sf;
+ #  define SIMD_SZ 4
+@@ -1732,7 +1732,7 @@
+   const v4sf * RESTRICT vb = (const v4sf*)b;
+   v4sf * RESTRICT vab = (v4sf*)ab;
+ 
+-#if defined(__arm__) || defined(__arm64__)
++#if defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+   __builtin_prefetch(va);
+   __builtin_prefetch(vb);
+   __builtin_prefetch(vab);
+--- a/src/pffft-wrap.c
++++ b/src/pffft-wrap.c
+@@ -40,7 +40,7 @@
+ 
+   float ar, ai, br, bi;
+ 
+-#if defined(__arm__) || defined(__arm64__)
++#if defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
+   __builtin_prefetch(va);
+   __builtin_prefetch(vb);
+   __builtin_prefetch(va+2);
+--- a/src/soxr.c
++++ b/src/soxr.c
+@@ -252,6 +252,8 @@
+     unsigned eax_, ebx_, ecx_, edx_;
+     CPUID(1, eax_, ebx_, ecx_, edx_);
+     return (edx_ & (SSE|SSE2)) != 0;
++  #elif defined __aarch64__
++    return true; /* NEON: every ARMv8-A, so Android's arm64-v8a */
+   #elif defined AV_CPU_FLAG_NEON
+     return !!(av_get_cpu_flags() & AV_CPU_FLAG_NEON);
+   #else

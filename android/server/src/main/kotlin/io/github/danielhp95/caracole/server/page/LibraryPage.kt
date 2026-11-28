@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.page
 
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.web.Inline
 import io.github.danielhp95.caracole.server.http.LibraryName
@@ -8,6 +9,7 @@ import io.github.danielhp95.caracole.server.http.PageIcon
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -16,12 +18,13 @@ import kotlinx.serialization.json.longOrNull
 
 /** library_page.WebControls on the phone: what its server adds to the page; its badge the one every page the phone
  * writes itself shows (MessagePage.PHONE_BADGE). [sync] true is WebControls.sync's "sheet": the sync's sheet alone
- * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab"). */
+ * (sync-sheet.html), which the app's sync button opens; the phone's page never has the Sync tab (Python's "tab").
+ * [audio]: why the phone makes no sheet from an audio file (Phone.audioProblem), null where it does: `server.audio`. */
 data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
     val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
-    val guitar: Boolean = false, val inApp: Boolean = false,
+    val guitar: Boolean = false, val inApp: Boolean = false, val audio: String? = LibraryPage.AUDIO_PROBLEM,
 )
 
 /**
@@ -64,8 +67,11 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
     /**
      * build_library_page's part of the served page: [data] with the server's own member (`server`, where caracole
      * serve puts it: before the songbooks), the form token, the songs a request waits or runs for, the requests, no
-     * Guitar Pro page, no sheet from YouTube and none from an audio file on the phone, no lyrics looked up under another
-     * name (`lyricsSearch` false), and the tests' timers if any; and each song's
+     * Guitar Pro page, no sheet from YouTube, no lyrics transcribed ([TRANSCRIBE_PROBLEM]: where they are), a sheet
+     * from an audio file where [ServerControls.audio] says so
+     * (library_page.audio_member's shape: `ok`, `why`, `limit`, `too_big`, the "+" and a card's entry drawn by
+     * library.js where `ok`), lyrics looked up under another name (`lyricsSearch` true: LyricsRoutes), and the
+     * tests' timers if any; and each song's
      * `fetchable`, false for a song a review must come first for ([ServerControls.held]) and for a card of a song the
      * phone hasn't got (a negative id, [MirrorPageData]).
      */
@@ -79,13 +85,12 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
             put("guitar", JsonPrimitive(controls.guitar))
             put("youtube", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
                                             "off" to JsonPrimitive(true))))
-            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(YOUTUBE_PROBLEM),
+            put("transcribe", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(TRANSCRIBE_PROBLEM),
                                                "songs" to JsonArray(emptyList()), "nothing" to JsonArray(emptyList()),
                                                "unsung" to JsonArray(emptyList()),
                                                "transcribed" to JsonArray(emptyList()), "time" to JsonPrimitive(""))))
-            put("audio", JsonObject(mapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(AUDIO_PROBLEM),
-                                          "limit" to JsonPrimitive(0), "too_big" to JsonPrimitive(""))))
-            put("lyricsSearch", JsonPrimitive(false))  // lyrics looked up under another name: the computer's alone
+            put("audio", audioMember(controls.audio))
+            put("lyricsSearch", JsonPrimitive(true))  // lyrics looked up under another name (LyricsRoutes)
             controls.timers?.let { timers -> put("timers", JsonObject(timers.mapValues { JsonPrimitive(it.value) })) }
         })
         val out = LinkedHashMap<String, JsonElement>()
@@ -99,6 +104,17 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
         }
         out.putIfAbsent("server", server)
         return JsonObject(out)
+    }
+
+    /** library_page.audio_member: whether the phone makes a song's sheet from an audio file, why not ([why]), the
+     * most an upload takes and the upload route's words for a file past it. */
+    private fun audioMember(why: String?): JsonObject = if (why != null) {
+        JsonObject(linkedMapOf("ok" to JsonPrimitive(false), "why" to JsonPrimitive(why), "limit" to JsonPrimitive(0),
+                               "too_big" to JsonPrimitive("")))
+    } else {
+        JsonObject(linkedMapOf("ok" to JsonPrimitive(true), "why" to JsonNull,
+                               "limit" to JsonPrimitive(AudioStore.AUDIO_MAX),
+                               "too_big" to JsonPrimitive(AudioStore.WORDS.getValue("too_big"))))
     }
 
     private fun fetchable(song: JsonElement, controls: ServerControls): JsonElement {
@@ -117,7 +133,14 @@ class LibraryPage(val assets: LibraryAssets, val requests: RequestsTab = Request
          * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
 
-        /** Why the phone makes no sheet from an audio file (the server member's `audio.why`): its page has no "+". */
+        /** Where the words of a song no lyrics site has are heard, the phone hearing none: the server member's
+         * `transcribe.why`, which library.js says on the card of a song with a chords-only auto sheet. */
+        const val TRANSCRIBE_PROBLEM =
+            "No lyrics site has its words. The computer hears them from its own audio of this song."
+
+        /** Why a phone with nothing to hear with makes no sheet from an audio file (a build without `:ml`, the
+         * default shell's; AudioRunner.problemOf with no chords): the server member's `audio.why`, its page then with
+         * no "+". */
         const val AUDIO_PROBLEM = "auto-chords isn't on the phone"
     }
 }

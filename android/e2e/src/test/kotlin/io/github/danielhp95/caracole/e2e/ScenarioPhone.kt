@@ -38,10 +38,12 @@ import kotlin.time.Duration.Companion.minutes
  * at [server]. It is driven through its App as the WebView's requests come, made by TestApp's request builder: the
  * launch's cookie and the Host, then a page's link ([get]), its script's read ([script]: JSON, the form token in its
  * header) or its form ([post]: the token in the body, from the page's own origin). Its sites are the fake sites server
- * at [sites] (RoutedTransport: tests/helpers/fake_sites.py), or, with none, a transport that refuses every one.
+ * at [sites] (RoutedTransport: tests/helpers/fake_sites.py), or, with none, a transport that refuses every one. A
+ * phase may change what the phone is made of ([deps]: its chord models, say), as the app's assembly would.
  */
 class ScenarioPhone(val home: File, val server: String, val sites: String? = null,
-                    render: ((PhoneDeps) -> PhoneRender)? = null) : AutoCloseable {
+                    render: ((PhoneDeps) -> PhoneRender)? = null,
+                    deps: (PhoneDeps) -> PhoneDeps = { it }) : AutoCloseable {
     val database: Database = Database(File(home.apply { mkdirs() }, "caracole.sqlite"))
     val libraryDir: File = File(home, "library").apply { mkdirs() }
     val stateDir: File = File(home, "state").apply { mkdirs() }
@@ -62,7 +64,7 @@ class ScenarioPhone(val home: File, val server: String, val sites: String? = nul
 
     /** The phone, its pages made by [render]'s PhoneRender where one is given (phase 7's), else the app's. */
     val phone: Phone = PhoneDeps(database, libraryDir, stateDir, mirror, scope, settings, TestApp.SECRET, TestApp.CSRF,
-                                 transport = { transport }).let { deps -> Phone(deps, render?.invoke(deps)) }
+                                 transport = { transport }).let(deps).let { made -> Phone(made, render?.invoke(made)) }
 
     /** A GET as the WebView makes it: a page's link, or its address typed. */
     fun get(target: String): Response = handle("GET", target, mapOf("sec-fetch-site" to "same-origin"))

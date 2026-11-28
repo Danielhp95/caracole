@@ -54,6 +54,7 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             for (route in routes) {
                 require(route.method == "GET" || route.method == "POST") { "${route.method} ${route.path}: GET or POST" }
                 require(route.body in Route.BODY_TYPES) { "${route.method} ${route.path}: a body of form, json or bytes" }
+                require(!route.spool || route.body == Route.BYTES) { "${route.method} ${route.path}: spools a bytes body alone" }
                 require(when {
                     route.method == "GET" -> route.get != null
                     route.body == Route.FORM -> route.post != null
@@ -90,6 +91,16 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
             return MAX_BODY
         }
         return routeFor(method, path)?.limit ?: MAX_BODY
+    }
+
+    /** Whether the route at [target] spools its body ([Route.spool]): LocalServer hands it the body as a stream. */
+    fun spools(method: String, target: String): Boolean {
+        val path = try {
+            PyUrl.unquote(PyUrl.urlsplit(target).path, strict = true)
+        } catch (e: PyUrl.Invalid) {
+            return false
+        }
+        return routeFor(method, path)?.spool == true
     }
 
     /** The answer to a request whose headers refuse it already, before its body is read (WebApp.refused_unread's
@@ -236,16 +247,21 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         val headers = request.headers
         if (!Security.crossOriginOk("POST", headers, headers["host"])) return message(403, "Refused", ANOTHER_SITE)
         if (!Security.sameToken(headers[TOKEN_HEADER], config.csrf)) {
-            val refused = message(403, "Refused", "This is older than the server, or not from it: read its form token " +
-                                                  "again and try again.")
+            val refused = message(403, "Refused", "Older than the server, or not from it. Read its form token again " +
+                                                  "and retry.")
             refused.data = JsonObject(refused.data.orEmpty() + ("reload" to JsonPrimitive(true)))
             return refused
         }
         val type = Route.BODY_TYPES.getValue(route.body)
         if (PyText.lower(PyText.strip((headers["content-type"] ?: "").substringBefore(';'))) != type) {
-            return message(415, "Not what it reads", "caracole reads only $type here.")
+            return message(415, "Not what it reads", "Only $type here.")
         }
         if (request.body.size > route.limit) return message(413, "Too long", "That is too long.")
+        if (route.spool) {  // its stream, unread: past the limit by its Content-Length, refused before a byte is read
+            val declared = headers["content-length"]?.let { PyText.strip(it).toLongOrNull() }
+            if (declared != null && declared > route.limit) return message(413, "Too long", "That is too long.")
+            return request.stream ?: java.io.ByteArrayInputStream(request.body)
+        }
         if (route.body == Route.BYTES) return request.body
         val text = PyText.utf8(request.body) ?: return message(400, "Not JSON", "Can't read that as JSON.")
         return try {

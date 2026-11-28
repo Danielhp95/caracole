@@ -519,6 +519,31 @@ def test_another_video_replaces_the_audio_and_the_sheet(setup, conn, fake, sites
     assert [p.name for p in (setup.cache_dir / "youtube").iterdir()] == [f"1-{other}.wav"]
 
 
+def test_another_video_over_a_sheet_that_keeps_what_was_heard_is_heard_whatever_words_come_with_it(
+        setup, conn, fake, sites, tmp_path):
+    lrclib, _ = sites
+    saved = list(lrclib.records)
+    lrclib.records.clear()
+    vikingos(fake, tmp_path)
+    assert make(setup)[0].ok
+    song = find_song(conn, result_key(conn))
+    assert auto_raw(conn, song)["lyrics"] == "none" and "heard" in auto_raw(conn, song)
+    lrclib.records.extend(saved)
+    from caracole.lyrics import Lyrics
+
+    # Its words found since (a lookup's), and then another video: the new audio is heard, never the old re-laid.
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics.from_record(record(200.0)).to_json())
+    other = "oNOFfl3Hx3s"
+    fake.video(other, "Vikingos veganos (en directo)", "Nick Cani", 200.0, ext="wav",
+               copy=str(tmp_path / "audio" / "vikingos.wav"))
+    recognizer = Recognizer()
+    result, heard = make(setup, url=f"https://youtu.be/{other}", recognizer=recognizer)
+    assert result.ok, result
+    assert len(recognizer.calls) == 1 and recognizer.calls[0].name == f"1-{other}.wav", heard.ends()
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics"), heard.ends()
+    assert auto_raw(conn, song)["youtube"]["id"] == other
+
+
 @pytest.mark.parametrize("url,asks", [
     (PASTED, ["downloading the video's audio"]),
     (None, ["looking for a video on YouTube", "downloading the video's audio"]),

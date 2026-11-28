@@ -22,7 +22,9 @@ the same library.
   render step: ``{"failed": [display names], "files": [[path, sha256, size], …] (every file of the songs' folders,
   by path), "kv": {key: text} (every record of render.py's and the phone's: render:files:*, render:progressions:*,
   render:*:phone, keys:own_versions), "units": {unit: digest} (each song's, which a changed file, version or override
-  moves), "info": {path: text} (each info.json)}``.
+  moves), "info": {path: text} (each info.json)}``; and for the cases of ``RAW_CASES`` ``"raws": {"<song id>/<tab
+  id>": 16 hex}``, each auto version's raw text as SQLite holds it, by its SHA-256 (the units' canonical digests are
+  blind to a raw's member order, which tells whether plain lyrics went on a heard sheet before its re-lay or after).
 
 The cases (``CASES``) between them reach: a UG sheet and its key, and its timed lyrics, too few lines to light its page;
 the versions kept beside the sheet (their pages, one dropped once it leaves), the song's UG versions listed with the one
@@ -33,7 +35,8 @@ whatever is there); harmonica tabs (their pages, the harp the sheet's viewer sta
 leaves or its text is gone); an own version kept by a major letter alone on a sheet now read minor, rewritten once (kv
 ``keys:own_versions``), and one moved by ``[transpose]``; an auto sheet that takes lyrics that came after it
 (``with_plain_lyrics``, its version's ``raw`` lyrics "plain"), one beside a human sheet that takes none, one made from a
-YouTube video's audio (the video drawn from the icons, its credit off the viewer); Chinese sheets in Simplified and in
+YouTube video's audio (the video drawn from the icons, its credit off the viewer); auto sheets that keep what was heard,
+laid out again over the words that came since before any page is made (``relay_onto_sheets``), one up to date left; Chinese sheets in Simplified and in
 Traditional characters (the phone's script record); LaCuerda's sheet; a sheet that can't be read (the song failed); a
 song with no sheet, and one ignored; a library that holds the computer's PDFs and their records (never linked, read or
 deleted: info.json's ``render`` null), whose human sheet then leaves (its .cho and page gone, the PDFs left); a ukulele
@@ -334,6 +337,39 @@ def case_auto_sheets(w: World) -> list[dict]:
     return [{"render": None}]
 
 
+def case_relaid(w: World) -> list[dict]:
+    """Auto sheets that keep what was heard, laid out again over the words that came since, before any page is made
+    (render_all's ``relay_onto_sheets`` after ``lyrics_onto_sheets``): one the phone made over none, timed lyrics
+    come; one another caracole made from a video's audio, plain lyrics come; one up to date, left as it is."""
+    from caracole.autochords.sheet import Heard, Maker, make_sheet, raw_of
+    from caracole.youtube import Video
+
+    heard = Heard([ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G"), ChordSegment(8.0, 12.0, "Am")],
+                  BEATS, BEATS[::4], 12.0)
+    phone = Maker("phone", "f0f0f0f0f0f0f0f0", {"chords": "btc_large_voca@0123456789abcdef"},
+                  "onnxruntime 1.27.1", "song.mp3", "00112233aabbccdd")
+    for title, video, words in (("Relaid On Timed Words", None, None),
+                                ("Relaid From A Video", VIDEO, None),
+                                ("Up To Date", None, SYNCED)):
+        song = add_song(w.conn, "Placeholder Band", title, added_at=f"2026-10-0{len(list_songs(w.conn)) + 1}T00:00:00Z")
+        if words is not None:
+            update_song(w.conn, song.id, lyrics_status="found", lyrics_json=Lyrics(
+                plain="made up words to sing\nonly for the test", synced=words, instrumental=False, duration=12.0,
+                lrclib_id=None, raw={}).to_json())
+        song = get_song(w.conn, song.id)
+        clip = Video.from_json(video) if video else None
+        made = make_sheet(song, heard, source=youtube_credit(clip.title, clip.channel, clip.id) if clip else None)
+        vid = _version(w, song, "auto", str(song.id), "auto", raw=raw_of(song, made, video=clip, maker=phone),
+                       rating=0, votes=0)
+        _keep(w, song, vid, songs.AUTO_SHEET, made.text)
+    later = list_songs(w.conn)
+    update_song(w.conn, later[-1].id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="made up words to sing\nonly for the test", synced=SYNCED, instrumental=False, duration=12.0,
+        lrclib_id=None, raw={}).to_json())
+    store_lyrics(w, later[-2], "made up words to sing\nonly for the test\n\nand a second verse")
+    return [{"render": None}, {"render": None}]
+
+
 def case_chinese(w: World) -> list[dict]:
     simplified = add_song(w.conn, "李健", "月亮代表")
     ug_sheet(w, simplified, SIMPLIFIED, tab=77001, tonality="C")
@@ -401,6 +437,7 @@ CASES = {
     "harmonica": case_harmonica,
     "own_versions": case_own_versions,
     "auto_sheets": case_auto_sheets,
+    "relaid": case_relaid,
     "chinese": case_chinese,
     "other_sheets": case_other_sheets,
     "computers_pdfs": case_computers_pdfs,
@@ -444,7 +481,18 @@ def _fixture(w: World) -> list[dict]:
 RECORDED = re.compile(r"render:(files:\d+|progressions:\d+|\d+:phone)|keys:own_versions")
 
 
-def _out(w: World, made: phone.PhoneRendered) -> dict[str, Any]:
+# The cases whose outs also hold each auto version's raw as SQLite holds it (its text's SHA-256, 16 hex): the units'
+# digests are of canonical JSON, blind to the order of a raw's members, which tells whether the plain lyrics were put
+# on a heard sheet before or after it was laid out again.
+RAW_CASES = ("relaid",)
+
+
+def _raws(w: World) -> dict[str, str]:
+    rows = w.conn.execute("SELECT song_id, tab_id, raw FROM versions WHERE provider = 'auto' ORDER BY song_id, tab_id")
+    return {f"{song_id}/{tab_id}": hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16] for song_id, tab_id, raw in rows}
+
+
+def _out(w: World, made: phone.PhoneRendered, case: str = "") -> dict[str, Any]:
     lib = w.cfg.library_dir
     files = []
     for path in sorted(p for p in lib.rglob("*") if p.is_file() and not p.is_symlink() and p.parent != lib):
@@ -453,7 +501,10 @@ def _out(w: World, made: phone.PhoneRendered) -> dict[str, Any]:
     kv = {k: v for k, v in w.conn.execute("SELECT key, value FROM kv ORDER BY key") if RECORDED.fullmatch(k)}
     units = {phone.unit_id(s): phone.unit_digest(w.conn, w.cfg, s) for s in list_songs(w.conn)}
     info = {path: (lib / path).read_text(encoding="utf-8") for path, _, _ in files if path.endswith("/info.json")}
-    return {"failed": made.failed, "files": files, "kv": kv, "units": units, "info": info}
+    out = {"failed": made.failed, "files": files, "kv": kv, "units": units, "info": info}
+    if case in RAW_CASES:
+        out["raws"] = _raws(w)
+    return out
 
 
 def _assert_phone_writes(out: dict[str, Any], fixture: list[dict]) -> None:
@@ -475,7 +526,7 @@ def run_case(root: Path, name: str) -> dict[str, Any]:
         outs = []
         for step in steps:
             if "render" in step:
-                out = _out(w, phone.phone_render(w.conn, w.cfg, song_ids=step["render"]))
+                out = _out(w, phone.phone_render(w.conn, w.cfg, song_ids=step["render"]), name)
                 _assert_phone_writes(out, fixture)
                 outs.append(out)
             elif "drop" in step:

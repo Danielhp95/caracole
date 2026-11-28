@@ -20,6 +20,7 @@ import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.respond
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
@@ -30,6 +31,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.BindException
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -38,7 +40,11 @@ import java.util.logging.Logger
  * The phone's server: Ktor CIO listening on 127.0.0.1 alone, every request handed whole to [app] (server.py's part
  * of caracole serve): its method, its target exactly as sent (`%2F` and all), its headers by lowercase name (a
  * header sent twice, its last value, as http.server keeps one; cookies all, joined), and its body read up to its
- * route's limit and one byte more, which App refuses as too long (413); a body the client cut short is a 400. A
+ * route's limit and one byte more, which App refuses as too long (413), or for a route that spools its body
+ * ([spooled]: POST /audio/upload) as a stream; a body the client cut short is a 400 (a spooled one's, short of its
+ * Content-Length, in server.py's words). A spooled body sent chunked, with no Content-Length, is read by its route
+ * up to the route's limit and refused there; what is left of it CIO drains with no cap, as it drains any body it
+ * reads to the next request (behind the launch secret: only the app's own WebView and tests get that far). A
  * request its headers refuse already (no launch secret, another host name: App.refusedUnread) is answered before its
  * body is read, and its connection closed. The
  * rest of a body too long is Ktor's to drop: CIO reads a request's whole Content-Length before the next request on
@@ -98,6 +104,12 @@ class LocalServer(val app: App) : AutoCloseable {
                     finish()
                     return@intercept
                 }
+                if (app.spools(method, target)) {
+                    spooled(call.receiveChannel(), method, target, headers)
+                        .also { call.respond(outgoing(it, head = false, call.response.headers)) }
+                    finish()
+                    return@intercept
+                }
                 val response = try {
                     val body = try {
                         read(call.receiveChannel(), app.bodyLimit(method, target) + 1)
@@ -126,6 +138,71 @@ class LocalServer(val app: App) : AutoCloseable {
             throw e
         }
         return server
+    }
+
+    /**
+     * A request to a route that spools its body (Route.spool: POST /audio/upload): refused unread past the route's
+     * limit by its Content-Length, as server.py refuses one (413, its words); else handed to App with its body as a
+     * stream, read as the route reads it, never held whole. An answer that leaves the body unread (that refusal, or
+     * the route's: the store stops at the first chunk that isn't audio, or past its limit) says `Connection: close`;
+     * what the client still sends of it CIO drops, as it drops the rest of a form too long, never reading any of it as
+     * a request (LocalServerTest), and never resets the connection under a client still sending, which would lose
+     * the refusal it is to read.
+     */
+    private suspend fun spooled(channel: ByteReadChannel, method: String, target: String,
+                                headers: Map<String, String>): Response {
+        val length = headers["content-length"]?.let { Py.strip(it).toLongOrNull() }
+        if (length != null && length > app.bodyLimit(method, target)) {
+            return app.finish(Response(413, Body.Bytes(TOO_LONG.toByteArray()),
+                                       mutableListOf("Content-Type" to TEXT, "Connection" to "close")))
+        }
+        val stream = Ended(channel.toInputStream(), length)
+        val response = try {
+            withContext(Dispatchers.IO) {
+                app.handle(Request(method, target, headers, ByteArray(0), stream))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            log.log(Level.SEVERE, "caracole: $method $target failed", e)
+            app.finish(Response(500, Body.Bytes(BUG.toByteArray()), mutableListOf("Content-Type" to TEXT)))
+        }
+        // A body the client ended before its Content-Length: never taken as a whole upload (the route's read of it
+        // failed at that end), whatever the route answered of it (server.py's 400, its words).
+        if (stream.short) {
+            return app.finish(Response(400, Body.Bytes(SHORT.toByteArray()),
+                                       mutableListOf("Content-Type" to TEXT, "Connection" to "close")))
+        }
+        // Never cancelled: a reset while the client still sends would lose the answer it is to read (its refusal).
+        if (!stream.ended) response.headers.add("Connection" to "close")
+        return response
+    }
+
+    /** A body's stream that says whether it was read to its end. Its close (the route's, which closes what it is
+     * handed whatever came of it) lets the channel be: closing the channel's own stream cancels it, which resets a
+     * connection the client still sends on, losing the refusal it is to read; CIO drops the rest. With the request's
+     * Content-Length ([length]), an end before it is [short], and the read that meets it an IOException, so the
+     * route never takes part of a file as the whole of it. */
+    private class Ended(private val input: InputStream, private val length: Long?) : InputStream() {
+        @Volatile var ended = false
+            private set
+        @Volatile var short = false
+            private set
+        private var read = 0L
+
+        override fun read(): Int = input.read().also { if (it < 0) end() else read++ }
+        override fun read(b: ByteArray, off: Int, len: Int): Int =
+            input.read(b, off, len).also { if (it < 0) end() else read += it }
+        override fun available(): Int = input.available()
+        override fun close() {}
+
+        private fun end() {
+            ended = true
+            if (length != null && read < length) {
+                short = true
+                throw IOException(SHORT.removeSuffix("\n"))
+            }
+        }
     }
 
     /** Up to [most] bytes of the body: what App needs to read a form, or to know it is too long. */
@@ -181,6 +258,8 @@ class LocalServer(val app: App) : AutoCloseable {
         const val TEXT = "text/plain; charset=utf-8"
         const val BUG = "caracole hit a bug; its log says where.\n"
         const val UNREAD = "That request's body can't be read.\n"
+        const val TOO_LONG = "That is too long to send here.\n"  // server.py's, past a route's limit
+        const val SHORT = "That body is shorter than it said it was.\n"  // server.py's, a body ended early
         val log: Logger = Logger.getLogger("caracole.server")
 
         /**

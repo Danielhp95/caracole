@@ -6,7 +6,8 @@ promise is that losing it costs only requests: a file you gave can't be fetched 
 
 - **A kept file** is ``<song id>-<first 16 hex of its SHA-256><ext>`` (``keep``), and the song's ``audio_path`` names
   it, as it names a purchase. A song's audio is an upload when that path is a regular file of this folder by such a
-  name (``uploaded``): no kv record, nothing the phone or a sync sees.
+  name (``uploaded``): no kv record of it, nothing the phone or a sync sees. The name the file was given under is
+  kept beside it (kv ``audio:name:<song id>``, ``NAME_KEY``, ``given_name``), for its auto sheet's raw alone.
 - **An upload always wins**, the owner's decision of 2026-11-25: a file you give a song is its audio whatever it had
   (a purchase linked from Music/, whose file stays where it is; YouTube's audio, which youtube_fetch.py's ``tidy``
   then lets go of; an earlier upload, deleted), and nothing takes its place later: ``music.scan_music`` leaves such a
@@ -54,11 +55,16 @@ from shutil import disk_usage
 from typing import IO, Any
 
 from caracole.config import Config
+from caracole.db import kv_delete, kv_get, kv_set, savepoint
 from caracole.songs import Song, get_song, update_song
 
 log = logging.getLogger(__name__)
 
 FOLDER = "audio"  # in the state directory
+# kv: the name the file a song's audio is was given under (an upload's, as sent; a file of your own's), a name to
+# show alone, for its auto sheet's raw (``audio_name``): written as ``keep`` makes it the song's audio, gone with the
+# song (songs._PER_SONG_KV), and with the file at a merge (songs._given_audio); no sync carries it, the raw does.
+NAME_KEY = "audio:name:"
 AUDIO_MAX = 128 * 1024 * 1024  # an upload's bytes, at most; a file of your own is any size
 MAX_SECONDS = 30 * 60  # an audio file's length, at most
 ROOM = 1024 ** 3  # bytes the disk keeps free beside twice the file, at least
@@ -82,6 +88,9 @@ _MP4_BRANDS = {b"M4A ", b"M4B ", b"mp42", b"isom", b"dash", b"iso2", b"iso5", b"
 _EXT = "|".join(re.escape(ext) for ext in FORMATS.values())
 ID = re.compile(r"[0-9a-f]{16}")  # a staged upload's id
 _STAGED = ".upload-"
+_RECORD = ".json"  # a staged upload's record: .upload-<id>.json
+_MARK = ".kept"  # a moved upload's marker: .upload-<id>.kept
+_COPY, _COPY_END = ".keep-", ".part"  # a copy into the folder, until it is whole: .keep-<16 hex>.part
 _PIECE = re.compile(rf"\.upload-(?P<id>[0-9a-f]{{16}})(?P<ext>{_EXT}|\.json)")  # a staged upload's audio or record
 _STAGED_AUDIO = re.compile(rf"\.upload-(?P<id>[0-9a-f]{{16}})(?:{_EXT})")
 _MARKER = re.compile(r"\.upload-(?P<id>[0-9a-f]{16})\.kept")  # a moved upload's marker: the kept file it became
@@ -89,8 +98,14 @@ _MARKER = re.compile(r"\.upload-(?P<id>[0-9a-f]{16})\.kept")  # a moved upload's
 # come later than that. A few dozen bytes each.
 MARKED = 30 * 86400
 KEPT = re.compile(rf"[0-9]+-[0-9a-f]{{16}}(?:{_EXT})")  # a kept file: <song id>-<sha256 16 hex><ext>
-_PART = re.compile(r"\.keep-[0-9a-f]{16}\.part")  # a copy into the folder, until it is whole
+# A copy into the folder, until it is whole.
+_PART = re.compile(rf"{re.escape(_COPY)}[0-9a-f]{{16}}{re.escape(_COPY_END)}")
 _RECORD_MAX = 64 * 1024  # a staged upload's record's bytes, at most
+_SHA256 = re.compile(r"[0-9a-f]{64}")  # a record's digest
+_SPLIT = re.compile(r"[/\\]")  # a name's parts, of which the last is the name to show
+DISPLAY_MOST = 255  # a name to show's characters, at most
+TAGS = ("artist", "title", "album")  # the tags an audio file's are read as
+MARKER_FIELDS = ("kept", "song", "at")  # a marker's members, in the order it is written
 
 NOT_AUDIO = "Not an audio file caracole reads (MP3, M4A, FLAC, WAV, Ogg or AIFF)."
 TOO_BIG = "That file is too big: an audio file is 128 MiB at most; `caracole audio FILE` takes any."
@@ -100,6 +115,8 @@ EMPTY = "That file is empty."
 NO_NAME = "What is the file called? Its name is text."
 WHICH = "Which upload? Its id is 16 hex."
 GONE = "That upload is gone: it was left over an hour, or another file was chosen since. Choose it again."
+NOT_IN_BOOK = "{song} isn't in the book any more."  # the song's display name
+NOT_A_STORE = "{path} isn't a folder of caracole's own (a symbolic link, say): no audio file is kept there."
 
 # One change at a time to the staged uploads, of caracole serve's threads; re-entrant, so that a route may hold it
 # (``held``) across what it reads of the queue and what it changes here.
@@ -247,7 +264,7 @@ def _read(reader: Any, f: IO[bytes], fmt: str) -> Audio:
         raise AudioError(TOO_LONG, 422)
     tags = read.tags
     named = {key: _first(tags, keys) if tags is not None else None
-             for key, keys in (("artist", _ARTIST_KEYS), ("title", _TITLE_KEYS), ("album", _ALBUM_KEYS))}
+             for key, keys in zip(TAGS, (_ARTIST_KEYS, _TITLE_KEYS, _ALBUM_KEYS), strict=True)}
     return Audio(fmt, float(length), named)
 
 
@@ -268,8 +285,8 @@ def _display_name(name: object) -> str:
     at most; never a path."""
     if not isinstance(name, str):
         return ""
-    last = re.split(r"[/\\]", name)[-1]
-    return "".join(c for c in last if unicodedata.category(c) != "Cc").strip()[:255]
+    last = _SPLIT.split(name)[-1]
+    return "".join(c for c in last if unicodedata.category(c) != "Cc").strip()[:DISPLAY_MOST]
 
 
 # --- the folder -----------------------------------------------------------------------------------------------------
@@ -286,8 +303,7 @@ def _store(cfg: Config) -> Path:
     try:
         fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError as e:
-        raise AudioError(f"{path} isn't a folder of caracole's own (a symbolic link, say): no audio file is kept "
-                         "there.", 500) from e
+        raise AudioError(NOT_A_STORE.format(path=path), 500) from e
     try:
         os.fchmod(fd, 0o700)
     finally:
@@ -361,13 +377,13 @@ def _staged_ids(root: Path) -> set[str]:
 
 def _drop_pieces(root: Path, upload_id: str) -> bool:
     """A staged upload's files deleted, whatever they are; whether any was there."""
-    gone = [_unlink(root / f"{_STAGED}{upload_id}{ext}") for ext in (*FORMATS.values(), ".json")]
+    gone = [_unlink(root / f"{_STAGED}{upload_id}{ext}") for ext in (*FORMATS.values(), _RECORD)]
     return any(gone)
 
 
 def _touched(root: Path, upload_id: str) -> float:
     times = []
-    for ext in (*FORMATS.values(), ".json"):
+    for ext in (*FORMATS.values(), _RECORD):
         try:
             times.append(os.lstat(root / f"{_STAGED}{upload_id}{ext}").st_mtime)
         except OSError:
@@ -413,7 +429,7 @@ def stage(cfg: Config, data: bytes, name: str, *,
         try:
             with open(fd, "wb") as f:
                 f.write(data)
-            with open(_create(root / f"{_STAGED}{upload_id}.json"), "wb") as f:
+            with open(_create(root / f"{_STAGED}{upload_id}{_RECORD}"), "wb") as f:
                 f.write(json.dumps(up.record()).encode())
         except BaseException:
             _drop_pieces(root, upload_id)
@@ -457,10 +473,10 @@ def _read_record(path: Path) -> dict[str, Any] | None:
         return None
     tags = record.get("tags")
     ok = (isinstance(record.get("name"), str) and type(record.get("size")) is int
-          and isinstance(record.get("sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", record["sha256"])
+          and isinstance(record.get("sha256"), str) and _SHA256.fullmatch(record["sha256"])
           and record.get("format") in FORMATS and type(record.get("duration")) in (int, float)
           and type(record.get("at")) in (int, float) and isinstance(tags, dict)
-          and set(tags) == {"artist", "title", "album"} and all(v is None or isinstance(v, str) for v in tags.values()))
+          and set(tags) == set(TAGS) and all(v is None or isinstance(v, str) for v in tags.values()))
     return record if ok else None
 
 
@@ -473,7 +489,7 @@ def staged(cfg: Config, upload_id: str) -> Staged:
     if not _is_store(root):
         raise AudioError(GONE, 404)
     there = [ext for ext in FORMATS.values() if os.path.lexists(root / f"{_STAGED}{upload_id}{ext}")]
-    record = _read_record(root / f"{_STAGED}{upload_id}.json")
+    record = _read_record(root / f"{_STAGED}{upload_id}{_RECORD}")
     if len(there) != 1 or record is None or FORMATS[record["format"]] != there[0]:
         raise AudioError(GONE, 404)
     path = root / f"{_STAGED}{upload_id}{there[0]}"
@@ -513,15 +529,15 @@ class Marked:
 
 
 def _marker(root: Path, upload_id: str) -> Path:
-    return root / f"{_STAGED}{upload_id}.kept"
+    return root / f"{_STAGED}{upload_id}{_MARK}"
 
 
 def _write_marker(root: Path, upload_id: str, kept: Path, song_id: int) -> None:
     """The marker written whole (a temporary name, then a rename over any before it), before the data's move."""
-    part = root / f".keep-{secrets.token_hex(8)}.part"
+    part = root / f"{_COPY}{secrets.token_hex(8)}{_COPY_END}"
     try:
         with open(_create(part), "wb") as f:
-            f.write(json.dumps({"kept": kept.name, "song": song_id, "at": time.time()}).encode())
+            f.write(json.dumps(dict(zip(MARKER_FIELDS, (kept.name, song_id, time.time()), strict=True))).encode())
             f.flush()
             os.fsync(f.fileno())
         os.rename(part, _marker(root, upload_id))
@@ -535,7 +551,7 @@ def _read_marker(root: Path, upload_id: str) -> Marked | None:
     if (not isinstance(record, dict) or not isinstance(record.get("kept"), str) or not KEPT.fullmatch(record["kept"])
             or type(record.get("song")) is not int or type(record.get("at")) not in (int, float)):
         return None
-    done = not os.path.lexists(root / f"{_STAGED}{upload_id}.json")
+    done = not os.path.lexists(root / f"{_STAGED}{upload_id}{_RECORD}")
     return Marked(upload_id, root / record["kept"], record["song"], float(record["at"]), done)
 
 
@@ -642,6 +658,19 @@ def given_file(audio_path: str | None) -> bool:
     return bool(KEPT.fullmatch(path.name)) and path.parent.name == FOLDER and _regular(path)
 
 
+def given_sha16(audio_path: str | None) -> str | None:
+    """The first 16 hex digits of the SHA-256 of the file you gave a song that ``audio_path`` names, read from its kept
+    name (``<song id>-<sha256 16 hex><ext>`` in a folder named as the store is), or None for any other path: no file
+    is read, so a record of a given file's audio is known by its name alone (transcript.py ``audio_key``; the phone's
+    ``AudioStore.givenSha16`` alike)."""
+    if not audio_path:
+        return None
+    path = Path(audio_path)
+    if not KEPT.fullmatch(path.name) or path.parent.name != FOLDER:
+        return None
+    return path.name.split("-", 1)[1][:16]
+
+
 def uploaded(cfg: Config, song: Song) -> Path | None:
     """The file you gave the song, when its audio is one (a kept file of the folder), else None: a purchase,
     YouTube's audio, or none."""
@@ -677,7 +706,7 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
     try:
         current = get_song(conn, song.id)
     except KeyError:
-        raise AudioError(f"{song.display} isn't in the book any more.", 404) from None
+        raise AudioError(NOT_IN_BOOK.format(song=song.display), 404) from None
     source = Path(source)
     root = folder(cfg)
     staged_audio = _STAGED_AUDIO.fullmatch(source.name)
@@ -705,7 +734,7 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
         else:
             root = _store(cfg)
             _room(root, os.fstat(f.fileno()).st_size)
-            part = root / f".keep-{secrets.token_hex(8)}.part"
+            part = root / f"{_COPY}{secrets.token_hex(8)}{_COPY_END}"
             try:
                 with open(_create(part), "wb") as out:
                     digest = _hash(f, out)
@@ -720,17 +749,40 @@ def keep(cfg: Config, conn: sqlite3.Connection, song: Song, source: Path, *, mov
                 _unlink(part)
                 raise
     _sync(root)
-    return _named(conn, root, current, kept, staged_audio.group("id") if move else None)
+    return _named(conn, root, current, kept, staged_audio.group("id") if move else None, source.name)
 
 
-def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None) -> Path:
-    """The song's row naming the kept file, then the staged record let go (a moved upload's keep over), then the file
-    the song had there before, unless another song's row names it."""
+def given_name(conn: sqlite3.Connection, song: Song) -> str | None:
+    """The name the song's given file had (``NAME_KEY``): None for a song kept none for, or one kept before the
+    record was (never a name made up)."""
+    return kv_get(conn, f"{NAME_KEY}{song.id}") or None
+
+
+def _sent_name(root: Path, upload_id: str) -> str:
+    """The name a staged upload was sent under, from its record (``_display_name``'s); "" when it can't be read."""
+    try:
+        record = json.loads((root / f"{_STAGED}{upload_id}{_RECORD}").read_bytes())
+    except (OSError, ValueError):
+        return ""
+    return _display_name(record.get("name")) if isinstance(record, dict) else ""
+
+
+def _named(conn: sqlite3.Connection, root: Path, current: Song, kept: Path, upload_id: str | None,
+           name: str = "") -> Path:
+    """The song's row naming the kept file, and the name it was given under (``NAME_KEY``: a staged upload's, else
+    ``name``), in one savepoint, then the staged record let go (a moved upload's keep over), then the file the song
+    had there before, unless another song's row names it."""
     mtime = os.lstat(kept).st_mtime
-    if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
-        update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
+    shown = _sent_name(root, upload_id) if upload_id is not None else _display_name(name)
+    with savepoint(conn, "audio_named"):  # the row and its file's name together: never the new file, the old name
+        if (current.audio_path, current.audio_mtime) != (str(kept), mtime):
+            update_song(conn, current.id, audio_path=str(kept), audio_mtime=mtime)
+        if shown:
+            kv_set(conn, f"{NAME_KEY}{current.id}", shown)
+        else:
+            kv_delete(conn, f"{NAME_KEY}{current.id}")
     if upload_id is not None:
-        _unlink(root / f"{_STAGED}{upload_id}.json")  # the row names the kept file now
+        _unlink(root / f"{_STAGED}{upload_id}{_RECORD}")  # the row names the kept file now
     earlier = kept_in(root, current.audio_path)
     if earlier is not None and earlier != kept and not _named_by_another(conn, earlier, current.id):
         _unlink(earlier)
@@ -748,7 +800,7 @@ def adopt(cfg: Config, conn: sqlite3.Connection, song: Song, upload_id: str) -> 
     try:
         current = get_song(conn, song.id)
     except KeyError:
-        raise AudioError(f"{song.display} isn't in the book any more.", 404) from None
+        raise AudioError(NOT_IN_BOOK.format(song=song.display), 404) from None
     examine(found.path)  # still audio caracole reads
     return _named(conn, root, current, found.path, upload_id)
 

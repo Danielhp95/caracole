@@ -1,0 +1,72 @@
+{
+ "merge": {
+  "NO_CHORD": "N",
+  "AUTO_MARKER": "auto-generated, unverified",
+  "DEFAULT_BEAT": 0.5,
+  "BEATS_PER_BAR": 4,
+  "BARS_PER_LINE": 4,
+  "GAP_BARS": 2,
+  "EPS": 1e-06,
+  "STAMP_RUN": "(?:\\s*\\[\\d+:\\d{1,2}(?:[.:]\\d+)?\\])+",
+  "STAMP": "\\[(\\d+):(\\d{1,2})(?:[.:](\\d+))?\\]",
+  "TAG": "\\[([A-Za-z#]+):(.*)\\]",
+  "WORD_TIME": "<(\\d+):(\\d{1,2})(?:[.:](\\d+))?>",
+  "WORD_PIECE": "(<\\d+:\\d{1,2}(?:[.:]\\d+)?>)|(\\s+)|((?:(?!<\\d+:\\d{1,2}(?:[.:]\\d+)?>)\\S)+)",
+  "UNSPACED": "[぀-ヿ㐀-䶿一-鿿豈-﫿𠀀-𮯯]",
+  "APOSTROPHES": "'’",
+  "NO_CHORD_CELL": "[ch]N.C.[/ch]"
+ },
+ "align": {
+  "MAX_SHIFT": 30.0,
+  "STEPS_PER_BEAT": 4,
+  "MIN_LINES": 6,
+  "WEIGHTS": {
+   "onsets": 1.0,
+   "coverage": 1.0,
+   "repeats": 0.5
+  },
+  "BAR_SHARE": 0.5,
+  "EXTENT_COST": 0.05,
+  "PRIOR": 0.1,
+  "MARGIN": 0.07,
+  "MIN_ONSETS": 0.4,
+  "MIN_COVERAGE": 0.7,
+  "STEADY_BARS": 2,
+  "REPEAT_CHARS": 8,
+  "REPEATS_PER_LINE": 6,
+  "EPS": 1e-06,
+  "WORD": "\\w+"
+ },
+ "sheet": {
+  "MODEL": "btc_large_voca",
+  "CONTRACT": 1,
+  "SYNC_TOLERANCE_S": 2.0,
+  "COLUMNS": "display",
+  "MAKER_MEMBERS": [
+   "made_on",
+   "made_by",
+   "models",
+   "runtime",
+   "audio_name",
+   "audio_sha16"
+  ],
+  "RELAY_KEEPS": [
+   "audio",
+   "youtube",
+   "made_on",
+   "made_by",
+   "models",
+   "runtime",
+   "audio_name",
+   "audio_sha16"
+  ]
+ },
+ "transcript": {
+  "LYRICS_SOURCE": "transcript",
+  "NOTE": "Lyrics transcribed from the audio (Whisper), unverified",
+  "SILENT": "Instrumental: nothing sung was heard in the audio",
+  "NOT_SUNG": "Chords only: you said it isn't sung",
+  "TRANSCRIPT": "transcript:",
+  "HEARD_NOTHING": "transcribe:none:"
+ }
+}

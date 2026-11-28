@@ -1,0 +1,52 @@
+{
+ "contract": 1,
+ "release": "models",
+ "btc": {
+  "graph": {
+   "name": "btc-graph.onnx",
+   "bytes": 1405441,
+   "sha256": "e20b247cc04d8e550a11cb0c9d7b96214351fd42ba1e18b76c9daae655db9155"
+  },
+  "weights": {
+   "name": "btc_model_large_voca.pt",
+   "bytes": 12229576,
+   "sha256": "1673d23f8f9a55ae7f9e8b80a51da616debb22675b8d8b67ea6ce0ef37b0ab51",
+   "repository": "jayg996/BTC-ISMIR19",
+   "commit": "2682317be668032e6e4b269ded36adaa2ad57df0",
+   "path": "test/btc_model_large_voca.pt",
+   "git_blob": "11c6edbaaaee33737aa7a41dcb9044191630326f"
+  },
+  "mean": -2.227988,
+  "std": 1.7191329,
+  "pad": "mean",
+  "window": 108,
+  "bins": 144,
+  "classes": 170,
+  "model": "btc_large_voca@1673d23f8f9a55ae"
+ },
+ "beats": {
+  "checkpoint": {
+   "name": "final0.ckpt",
+   "bytes": 81058141,
+   "sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331"
+  },
+  "fp32": {
+   "name": "beat_this-final0.onnx",
+   "bytes": 83161696,
+   "sha256": "c61f7e36b7391146b8a8a75a64ebe6c26e5f3815cab7c4baa03bfdd25ca8d576",
+   "asset": "beat_this-final0.onnx",
+   "model": "beat_this final0@8c328b45f59d8dd3"
+  },
+  "fp16": {
+   "name": "beat_this-final0-fp16.onnx",
+   "bytes": 42677145,
+   "sha256": "d9eedbbecffc91c82791d73e4acdb93651bbefcf45d11b2ed7dc6ec3dcbc1257",
+   "asset": "beat_this-final0-fp16.onnx",
+   "model": "beat_this final0@8c328b45f59d8dd3 fp16"
+  },
+  "chunk": 1500,
+  "border": 6,
+  "fps": 50,
+  "bins": 128
+ }
+}

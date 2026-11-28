@@ -4,6 +4,7 @@ songs are offered one. No model runs here."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import os
 from pathlib import Path
 
@@ -36,6 +37,14 @@ def youtube_song(conn, tmp_path, artist="A", title="T", **fields):
     return get_song(conn, song.id)
 
 
+def other_audio(conn, song):
+    """The song's audio replaced by other bytes (another video), at a new path, as a new download links it."""
+    other = Path(song.audio_path).with_name(f"{song.id}-other.m4a")
+    other.write_bytes(b"another video's audio")
+    update_song(conn, song.id, audio_path=str(other), audio_mtime=os.stat(other).st_mtime)
+    return get_song(conn, song.id)
+
+
 def made(song, **kw):
     fields = dict(lrc="[00:01.00]hello\n", audio=song.audio_path, audio_mtime=song.audio_mtime, model=tr.MODEL,
                   language="en", device="cuda", words_dropped=0, made_at="2026-11-20T00:00:00Z")
@@ -56,8 +65,7 @@ def test_a_transcript_of_other_audio_is_none_and_the_offer_comes_back(conn, cfg,
     song = youtube_song(conn, tmp_path)
     tr.keep_transcript(conn, song, made(song))
     assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
-    update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
-    song = get_song(conn, song.id)
+    song = other_audio(conn, song)
     assert tr.transcript_of(conn, song) is None
     assert tr.why_not_offered(conn, cfg, song, Overrides()) is None
 
@@ -68,11 +76,11 @@ def test_heard_nothing_holds_for_that_audio_alone(conn, cfg, tmp_path):
     tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="sung 6.2 s", by="caracole")
     assert tr.heard_nothing(conn, song)
     assert kv_get_json(conn, f"{tr.HEARD_NOTHING}{song.id}") == {
-        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "at": "2026-11-20T00:00:00Z", "why": "sung 6.2 s",
+        "audio": song.audio_path, "audio_mtime": song.audio_mtime, "audio_size": 5,
+        "audio_sha256": hashlib.sha256(b"audio").hexdigest(), "at": "2026-11-20T00:00:00Z", "why": "sung 6.2 s",
         "by": "caracole"}
     assert tr.why_not_offered(conn, cfg, song, Overrides()) is not None
-    update_song(conn, song.id, audio_mtime=song.audio_mtime + 5)
-    other = get_song(conn, song.id)
+    other = other_audio(conn, song)
     assert not tr.heard_nothing(conn, other)
     assert tr.why_not_offered(conn, cfg, other, Overrides()) is None
     tr.note_heard_nothing(conn, song, "2026-11-20T00:00:00Z", why="you said so", by="you")
@@ -293,9 +301,10 @@ def test_the_owners_not_sung_holds_for_that_audio_and_a_new_file_is_heard_again(
     assert tr.why_not_unsung(conn, cfg, song, Overrides()) == tr.NO_TRANSCRIPT
     assert tr.heard_nothing(conn, song)
     assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [song.id], "transcribed": []}
-    moved = dataclasses.replace(song, audio_mtime=(song.audio_mtime or 0) + 5)  # a new file: a new start
+    moved = other_audio(conn, song)  # a new file: a new start
     assert not tr.heard_nothing(conn, moved) and not tr.said_not_sung(conn, moved)
     assert tr.why_not_offered(conn, cfg, moved, Overrides()) is None
+    update_song(conn, song.id, audio_path=song.audio_path, audio_mtime=song.audio_mtime)  # its file back
     tr.keep_transcript(conn, song, made(song))  # Transcribe anyway heard it: their word is gone with it
     assert not tr.said_not_sung(conn, song)
     assert tr.offers(conn, cfg, Overrides()) == {"songs": [], "nothing": [], "unsung": [], "transcribed": [song.id]}
@@ -339,3 +348,20 @@ def test_a_removal_takes_the_failed_hearings_note_with_the_song(conn, cfg, tmp_p
     assert tr.HEARING_FAILED in _PER_SONG_KV
     delete_song_kv(conn, song.id)
     assert kv_get(conn, f"{tr.HEARING_FAILED}{song.id}") is None
+
+
+@pytest.mark.parametrize("words_win", [True, False])
+def test_a_song_whose_auto_sheet_another_caracole_made_is_offered_its_words_as_any(conn, cfg, tmp_path, monkeypatch,
+                                                                                    words_win):
+    # Decision 5 decides what words heard here do to that sheet (run.py), never whether the card offers them: with
+    # words winning the nightly pass hears them too; without, Transcribe the lyrics by hand is the one way.
+    assert tr.WORDS_WIN is True  # the design's recommendation, in force until the owner says otherwise
+    monkeypatch.setattr(tr, "WORDS_WIN", words_win)
+    song = youtube_song(conn, tmp_path)
+    version = upsert_version(conn, provider="auto", tab_id="42", song_id=song.id, slot="sheet", kind="auto", rating=0,
+                             votes=0, version=1, label=None, url="file:///data/phone/x.mp3",
+                             raw={"lyrics": "none", "heard": {"contract": 1}, "made_on": "phone",
+                                  "made_by": "0f1e2d3c4b5a6978"}, now="2026-11-20T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=version, name="sheet (auto).txt", data=b"[C]", rank=1)
+    assert tr.why_not_offered(conn, cfg, get_song(conn, song.id), Overrides()) is None
+    assert song.id in tr.offers(conn, cfg, Overrides())["songs"]

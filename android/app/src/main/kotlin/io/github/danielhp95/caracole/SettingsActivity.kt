@@ -21,6 +21,7 @@ import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -46,6 +47,10 @@ import java.time.Instant
  * network stopped is asked about ("52 MB on a metered network?") while the network is still metered, whoever queued
  * it (the Journal's Try again too), Download then the owner's go-ahead, the question kept for the next screen until it
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
+ * Chords from audio (ChordModelsRow): the models' line ("Not downloaded · 55 MB", "Downloading · 21 of 55 MB",
+ * "Ready · 55 MB on the phone", "Not downloaded: {why}", "Waiting for your go-ahead (a metered network)"), Download
+ * (§6's question, then a metered network's, then ModelsRunner's job queued, its line followed) and Remove (its
+ * question, then ModelsRunner.remove, its refusal said); in the debug build, the Chords bench after it. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
  * its start tried again as the screen comes back. The library screen's bar has the same sync button.
  * No item's text ends in "…".
@@ -59,6 +64,10 @@ class SettingsActivity : Activity() {
     private lateinit var resetTextSize: Button
     private lateinit var cataloguesDate: TextView
     private lateinit var cataloguesStatus: TextView
+    private lateinit var chordsLine: TextView
+    private lateinit var chordsDownload: Button
+    private lateinit var chordsRemove: Button
+    private lateinit var chordsStatus: TextView
     private var scope: CoroutineScope = MainScope()
 
     /** The catalogues' job followed now, if any. */
@@ -70,6 +79,13 @@ class SettingsActivity : Activity() {
 
     /** The job [asked] is about (SiteCatalogues.keyOf). */
     private var askedFor: String? = null
+
+    /** The chord models' job followed now, if any. */
+    private var followingChords: kotlinx.coroutines.Job? = null
+
+    /** The chords row's question open now (Download's, the metered network's, Remove's; a device test answers it). */
+    internal var chordsAsked: AlertDialog? = null
+        private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,6 +102,10 @@ class SettingsActivity : Activity() {
         resetTextSize = findViewById(R.id.reset_text_size)
         cataloguesDate = findViewById(R.id.catalogues_date)
         cataloguesStatus = findViewById(R.id.catalogues_status)
+        chordsLine = findViewById(R.id.chords_line)
+        chordsDownload = findViewById(R.id.chords_download)
+        chordsRemove = findViewById(R.id.chords_remove)
+        chordsStatus = findViewById(R.id.chords_status)
 
         address.setText(settings.server)
         address.addTextChangedListener(object : TextWatcher {
@@ -122,7 +142,10 @@ class SettingsActivity : Activity() {
         }
 
         findViewById<Button>(R.id.backups).setOnClickListener { startActivity(Intent(this, BackupsActivity::class.java)) }
+        if (BuildConfig.CHORDS_BENCH) addChordsBench()
         findViewById<Button>(R.id.catalogues_download).setOnClickListener { downloadCatalogues(meteredOk = false) }
+        chordsDownload.setOnClickListener { askToDownloadChords() }
+        chordsRemove.setOnClickListener { askToRemoveChords() }
         // The first start's Download (MainActivity), which queued the job and opened this screen: asked here, on top.
         if (savedInstanceState == null && intent.getBooleanExtra(ASK_TO_NOTIFY, false)) askToNotify()
     }
@@ -134,6 +157,7 @@ class SettingsActivity : Activity() {
         showStorage()
         showCatalogues()
         followCatalogues()
+        followChords()
     }
 
     override fun onStart() {
@@ -152,6 +176,8 @@ class SettingsActivity : Activity() {
         asked?.let { it.setOnDismissListener(null); it.dismiss() }
         asked = null
         askedFor = null
+        chordsAsked?.let { it.setOnDismissListener(null); it.dismiss() }
+        chordsAsked = null
         super.onDestroy()
     }
 
@@ -350,11 +376,136 @@ class SettingsActivity : Activity() {
         cataloguesStatus.text = text
     }
 
+    // --- Chords from audio (ChordModelsRow) --------------------------------------------------------------------------
+
+    /** The row as the phone has it now: the models' size, whether they are here (ModelsRunner.ready, the files'
+     * answer), what keeps this phone from chords whatever the models (Phone.chordsProblem), the newest models job. */
+    private suspend fun chordsRow(phone: Phone): ChordModelsRow.Row = withContext(Dispatchers.IO) {
+        ChordModelsRow.of(phone.models.bytes(), phone.models.ready(), phone.chordsProblem(),
+                          ChordModelsRow.lastOf(phone.queue.snapshot()))
+    }
+
+    /** The row drawn: its line, Download (with the models' size) and Remove where it offers them. */
+    private fun showChords(row: ChordModelsRow.Row, bytes: Long?) {
+        chordsLine.text = when (row.line) {
+            ChordModelsRow.Line.NOT_DOWNLOADED -> getString(R.string.chords_not_downloaded, row.text)
+            ChordModelsRow.Line.DOWNLOADING -> getString(R.string.chords_downloading, row.text)
+            ChordModelsRow.Line.READY -> getString(R.string.chords_ready, row.text)
+            ChordModelsRow.Line.CANT -> getString(R.string.chords_cant, row.text)
+            ChordModelsRow.Line.WAITING -> getString(R.string.chords_waiting)
+        }
+        chordsDownload.visibility = if (row.download) View.VISIBLE else View.GONE
+        bytes?.let { chordsDownload.text = getString(R.string.chords_download, SiteCatalogues.size(it)) }
+        chordsRemove.visibility = if (row.remove) View.VISIBLE else View.GONE
+    }
+
+    /** The row drawn now, then followed while the newest models job waits or runs ("Downloading · 21 of 55 MB"). */
+    private fun followChords() {
+        followingChords?.cancel()
+        followingChords = scope.launch {
+            val phone = phone() ?: return@launch
+            while (true) {
+                val row = chordsRow(phone)
+                showChords(row, phone.models.bytes())
+                if (row.line != ChordModelsRow.Line.DOWNLOADING) return@launch
+                delay(FOLLOW_MS)
+            }
+        }
+    }
+
+    /** Download: §6's question with what a download would ask for now (ModelsRunner.toDownload: a file a failed
+     * download kept is no download), then, on a metered network, its own; then the `models` job queued, the second
+     * answer its go-ahead (ModelsRunner.spec(meteredOk)). */
+    private fun askToDownloadChords() {
+        scope.launch {
+            val phone = phone() ?: return@launch
+            val app = applicationContext
+            val (left, metered) = withContext(Dispatchers.IO) { phone.models.toDownload() to Caracole.metered(app) }
+            val size = SiteCatalogues.size(left ?: phone.models.bytes() ?: 0)
+            askChords(AlertDialog.Builder(this@SettingsActivity)
+                .setTitle(R.string.chords_ask_title)
+                .setMessage(getString(R.string.chords_ask_message, size))
+                .setPositiveButton(R.string.chords_ask_yes) { _, _ ->
+                    if (metered) askMetered(size) else downloadChords(meteredOk = false)
+                }
+                .setNegativeButton(R.string.chords_ask_no, null))
+        }
+    }
+
+    /** "You're on a metered network. Download 55 MB anyway?": Download, the go-ahead; Not now queues nothing. */
+    private fun askMetered(size: String) {
+        askChords(AlertDialog.Builder(this)
+            .setMessage(getString(R.string.chords_metered, size))
+            .setPositiveButton(R.string.chords_ask_yes) { _, _ -> downloadChords(meteredOk = true) }
+            .setNegativeButton(R.string.chords_ask_no, null))
+    }
+
+    /** The `models` job queued and followed; the queue full said. */
+    private fun downloadChords(meteredOk: Boolean) {
+        askToNotify()
+        scope.launch {
+            val phone = phone() ?: return@launch
+            val queued = withContext(Dispatchers.IO) {
+                try {
+                    phone.queue.submit(phone.models.spec(meteredOk)).first
+                } catch (_: QueueFull) {
+                    null
+                }
+            }
+            if (queued == null) sayChords(getString(R.string.chords_queue_full)) else chordsStatus.visibility = View.GONE
+            followChords()
+        }
+    }
+
+    /** Remove: its question, then ModelsRunner.remove (refused while a job uses the models, said in its words). */
+    private fun askToRemoveChords() {
+        askChords(AlertDialog.Builder(this)
+            .setTitle(R.string.chords_remove_title)
+            .setMessage(R.string.chords_remove_message)
+            .setPositiveButton(R.string.chords_remove_yes) { _, _ -> removeChords() }
+            .setNegativeButton(R.string.chords_remove_no, null))
+    }
+
+    private fun removeChords() {
+        scope.launch {
+            val phone = phone() ?: return@launch
+            val refused = withContext(Dispatchers.IO) { phone.models.remove() }
+            if (refused != null) sayChords(refused) else chordsStatus.visibility = View.GONE
+            followChords()
+        }
+    }
+
+    private fun askChords(builder: AlertDialog.Builder) {
+        chordsAsked?.let { it.setOnDismissListener(null); it.dismiss() }
+        chordsAsked = builder.setOnDismissListener { chordsAsked = null }.show()
+    }
+
+    /** What the chords row's actions say, under its buttons. */
+    private fun sayChords(text: String) {
+        chordsStatus.visibility = View.VISIBLE
+        chordsStatus.text = text
+    }
+
     /** "Text size: 120%", as the last pinch left it; Reset only when it isn't the pages' own. */
     private fun showTextSize() {
         val zoom = settings.textZoom
         textSize.text = getString(R.string.text_size, zoom)
         resetTextSize.isEnabled = zoom != TextZoom.DEFAULT
+    }
+
+    /** The debug build's Chords bench (src/debugMl's ChordsBenchActivity, the chords-on-the-phone design's §9.1), a
+     * button in the Chords from audio section, after its hint: a debug build with :ml alone (BuildConfig.CHORDS_BENCH,
+     * false in a release and in a debug build of another shell, and R8 drops this). */
+    private fun addChordsBench() {
+        val backups = findViewById<Button>(R.id.backups)
+        val rows = backups.parent as android.view.ViewGroup
+        val button = Button(this).apply {
+            text = CHORDS_BENCH
+            setOnClickListener {
+                startActivity(Intent().setClassName(this@SettingsActivity, "$PACKAGE.ChordsBenchActivity"))
+            }
+        }
+        rows.addView(button, rows.indexOfChild(findViewById(R.id.chords_hint)) + 1)  // in the Chords from audio section
     }
 
     private fun fitInsets() {
@@ -371,6 +522,10 @@ class SettingsActivity : Activity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
+        /** The debug build's Chords bench row's words (ChordsBenchTest finds it by them). */
+        const val CHORDS_BENCH = "Chords bench"
+        private const val PACKAGE = "io.github.danielhp95.caracole"
+
         /** An extra: ask to show notifications as the screen opens (the first start's Download of the catalogues). */
         const val ASK_TO_NOTIFY = "io.github.danielhp95.caracole.ASK_TO_NOTIFY"
 

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ONNX Runtime is built from its source (../nix/onnxruntime-android.nix): its AAR declares no provider and no
+         permission, and the runtime has no telemetry to turn off (1.27.1's is opt-in at build time, never set; the
+         Maven AAR's ai.onnxruntime.TelemetryInitializer, Microsoft's 1DS, came after it). NoTelemetryTest holds the
+         installed app to it, ApkScanTest the runtime's files and the APKs. -->
+    <!-- MlChordModels holds a partial wake lock while the models hear a song (the design's §3.4); the app has the
+         permission already (WorkManager's), :ml's own test APK hasn't. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application>
+        <!-- The chord models' process (the design's §3.3): MlService alone runs in ":ml", bound by MlChordModels from
+             the main process, so the models' memory, a crash or the low-memory killer never touch the app's server.
+             Not exported: only caracole's own processes bind it. Both builds of the ml shell carry it, the release
+             too (release-check.sh). -->
+        <service
+            android:name="io.github.danielhp95.caracole.ml.MlService"
+            android:exported="false"
+            android:process=":ml" />
+    </application>
+</manifest>

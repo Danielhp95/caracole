@@ -69,4 +69,10 @@ class Lookup(val cfg: PhoneConfig, val database: Database, val store: LibrarySto
              val progress: Progress, val pacing: Pacing, val stages: SiteStages = SiteStages.ALL,
              val readOverrides: (Db) -> Overrides = Overrides::read) {
     fun run(db: Db): LookupResult = LookupRun(this, db).run()
+
+    /** get.py's lyrics stage alone over the song of [songId], LRCLIB and Megalobiz asked with the audio's [length]
+     * (a staged job's on the phone, server.lookups' AudioRunner: the lookup's words, pace and envelope where the
+     * computer's job asks at the bulk pace); its end in [LookupResult.states] and `details`, its requests, as [run]'s.
+     * The caller holds [db]'s write, as for [run]; [request] is unused. */
+    fun lyrics(db: Db, songId: Long, length: Double?): LookupResult = LookupRun(this, db).lyricsAlone(songId, length)
 }

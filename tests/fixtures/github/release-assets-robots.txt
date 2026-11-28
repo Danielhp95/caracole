@@ -1,0 +1,6 @@
+release-assets.githubusercontent.com publishes no robots.txt: checked by hand on 2026-11-27, one plain GET of
+https://release-assets.githubusercontent.com/robots.txt, it answered HTTP 404 with its cache's page ("Error 404 Not
+Found", Varnish).
+
+No rules, so nothing there is closed: the address GitHub's API redirects a release asset's bytes to (the one host a
+download from GitHub's API may be redirected to, core.catalogues' API_REDIRECTS) is open.

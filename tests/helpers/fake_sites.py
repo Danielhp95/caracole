@@ -67,6 +67,11 @@ The scenario ``lookups`` (``LOOKUPS``): nine songs, each with a part (``role``) 
   which looks up none of them. The first plays and is made the song's own version; both make a songbook, the second's
   key set in it and a Guitar Pro file shared to it.
 
+The scenario ``chords`` (``CHORDS``), ChordsEndToEndTest's: one song, ``hearing``, Calla Lake's River Road, which a
+committed clip (tests/fixtures/autochords/hearing.mp3, 20 s) is made the auto sheet of on the phone: LRCLIB's timed
+lyrics of it, their duration the clip's (``CLIP_SECONDS``) and four lines within it, so that the audio job's lyrics
+stage, asked with the clip's length, takes them; no site has anything else of it.
+
 The standard library alone at import, so that e2e_library.py can import its songs; caracole, httpx and the suite's
 helpers are imported where they are used.
 """
@@ -145,6 +150,7 @@ class SiteSong:
     query: str = ""  # what a search for it types (a song of UG's index)
     chinese: bool = False  # its charts sing made-up Chinese words
     harp: tuple[int, int] | None = None  # its harmonica tab on harptabs.com: the tab's id, its artist page's id
+    duration: float | None = None  # LRCLIB's length of it, its timed lines within it (None: 180 s, a line every 4 s)
 
     def tab_url(self, tab: int) -> str:
         if self.bare is not None:
@@ -196,7 +202,11 @@ LOOKUPS = (
              lyrics=True, query="life on the ocean wave"),
 )
 ROUND = ("round_play", "round_book")  # the integration's round (tests/test_android_e2e.py's step 14), none before it
-SCENARIOS = {"lookups": LOOKUPS}
+CLIP_SECONDS = 20.0  # tests/fixtures/autochords/hearing.mp3's length, round()ed as LRCLIB states one
+CHORDS = (
+    SiteSong("hearing", Artist("Calla Lake", 70101), "River Road", "C", (), lyrics=True, duration=CLIP_SECONDS),
+)
+SCENARIOS = {"lookups": LOOKUPS, "chords": CHORDS}
 
 
 def _fold(text: str) -> str:
@@ -280,9 +290,11 @@ def build_index(conn: sqlite3.Connection, folder: Path, name: str = "lookups") -
     (``store_harptabs``)."""
     from caracole.ug.index import build_index as build
 
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "sitemap1.xml").write_text(sitemap(index_rows(name)), encoding="utf-8")
-    build(conn, None, NOW, from_dir=folder)
+    rows = index_rows(name)
+    if rows:  # a scenario with no tab of UG's (``chords``) leaves its index empty
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "sitemap1.xml").write_text(sitemap(rows), encoding="utf-8")
+        build(conn, None, NOW, from_dir=folder)
     store_harptabs(conn, NOW, name)
 
 
@@ -409,12 +421,22 @@ class Sites:
     def _record(self, song: SiteSong, n: int) -> dict:
         record = json.loads(_fixture("lrclib/get_hit.json"))
         lines = lyrics_lines()
+        if song.duration is None:
+            duration, timed = 180.0, [(10 + 4 * i, line) for i, line in enumerate(lines)]
+        else:  # a clip's: four lines within it, the first at 1 s
+            duration = song.duration
+            timed = [(1 + i * (duration - 2) / 4, line) for i, line in enumerate(lines[:4])]
+            lines = lines[:4]
         record.update(id=990000 + n, name=song.title, trackName=song.title, artistName=song.artist.name,
-                      albumName="", duration=180.0, instrumental=False, hasWordSync=False,
+                      albumName="", duration=duration, instrumental=False, hasWordSync=False,
                       plainLyrics="\n".join(lines),
-                      syncedLyrics="\n".join(f"[00:{10 + 4 * i:02d}.00] {line}" for i, line in enumerate(lines)))
+                      syncedLyrics="\n".join(f"[{int(t // 60):02d}:{t % 60:05.2f}] {line}" for t, line in timed))
         record.pop("lyricsfile", None)
         return record
+
+    def lrclib_record(self, role: str) -> dict:
+        """The LRCLIB record ``/api/get`` answers for the scenario's song of part ``role``."""
+        return next(record for song, record in self._lyrics() if song.role == role)
 
     def _lyrics(self) -> list[tuple[SiteSong, dict]]:
         return [(s, self._record(s, n)) for n, s in enumerate(self.songs) if s.lyrics]

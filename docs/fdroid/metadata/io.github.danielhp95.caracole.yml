@@ -22,6 +22,11 @@ Description: |-
     changed; where both changed a song, you pick which to keep.
   * Guitar Pro on the phone: a file drawn as score and tab and played.
   * Share to caracole: share a song from a music app to find it or fetch it.
+  * Chords from audio: give it a song's audio file and it works out the
+    chords and the beats on the phone, under the lyrics it finds, with no
+    computer. It needs Android 13, an arm64 phone and 6 GB of memory, and
+    downloads its models once, at a tap (about 55 MB, from caracole's GitHub
+    release and the chord model's authors' repository).
 
   It needs a computer running caracole serve to sync from:
   https://github.com/Danielhp95/caracole

@@ -124,7 +124,7 @@ def rig(tmp_path):
 def test_the_one_phone_gets_this_checkouts_debug_build_for_user_0_alone(rig):
     done = rig.run(devices=f"emulator-5554 device\n{PHONE} device")
     assert done.returncode == 0, done.stderr
-    assert rig.calls("nix") == [["develop", str(rig.android), "-c", "gradle", "-p", str(rig.android),
+    assert rig.calls("nix") == [["develop", f"{rig.android}#ml", "-c", "gradle", "-p", str(rig.android),
                                  ":app:assembleDebug", "--max-workers=2"]]
     assert ["-s", PHONE, "install", "-r", "--user", "0", rig.apk] in rig.calls("adb")
     assert f"Installed {DEBUG} 0.3.0-debug+abc1234 on {PHONE}." in done.stdout, "the version names its commit"

@@ -60,8 +60,8 @@ interface JobContext {
     fun readable(files: Map<String, String>, seconds: Double) {}
 
     /**
-     * Runs the lookups queued since (JobCommands.isLookup's jobs, in the order queued, those queued meanwhile too),
-     * then returns: a long job of the phone's own (the render job) calls it between two songs, from its run or a
+     * Runs the lookups queued since (JobCommands.isLookup's jobs, in the order queued, those queued meanwhile too, but
+     * one of the running job's own song, JobCommands.songOfJob, which waits until it ends), then returns: a long job of the phone's own (the render job) calls it between two songs, from its run or a
      * plain callback of it (PhoneRender's `between`). They run in the queue's one worker, on the caller's thread,
      * which waits for them (a job's run is the worker's: nothing else of the queue runs meanwhile), and a stop of the
      * queue's scope stops them and then the caller (a CancellationException).
@@ -677,17 +677,24 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     /** Whether [job] is to let the lookups queued behind it go first now: it runs, isn't one of them, isn't being
      * let go before, and a lookup waits. */
     private fun yields(job: Job): Boolean = synchronized(lock) {
-        !yielding && job.state == Job.RUNNING && !isLookup(job) && jobs.any { it.state == Job.QUEUED && isLookup(it) }
+        !yielding && job.state == Job.RUNNING && !isLookup(job) && jobs.any { goesFirst(it, job) }
     }
 
+    /** Whether [queued] is a lookup to let go first while [job] runs: queued, a lookup, and of another song than
+     * [job]'s (jobs.py `_take`: a song never has two jobs running; JobCommands.songOfJob), which stays queued until
+     * [job] ends. */
+    private fun goesFirst(queued: Job, job: Job): Boolean =
+        queued.state == Job.QUEUED && isLookup(queued) &&
+            JobCommands.songOfJob(queued.spec.key) != JobCommands.songOfJob(job.spec.key)
+
     /** The lookups queued since a long job of the phone's own began, run here, one by one, until none waits or the
-     * queue stops (JobContext.yieldToQueued). */
+     * queue stops (JobContext.yieldToQueued); one of its own song waits for it. */
     private suspend fun yieldFrom(job: Job) {
         synchronized(lock) { yielding = true }
         try {
             while (currentCoroutineContext().isActive) {
                 val next = synchronized(lock) {
-                    val lookups = jobs.filter { it.state == Job.QUEUED && isLookup(it) }
+                    val lookups = jobs.filter { goesFirst(it, job) }
                     job.waitingFor = lookups.size
                     lookups.firstOrNull()?.also(::startLocked)
                 } ?: break

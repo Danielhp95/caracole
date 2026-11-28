@@ -77,9 +77,9 @@ class AssemblyTest {
 
     @Test fun theModulesAreInTheirOrderAndEachRouteIsOneModulesAlone() = phone { phone ->
         assertEquals(listOf("PageRoutes", "SearchRoutes", "JobsRoutes", "RequestsRoutes", "SyncRoutes", "SyncFileRoutes",
-                            "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "SongbookRoutes", "VersionsRoutes",
-                            "HarmonicaRoutes",
-                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "ShareRoutes"),
+                            "LibraryRoutes", "LookupRoutes", "UgLinkRoutes", "LyricsRoutes", "SongbookRoutes",
+                            "VersionsRoutes", "HarmonicaRoutes",
+                            "ReviewRoutes", "ExportRoutes", "GuitarRoutes", "AudioRoutes", "ShareRoutes"),
                      phone.modules.map { it::class.simpleName })
         val owners = phone.modules.flatMap { module -> module.routes.map { "${it.method} ${it.path}" to module } }
         val twice = owners.groupBy({ it.first }, { it.second::class.simpleName }).filterValues { it.size > 1 }
@@ -103,6 +103,7 @@ class AssemblyTest {
             "ReviewRoutes" to listOf("GET /review", "POST /review"),
             "ExportRoutes" to listOf("GET /export.pdf"),
             "GuitarRoutes" to listOf("GET /guitar", "GET /assets/alphatab/"),
+            "AudioRoutes" to listOf("POST /audio/upload", "POST /audio", "POST /audio/drop"),
             "SyncRoutes" to listOf("GET /api/sync", "POST /sync/test", "POST /sync/compare", "GET /api/sync/unit",
                                    "GET /api/sync/indexes", "POST /sync/apply"),
             "SyncFileRoutes" to listOf("GET /api/sync/sizes", "POST /sync/export", "GET /api/sync/export",
@@ -110,7 +111,8 @@ class AssemblyTest {
                                        "POST /sync/import/drop"),
         )
         // The phone's own page of a song shared to the app, which caracole serve has none of.
-        assertEquals(listOf("GET /share", "POST /share", "GET /share/cancel"),
+        assertEquals(listOf("GET /share", "POST /share", "GET /share/cancel", "GET /share/audio",
+                            "POST /share/audio/cancel"),
                      phone.modules.filterIsInstance<ShareRoutes>().single().routes.map { "${it.method} ${it.path}" })
         val ownerOf = owners.associate { (route, module) -> route to module::class.simpleName }
         for ((module, routes) in moved) {
@@ -169,6 +171,39 @@ class AssemblyTest {
             assertTrue(folder.isDirectory, "its folder stays")
             assertTrue(beside.exists(), "nothing beside it is touched")
         }
+    }
+
+    /** The given audio no song names (a song a take removed or merged, a removal's) is tidied as the phone starts
+     * and after a sync's take; a kept file a song names, a staged upload and anything else stay. */
+    @Test fun theGivenAudioNoSongNamesIsTidiedAtTheStartAndAfterATake() {
+        val folder = File(tmp.root, "state/audio").apply { mkdirs() }
+        val orphan = File(folder, "7-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+        val staged = File(folder, ".upload-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+        phone { phone ->
+            assertTrue(!orphan.exists(), "a kept file no song names is gone at the start")
+            assertTrue(staged.exists(), "a staged upload is the sweep's, never the tidy's")
+            val again = File(folder, "8-0123456789abcdef.mp3").apply { writeBytes(ByteArray(8)) }
+            phone.afterSync()
+            assertTrue(!again.exists(), "and after a take")
+        }
+    }
+
+    /** `caracole audio` is the phone's command, AudioRunner's; with no chord models wired in (a build without
+     * `:ml`, the assembly's default) its job refuses before anything is kept, in the command's words; the models' remove is
+     * refused while one waits or runs (ModelsRunner.USES). */
+    @Test fun theAudioCommandIsWiredAndWithNoChordsItRefusesBeforeAnythingIsKept() = phone { phone ->
+        val commands = io.github.danielhp95.caracole.server.jobs.JobCommands.audioSheetSteps("Calla Lake - River Road",
+                                                                                           "0123456789abcdef")
+        assertTrue(io.github.danielhp95.caracole.server.jobs.JobCommands.AUDIO_SHEET in
+                       io.github.danielhp95.caracole.server.lookups.ModelsRunner.USES)
+        val job = phone.queue.submit(JobSpec("Sheet from an audio file: Calla Lake - River Road",
+                                             "audio:calla-lake/river-road", "song",
+                                             io.github.danielhp95.caracole.server.jobs.JobCommands.stages(commands.map { it.args }),
+                                             commands = commands)).first
+        val over = runBlocking { phone.queue.await(job.id) }
+        assertEquals(Job.FAILED, over.state)
+        assertEquals(listOf("error: caracole makes no sheet from an audio file here: auto-chords isn't on the phone"),
+                     over.steps.single().output)
     }
 
     /** A take checks a song's `[version]` and `[harmonica]` entries with the viewer's own checks, as
@@ -261,8 +296,12 @@ class AssemblyTest {
         assertEquals(Job.FAILED, over.state)  // no runner of "nothing" on the phone
         assertEquals("error: caracole nothing isn't on the phone", over.output.last())
         assertEquals(listOf(job.id), ended.map { it.id })
-        assertEquals(setOf("get", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render", "songbook",
-                           "inbox", "backup", "catalogues"), phone.queue.commands.runners.keys)
+        assertEquals(setOf("get", "lyrics", "versions", "lacuerda", "harptabs", "ug", "review", "harmonica", "render",
+                           "songbook", "inbox", "backup", "catalogues", "models", "audio"),
+                     phone.queue.commands.runners.keys)
+        // The JVM's classpath carries no models.json, as the release's: the models' job is offered and says so.
+        assertEquals(null, phone.models.folder())
+        assertEquals("This build carries no chord models.", phone.models.ready())
         // The site catalogues listed through GitHub's API, the one source.
         assertTrue(phone.catalogues.source(io.github.danielhp95.caracole.mirror.Http()) is
                        io.github.danielhp95.caracole.core.catalogues.CatalogueSource.Api)

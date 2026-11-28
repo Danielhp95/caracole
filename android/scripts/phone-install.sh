@@ -8,10 +8,11 @@
 #               never counts), and an error that lists the devices when there is none or more than one
 #   --launch    start the app once it is installed
 #
-# It builds the debug APK of the checkout it is in (nix develop <checkout>/android -c gradle -p <checkout>/android
-# :app:assembleDebug --max-workers=2), checks that it is the debug build, io.github.danielhp95.caracole.debug, then
-# installs it for the phone's own user alone (adb install -r --user 0: another user of the phone is left alone) and
-# says the package and the versionName the phone now has. It never touches F-Droid's io.github.danielhp95.caracole.
+# It builds the debug APK of the checkout it is in, in the ml shell so the chord models' :ml is in it (nix develop
+# <checkout>/android#ml -c gradle -p <checkout>/android :app:assembleDebug --max-workers=2), checks that it is the debug
+# build, io.github.danielhp95.caracole.debug, then installs it for the phone's own user alone (adb install -r --user 0:
+# another user of the phone is left alone) and says the package and the versionName the phone now has. It never touches
+# F-Droid's io.github.danielhp95.caracole.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -70,7 +71,7 @@ fi
 echo "phone-install.sh: installing on $serial" >&2
 
 # 2. The debug APK of this checkout.
-nix develop "$android" -c gradle -p "$android" :app:assembleDebug --max-workers=2
+nix develop "$android#ml" -c gradle -p "$android" :app:assembleDebug --max-workers=2
 out="$android/app/build/outputs/apk/debug"
 apk="$out/app-debug.apk"
 [ -f "$apk" ] || fail "the build made no $apk"

@@ -76,7 +76,7 @@
             android:label="@string/backups_label" />
 
         <!-- Files shared to caracole, filed as _inbox/ files them (lane inbox-share): SEND and SEND_MULTIPLE of these
-             stream types alone. Never VIEW, which would offer caracole for every PDF and binary on the phone, nor
+             stream types alone; an audio file (the audio types after them, AudioShare.TYPES) opens its sheet's page. Never VIEW, which would offer caracole for every PDF and binary on the phone, nor
              text/plain or any type at all (a music app's link, another design's). -->
         <activity
             android:name=".ShareActivity"
@@ -96,6 +96,10 @@
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="audio/midi" />
                 <data android:mimeType="application/x-musescore" />
+                <!-- Any audio type: apps label files audio/mp3, audio/x-mpeg, audio/webm…, and the upload judges
+                     the bytes (AudioStore's sniff), refusing what isn't audio it reads; MIDI goes to the inbox
+                     (AudioShare.isAudio). -->
+                <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
 

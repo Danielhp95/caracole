@@ -18,9 +18,25 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
+val modelsTestData = tasks.register<Sync>("modelsTestData") {
+    from("../../tests/conformance/data") {
+        include("caracole/autochords/models.json", "caracole/autochords/btc-graph.onnx")
+    }
+    into(layout.buildDirectory.dir("models-test-data"))
+}
+
 sourceSets {
     main {
         resources.srcDir("../../tests/conformance/data")
+        // The chord models' graph and pins are :ml's (the release's on an arm64 phone too): never carried through
+        // :core, so a build without :ml has none.
+        resources.exclude("caracole/autochords/**")
+    }
+    test {
+        // core.models' tests read the pins and BTC's graph as :ml puts them on the classpath: a
+        // folder of their own, so that the filter is theirs alone (a resources.include would filter every test
+        // resource).
+        resources.srcDir(modelsTestData)
     }
 }
 

@@ -104,7 +104,7 @@ class ViewerSkeletonTest {
     @Test fun theViewersCorpusAreasAreRegisteredOnceEach() {
         val areas = ViewerReplays.all.map { it.area }
         assertEquals(listOf("theory", "sheet", "shapes", "chinese", "harmony", "version", "harptab", "pages",
-                            "harmonica-page", "render"), areas)
+                            "harmonica-page", "render", "autochords-sheet"), areas)
         assertEquals(listOf("harmonica-page"), Replays.named(listOf("harmonica_page"), ViewerReplays.all).map { it.area })
         val elsewhere = Replays.all.map { it.area }.toSet()
         assertEquals(emptySet(), areas.toSet() intersect elsewhere)

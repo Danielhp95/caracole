@@ -52,6 +52,11 @@ STAGES = (
     ("pages", "The logbook page"),
 )
 SAME_FILE = "has this file's audio already"
+KEPT_AS = "kept as its audio: {format}, {length}"  # the audio stage's end, the file's format and length (m:ss)
+REPLACES = "; it replaces {replaced} as the song's source"  # after it, the audio the song had
+GIVEN_BEFORE = "the file given before"  # what it replaces: a file given before
+CANT_KEEP = "can't keep {what}: {why}"  # its failure of the disk's
+THE_UPLOAD = "the upload"  # ``{what}`` of an upload
 
 
 @dataclass(frozen=True)
@@ -116,7 +121,7 @@ class _AudioSheet(_Sheet):
         song, req = self.song, self.request
         before = audio_store.uploaded(self.cfg, song)
         if before is not None:
-            replaced = "the file given before"
+            replaced = GIVEN_BEFORE
         elif song.audio_path and youtube_audio(self.conn, song) is not None:
             replaced = "YouTube's audio"
         elif song.audio_path:
@@ -139,12 +144,12 @@ class _AudioSheet(_Sheet):
             said = str(e).rstrip(".")
             return self._fail(said[:1].lower() + said[1:])
         except OSError as e:  # the disk's, reading the file or writing its copy
-            return self._fail(f"can't keep {req.file or 'the upload'}: {e.strerror or e}")
+            return self._fail(CANT_KEEP.format(what=req.file or THE_UPLOAD, why=e.strerror or e))
         self._song_again()  # its audio the kept file's now, for the stages after
         if kept == before:
             return "done", SAME_FILE
-        said = f"kept as its audio: {found.format}, {format_duration(round(found.duration * 1000))}"
-        return "done", said + (f"; it replaces {replaced} as the song's source" if replaced else "")
+        said = KEPT_AS.format(format=found.format, length=format_duration(round(found.duration * 1000)))
+        return "done", said + (REPLACES.format(replaced=replaced) if replaced else "")
 
     def run(self) -> SheetResult:
         self._run(f"audio {self.request.display}")

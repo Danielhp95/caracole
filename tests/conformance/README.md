@@ -6,7 +6,9 @@ docs/superpowers/specs/2026-11-03-conformance-corpus.md.
 
 - `data/caracole/<area>/`: runtime data the phone ships (a resource root of `:core`): Unicode tables, keys, pinyin,
   the schema (`schema/migrations.json`, and `schema/phone.sql`, hand-written), the page's asset order, yt-dlp's
-  arguments and patterns (`youtube/youtube.json`; its budgets and pauses are `config/config.json`'s).
+  arguments and patterns (`youtube/youtube.json`; its budgets and pauses are `config/config.json`'s), the audio
+  store's rules and words (`library/audio_store.json`, with `vectors/library/audio_store.jsonl`, the area
+  `audio-store`: tests/test_conformance_audio_store.py).
 - `vectors/<area>/`: test vectors, `<name>.jsonl` (a header, then a record a line) or `<name>.json`, and fixtures,
   `vectors/<area>/fixtures/<name>.jsonl` (a database's rows, kv and files, replayed on both sides). Gradle hands the
   folder to every Kotlin test as the system property `caracole.conformance`.
@@ -19,3 +21,42 @@ Never edit one by hand; regenerate:
 
 then run the Kotlin side against it, `nix develop ./android -c gradle -p android test`, before merging (the drift
 protocol, in the spec).
+
+The `autochords` area (`vectors/autochords/`, `data/caracole/autochords/`) is what the computer's models make of the
+committed clips (tests/fixtures/autochords/), and its generator, tests/test_conformance_autochords_models.py, needs
+torch and the model files: its models' half is checked and regenerated in the auto-chords shell alone, which the
+command above skips,
+
+    CARACOLE_CORPUS=write nix develop .#autochords -c pytest -q -n 0 -m autochords tests/test_conformance_autochords_models.py
+
+Its arrays are base64 of little-endian float32 (the mel float16); its model outputs are PyTorch's on one thread,
+the same bits on every run on a CPU of the kernels its meta names (`cpu_capability`). On another CPU a byte
+mismatch is expected, and the generator skips its byte check there, saying so; there, as for the phone's runtime,
+the check that counts is the gates', which `vectors/autochords/models.jsonl`'s meta record holds (`gates`: BTC's
+argmax and logits, beat_this's fp32 logits, the fp16-stored file's beats and downbeats by F, with no logit bound).
+`vectors/autochords/soxr.jsonl` (python-soxr's HQ resampling, which the phone's libsoxr is held to within 1e-6) needs
+only python-soxr, on any CPU: it is never skipped there.
+`vectors/autochords/decode.jsonl` (the computer's decode of tests/fixtures/autochords/decode*.*, `load_mono` at each
+file's rate, a lossy one's as 16-bit deltas deflated, a lossless one's by SHA-256, and read_audio's length, which the
+phone's decoder is held to by its meta's `gates`) needs no model and no CPU's kernels either.
+`vectors/autochords/frontend.jsonl`'s meta holds the gate the phone's front ends are held to (`gates`: equal frames, a
+cosine per frame), and `data/caracole/autochords/frontend.json` what those front ends apply: librosa's CQT as it ran,
+its sparse bases, and beat_this's mel filterbank, never recomputed on the phone.
+`vectors/autochords/peaks.jsonl`, `chunks.jsonl` and `scores.jsonl` (beat_this's postprocessor and chunking, mir_eval's
+WCSR and beat F, with `data/caracole/autochords/scores.json`) need no model file and no CPU's kernels, only torch,
+beat_this and mir_eval; `labels.jsonl` and `labels.json` (btc.py's labels) come from tests/test_conformance_autochords.py
+in the default shell, with the rest of the corpus.
+`data/caracole/autochords/` ships in the debug build alone, as android/ml's resources (frontend.json as
+android/autochords'): `:core`, whose resource root is `data/`, leaves it out, so the release carries none of it until
+the stage that ships the models.
+
+The `autochords-sheet` area (`vectors/autochords-sheet/`) is the sheet laid out of what was heard, which needs no
+model: `merge.jsonl` (merge.py's `build_sheet`, `snap_to_beats`, its LRC reader and its word columns over the calls
+test_autochords_merge.py makes, the literals of both auto-chords test files and seeded hearings) and `align.jsonl`
+(align.py's `lyrics_offset` and `shifted_lrc`, and `math.fsum`), `sheet.jsonl` (sheet.py's `make_sheet`, `raw_of`,
+`read_heard`, `relay_due` and `relay` over named hearings and lyrics of each kind) and `relay.jsonl`
+(sheet_lyrics.py's `relay_onto_sheets` over a library, step by step), with `data/caracole/viewer/autochords.json`,
+merge.py's, align.py's, sheet.py's and transcript.py's constants and patterns, which ships in the release as the rest
+of `viewer/`'s data.
+tests/test_conformance_autochords.py writes them in the default shell, and `:viewer`'s viewer.autochords replays them
+(AutochordsReplay).

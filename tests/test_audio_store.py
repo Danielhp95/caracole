@@ -345,6 +345,66 @@ def test_keep_names_it_by_song_and_digest_and_links_it(conn, cfg, tmp_path):
     assert uploaded(cfg, get_song(conn, other.id)) == moved
 
 
+def test_keep_remembers_the_name_the_file_was_given_under(conn, cfg, tmp_path):
+    # Its auto sheet's raw names it (audio_name), a remake as the first sheet: kv audio:name:<id>, its name alone, as
+    # a name to show, replaced by the next file given.
+    from caracole.audio_store import NAME_KEY, given_name
+    from caracole.db import kv_get
+
+    song = add_song(conn, "Radiohead", "Creep")
+    assert given_name(conn, song) is None
+    keep(cfg, conn, song, write(tmp_path / "home" / "Creep (Live).flac", "FLAC", 2.0), move=False)
+    assert given_name(conn, song) == kv_get(conn, f"{NAME_KEY}{song.id}") == "Creep (Live).flac"
+    up = stage(cfg, audio("WAV", 2.0), "C:\\Users\\me\\creep\x07 take 2.wav", named=())
+    keep(cfg, conn, song, up.path, move=True)
+    assert given_name(conn, song) == "creep take 2.wav"  # the name it was sent under, shown: no folder, no control
+
+
+def test_the_row_and_the_name_are_written_together_or_not_at_all(conn, cfg, tmp_path, monkeypatch):
+    # One upload replacing another: a failure between the row's update and the name's write left the row naming the
+    # new file under the old file's name, which the next auto sheet's raw would carry (audio_name).
+    from caracole.audio_store import given_name
+
+    song = add_song(conn, "Radiohead", "Creep")
+    first = keep(cfg, conn, song, write(tmp_path / "home" / "Creep (Live).flac", "FLAC", 2.0), move=False)
+    before = get_song(conn, song.id)
+
+    def failing(conn, key, value):
+        raise OSError("the name's write fails")
+
+    monkeypatch.setattr(audio_store, "kv_set", failing)
+    with pytest.raises(OSError):
+        keep(cfg, conn, before, write(tmp_path / "home" / "Creep (Studio).flac", "FLAC", 3.0), move=False)
+    after = get_song(conn, song.id)
+    assert (after.audio_path, after.audio_mtime) == (str(first), before.audio_mtime)
+    assert given_name(conn, after) == "Creep (Live).flac"
+
+
+def test_the_name_key_is_one_of_the_per_song_records_a_merge_or_removal_deletes():
+    from caracole.audio_store import NAME_KEY
+    from caracole.songs import _PER_SONG_KV
+
+    assert NAME_KEY in _PER_SONG_KV
+
+
+def test_a_keep_finished_after_its_cut_off_remembers_the_name_too(conn, cfg, monkeypatch):
+    from caracole.audio_store import adopt, given_name
+
+    song = add_song(conn, "Radiohead", "Creep")
+    up = stage(cfg, audio("MP3"), "creep take 3.mp3", named=())
+    real = audio_store.update_song
+
+    def killed(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(audio_store, "update_song", killed)
+    with pytest.raises(KeyboardInterrupt):
+        keep(cfg, conn, song, staged(cfg, up.id).path, move=True)
+    monkeypatch.setattr(audio_store, "update_song", real)
+    adopt(cfg, conn, song, up.id)
+    assert given_name(conn, song) == "creep take 3.mp3"
+
+
 def test_keep_refuses_a_song_no_longer_in_the_book(conn, cfg, tmp_path):
     song = add_song(conn, "Radiohead", "Creep")
     conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
@@ -500,6 +560,8 @@ def test_a_merge_keeps_the_file_given_and_tidy_lets_it_be(conn, cfg, tmp_path, o
     from caracole.autochords.run import _skip_reason
     from caracole.overrides import Overrides
     from caracole.removal import plan_removal, remove_song
+    from caracole.audio_store import NAME_KEY, given_name
+    from caracole.db import kv_get, kv_set
     from caracole.songs import ensure_current_keys, list_songs
 
     older, newer = _two_spellings(conn)
@@ -509,14 +571,21 @@ def test_a_merge_keeps_the_file_given_and_tidy_lets_it_be(conn, cfg, tmp_path, o
         bought.write_bytes(audio("FLAC"))
         update_song(conn, older.id, audio_path=str(bought), audio_mtime=bought.stat().st_mtime)
     file = given(conn, cfg.state_dir, older if on == "older" else newer, "MP3")
+    for who, record in (("older", older), ("newer", newer)):
+        if who == on or (who == "newer" and on != "older"):
+            kv_set(conn, f"{NAME_KEY}{record.id}", f"given to the {who}.mp3")
     ensure_current_keys(conn)
     (song,) = list_songs(conn)
     assert song.id == older.id and song.audio_path == str(file) and song.audio_mtime == file.stat().st_mtime
     assert tidy(conn, cfg) == 0 and file.exists()
     assert uploaded(cfg, song) == file
     assert _skip_reason(conn, song, Overrides()) is None  # its auto sheet is due, from the file
+    # The name it was given under goes with the file: the merged song's
+    assert given_name(conn, song) == f"given to the {'older' if on == 'older' else 'newer'}.mp3"
+    assert kv_get(conn, f"{NAME_KEY}{newer.id}") is None
     remove_song(conn, cfg, plan_removal(conn, cfg, song))
     assert not file.exists()
+    assert kv_get(conn, f"{NAME_KEY}{song.id}") is None  # and goes with a removal
 
 
 @pytest.mark.parametrize("last_on", ["older", "newer"])
@@ -525,6 +594,8 @@ def test_a_merge_of_two_uploads_keeps_the_newer_and_lets_the_other_go(conn, cfg,
     # the one before: the other file is no song's audio now, and the next tidy lets it go.
     from helpers.audio_files import given
 
+    from caracole.audio_store import NAME_KEY, given_name
+    from caracole.db import kv_set
     from caracole.songs import ensure_current_keys, list_songs
 
     older, newer = _two_spellings(conn)
@@ -533,9 +604,12 @@ def test_a_merge_of_two_uploads_keeps_the_newer_and_lets_the_other_go(conn, cfg,
     os.utime(first, (1_000_000, 1_000_000))
     update_song(conn, first_on.id, audio_mtime=first.stat().st_mtime)
     last = given(conn, cfg.state_dir, last_song, "WAV")
+    kv_set(conn, f"{NAME_KEY}{first_on.id}", "first.mp3")
+    kv_set(conn, f"{NAME_KEY}{last_song.id}", "last.wav")
     ensure_current_keys(conn)
     (song,) = list_songs(conn)
     assert song.audio_path == str(last)
+    assert given_name(conn, song) == "last.wav"  # the name of the file it keeps
     assert tidy(conn, cfg) == 1 and last.exists() and not first.exists()
 
 
@@ -660,3 +734,12 @@ def test_sweep_leaves_a_marker_a_job_holds_and_drops_one_with_neither_file_nor_d
     assert markers(cfg) == [f".upload-{up.id}.kept"]
     sweep(cfg, ())
     assert markers(cfg) == [] and names(cfg) == []
+
+
+def test_a_given_files_digits_are_read_from_its_kept_name_alone():
+    from caracole.audio_store import given_sha16
+
+    assert given_sha16("/var/lib/caracole/audio/12-0123456789abcdef.m4a") == "0123456789abcdef"
+    for other in (None, "", "/music/12-0123456789abcdef.m4a", "/state/audio/12-0123456789abcdeg.m4a",
+                  "/state/audio/12-0123456789abcdef.mkv", "/state/audio/.upload-0123456789abcdef.mp3"):
+        assert given_sha16(other) is None, other

@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.server
 
 import io.github.danielhp95.caracole.core.catalogues.CatalogueSource
+import io.github.danielhp95.caracole.core.models.ModelFiles
+import io.github.danielhp95.caracole.core.models.ModelsSource
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.health.Alerts
@@ -9,6 +11,7 @@ import io.github.danielhp95.caracole.core.index.IndexTransfer
 import io.github.danielhp95.caracole.core.index.MergeProgress
 import io.github.danielhp95.caracole.core.index.MergedIndexes
 import io.github.danielhp95.caracole.core.index.Paced
+import io.github.danielhp95.caracole.core.library.AudioStore
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverrideChecks
@@ -39,12 +42,15 @@ import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.ktor.LocalServer
 import io.github.danielhp95.caracole.server.lookups.BackupRunner
 import io.github.danielhp95.caracole.server.lookups.CataloguesRunner
+import io.github.danielhp95.caracole.server.lookups.AudioRunner
+import io.github.danielhp95.caracole.server.lookups.ModelsRunner
 import io.github.danielhp95.caracole.server.lookups.GetRunner
 import io.github.danielhp95.caracole.server.lookups.HarmonicaRunner
 import io.github.danielhp95.caracole.server.lookups.HarpTabsRunner
 import io.github.danielhp95.caracole.server.lookups.InboxRetry
 import io.github.danielhp95.caracole.server.lookups.InboxRunner
 import io.github.danielhp95.caracole.server.lookups.LaCuerdaRunner
+import io.github.danielhp95.caracole.server.lookups.LyricsRunner
 import io.github.danielhp95.caracole.server.lookups.RenderRunner
 import io.github.danielhp95.caracole.server.lookups.ReviewRunner
 import io.github.danielhp95.caracole.server.lookups.UgLinkRunner
@@ -56,6 +62,7 @@ import io.github.danielhp95.caracole.server.page.PageRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.page.ServerControls
 import io.github.danielhp95.caracole.server.page.SongbookSection
+import io.github.danielhp95.caracole.server.routes.AudioRoutes
 import io.github.danielhp95.caracole.server.routes.ExportRoutes
 import io.github.danielhp95.caracole.server.routes.GuitarRoutes
 import io.github.danielhp95.caracole.server.routes.HarmonicaRoutes
@@ -71,6 +78,7 @@ import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncFileRoutes
 import io.github.danielhp95.caracole.server.routes.SyncRoutes
 import io.github.danielhp95.caracole.server.routes.SyncSettings
+import io.github.danielhp95.caracole.server.routes.LyricsRoutes
 import io.github.danielhp95.caracole.server.routes.UgLinkRoutes
 import io.github.danielhp95.caracole.server.routes.sync.Exports
 import io.github.danielhp95.caracole.server.routes.sync.Imports
@@ -88,6 +96,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import java.io.File
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -100,7 +109,15 @@ import io.github.danielhp95.caracole.mirror.SyncEngine as MirrorSync
  * reaches a site by accident). [searchesLacuerda] false: `/api/search`'s `lacuerda_search` null, as the computer's
  * `WebApp(searches_lacuerda=False)` (CaracoleTestRunner's). [catalogues]: where the site catalogues' job lists
  * GitHub's release (GitHub's API; a device test's GitHub on loopback), and [metered]: whether the network is metered
- * now, read as the job runs (the app's ConnectivityManager; none metered by default).
+ * now, read as the job runs (the app's ConnectivityManager; none metered by default). [models]: where the chord
+ * models' job downloads them from, with this build's pins (ModelFiles.carried(): `:ml` puts them on the classpath,
+ * the release's as a debug build's; a device test's GitHub on loopback and pins of its own), null for a build that
+ * carries none (one without `:ml`), whose job and Settings say so. [chords]: the chord models that hear a song's audio
+ * (`:ml`'s MlChordModels, E22's), null where nothing can hear (a build without `:ml`, a test's): the audio job then
+ * refuses in its words; a phone `:ml` can't hear on (x86_64, Android 12, little memory) says why through
+ * ChordModels.phoneProblem.
+ * [examiner]: the reader of an audio file's length and tags the audio store needs (the app's, E24's); by default one
+ * that reads none ([NO_EXAMINER]: every file refused as audio caracole doesn't read here).
  */
 data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir: File, val mirror: Mirror?,
                      val scope: CoroutineScope, val settings: SyncSettings, val secret: String, val csrf: String,
@@ -108,19 +125,30 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
                      val alerts: Alerts = Alerts.NONE, val pacing: Pacing = Pacing.REAL,
                      val searchesLacuerda: Boolean = true,
                      val catalogues: (Http) -> CatalogueSource = { CatalogueSource.Api(it) },
-                     val metered: () -> Boolean = { false })
+                     val metered: () -> Boolean = { false },
+                     val models: ModelsSource? = ModelFiles.carried()?.let { pins -> ModelsSource(pins = { pins }) },
+                     val chords: ChordModels? = null, val examiner: AudioStore.Examiner = NO_EXAMINER) {
+    companion object {
+        /** An examiner that reads no audio: what it is handed is refused (AudioStore's NOT_AUDIO), as a phone whose app
+         * gave none reads no file. */
+        val NO_EXAMINER = AudioStore.Examiner { _, _ -> throw IllegalStateException("not audio caracole reads here") }
+    }
+}
 
 /**
  * The phone's caracole, assembled: its route modules in this order, PageRoutes, SearchRoutes, JobsRoutes,
  * RequestsRoutes, SyncRoutes ([sync], public for the app's unattended sync), SyncFileRoutes (Export and Import a file,
  * whose Sync SyncRoutes hands it; an import's pages a layer of the mirror, the engine's `pagesFromFile`; the export's
  * pages MirrorPages over the mirror), LibraryRoutes, LookupRoutes, UgLinkRoutes (a UG link pasted into the search
- * box), then milestone 6's, SongbookRoutes, VersionsRoutes,
- * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, then the phone's own ShareRoutes (a song shared to
- * the app, a link alone read by asking its service once: ShareReader), then Stubs for every route no module answers; the
+ * box), LyricsRoutes (a song's lyrics looked up under a name typed), then milestone 6's, SongbookRoutes, VersionsRoutes,
+ * HarmonicaRoutes, ReviewRoutes, ExportRoutes and GuitarRoutes, AudioRoutes (a sheet from an audio file: the "+" and a
+ * card's entry, its uploads staged in [audio], refused while [audioProblem] says why), then the phone's own
+ * ShareRoutes (a song shared to the app, a link alone read by asking its service once: ShareReader; an audio file
+ * shared, its page, through [audioRoutes]), then Stubs for every route no module answers; the
  * library's files behind them; one job queue for every write, its requests kept in `stateDir/requests.jsonl`
  * (JobHistory.at) across the app's restarts, its command runners (`get`, `versions`, `lacuerda`,
- * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues]), and
+ * `harptabs`, `ug`, `review`, `harmonica`, `render`, `songbook`, `inbox`, `backup`, `catalogues`: [catalogues],
+ * `models`: [models], `audio`: AudioRunner over [audio] and [PhoneDeps.chords]), and
  * after each job [afterJob]; the
  * phone's own pages ([render]: through its seam the lookup's pdf stage, what follows a sync's take, and the render job
  * queued by [start] when pages are owed), its songbooks' ([songbookPages]: through its seam the songbooks stage); and
@@ -130,7 +158,7 @@ data class PhoneDeps(val database: Database, val libraryDir: File, val stateDir:
  */
 class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
     val queue: JobQueue
-    private val store = LibraryStore(deps.libraryDir)
+    private val store = LibraryStore(deps.libraryDir, File(deps.stateDir, AudioStore.FOLDER))
     private val cards = PhonePageData(MirrorPageData(deps.mirror), store)
 
     /** The pages the phone makes itself (milestone 5). */
@@ -156,6 +184,15 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * metered ([PhoneDeps.metered]). */
     val catalogues: CataloguesRunner
 
+    /** The chord models' job (`models`), which the app queues ([ModelsRunner.spec]) and removes ([ModelsRunner.remove]),
+     * and the one answer to whether they are here ([ModelsRunner.ready]): [PhoneDeps.models] (null, a build that
+     * carries none: the job refuses in its words), stopping for the owner's go-ahead on a metered network as the
+     * catalogues do ([PhoneDeps.metered]). */
+    val models: ModelsRunner
+
+    /** The audio the owner gave, `stateDir/audio/` ([AudioStore], the audio job's and the audio routes'). */
+    val audio: AudioStore
+
     init {
         val commands = HashMap<String, io.github.danielhp95.caracole.server.jobs.CommandRunner>()
         queue = JobQueue(deps.scope, commands = Commands(commands), history = JobHistory.at(deps.stateDir))
@@ -178,7 +215,36 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
                                       forget = { search.invalidate() })
         catalogues.sweep()  // the file an import killed in its middle left (up to the whole unpacked index)
         commands[CataloguesRunner.COMMAND] = catalogues
+        models = ModelsRunner(parts, deps.models, metered = deps.metered)
+        models.sweep()  // what a download killed in its middle left beside the models' folder
+        commands[ModelsRunner.COMMAND] = models
+        audio = AudioStore(deps.stateDir, deps.examiner)
+        commands[AudioRunner.COMMAND] = AudioRunner(parts, deps.chords, audio, problem = ::audioProblem,
+                                                    names = models::names,
+                                                    hold = { hearing -> models.holding(hearing) })
+        commands["lyrics"] = LyricsRunner(parts, deps.chords, audio, problem = ::audioProblem, names = models::names,
+                                          hold = { hearing -> models.holding(hearing) })
+        tidyAudio()  // the given audio no song names (a merge's older file, a removal's), as the phone starts
     }
+
+    /** Why this phone makes no sheet from an audio file now, or null (AudioRunner.problemOf over [PhoneDeps.chords]
+     * and [ModelsRunner.ready]): the audio job's refusal, and the one answer E24's routes and `server.audio` give. */
+    fun audioProblem(): String? = AudioRunner.problemOf(deps.chords, models.ready())
+
+    /** What keeps this phone from making chords whatever the models' files (its Android, its processor, its memory:
+     * ChordModels.phoneProblem), or null: Settings' row says it in place of a download (no chords at all: the
+     * release's LibraryPage.AUDIO_PROBLEM). */
+    fun chordsProblem(): String? = deps.chords.let { chords -> if (chords == null) LibraryPage.AUDIO_PROBLEM else chords.phoneProblem() }
+
+    /** The kept audio files no song names deleted (audio_store.tidy, the computer's scan step's): at the phone's start
+     * and after a sync's take, in a write of their own, never under the store's lock. */
+    private fun tidyAudio() {
+        deps.database.writeBlocking { db -> audio.tidy(db) }
+    }
+
+    /** The audio routes (a sheet from an audio file: the "+", a card's entry), and an audio file shared to the app
+     * staged through them (AudioRoutes.stageShared, the app's ShareActivity) for ShareRoutes' `/share/audio`. */
+    val audioRoutes: AudioRoutes = AudioRoutes(parts, audio, ::audioProblem)
 
     /** The files shared to the app that wait for a song, tried again after each job. */
     private val inbox = InboxRetry(parts)
@@ -232,14 +298,18 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         LibraryRoutes(store, queue, cards, deps.database),
         LookupRoutes(parts),
         UgLinkRoutes(parts),
+        LyricsRoutes(parts, fileLength = { path ->
+            java.io.File(path).takeIf { it.isFile }?.let { runCatching { audio.formatAndLength(it).second }.getOrNull() }
+        }),
         SongbookRoutes(parts),
         VersionsRoutes(parts, deps.csrf),
         HarmonicaRoutes(parts, deps.csrf),
         ReviewRoutes(parts, deps.csrf),
         ExportRoutes(parts),
         GuitarRoutes(parts),
+        audioRoutes,
         ShareRoutes(deps.database, search, deps.csrf, libraryName = { config().libraryName.orEmpty() },
-                    links = ShareReader(parts)),
+                    links = ShareReader(parts), audio = audioRoutes),
     )
 
     val app: App = App(
@@ -277,6 +347,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
      * with none owed, those songbook pages made again now (SongbookPagesImpl.renderOwn: a song the take moved, its
      * sheet the mirror's now). A full queue leaves them owed, for the next start's or take's render job. */
     internal fun afterSync() {
+        tidyAudio()  // a song the take removed, or merged into another, leaves its given audio to go
         deps.mirror?.reload()
         val owed = render.afterSync()
         if (!owed) deps.database.writeBlocking { db -> songbookPages.renderOwn(db) }
@@ -365,6 +436,7 @@ class Phone(private val deps: PhoneDeps, render: PhoneRender? = null) {
         return ServerControls(
             csrf = deps.csrf, busy = busy, active = active.size, held = held, removing = removing,
             jobs = active.map { JobViews.view(it, queue) }, sync = true, guitar = GuitarRoutes.available(),
+            audio = audioProblem(),
             inApp = true,
         )
     }

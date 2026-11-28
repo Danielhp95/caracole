@@ -202,23 +202,44 @@ object Lrclib {
      */
     fun fetchLyrics(client: Client, artist: String, title: String, album: String?, durationS: Double?,
                     cache: Boolean = true): LyricsResult {
-        val track = Normalize.cleanTitle(title)
-        val params = mutableListOf("artist_name" to artist, "track_name" to track)
-        if (!album.isNullOrEmpty()) params += "album_name" to album
-        if (durationS != null) params += "duration" to PyFormat.roundHalfEven(durationS).toString()
-        val getUrl = "$API/get"
-        val resp = client.get(getUrl, params = params, accept = GET_ACCEPT, cache = cache)
-        val found = HttpRules.readOnceMore(client, resp, getUrl, { it is LrclibParseError }, accept = GET_ACCEPT,
-                                           params = params) { getRecord(it) }
+        val found = getMatch(client, getParams(artist, title, album, durationS), cache)
         if (found != null) outcome(Lyrics.fromRecord(found))?.let { return it }
-
-        val searchUrl = "$API/search"
-        val query = listOf("track_name" to searchTitle(track), "artist_name" to artist)
-        val answered = client.get(searchUrl, params = query, accept = SEARCH_ACCEPT, cache = cache)
-        val cands = HttpRules.readOnceMore(client, answered, searchUrl, { it is LrclibParseError },
-                                           accept = SEARCH_ACCEPT, params = query) { searchRecords(it) }
+        val cands = searchRecords(client, searchQuery(artist, title), cache)
         val best = pickCandidate(cands, artist, title, durationS)
         return best?.let { outcome(Lyrics.fromRecord(it)) } ?: LyricsResult("missing", null)
+    }
+
+    /** lyrics.get_params: what `/api/get` is sent for a song: its cleaned title, its artist as written and, when
+     * known, its album and its length in whole seconds (`round()`, half to even). */
+    fun getParams(artist: String, title: String, album: String?, durationS: Double?): List<Pair<String, String>> {
+        val params = mutableListOf("artist_name" to artist, "track_name" to Normalize.cleanTitle(title))
+        if (!album.isNullOrEmpty()) params += "album_name" to album
+        if (durationS != null) params += "duration" to PyFormat.roundHalfEven(durationS).toString()
+        return params
+    }
+
+    /** lyrics.search_query: what `/api/search` is sent for a song: its cleaned title as the search reads it
+     * ([searchTitle]) and its artist as written. */
+    fun searchQuery(artist: String, title: String): List<Pair<String, String>> =
+        listOf("track_name" to searchTitle(Normalize.cleanTitle(title)), "artist_name" to artist)
+
+    /** lyrics.get_match: `/api/get`'s record for [params] ([getParams]), null for its miss; an answer that can't be
+     * read asked for once more, past the cache. [cache] and [maxAge] go to the first request. */
+    fun getMatch(client: Client, params: List<Pair<String, String>>, cache: Boolean = true,
+                 maxAge: Duration? = null): JsonObject? {
+        val url = "$API/get"
+        val resp = client.get(url, params = params, accept = GET_ACCEPT, cache = cache, maxAge = maxAge)
+        return HttpRules.readOnceMore(client, resp, url, { it is LrclibParseError }, accept = GET_ACCEPT,
+                                      params = params) { getRecord(it) }
+    }
+
+    /** lyrics.search_records: `/api/search`'s records for [query] ([searchQuery]), in its order. */
+    fun searchRecords(client: Client, query: List<Pair<String, String>>, cache: Boolean = true,
+                      maxAge: Duration? = null): JsonArray {
+        val url = "$API/search"
+        val resp = client.get(url, params = query, accept = SEARCH_ACCEPT, cache = cache, maxAge = maxAge)
+        return HttpRules.readOnceMore(client, resp, url, { it is LrclibParseError }, accept = SEARCH_ACCEPT,
+                                      params = query) { searchRecords(it) }
     }
 
     /** lyrics.fetch_lrclib_record: a record of LRCLIB's by its id, `/api/get/{id}` (the record you picked,

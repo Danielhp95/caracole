@@ -501,6 +501,30 @@ class JobQueueTest {
         assertEquals(listOf(true), queue.snapshot().map { it.state == Job.DONE }.distinct())
     }
 
+    /** jobs.py `_take`'s rule, a song never has two jobs running: a yield passes over a lookup of the running job's own
+     * song (a sheet from an audio file's, `audio:<key>`), which stays queued until that job ends, then runs; a lookup
+     * of another song queued behind it goes first as ever. */
+    @Test fun aYieldNeverRunsALookupOfTheRunningJobsOwnSong() = runTest {
+        val log = mutableListOf<String>()
+        val queue = queue(mapOf("get" to CommandRunner { args, _ -> log += "get ${args.last()}" }))
+        val hearing = CompletableDeferred<Unit>()
+        val sheet = queue.submit(JobSpec("Sheet from an audio file: A - 1", JobCommands.AUDIO_SHEET + "a/1", "song",
+                                         listOf("chords" to "Chords from the audio")) { context ->
+            hearing.await()
+            context.yieldToQueued()  // B's lookup goes first, A's own waits
+            log += "chords"
+            assertEquals(Job.QUEUED, queue.snapshot().single { it.spec.key == "a/1" }.state)
+            assertEquals(0, queue.job(1)!!.waitingFor)
+        }).first
+        runCurrent()
+        val own = queue.submit(lookup("A", "1")).first
+        val other = queue.submit(lookup("B", "2")).first
+        hearing.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("get 2", "chords", "get 1"), log)
+        assertEquals(listOf(Job.DONE, Job.DONE, Job.DONE), listOf(sheet, own, other).map { queue.job(it.id)!!.state })
+    }
+
     /** A song's pages made, [between] two of them called first, as PhoneRender.renderStale calls its callback. */
     private fun twoSongs(between: () -> Unit, song: () -> Unit) {
         between()

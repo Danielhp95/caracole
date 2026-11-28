@@ -85,6 +85,15 @@ and what the next step needs of it). The steps, as the plan numbers them:
    computer back: caracole serve's Import a file takes it (``imported_on_the_computer``: open, the parts, compare,
    apply), its summary's outcome a song and a songbook taken and nothing given, and both libraries equal unit for
    unit after (``the_file_read_back``).
+16. One song, two caracoles (``a_sheet_made_on_the_phone``), the computer and the fake sites up: phase 12, the phone's
+   audio job makes a chords-only sheet of a committed clip (its models answering the computer's hearing of it, every
+   lyrics site missing the song), and a sync gives it, no conflict, the computer's unit of it the phone's.
+17. Computer: with a purchase of the song, ``caracole autochords`` (packages named torch, librosa and beat_this that
+   raise as imported) leaves the sheet another caracole made (``MADE_ELSEWHERE``), bytes and raw as they were; the
+   song's lyrics come (LRCLIB's record, kept as the lyrics step keeps it) and ``caracole render --song`` lays the sheet
+   out again over them, its maker still the phone, one ``auto`` version.
+18. Phone, phase 13: a sync takes the re-laid sheet (the computer's change alone), its page served; the phone's own
+   render lays out nothing more and moves nothing; a third comparison finds nothing; one digest on both sides.
 
 Beside the scenario, the computer's own library is checked: the goal's changes and no request sent; the Chinese
 sheet's page carries each character's reading and its words in either script, and Oh! Susanna's harmonica tab its
@@ -487,6 +496,80 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
     assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
     the_file_read_back(eleven, job, computer)
+
+    # 16-18. One song, two caracoles: a sheet the phone made from an audio file, left by the computer's nightly pass,
+    # laid out again there over the lyrics, taken back, and never fought over.
+    a_sheet_made_on_the_phone(computer, port, dir)
+
+
+def a_sheet_made_on_the_phone(computer: Computer, port: int, dir: Path) -> None:
+    """Steps 16 to 18 (the chords-on-the-phone design's §5, its gate B2 sync): the phone makes a chords-only sheet
+    of a song from an audio file and gives it at a sync (phase 12); the computer's ``caracole autochords`` leaves it,
+    the computer holding a purchase of the song (R3: made by another caracole), then the song's lyrics come and its
+    render lays the sheet out again over them from what was heard (R2), its maker still the phone; the phone takes it
+    back, lays out nothing more, and a third comparison finds nothing (phase 13). No conflict at any sync, one ``auto``
+    version on either side, its digest the same."""
+    from caracole.autochords.sheet import lyrics_key
+    from caracole.autochords.sheet_lyrics import MADE_ELSEWHERE
+    from helpers.fake_sites import CHORDS, Sites
+
+    with FakeSites(LOOKUPS) as fake, computer.serving(port) as url:
+        twelve = phone(12, url, dir, sites=fake.url)
+        state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+        assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    key = twelve["key"]
+    unit = f"song/{key}"
+    assert computer.units()[unit][1] == twelve["digest"]
+    ((tab, raw),) = computer.auto_versions(key)  # one auto version, the phone's
+    assert (raw["made_on"], raw["made_by"], raw["heard"], raw["lyrics"]) == ("phone", twelve["made_by"],
+                                                                             twelve["heard"], "none")
+    sheet = computer.cfg().library_dir / key_folder(computer, key) / "sheet (auto).txt"
+    assert sheet.read_text(encoding="utf-8") == twelve["sheet"]
+
+    # The computer's nightly pass, with a purchase of the song: it leaves the sheet another caracole made.
+    (song,) = (s for s in CHORDS if s.role == "hearing")
+    computer.buy(song.artist.name, song.title, REPO / "tests" / "fixtures" / "autochords" / "hearing.mp3")
+    said = computer.without_models("autochords")
+    assert "Music: 1 file, 1 linked" in said, said
+    assert f"{twelve['display']}: skipped ({MADE_ELSEWHERE})" in said, said
+    assert "auto-chords: 0 generated" in said, said
+    assert computer.auto_versions(key) == [(tab, raw)] and sheet.read_text(encoding="utf-8") == twelve["sheet"]
+    assert computer.units()[unit][1] == twelve["digest"]
+
+    # The song's lyrics come (LRCLIB's timed lyrics of it), and the render lays the sheet out again over them.
+    computer.lyrics_found(key, Sites("chords").lrclib_record("hearing"))
+    computer.caracole("render", "--song", twelve["display"])
+    ((again, relaid),) = computer.auto_versions(key)
+    assert again == tab and relaid["lyrics"] == "synced", relaid
+    assert relaid["lyrics_key"] == lyrics_key(Sites("chords").lrclib_record("hearing")["plainLyrics"]), relaid
+    assert (relaid["made_on"], relaid["made_by"], relaid["heard"]) == ("phone", twelve["made_by"], twelve["heard"])
+    laid = sheet.read_text(encoding="utf-8")
+    assert laid != twelve["sheet"] and Sites("chords").lrclib_record("hearing")["plainLyrics"].splitlines()[0] in laid
+    relaid_digest = computer.units()[unit][1]
+    assert relaid_digest != twelve["digest"]
+
+    with computer.serving(port) as url:
+        thirteen = phone(13, url, dir)
+        state = json.loads((dir / "phone" / "phone-state.json").read_text(encoding="utf-8"))
+        assert {unit: (u["label"], u["digest"]) for unit, u in state["units"].items()} == computer.units()
+    assert thirteen["digest"] == relaid_digest == computer.units()[unit][1]
+    assert computer.auto_versions(key) == [(tab, relaid)]
+    print("a sheet made on the phone:", json.dumps({"key": key, "asked": twelve["asked"], "made": twelve["digest"],
+                                                    "relaid": relaid_digest}, ensure_ascii=False))
+
+
+def key_folder(computer: Computer, key: str) -> Path:
+    """The song's folder in the computer's library."""
+    from caracole import db
+    from caracole.library import song_dir
+    from caracole.songs import find_song
+
+    cfg = computer.cfg()
+    conn = db.connect(cfg.db_path)
+    try:
+        return song_dir(cfg.library_dir, find_song(conn, key)).relative_to(cfg.library_dir)
+    finally:
+        conn.close()
 
 
 def phone_made(dir: Path, keys: list[str]) -> Pages:

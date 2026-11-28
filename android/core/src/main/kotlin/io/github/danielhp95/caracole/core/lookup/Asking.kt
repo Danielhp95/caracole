@@ -38,10 +38,12 @@ interface Asking {
 /** What a site's stage of a lookup reads: the database (autocommit), the song, the overrides and settings now, the
  * library, the asking and the lookup's time; [cacheDir], the lookup's HTTP cache (its clients', `cfg.cache_dir`),
  * for what a stage reads from the cache alone with no client (the match stage's backfill): every lookup gives it,
- * whatever asking wraps the envelope; a test's context may have none. */
+ * whatever asking wraps the envelope; a test's context may have none. [length], the audio's length in seconds a
+ * staged job asks the lyrics sites with (LRCLIB's and Megalobiz's `durations`, youtube_sheet.py's), none for a
+ * lookup's (get.py asks with the song's line alone). */
 data class StageContext(val db: Db, val song: SongRow, val overrides: Overrides, val config: PhoneConfig,
                         val library: LibraryStore, val asking: Asking, val now: Instant, val cacheDir: File? = null,
-                        val askedUnderName: () -> Unit = {})
+                        val length: Double? = null, val askedUnderName: () -> Unit = {})
 
 /** How a stage ended: done, skipped or failed, and get.py's words for it. */
 data class StageEnd(val state: String, val detail: String)

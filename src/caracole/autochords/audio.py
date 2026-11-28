@@ -12,7 +12,9 @@ NumPy, librosa and torchaudio are imported inside the functions, so this module 
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import re
 import os
 import sys
 import tempfile
@@ -25,6 +27,27 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 DISAGREES_S = 0.5  # how far libsndfile's decode of an MP3 may be from its frames' length before FFmpeg reads it
+
+
+HASH_BLOCK = 1 << 20  # what ``sha16`` reads at a time: a file of hundreds of MB is never held whole
+_STORE_HASH = re.compile(r"[0-9a-df-np-sv-z]{32}-")  # a Nix store path's hash, before the name it was given
+
+
+def sha16(path: Path | str) -> str:
+    """The first 16 hex digits of the SHA-256 of a file's bytes, read ``HASH_BLOCK`` at a time."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while block := f.read(HASH_BLOCK):
+            digest.update(block)
+    return digest.hexdigest()[:16]
+
+
+def file_stem(path: Path | str) -> str:
+    """A model file's name less its extension, and less the hash a Nix store path puts before it
+    (``/nix/store/<hash>-btc_model_large_voca.pt`` is ``btc_model_large_voca``)."""
+    stem = Path(path).stem
+    found = _STORE_HASH.match(stem)
+    return stem[found.end():] if found else stem
 
 
 def load_mono(path: Path | str, rate: int) -> np.ndarray:

@@ -140,7 +140,7 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
             val song = Songs.byId(db, id)
                 ?: throw Refused(404, "No such song", "That song isn't in the logbook. Removed already?")
             LookupForms.sameSong(song, form)
-            song to if (confirmed) null else RemovalQuestion.data(db, song)
+            song to if (confirmed) null else RemovalQuestion.data(db, song, store.givenAudio(db, song) != null)
         }
         if (question != null) {
             return RemovalQuestion.page(song, question, form["csrf"].orEmpty(), back, libraryAt(back, song.id))

@@ -200,6 +200,11 @@ object JobCommands {
         Command("Making the PDF", listOf("render", "--song=$display")),
     )
 
+    /** jobs.audio_sheet_steps: a song's auto sheet from an audio file uploaded now, `caracole audio --progress`, one
+     * process for every stage (audio_sheet.py's STAGES); [upload] the staged upload's 16-hex id, never a path. */
+    fun audioSheetSteps(display: String, upload: String): List<Command> =
+        listOf(Command("Making the sheet", listOf("audio", "--progress", "--upload=$upload", "--song=$display")))
+
     /** Look one song up now: `caracole get --progress`, one process for every stage (get.py). */
     fun lookupSteps(artist: String, title: String, album: String? = null, durationMs: Long? = null,
                     ug: String? = null, tab: String? = null, lacuerda: String? = null, harptabs: String? = null,
@@ -240,6 +245,21 @@ object JobCommands {
     fun lacuerdaSearchSteps(query: String, auto: Boolean): List<Command> =
         listOf(Command("Searching LaCuerda",
                        listOf("lacuerda", "--search=$query", "--progress") + if (auto) listOf("--auto") else emptyList()))
+
+    /** Look a song's lyrics up now under [name] ("Artist - Title", the one typed): `caracole lyrics --song --as`,
+     * no `--progress` and no stages, its line its last line (jobs.lyrics_search_steps). */
+    fun lyricsSearchSteps(display: String, name: String): List<Command> =
+        listOf(Command("Looking for lyrics under “$name”", listOf("lyrics", "--song=$display", "--as=$name")))
+
+    /** Make a record of the song's kept lyrics search its lyrics now, and its auto sheet again over them: `caracole
+     * lyrics --song --record --progress`, one process for every stage (jobs.lyrics_pick_steps). */
+    fun lyricsPickSteps(display: String, record: String): List<Command> =
+        listOf(Command("Taking the lyrics", listOf("lyrics", "--song=$display", "--record=$record", "--progress")))
+
+    /** Take the record picked for a song's lyrics back now: `caracole lyrics --song --clear`, no request, no stages
+     * (jobs.lyrics_clear_steps). */
+    fun lyricsClearSteps(display: String): List<Command> =
+        listOf(Command("Clearing the lyrics record you picked", listOf("lyrics", "--song=$display", "--clear")))
 
     /** Read a harptabs.com artist's page into its index now: `caracole harptabs --artist`, one request. */
     fun harptabsArtistSteps(path: String, name: String): List<Command> =
@@ -323,6 +343,12 @@ object JobCommands {
     /** Whether a command makes a song's sheet from an audio file you gave (`caracole audio`). */
     fun sheetsFromAudio(args: List<String>): Boolean = first(args) == "audio"
 
+    /** jobs.uploads_named: the staged uploads (AudioStore's ids) the waiting and running jobs of [jobs] name
+     * (`--upload=`), which an upload never lets go of. */
+    fun uploadsNamed(jobs: List<Job>): Set<String> = jobs.filter { it.active }.flatMap { it.steps }
+        .filter { sheetsFromAudio(it.args) }.flatMap { it.args }.filter { it.startsWith("--upload=") }
+        .mapTo(HashSet()) { it.removePrefix("--upload=") }
+
     /** jobs._picks_lyrics: whether a command makes a record of a song's kept lyrics search its lyrics (`caracole
      * lyrics --pick` or `--record`). */
     fun picksLyrics(args: List<String>): Boolean =
@@ -359,6 +385,17 @@ object JobCommands {
     fun songKeyOf(jobKey: String): String =
         jobKey.removePrefix(REMOVING).removePrefix(YOUTUBE_SHEET).removePrefix(TRANSCRIBE).removePrefix(AUDIO_SHEET)
             .removePrefix(LYRICS_PICK).removePrefix(LYRICS_CLEAR)
+
+    /** The song a job is about, as the lane sees it (jobs.song_of_job): [songKeyOf]'s, and the song's own changes,
+     * Make this my version's and a harmonica tab's reading's, their song's identity key after their prefix up to its
+     * first ":", and a lyrics search's; any other job's key whole (no song's). A yield passes over a lookup of the
+     * running job's song by it (JobQueue): a song never has two jobs running. */
+    fun songOfJob(jobKey: String): String {
+        for (prefix in listOf(EXPORTING, READING)) {
+            if (jobKey.startsWith(prefix)) return jobKey.removePrefix(prefix).substringBefore(':')
+        }
+        return songKeyOf(jobKey.removePrefix(LYRICS_SEARCH))
+    }
 
     private val PICKED_BY_LOOKUP = listOf("--ug=", "--tab=", "--lacuerda=", "--harptabs=", "--gametabs=", "--ireal=")
 
