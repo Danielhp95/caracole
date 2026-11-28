@@ -581,10 +581,10 @@ def render_all(
     ``failed`` list and ``no_font``, and go back on, at the end, as this pass
     found them; the next full pass puts them back in the library's order.
 
-    ``between`` is called between two songs, in no transaction: bulk work hands
-    caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
-    that renders many PDFs takes minutes. When it says it did, overrides.toml
-    and each song after are read again, since the lookup may have changed them.
+    ``between`` is called between two songs, and between two auto sheets the re-lay lays out again, in no
+    transaction: bulk work hands caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass that
+    renders many PDFs takes minutes. When it says it did, overrides.toml and each song after are read again, since
+    the lookup may have changed them.
 
     ``on_song(n, total, song)`` hears each song's turn as it starts, the ``n``-th
     of the ``total`` listed, an ignored one's too: how far the pass is, which
@@ -593,7 +593,19 @@ def render_all(
     from caracole.autochords.sheet_lyrics import lyrics_onto_sheets, relay_onto_sheets
 
     given = lyrics_onto_sheets(conn, cfg, overrides, only=song_ids)
-    given += relay_onto_sheets(conn, cfg, overrides, only=song_ids, between=between)
+    handed = False
+
+    def relay_between() -> bool:  # the re-lay's hand-overs are the pass's too: what it renders after is read again
+        nonlocal handed
+        if between is not None and between():
+            handed = True
+            return True
+        return False
+
+    given += relay_onto_sheets(conn, cfg, overrides, only=song_ids,
+                               between=None if between is None else relay_between)
+    if handed:
+        overrides = _overrides_again(cfg, overrides)
     stats = RenderStats(given=len(given))
     tally = _Tally(stats)
     font, font_problem = _cjk_font(cfg.cjk_font)

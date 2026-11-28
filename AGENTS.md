@@ -5925,7 +5925,8 @@ picks one).
     `test_youtube_fetch.py::test_a_song_a_lookup_kept_a_human_sheet_for_in_the_passs_pause_is_left_alone`), and the
     three lyrics passes `[lyrics]` too (lyrics.py `Turns`), keeping an answer of a turn a pick or a clear came in only
     for a song still asked so;
-  - and `autochords_pending` and `render_all` read each song after and overrides.toml again;
+  - and `autochords_pending` and `render_all` read each song after and overrides.toml again (`render_all` after a
+    hand-over in its re-lay of auto sheets too, before any PDF);
   - what comes after reads overrides.toml again too (`_common.overrides_since`): the run's next steps,
     `StepContext.read_overrides_again`; the songbooks and pages of `caracole render` and `autochords`; the pages of
     `caracole fetch`, `youtube`, `icons` and commands/lyrics.py's `_provider_pass`.
