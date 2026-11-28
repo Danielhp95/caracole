@@ -6,6 +6,7 @@ import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.youtube.DayBudget
 import io.github.danielhp95.caracole.core.youtube.Outdated
 import io.github.danielhp95.caracole.core.youtube.YtDlp
+import io.github.danielhp95.caracole.server.jobs.Outcomes
 import io.github.danielhp95.caracole.server.lookups.AudioRunner
 import io.github.danielhp95.caracole.server.lookups.YouTubeSheetRunner
 import java.time.Instant
@@ -45,7 +46,7 @@ object YouTubeRow {
         s.problem == AudioRunner.NOT_DOWNLOADED -> NEEDS_MODELS
         s.problem != null -> s.problem.replaceFirstChar { if (it in 'a'..'z') it - 32 else it }
         s.coolingUntil != null -> COOLING.replace("{when}", s.coolingUntil)
-        s.outdated != null -> OUTDATED.replace("{words}", io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(s.outdated))
+        s.outdated != null -> OUTDATED.replace("{words}", Outcomes.outdated(s.outdated))
         else -> listOfNotNull("On", s.version?.let { "yt-dlp $it" }, runs(s.runs, s.budget)).joinToString(" · ")
     }
 

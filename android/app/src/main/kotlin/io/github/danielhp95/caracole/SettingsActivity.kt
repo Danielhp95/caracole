@@ -51,7 +51,8 @@ import java.time.Instant
  * is answered (a rotation's). Download asks to show notifications first, the download's own with its bar. A
  * phone's caracole that can't start is said under the catalogues' button ("Couldn't start · …"), never a crash, and
  * its start tried again as the screen comes back. YouTube audio ([YouTubeRow], the phone-youtube design's §7) says
- * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours", off, the chord
+ * what a sheet from a YouTube video stands on now ("On · yt-dlp 2026.11.23 · 2 of 50 runs in the last 24 hours",
+ * off, the chord
  * models needed, a cooldown, out of date), none in a build without yt-dlp. The library screen's bar has the same sync
  * button.
  * No item's text ends in "…".
@@ -179,17 +180,23 @@ class SettingsActivity : Activity() {
                 if (reverting) return@setOnCheckedChangeListener
                 scope.launch {
                     val kept = withContext(Dispatchers.IO) {
-                        runCatching {
-                            phone.parts.database.writeBlocking { db -> YouTubeAuto.set(db, on) }
-                            YouTubeWorker.schedule(this@SettingsActivity, phone)
-                        }
+                        runCatching { phone.parts.database.writeBlocking { db -> YouTubeAuto.set(db, on) } }
                     }
-                    kept.onFailure { e ->
+                    kept.onFailure { e ->  // not kept: the switch back as it was, and said
                         Log.w("caracole", "the automatic YouTube pass's switch couldn't be kept", e)
                         reverting = true
                         button.isChecked = !on
                         reverting = false
                         findViewById<TextView>(R.id.youtube_line).text = getString(R.string.youtube_auto_failed, why(e))
+                        return@launch
+                    }
+                    val scheduled = withContext(Dispatchers.IO) {
+                        runCatching { YouTubeWorker.schedule(this@SettingsActivity, phone) }
+                    }
+                    scheduled.onFailure { e ->  // kept as written; its work not (re)scheduled, said
+                        Log.w("caracole", "the automatic YouTube pass's work couldn't be scheduled", e)
+                        findViewById<TextView>(R.id.youtube_line).text =
+                            getString(R.string.youtube_auto_unscheduled, why(e))
                     }
                 }
             }

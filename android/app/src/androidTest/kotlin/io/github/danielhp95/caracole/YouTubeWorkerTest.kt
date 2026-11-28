@@ -20,7 +20,8 @@ import java.time.Instant
  * The automatic YouTube pass's work on the device (YouTubeWorker, the phone-youtube design's §5.3), through the real
  * WorkManager of the debug app: the daily work scheduled on a phone with no computer, and not on one that synced
  * within 14 days; the switch off schedules nothing and cancels what was there; soon's work enqueued once, KEEP. The
- * pass itself (which songs, how many, its stops) is the JVM's YouTubeAutoTest, over the real queue.
+ * pass itself (which songs, how many, its stops) is the JVM's YouTubeAutoTest, over the real queue. Before and after
+ * each test: both works cancelled, every `sync:base:%` record cleared (the phone's syncs: a test's own), the switch on.
  *
  *     android/scripts/device-test.sh YouTubeWorkerTest
  */
@@ -105,9 +106,11 @@ class YouTubeWorkerTest {
      * doWork runs the pass, which with nothing due queues nothing; with the switch turned off since, it stops there. */
     @Test fun theSoonWorkForcedRunsThePass() = onWifiCharging {
         YouTubeWorker.lastForTests = null
+        YouTubeWorker.foregroundForTests = false
         YouTubeWorker.soon(context, phone)
         force(YouTubeWorker.SOON)
         assertEquals(WorkInfo.State.SUCCEEDED, finished(YouTubeWorker.SOON))
+        assertTrue("the worker went into the foreground (setForeground)", YouTubeWorker.foregroundForTests)
         // The pass ran: nothing due, or (no chord models on this emulator) the route not offered; no job either way.
         val stopped = YouTubeWorker.lastForTests?.stopped
         assertTrue("$stopped", stopped == YouTubeAuto.Stop.NOTHING_DUE || stopped == YouTubeAuto.Stop.NOT_OFFERED)
@@ -136,9 +139,13 @@ class YouTubeWorkerTest {
     }
 
     /** [block] with the emulator's constraints held (WorkManager checks them again as the job starts): Wi-Fi, no mobile
-     * data, on AC and full; put back after. The emulator's alone: device-test.sh runs nothing on a phone. */
+     * data, on AC and full; Wi-Fi and mobile data put back as they were after, the battery reset. The emulator's alone:
+     * device-test.sh runs nothing on a phone. */
     private fun onWifiCharging(block: () -> Unit) {
-        Assume.assumeTrue("an emulator", android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.PRODUCT.contains("sdk"))
+        Assume.assumeTrue("an emulator",
+                          android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.PRODUCT.contains("sdk"))
+        val data = shell("settings get global mobile_data").trim() == "1"
+        val wifi = shell("settings get global wifi_on").trim() != "0"
         shell("svc data disable"); shell("svc wifi enable")
         shell("dumpsys battery set ac 1"); shell("dumpsys battery set level 100")
         try {
@@ -146,12 +153,15 @@ class YouTubeWorkerTest {
             while (Caracole.metered(context) && System.currentTimeMillis() < deadline) Thread.sleep(200)
             block()
         } finally {
-            shell("dumpsys battery reset"); shell("svc data enable")
+            shell("dumpsys battery reset")
+            shell(if (wifi) "svc wifi enable" else "svc wifi disable")
+            shell(if (data) "svc data enable" else "svc data disable")
         }
     }
 
     /** The JobScheduler job of the unique work [name], run now whatever its delay and constraints: its job id the one
-     * WorkManager gave it (its own database's SystemIdInfo, in no_backup, read in this, the app's process). */
+     * WorkManager gave it, read from WorkManager's PRIVATE database (SystemIdInfo, in no_backup, in this, the app's
+     * process) and its JobScheduler namespace: both WorkManager 2.10's, to redo at a WorkManager bump. */
     private fun force(name: String) {
         val id = work.getWorkInfosForUniqueWork(name).get().single().id.toString()
         val deadline = System.currentTimeMillis() + 10_000

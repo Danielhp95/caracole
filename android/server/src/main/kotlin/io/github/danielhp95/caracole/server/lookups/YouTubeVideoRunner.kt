@@ -97,7 +97,9 @@ class YouTubeVideoRunner(
          * why there is none (a video YouTube won't give kept as none, with why). */
         private fun read(engine: YouTubeEngine, policy: io.github.danielhp95.caracole.core.config.ProviderPolicy,
                          runId: String): Video? {
-            val asked = asking.ask(engine, policy, key, runId, unavailable = { e ->
+            val asked = asking.ask(engine, policy, key, runId,
+                                   outdated = { e -> YouTubeSheetRunner.noteOutdated(parts, engine, e, now) },
+                                   unavailable = { e ->
                 parts.database.writeBlocking { db ->
                     asking.keep(db, key, JsonObject(linkedMapOf("at" to JsonPrimitive(stamp), "video" to JsonNull,
                         "unavailable" to JsonPrimitive(Py.slice(e.msg ?: e.message.orEmpty(), 0, YouTubeAsk.ERROR_CHARS)))))

@@ -30,6 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import io.github.danielhp95.caracole.server.jobs.Outcomes
 
 /** The automatic pass's trigger after a lookup (the design's §5.3; Phone.afterJob): a lookup whose outcome is "Not on
  * the sites" notes that song (kv `youtube-wanted:<id>`) and tells onNoSheet; one of a song that keeps a sheet notes
@@ -107,7 +109,7 @@ class NoSheetNoteTest {
         assertNotNull(noted(phone, "Calla Lake", "River Road"), said(phone, job))
         assertEquals(1, told.get())
         // Another song's lookup in between: each its own.
-        lookUp(phone, "Harbour Lights", "Paper Boats")
+        assertEquals(Job.DONE, lookUp(phone, "Harbour Lights", "Paper Boats").state)
         assertNotNull(noted(phone, "Harbour Lights", "Paper Boats"))
         assertEquals(2, told.get())
         assertEquals(2L, phone.parts.database.read { db ->
@@ -126,7 +128,9 @@ class NoSheetNoteTest {
             Kept.keepFile(db, phone.parts.store, song, v, "sheet.txt", "[ch]G[/ch]\nHi".toByteArray(), 1, Stamps.now())
             Versions.updateSong(db, song.id, mapOf("status" to "found", "match_decision" to "pinned"))
         }
-        lookUp(phone, "Calla Lake", "River Road")
+        val job = lookUp(phone, "Calla Lake", "River Road")
+        assertEquals(Job.DONE, job.state)
+        assertTrue(Outcomes.NOT_ON_THE_SITES !in said(phone, job), said(phone, job))
         assertNull(noted(phone, "Calla Lake", "River Road"))
         assertEquals(0, told.get())
     }
@@ -134,7 +138,9 @@ class NoSheetNoteTest {
     @Test fun aBuildWithNoYtDlpNotesNothing() = phone(youtube = null) { phone ->
         val told = AtomicInteger()
         phone.onNoSheet = { told.incrementAndGet() }
-        lookUp(phone, "Calla Lake", "River Road")
+        val job = lookUp(phone, "Calla Lake", "River Road")
+        assertEquals(Job.DONE, job.state)
+        assertTrue(Outcomes.NOT_ON_THE_SITES in said(phone, job), "the lookup would note it with yt-dlp: ${said(phone, job)}")
         assertNull(noted(phone, "Calla Lake", "River Road"))
         assertEquals(0, told.get())
     }

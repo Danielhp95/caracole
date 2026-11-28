@@ -94,9 +94,10 @@ class YouTubeAuto(
          * default); the phone's own, kept by a restore (OwnRecords). */
         const val SWITCH = "phone:youtube-auto"
 
-        /** A pass queues no job after 8 minutes into its worker (WorkManager stops a worker at 10). The job it awaits
-         * may run longer (a song's hearing takes minutes): its worker may then be stopped while it waits, and the job goes
-         * on in the queue, whose foreground service keeps the process; the next pass takes the songs after it. */
+        /** A pass queues no job after 8 minutes (the design's §5.3). The job it awaits may run longer (a song's hearing
+         * takes minutes): the worker is long-running (the app's YouTubeWorker in the foreground through WorkManager's
+         * setForeground, which lifts WorkManager's 10 minutes), so it awaits the job to its end, the process in the
+         * foreground meanwhile. */
         const val MOST_S = 8 * 60.0
 
         /** A song costs two runs (a search and a download): a pass stops with fewer left. */
@@ -118,16 +119,20 @@ class YouTubeAuto(
 
         /** The time of the phone's last sync, or null for none. */
         fun lastSync(db: Db): Instant? {
-            val peers = db.query("SELECT key FROM kv WHERE key LIKE 'sync:base:%'") { it.text(0)!!.removePrefix("sync:base:") }
+            val peers = db.query("SELECT key FROM kv WHERE key LIKE 'sync:base:%'") {
+                it.text(0)!!.removePrefix("sync:base:")
+            }
             return peers.mapNotNull { peer ->
-                Compare.baseOf(db, peer)?.values?.mapNotNull { (_, at) -> runCatching { Stamps.parse(at) }.getOrNull() }?.maxOrNull()
+                Compare.baseOf(db, peer)?.values
+                    ?.mapNotNull { (_, at) -> runCatching { Stamps.parse(at) }.getOrNull() }?.maxOrNull()
             }.maxOrNull()?.let(Stamps::instant)
         }
 
         /** The automatic job of the song [display] ([key], its identity key): the computer's, with no video given. */
         fun spec(display: String, key: String) =
             LookupForms.spec("Sheet from YouTube: $display", JobCommands.YOUTUBE_SHEET + key,
-                             listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--song=$display"))),
+                             listOf(Command("Making the sheet",
+                                            listOf("youtube", "--sheet", "--progress", "--song=$display"))),
                              display = display).copy(automatic = true)
     }
 }

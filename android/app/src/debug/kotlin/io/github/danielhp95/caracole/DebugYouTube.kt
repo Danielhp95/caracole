@@ -9,5 +9,6 @@ import java.io.File
  * class's name alone ([Caracole.youtube]): a release, which carries no `:youtube`, has neither. */
 object DebugYouTube {
     @JvmStatic
-    fun engine(context: Context, cacheDir: File): YouTubeEngine = YtDlpEngine(context, cacheDir)
+    fun engine(context: Context, cacheDir: File): YouTubeEngine =
+        YtDlpEngine(context, cacheDir, BuildConfig.YTDLP_VERSION)
 }

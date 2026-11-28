@@ -238,6 +238,36 @@ class YouTubeVideoRunnerTest {
         }
     }
 
+    /** A pasted video's read yt-dlp can't do notes it by the video (the design's §7, Outdated): said in the phone's
+     * words where the app's yt-dlp names its version; two videos set out of date, the alert once. */
+    @Test fun aReadYtDlpCantDoNotesOutOfDateByItsVideo() {
+        val w = World()
+        val told = ArrayList<String>()
+        val alerts = object : Alerts {
+            override fun blocked(provider: String, until: java.time.Instant?, message: String) {}
+            override fun failed(title: String, line: String) {}
+            override fun outdated(version: String, words: String) { told += version }
+        }
+        val parts = PhoneParts(w.parts.database, w.parts.store, w.parts.stateDir, w.parts.config, w.parts.queue,
+                               w.parts.cards, w.parts.clients, w.parts.pages, w.parts.songbooks, alerts, w.parts.pacing,
+                               w.parts.searchesLacuerda)
+        val versioned = object : YouTubeEngine by w.engine {
+            override val version = "2026.11.23"
+        }
+        w.answer = { Ran(1, "", "ERROR: [youtube] x: Unable to extract yt initial data\n") }
+        val words = io.github.danielhp95.caracole.server.jobs.Outcomes.outdated("2026.11.23")
+        fun read(link: String): List<String> {
+            val lines = Lines()
+            runBlocking { YouTubeVideoRunner(parts, versioned, routeWhy = { null }).run(listOf("youtube", "--video=$link"), lines) }
+            return lines.said
+        }
+        assertEquals(listOf("Not searched: $words."), read(id))
+        assertEquals(emptyList(), told)
+        read("dQw4w9WgXcQ")
+        assertEquals(listOf("2026.11.23"), told)
+        assertTrue(w.database.read { db -> io.github.danielhp95.caracole.core.youtube.Outdated.state(db, "2026.11.23", now) } != null)
+    }
+
     /** A link that names no video exits 2 in the computer's words, asking nothing. */
     @Test fun aLinkThatIsNoVideosExitsTwo() {
         val w = World()

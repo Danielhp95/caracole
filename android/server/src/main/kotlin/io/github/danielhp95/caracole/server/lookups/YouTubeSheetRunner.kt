@@ -45,6 +45,7 @@ import io.github.danielhp95.caracole.server.http.caracoleResource
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.JobContext
+import io.github.danielhp95.caracole.server.jobs.Outcomes
 import io.github.danielhp95.caracole.viewer.autochords.AutoSheet
 import io.github.danielhp95.caracole.viewer.autochords.ChordModels
 import io.github.danielhp95.caracole.viewer.autochords.Heard
@@ -242,7 +243,7 @@ class YouTubeSheetRunner(
             // yt-dlp out of date (Outdated): an automatic job never comes here (YouTubeAuto stops first); one asked for
             // now runs, saying so first.
             parts.database.read { db -> Outdated.state(db, engine.version, now) }?.let {
-                val warning = io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(engine.version!!)
+                val warning = Outcomes.outdated(engine.version!!)
                 context.say(warning)
                 doing("audio", warning)
             }
@@ -252,7 +253,8 @@ class YouTubeSheetRunner(
             // An automatic job (the design's §5.3): the day's runs left its budget, and no run on a metered network,
             // checked again before each (a job queued on Wi-Fi may run after the phone left it).
             val automatic = context.automatic
-            val budget = if (automatic) parts.database.read { db -> DayBudget.left(db, config, now) } else policy.budget.toInt()
+            val budget = if (automatic) parts.database.read { db -> DayBudget.left(db, config, now) }
+                         else policy.budget.toInt()
             val runner = YtDlp(Yielding(process, context), policy, engine.cacheDir, engine.qjs.path, engine::gate,
                                writes, pacing(), budget = budget, runId = stamp,
                                beforeRun = { if (automatic && metered()) YouTubeSearchRunner.METERED else null })
@@ -273,14 +275,9 @@ class YouTubeSheetRunner(
             } catch (e: ExtractorOutdated) {  // yt-dlp's, never the video's: counted against nothing
                 failed(e)
                 val reason = e.msg ?: e.message.orEmpty()
-                // Two videos within 24 hours set the phone's out of date (the design's §7), told once a version.
-                val version = engine.version
-                if (parts.database.writeBlocking { db -> Outdated.note(db, version, e.url ?: SEARCH, reason, now) }) {
-                    parts.alerts.outdated(version!!, io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(version))  // note() sets none without one
-                }
-                if (version == null) return "failed" to reason  // no version known: yt-dlp's own words
+                val words = noteOutdated(parts, engine, e, now) ?: return "failed" to reason  // no version: yt-dlp's
                 context.say(reason)
-                return "failed" to io.github.danielhp95.caracole.server.jobs.Outcomes.outdated(version)
+                return "failed" to words
             } catch (e: GateRefused) {
                 failed(e)
                 return "failed" to (e.msg ?: e.message.orEmpty())
@@ -547,6 +544,19 @@ class YouTubeSheetRunner(
 
         private val giveUpAfter: Int by lazy {
             (YouTubeData.read().json.getValue("fetch") as JsonObject).getValue("give_up_after").jsonPrimitive.int
+        }
+
+        /** An [ExtractorOutdated] run of the app's yt-dlp noted (Outdated.note, by the run's target: the video's address,
+         * or the search's), its alert sent once when it set out of date (two videos within 24 hours, once a version);
+         * the phone's words for it ([Outcomes.outdated]), or null with no version known (nothing noted). */
+        internal fun noteOutdated(parts: PhoneParts, engine: YouTubeEngine, e: ExtractorOutdated,
+                                  now: java.time.Instant): String? {
+            val version = engine.version ?: return null
+            val reason = e.msg ?: e.message.orEmpty()
+            if (parts.database.writeBlocking { db -> Outdated.note(db, version, e.url ?: SEARCH, reason, now) }) {
+                parts.alerts.outdated(version, Outcomes.outdated(version))
+            }
+            return Outcomes.outdated(version)
         }
 
         /** commands/youtube.py's words for a caracole that makes no sheet from YouTube. */

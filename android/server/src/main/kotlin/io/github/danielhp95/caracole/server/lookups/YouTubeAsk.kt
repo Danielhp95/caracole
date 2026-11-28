@@ -72,10 +72,12 @@ internal class YouTubeAsk(
     /**
      * [run] over one yt-dlp run for [key] under [runId], its ends said: what it came to ([Asked]), or null once the job
      * said why there is none. [unavailable] answers a video YouTube won't give (a `--video`'s); left null, that is an
-     * error as any other (a `--search`'s).
+     * error as any other (a `--search`'s). [outdated] notes yt-dlp out of date and gives the phone's words for it (a
+     * `--video`'s, YouTubeSheetRunner.noteOutdated; the search's suggestion notes none).
      */
     fun <T> ask(engine: YouTubeEngine, policy: ProviderPolicy, key: String, runId: String,
                 unavailable: ((VideoUnavailable) -> Unit)? = null,
+                outdated: ((ExtractorOutdated) -> String?)? = null,
                 run: (YtDlp) -> T?): Asked<T>? {
         val process = engine.process()
         val runner = YtDlp(YouTubeSheetRunner.Yielding(process, context), policy, engine.cacheDir, engine.qjs.path,
@@ -103,8 +105,10 @@ internal class YouTubeAsk(
                 val why = e.msg ?: e.message.orEmpty()
                 if (e is ExtractorOutdated || e is GateRefused || e is RunHeldBack) {
                     // the phone's own, a host's problem and never the key's (as YouTubeSheetRunner rules them): said
-                    // in their words, nothing recorded against the key or the hour
-                    end(words("not_searched") + why + ".")
+                    // in their words (yt-dlp out of date in the phone's, noted, where [outdated] notes it), nothing
+                    // recorded against the key or the hour
+                    val said = (e as? ExtractorOutdated)?.let { outdated?.invoke(it) } ?: why
+                    end(words("not_searched") + said + ".")
                     return null
                 }
                 parts.database.writeBlocking { db ->

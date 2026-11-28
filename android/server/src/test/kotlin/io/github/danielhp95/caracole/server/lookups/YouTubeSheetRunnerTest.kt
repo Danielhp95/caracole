@@ -365,9 +365,53 @@ class YouTubeSheetRunnerTest {
         }
         sheet("ThirdVideo3")
         assertEquals(1, told.size, "told once a version")
-        // Asked for now, a job still runs, warning first.
-        val now = sheet("ok")
+        // Asked for now, a job still runs, warning first: said before its download starts.
+        var saidBefore: List<String>? = null
+        phone.runners[YouTubeSheetRunner.COMMAND] = runner(Downloader(during = {
+            saidBefore = phone.queue.snapshot().first { it.state == Job.RUNNING }.steps.single().output
+        }))
+        val now = runBlocking {
+            val commands = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress", "--url=$url",
+                                                                     "--song=$display")))
+            val spec = JobSpec("Sheet from YouTube: $display", JobCommands.YOUTUBE_SHEET + "calla-lake/river-road", "song",
+                               JobCommands.stages(commands.map { it.args }), display = display, commands = commands)
+            withTimeout(60_000) { phone.queue.await(phone.queue.submit(spec).first.id) }
+        }
         assertEquals("done", ends(now)["audio"]?.first, "${now.steps.single().output}")
-        assertTrue(words in now.steps.single().output, "${now.steps.single().output}")
+        assertTrue(saidBefore.orEmpty().contains(words), "said before the download: $saidBefore")
+    }
+
+    /** A video passed over (no m4a stream, the phone's PHONE_PASS_OVER) is no sign of yt-dlp out of date: two of them,
+     * on two videos, leave Outdated.state null and tell nobody. */
+    @Test fun twoPassOversSetNoOutOfDate() {
+        val phone = phone()
+        val told = CopyOnWriteArrayList<String>()
+        val alerts = object : io.github.danielhp95.caracole.core.health.Alerts {
+            override fun blocked(provider: String, until: java.time.Instant?, message: String) {}
+            override fun failed(title: String, line: String) {}
+            override fun outdated(version: String, words: String) { told += version }
+        }
+        val parts = PhoneParts(phone.parts.database, phone.parts.store, phone.parts.stateDir, phone.parts.config,
+                               phone.parts.queue, phone.parts.cards, phone.parts.clients, phone.parts.pages,
+                               phone.parts.songbooks, alerts, phone.parts.pacing, phone.parts.searchesLacuerda)
+        val passOver = object : YtDlpProcess {
+            override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit) =
+                Ran(1, "", "ERROR: [youtube] x: Requested format is not available. Use --list-formats for a list of available formats\n")
+        }
+        for (id in listOf("FirstVideo1", "SecondVid02")) {
+            phone.runners[YouTubeSheetRunner.COMMAND] = YouTubeSheetRunner(parts, Engine(passOver, File(parts.stateDir, "cache"),
+                                                                                         "2026.11.23"), Models(heard),
+                                                                           phone.store, problem = { null }, chordsProblem = { null })
+            val commands = listOf(Command("Making the sheet", listOf("youtube", "--sheet", "--progress",
+                                                                     "--url=https://www.youtube.com/watch?v=$id", "--song=$display")))
+            val spec = JobSpec("Sheet from YouTube: $display", JobCommands.YOUTUBE_SHEET + "calla-lake/river-road", "song",
+                               JobCommands.stages(commands.map { it.args }), display = display, commands = commands)
+            runBlocking { withTimeout(60_000) { phone.queue.await(phone.queue.submit(spec).first.id) } }
+        }
+        phone.database.read { db ->
+            assertNull(io.github.danielhp95.caracole.core.youtube.Outdated.state(db, "2026.11.23", java.time.Instant.now()))
+            assertNull(db.kvGet(io.github.danielhp95.caracole.core.youtube.Outdated.HITS))
+        }
+        assertEquals(emptyList(), told)
     }
 }

@@ -52,8 +52,8 @@ data class BenchRan(val ran: Ran, val lines: List<Stamped>)
  * it holds the owner's terms itself, each as the runner does, on the same records:
  *
  * - the day's runs: every yt-dlp run the phone sent counted ([DbLedger]: kv `ytbench:runs` and `events`' sent runs
- *   of provider `youtube` of the last 24 hours, as one set: DayBudget.runs); at most the provider's budget (PhoneConfig's `youtube`,
- *   50 since 2026-11-27, 6 before) in any 24 hours, the session refused when it would pass them, unless the cap is
+ *   of provider `youtube` of the last 24 hours, as one set: DayBudget.runs); at most the provider's budget
+ *   (PhoneConfig's `youtube`, 50 since 2026-11-27, 6 before) in any 24 hours, the session refused when it would pass them, unless the cap is
  *   lifted ([DbLedger.DAY_CAP_LIFTED], the owner's word of 2026-11-27, said in [State.capLifted] and the report's
  *   `budget.lifted`): then no count refuses a session or a run, and the count is said all the same; and each run
  *   RESERVED before its gate opens ([Ledger.reserve]: in one
@@ -617,8 +617,8 @@ class BenchRun(
  * and [record] as [BenchRun.Ledger] asks them, each in one read or write of the caller's.
  *
  * - The day's runs: DayBudget.runs, the union of kv `ytbench:runs` (the bench's own, a JSON list of UTC stamps,
- *   those of the last 24 hours kept), the product's reservations, and `events`' sent runs of provider `youtube` of the last 24 hours (every run the phone sent: the
- *   bench's own are rows there too, so a later product job and the bench share one count). A clock set back only
+ *   those of the last 24 hours kept), the product's reservations, and `events`' sent runs of provider `youtube` of
+ *   the last 24 hours (every run the phone sent: the bench's own are rows there too, so a later product job and the bench share one count). A clock set back only
  *   counts more runs, never fewer (a stamp later than now is still within 24 hours of it).
  * - A reservation: the provider on, no cooldown, fewer runs than its budget (unless [DAY_CAP_LIFTED]), then the run's
  *   stamp appended, in one write; the first run's pause asked of Pace.pauseAfterLastRequest itself (its sleep taken
@@ -651,8 +651,8 @@ object DbLedger {
                               Pace.lastRequest(db, PROVIDER), served, jobs, running, capLifted)
     }
 
-    /** The sent runs of the last 24 hours before [now]: DayBudget.runs, the union of `events`' rows, the bench's own stamps
-     * and the product's reservations no row followed; never fewer than the bench's stamps alone. */
+    /** The sent runs of the last 24 hours before [now]: DayBudget.runs, the union of `events`' rows, the bench's own
+     * stamps and the product's reservations no row followed; never fewer than the bench's stamps alone. */
     fun runs(db: Db, now: Instant): Int {
         val since = utc(now.minus(DAY))
         return maxOf(DayBudget.runs(db, now), stamps(db).count { it >= since })

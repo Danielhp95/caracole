@@ -14,9 +14,9 @@ import java.time.temporal.ChronoUnit
  * extraction error against the video): two runs classified `outdated` ([ExtractorOutdated]) on two different videos
  * within 24 hours set kv [KEY] `{version, at, reason}` for the app's yt-dlp version; the automatic pass then stops
  * until that version changes or [CLEARED_AFTER] passes ([state]); asked-now jobs still run, the audio stage warning
- * first (their words server.jobs' Outcomes.outdated). A pass-over ([PassedOver]) or any other error never notes one. The videos seen are kv [HITS]
- * (`[{video, version, at}]`, the last 24 hours'); both are the phone's own (OwnRecords), never synced. A version
- * unknown (null) notes nothing.
+ * first (their words server.jobs' Outcomes.outdated). A pass-over ([PassedOver]) or any other error never notes one.
+ * The videos seen are kv [HITS] (`[{video, version, at}]`, the last 24 hours'); both are the phone's own (OwnRecords),
+ * never synced. A version unknown (null) notes nothing.
  */
 object Outdated {
     const val KEY = "youtube-outdated"
@@ -24,8 +24,8 @@ object Outdated {
     val CLEARED_AFTER: Duration = Duration.ofDays(7)
     private val WITHIN: Duration = Duration.ofHours(24)
 
-    /** A run of [videoId] (or a search's target) yt-dlp [version] couldn't read, at [now]; true when this sets the state
-     * (a second video within 24 hours, the state not set already for this version): the caller's one alert. */
+    /** A run of [videoId] (or a search's target) yt-dlp [version] couldn't read, at [now]; true when this sets the
+     * state (a second video within 24 hours, the state not set already for this version): the caller's one alert. */
     fun note(db: Db, version: String?, videoId: String, reason: String, now: Instant): Boolean {
         if (version == null) return false
         val at = stamp(now)
@@ -33,7 +33,8 @@ object Outdated {
         val hits = hits(db).filter { it.third >= since && it.second == version && it.first != videoId } +
             Triple(videoId, version, at)
         db.kvSet(HITS, JsonArray(hits.map { (video, v, t) ->
-            JsonObject(linkedMapOf("video" to JsonPrimitive(video), "version" to JsonPrimitive(v), "at" to JsonPrimitive(t)))
+            JsonObject(linkedMapOf("video" to JsonPrimitive(video), "version" to JsonPrimitive(v),
+                                   "at" to JsonPrimitive(t)))
         }).toString())
         if (hits.map { it.first }.toSet().size < 2 || state(db, version, now) != null) return false
         db.kvSet(KEY, JsonObject(linkedMapOf("version" to JsonPrimitive(version), "at" to JsonPrimitive(at),

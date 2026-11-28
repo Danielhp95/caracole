@@ -238,10 +238,9 @@ object Caracole {
         }
     }
 
-    /** [real], its process [youtubeForTests]'s while a test sets one, its version the pinned yt-dlp's. */
+    /** [real], its process [youtubeForTests]'s while a test sets one. */
     private fun withTestsProcess(real: YouTubeEngine): YouTubeEngine = object : YouTubeEngine by real {
         override fun process(): YtDlpProcess = youtubeForTests ?: real.process()
-        override val version: String get() = BuildConfig.YTDLP_VERSION
     }
 
     private const val PACKAGE = "io.github.danielhp95.caracole"

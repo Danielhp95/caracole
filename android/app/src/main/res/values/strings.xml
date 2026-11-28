@@ -104,6 +104,8 @@
     <string name="youtube_failed">Couldn\'t read YouTube\'s state · %1$s</string>
     <string name="youtube_auto">Find audio on YouTube by itself</string>
     <string name="youtube_auto_failed">Couldn\'t keep the switch · %1$s</string>
+    <string name="youtube_auto_working">Finding audio on YouTube</string>
+    <string name="youtube_auto_unscheduled">Kept, but its work couldn\'t be scheduled · %1$s</string>
     <string name="youtube_auto_hint">For a song no site has a sheet of: on Wi-Fi, after a lookup, and daily while charging when no computer synced in 14 days</string>
     <string name="youtube_hint">A sheet from a YouTube video you paste or share: its audio taken with yt-dlp once you press Make sheet, then let go</string>
 

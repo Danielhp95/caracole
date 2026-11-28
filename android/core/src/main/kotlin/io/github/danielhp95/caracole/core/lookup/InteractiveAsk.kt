@@ -98,7 +98,9 @@ class InteractiveAsk(val clients: Clients, val db: Db, val runId: String, val no
             owed(provider)
             val p = config.provider(e.provider)
             // The day's per_day met when it cut the client's budget below the provider's own (Pace.withinTheDay).
-            if (bulk) Asked.Spent(hour = false, keptForSheets = false, bulk = true, day = client.policy.budget < p.budget)
+            if (bulk) {
+                Asked.Spent(hour = false, keptForSheets = false, bulk = true, day = client.policy.budget < p.budget)
+            }
             else Asked.Spent(hour = e.provider !in keptForSheets && client.policy.budget < p.lookupRequests,
                              keptForSheets = e.provider in keptForSheets)
         } catch (e: ProviderError) {

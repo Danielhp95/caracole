@@ -1,11 +1,15 @@
 package io.github.danielhp95.caracole
 
 import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -30,25 +34,62 @@ import java.util.concurrent.TimeUnit
  *
  * The switch "Find audio on YouTube by itself" off (kv `phone:youtube-auto`) schedules nothing and cancels both; a
  * build with no yt-dlp schedules nothing. The network is checked again before each run by the job itself.
+ *
+ * It runs long ([foreground]: WorkManager's `setForeground`, a quiet notification on the jobs' channel, the route a
+ * job may take into the foreground from the background, where SyncService's own start isn't allowed), so the job it
+ * awaits keeps a foreground component for as long as the worker lives.
  */
 class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result =
-        work(applicationContext, withContext(Dispatchers.IO) { Caracole.phone(applicationContext) }, DAILY in tags)
+        work(applicationContext, withContext(Dispatchers.IO) { Caracole.phone(applicationContext) }, DAILY in tags) {
+            foreground()
+        }
+
+    /** Into the foreground, as a long-running worker: a refusal (none allowed now) logged, the pass going on. */
+    private suspend fun foreground() {
+        try {
+            setForeground(foregroundInfo(applicationContext))
+            foregroundForTests = true
+        } catch (e: IllegalStateException) {
+            Log.w("caracole", "the automatic YouTube pass couldn't go into the foreground", e)
+        }
+    }
 
     companion object {
         /** What a run of the work does, [daily] the daily one's: nothing in a build with no yt-dlp; the daily one on a
          * phone it no longer belongs on (the switch off, or a sync within 14 days) lets itself go; else the pass. */
-        internal suspend fun work(context: Context, phone: Phone, daily: Boolean): Result {
+        internal suspend fun work(context: Context, phone: Phone, daily: Boolean,
+                                  foreground: suspend () -> Unit = {}): Result {
             if (phone.youtube == null) return Result.success()
             if (daily && withContext(Dispatchers.IO) { phone.parts.database.read { db -> !daily(db) } }) {
                 WorkManager.getInstance(context).cancelUniqueWork(DAILY)
                 return Result.success()
             }
+            foreground()
             val ended = phone.youtubeAuto.pass()
             lastForTests = ended
             Log.i("caracole", "the automatic YouTube pass queued ${ended.jobs.size} job(s), stopped: ${ended.stopped}")
             return Result.success()
         }
+
+        /** The worker's notification while it runs long: the jobs' channel, quiet. */
+        private const val NOTIFICATION = 5
+
+        private fun foregroundInfo(context: Context): ForegroundInfo {
+            Notifications.channel(context)
+            val notification = NotificationCompat.Builder(context, Notifications.JOBS)
+                .setSmallIcon(R.drawable.ic_notify)
+                .setContentTitle(context.getString(R.string.youtube_auto_working))
+                .setOngoing(true)
+                .setSilent(true)
+                .build()
+            return if (Build.VERSION.SDK_INT >= 29) {
+                ForegroundInfo(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else ForegroundInfo(NOTIFICATION, notification)
+        }
+
+        /** Whether a worker of this process went into the foreground, for a device test. */
+        @Volatile var foregroundForTests = false
 
         /** What the last pass of this process came to, for a device test. */
         @Volatile var lastForTests: YouTubeAuto.Ended? = null
@@ -57,7 +98,8 @@ class YouTubeWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         const val DAILY = "youtube-daily"
         private const val SOON_DELAY_MIN = 2L
 
-        private fun on(phone: Phone): Boolean = phone.youtube != null && phone.parts.database.read { YouTubeAuto.on(it) }
+        private fun on(phone: Phone): Boolean =
+            phone.youtube != null && phone.parts.database.read { YouTubeAuto.on(it) }
 
         /** Whether the daily work belongs on this phone now: the switch on and no sync in 14 days. */
         private fun daily(db: io.github.danielhp95.caracole.core.db.Db): Boolean =

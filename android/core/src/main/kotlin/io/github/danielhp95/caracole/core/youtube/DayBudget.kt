@@ -43,8 +43,8 @@ object DayBudget {
      * the rows and the reservations no row followed, as one set. */
     fun runs(db: Db, now: Instant): Int {
         val since = stamp(now.minusSeconds(DAY_S))
-        val rows = db.query("SELECT at FROM events WHERE provider = ? AND at >= ? AND decision IN ('ok', 'error', 'blocked') " +
-                                "ORDER BY at", PROVIDER, since) { it.text(0)!! }
+        val rows = db.query("SELECT at FROM events WHERE provider = ? AND at >= ? " +
+                                "AND decision IN ('ok', 'error', 'blocked') ORDER BY at", PROVIDER, since) { it.text(0)!! }
         val stamps = (stamps(db, BENCH) + stamps(db, RESERVED)).filter { it >= since }.sorted()
         val matched = BooleanArray(rows.size)
         var unmatched = 0
@@ -75,7 +75,8 @@ object DayBudget {
 
     private fun stamps(db: Db, key: String): List<String> = db.kvGet(key)?.let { text ->
         (runCatching { PyJson.loads(text) }.getOrNull() as? JsonArray)?.mapNotNull {
-            (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> runCatching { Instant.parse(c) }.isSuccess }
+            (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content
+                ?.takeIf { c -> runCatching { Instant.parse(c) }.isSuccess }
         }
     }.orEmpty()
 

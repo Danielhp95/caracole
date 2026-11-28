@@ -160,7 +160,8 @@ object LookupWords {
         is Asked.Cooling -> StageEnd("skipped", cooling(provider, asked.until))
         is Asked.Blocked -> StageEnd("skipped", blocked(asked.error, asked.state.cooldownUntil))
         is Asked.Spent -> StageEnd("skipped", if (asked.bulk) bulkSpent(provider, config.provider(provider), asked.day)
-                                            else spent(provider, config.provider(provider), asked.hour, asked.keptForSheets))
+                                            else spent(provider, config.provider(provider), asked.hour,
+                                                       asked.keptForSheets))
         is Asked.Failed -> StageEnd("failed", failed(asked.error))
     }
 
