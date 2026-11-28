@@ -5278,20 +5278,21 @@ picks one).
   the run count alone, every run still reserved, counted and reported; the pause, one run and one session at a time, a
   block and its cooldown, no retry, the provider's switch, the gate's hosts and three songs a session stay. Nothing
   else's budget changes (`YtDlp`'s, PhoneConfig's `youtube`, the computer's).
-- **On the phone too**, the owner's choice of 2026-11-26, answering the YouTube-on-Android study's seven questions:
-  "1. yes, 2. yes. 3. automatic is okay, 4 It's okay 5. acceptable, 6. I would 7. I don't want to go further with "ask
-  the computer route"". The exception holds on the phone on the computer's terms: the same arguments and block
-  patterns, read from the corpus's `data/caracole/youtube/youtube.json` (never retyped), and the same budget and
-  pauses, counted on the phone apart (Two caracoles, each its own politeness, below). yt-dlp, its challenge scripts
-  and QuickJS-NG are pinned in the APK (`android/youtube/pins.json`) and run in the app's `:youtube` process, in the
-  debug build alone until the owner's gate (the phone-youtube design's Y5); nothing updates itself, and a fix comes
-  with a caracole release (`android/scripts/bump-ytdlp.sh`). yt-dlp presents itself as its default clients do;
-  nothing solves BotGuard or mints a PO token. Every run is given the app's loopback gate (`HostGate`) as its
-  `--proxy` and is refused without it (`YtDlpService`); the gate allows YouTube's own hosts and refuses Google's
-  attestation host by name, and the app's bytes are measured against the gate's: a check and a measurement, not a
-  wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. Nothing runs before the owner
-  asks: a sheet from a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), a pasted
-  video's title and thumbnail (`YouTubeVideoRunner`), on any network.
+- **On the phone too**, the owner's choice of 2026-11-26, answering the YouTube-on-Android study's seven questions: "1.
+  yes, 2. yes. 3. automatic is okay, 4 It's okay 5. acceptable, 6. I would 7. I don't want to go further with "ask the
+  computer route"". The exception holds on the phone on the computer's terms: the same arguments and block patterns,
+  read from the corpus's `data/caracole/youtube/youtube.json` (never retyped), and the same budget and pauses, counted
+  on the phone apart (Two caracoles, each its own politeness, below). yt-dlp, its challenge scripts and QuickJS-NG are
+  pinned in the APK (`android/youtube/pins.json`) and run in the app's `:youtube` process, in the debug build alone
+  until the owner's gate (the phone-youtube design's Y5); nothing updates itself, and a fix comes with a caracole
+  release (`android/scripts/bump-ytdlp.sh`). yt-dlp presents itself as its default clients do (an official app's: a
+  TV's, a Vision Pro's); nothing solves BotGuard or mints a PO token. Every run is given the app's loopback gate
+  (`HostGate`) as its `--proxy` and is refused without it (`YtDlpService`); the gate allows YouTube's own hosts and
+  refuses Google's attestation host by name, and the app's bytes are measured against the gate's: a check and a
+  measurement, not a wall. Audio alone is chosen by format (`-f bestaudio[ext=m4a]`), with no FFmpeg. A pasted video's
+  title and thumbnail are read as it is pasted (`YouTubeVideoRunner`); nothing is downloaded before the owner asks, for
+  a video pasted, shared or named on a card (`YouTubeRoutes`, `YouTubeSheetRunner`), on any network. That changes once
+  the automatic pass lands (the phone-youtube design's Y3), which takes audio by itself.
 - YouTube's oEmbed for a link shared to the phone (provider `youtube-oembed`, the owner's choice of 2026-11-10) is no
   yt-dlp run and no part of this exception: one request a video, robots.txt honoured (its `/oembed` is open).
 - Everything else keeps honouring robots.txt; widen nothing here without the owner, and copy it to no other site.

@@ -89,14 +89,16 @@ build](../android/README.md#a-sheet-from-a-youtube-video-debug-build) alone, and
 chord models on the phone.
 
 Paste the video into the request form's YouTube field, or into a song's card and tap **Make
-sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone downloads the audio with
-yt-dlp, asks the lyrics sites for the words, works out the chords, keeps the sheet and deletes
-the audio. Nothing is downloaded before you tap. It works on Wi-Fi or mobile data.
+sheet**, or share it from the YouTube app and tap **Make its sheet from this video**. The phone
+downloads the audio with yt-dlp, asks the lyrics sites for the words, works out the chords,
+keeps the sheet and deletes the audio. Nothing is downloaded before you tap. It works on Wi-Fi
+or mobile data.
 
-Settings › **YouTube audio** says whether it can run, and how many yt-dlp runs the last 24 hours
-held. The phone keeps the computer's limits, counted on its own, and the same caveat: taking
-audio from YouTube goes against its terms ([the sites caracole reads](sources.md)).
-`[providers.youtube] enabled = false` on the computer turns it off on the phone at the next sync.
+Settings › **YouTube audio** says whether it can run, and how many times it ran yt-dlp in the
+last 24 hours. The phone keeps the computer's limits, counted on its own, and the same caveat:
+taking audio from YouTube goes against its terms ([the sites caracole reads](sources.md)).
+`[providers.youtube] enabled = false` on the computer turns it off on the phone at the next
+sync.
 
 ## What stays on the computer
 

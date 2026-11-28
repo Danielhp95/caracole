@@ -418,7 +418,8 @@ downloaded, the lyrics sites asked, the chords heard by the phone's own models, 
 (`YouTubeSheetRunner`, `YouTubeRoutes`). A pasted video's title and thumbnail are read first (`YouTubeVideoRunner`).
 YouTube's rules are the computer's, read from the corpus (core.youtube, the `youtube` area), on the owner's terms
 (AGENTS.md, "The one exception is YouTube"). Settings' YouTube audio row says where it stands, and
-`android/scripts/bump-ytdlp.sh` moves the pinned yt-dlp ([android/README.md](../android/README.md#a-release-when-youtube-changes)).
+`android/scripts/bump-ytdlp.sh` moves the pinned yt-dlp
+([android/README.md](../android/README.md#a-release-when-youtube-changes)).
 The release carries none of it until the owner's gate.
 
 ## Changes on the computer's side
