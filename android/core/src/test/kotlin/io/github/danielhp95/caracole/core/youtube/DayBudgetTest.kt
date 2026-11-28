@@ -95,4 +95,19 @@ class DayBudgetTest {
         DayBudget.release(db, stamp)
         assertEquals(0, DayBudget.runs(db, now))
     }
+
+    /** When the day leaves [least] runs again: now when it does; else 24 hours (and a second: a run exactly 24 hours
+     * old still counts) after the run whose slot frees the last of them; none for a budget under [least]. */
+    @Test fun twoRunsAreFreeAgainOnceEnoughOfTheOldestRunsLeaveTheDay() = db { db ->
+        val cfg = PhoneConfig.read(db)
+        val budget = cfg.provider("youtube").budget.toInt()
+        assertEquals(now, DayBudget.freesAt(db, cfg, now, 2), "no run yet: free now")
+        val oldest = now.minus(Duration.ofHours(20))
+        run(db, oldest, "ok")
+        repeat(budget - 2) { run(db, now.minus(Duration.ofHours(1)), "ok") }
+        assertEquals(1, DayBudget.left(db, cfg, now))
+        assertEquals(oldest.plus(Duration.ofHours(24)).plusSeconds(1), DayBudget.freesAt(db, cfg, now, 2),
+                     "one run left: two once the oldest leaves the day")
+        assertEquals(null, DayBudget.freesAt(db, cfg, now, budget + 1), "a budget under least never leaves them")
+    }
 }

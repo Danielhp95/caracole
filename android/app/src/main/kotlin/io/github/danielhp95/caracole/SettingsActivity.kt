@@ -213,7 +213,10 @@ class SettingsActivity : Activity() {
                         return@launch
                     }
                     val scheduled = withContext(Dispatchers.IO) {
-                        runCatching { YouTubeWorker.schedule(this@SettingsActivity, phone) }
+                        runCatching {
+                            YouTubeWorker.schedule(this@SettingsActivity, phone)
+                            if (on) YouTubeWorker.switchedOn(this@SettingsActivity, phone)
+                        }
                     }
                     scheduled.onFailure { e ->  // kept as written; its work not (re)scheduled, said
                         Log.w("caracole", "the automatic YouTube pass's work couldn't be scheduled", e)

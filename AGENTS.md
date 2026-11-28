@@ -5483,11 +5483,15 @@ picks one).
   on it. After a lookup that left its song "Not on the sites" (kv `youtube-wanted:<id>`, `Phone.onNoSheet`; on a
   paired phone, those songs alone), and daily while charging on a phone that has not synced with a computer in 14 days
   (`YouTubeAuto.paired`, the app's `YouTubeWorker`: `youtube-soon`, `youtube-daily`); a pass stops at 8 minutes, at
-  fewer than 2 runs left, at a block or at out of date: two runs yt-dlp can't read (classify's `outdated`) on two
+  fewer than 2 runs left, at a block or at out of date, and one that stops with songs it hadn't tried, for a reason
+  that passes by itself (8 minutes, a metered network, the queue full, a cooldown, the day's runs), asks for another
+  (`YouTubeAuto.again`, appended to `youtube-soon`; the switch turned back on asks for one where a noted song is due);
+  out of date is two runs yt-dlp can't read (classify's `outdated`) on two
   different videos within 24 hours set kv `youtube-outdated` `{version, at, reason}` for the app's yt-dlp
   (`core.youtube.Outdated`, `youtube-outdated:hits`; a pass-over never notes one), until that version changes or 7
   days pass, said in Settings, the job's audio stage and outcome ("YouTube changed what yt-dlp 2026.11.23 reads:
-  caracole's next release brings a fix") and one alert a version; a job asked for now still runs, warning first. Its jobs are `JobSpec.automatic`: their budget the day's runs
+  caracole's next release brings a fix") and one alert a version; a job asked for now still runs, warning first.
+  Its jobs are `JobSpec.automatic`: their budget the day's runs
   left, quiet (`Job.quiet`: no failed alert; a block's alert still once a cooldown), and their lyrics stage at the
   bulk pace and budget, under a run of its own (`youtube-auto:`), never within `lookup_per_hour`. Settings' switch
   "Find audio on YouTube by itself" (kv `phone:youtube-auto`, on by default) turns the pass alone off. A sheet from a

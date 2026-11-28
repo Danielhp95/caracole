@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.youtube
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -41,19 +42,34 @@ object DayBudget {
 
     /** The yt-dlp runs the phone sent in the 24 hours before [now] (a run stamped exactly 24 hours before included):
      * the rows and the reservations no row followed, as one set. */
-    fun runs(db: Db, now: Instant): Int {
+    fun runs(db: Db, now: Instant): Int = counted(db, now).size
+
+    /** When [least] runs are left of the day: [now] when they are; else the moment the run whose slot frees the last of
+     * them leaves the day (24 hours and a second after it: one exactly 24 hours old still counts); null for a budget
+     * under [least], which never leaves them. The automatic pass's next one after it stopped at fewer than 2 runs. */
+    fun freesAt(db: Db, config: PhoneConfig, now: Instant, least: Int): Instant? {
+        val budget = config.provider(PROVIDER).budget
+        if (budget < least) return null
+        val times = counted(db, now).map { Stamps.parse(it)?.let(Stamps::instant) ?: now }.sorted()
+        val need = times.size - (budget - least)  // the runs that must leave the day
+        if (need <= 0) return now
+        return times[(need - 1).toInt()].plusSeconds(DAY_S + 1)
+    }
+
+    /** The times of the runs [runs] counts, as stored: each row's, and each reservation no row followed. */
+    private fun counted(db: Db, now: Instant): List<String> {
         val since = stamp(now.minusSeconds(DAY_S))
         val rows = db.query("SELECT at FROM events WHERE provider = ? AND at >= ? " +
                                 "AND decision IN ('ok', 'error', 'blocked') ORDER BY at", PROVIDER, since) { it.text(0)!! }
         val stamps = (stamps(db, BENCH) + stamps(db, RESERVED)).filter { it >= since }.sorted()
         val matched = BooleanArray(rows.size)
-        var unmatched = 0
+        val unmatched = ArrayList<String>()
         for (s in stamps) {
             val latest = stamp(Instant.parse(s).plusSeconds(MATCH_S))
             val i = rows.indices.firstOrNull { !matched[it] && rows[it] >= s && rows[it] <= latest }
-            if (i == null) unmatched++ else matched[i] = true
+            if (i == null) unmatched += s else matched[i] = true
         }
-        return rows.size + unmatched
+        return rows + unmatched
     }
 
     /** One write (the caller's): a run's reservation at [now], its stamp; those older than a day dropped. */
