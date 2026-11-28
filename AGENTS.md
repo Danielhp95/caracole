@@ -3733,8 +3733,9 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     process's open gates by port and user; a NETWORK gate refused while `caracole.network` is `loopback` unless it
     names a resolver and a connector of its own (`NETWORK_UNDER_LOOPBACK`);
   - `YtDlp` (Y1.3), youtube.py's `YtDlp` over a `YtDlpProcess` (`Ran`; `NotStarted`, nothing sent): `budget` runs
-    (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), the pause
-    after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
+    (the `budget` event once), `beforeRun`'s refusal (`RunHeldBack`: no process, nothing spent, no event), asked
+    before the run's reservation and again once its pauses are over, right before its process (its slot given back),
+    the pause after this side's last run (`Pace.pauseAfterLastRequest`, kv `http:last_request:youtube`) then `_pause`'s, the
     gate's `proxyArg` in every argv, one `events` row a run (`EventLog`, the computer's fields); after a run the
     gate's log first (`GateRefused`, `gate.refusal`'s words, never a block; `gate.stopped`, the gate's acceptor
     ended by a bug, an error in `gate.stopped_said`), then a timeout, the exit status and `Classify.of`:
@@ -5472,7 +5473,8 @@ picks one).
 - The phone takes audio by itself ("automatic is okay"; and of its default: "1. yes and allow that setting"): at most
   the provider's budget (50) of yt-dlp runs in any 24 hours, every run of the phone's counted (`DayBudget`: `events`
   and the runs reserved before their gate opens, the bench's too, as one set); only on an unmetered network, checked
-  before each run (`YouTubeSearchRunner.METERED`, "waiting for Wi-Fi", the song left noted), and while the battery
+  before each run (`YouTubeSearchRunner.METERED`, "waiting for Wi-Fi", after its pauses too, the song left noted;
+  the job then ends, its later stages skipped in those words, no lyrics site asked: `StagedSheet.stopAfter`), and while the battery
   isn't low; only for a song with no sheet at all whose sites were asked (`Due.songs`); only once the chord models are
   on it. After a lookup that left its song "Not on the sites" (kv `youtube-wanted:<id>`, `Phone.onNoSheet`; on a
   paired phone, those songs alone), and daily while charging on a phone that has not synced with a computer in 14 days

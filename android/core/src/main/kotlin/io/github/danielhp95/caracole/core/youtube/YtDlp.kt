@@ -91,7 +91,8 @@ data class Download(val path: File, val video: Video)
  * - before each run, a cooldown recorded by an earlier job (`Health.isCooling`) refuses it: `ProviderBlocked` in the
  *   words the computer's callers say a cooling YouTube in (youtube_sheet.py: "waiting out YouTube until …"), with no
  *   gate opened, no process, no event and no strike; then [beforeRun] may refuse it ([RunHeldBack]: no process, no
- *   budget spent, no event); then the run is reserved ([DayBudget.reserve], one write before its gate opens), so the
+ *   budget spent, no event), and is asked again once the run's pauses are over, right before its process (a run held
+ *   back there gives its reserved slot back); then the run is reserved ([DayBudget.reserve], one write before its gate opens), so the
  *   day counts it whatever ends it, its slot given back ([DayBudget.release]) for a run that never started
  *   ([NotSent]);
  * - before the first, the pause after the last run this side sent ([Pace.pauseAfterLastRequest], kv
@@ -227,6 +228,9 @@ class YtDlp(
         } catch (e: NotSent) {
             writes.use { db -> DayBudget.release(db, reserved) }
             throw e
+        } catch (e: RunHeldBack) {  // held back after its pauses (runThrough): no process, its slot given back
+            writes.use { db -> DayBudget.release(db, reserved) }
+            throw e
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt() // kept, once the gate is closed (its close joins its threads)
             throw e
@@ -243,6 +247,9 @@ class YtDlp(
             if (owed > 0) clock.sleep(owed)
         }
         pause()
+        // Asked again once the pauses are over (each may yield seconds to queued work): a phone that left Wi-Fi
+        // meanwhile sends nothing ([run] gives the run's reserved slot back).
+        beforeRun()?.let { throw RunHeldBack(PROVIDER, target, it) }
         val refusedBefore = refusals(opened)
         val ran = try {
             process.run(argv, timeout, { line -> onLine(redacted(line, opened)) }, waiting)

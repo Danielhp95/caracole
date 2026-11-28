@@ -106,6 +106,10 @@ internal abstract class StagedSheet(
     /** After the pages stage, the sheet kept or not ([sheetKept]), in no write. */
     protected open fun afterPages() {}
 
+    /** Why the job goes no further once stage [name] has ended, every stage left skipped in those words; null to go
+     * on (YouTubeSheetRunner: an automatic job whose yt-dlp run was held back for a metered network). */
+    protected open fun stopAfter(name: String): String? = null
+
     /** The requests the job sent, said in its last line: "2 LRCLIB requests". */
     protected open fun sent(provider: String, n: Int): String =
         "$n ${LookupWords.NAMES[provider] ?: provider} request" + if (n == 1) "" else "s"
@@ -119,7 +123,13 @@ internal abstract class StagedSheet(
                 throw Stop("Can't read overrides.toml: ${e.message}")
             }
             report("song", "done", parts.database.writeBlocking(::findSong))
-            for (name in stageNames.drop(1)) stage(name)
+            val rest = stageNames.drop(1)
+            for ((i, name) in rest.withIndex()) {
+                stage(name)
+                val why = stopAfter(name) ?: continue
+                for (left in rest.drop(i + 1)) report(left, "skipped", why)
+                break
+            }
         } catch (e: Stop) {
             refuse(e.message.orEmpty())
         }
