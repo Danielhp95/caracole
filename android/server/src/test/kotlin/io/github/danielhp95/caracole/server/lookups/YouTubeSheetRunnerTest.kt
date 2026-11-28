@@ -43,6 +43,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.Closeable
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -307,6 +308,59 @@ class YouTubeSheetRunnerTest {
         phone.database.read { db ->
             assertEquals(emptyMap(), Records.load(db, 1).failures)
             assertNull(Health.state(db, "youtube").cooldownUntil)  // a refusal of the gate's is never a block
+        }
+    }
+
+    /** Offline (airplane mode, Wi-Fi with no internet), the app's gate answers yt-dlp's CONNECT 502 (504 on a connect
+     * timeout), words the pinned yt-dlp says as "Tunnel connection failed": the network's, never the video's. Three
+     * tries leave the pasted video asked for still, nothing counted against it. */
+    @Test fun aDownloadTheGateCouldntConnectIsCountedAgainstNoVideo() {
+        for (status in listOf("502 Bad Gateway", "504 Gateway Timeout")) {
+            val phone = phone()
+            val offline = object : YtDlpProcess {
+                override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit) =
+                    Ran(1, "", "WARNING: [youtube] $video: Unable to download webpage: <urlopen error Tunnel " +
+                        "connection failed: $status> (caused by ProxyError('<urlopen error Tunnel connection failed: " +
+                        "$status>'))\n" +
+                        "ERROR: [youtube] $video: Unable to download API page: <urlopen error Tunnel connection " +
+                        "failed: $status> (caused by ProxyError('<urlopen error Tunnel connection failed: $status>')); " +
+                        "please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= \n")
+            }
+            val jobs = (1..3).map { run(phone, runner(phone, offline)) }
+            for (job in jobs) {
+                assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
+                assertEquals(Job.FAILED, ends(job)["audio"]?.first, "$status: ${ends(job)["audio"]}")
+            }
+            phone.database.read { db ->
+                val record = Records.load(db, 1)
+                assertEquals(emptyMap(), record.failures.mapValues { it.value.content },
+                             "$status: a download the gate couldn't connect counted against the video")
+                assertNull(record.unusable, "$status: the pasted video given up (${record.unusableReason})")
+                assertTrue("Tunnel connection failed" in record.error.orEmpty(), "$status: ${record.error}")
+            }
+        }
+    }
+
+    /** The `:youtube` process gone while yt-dlp ran, unasked (the phone ran out of memory): the phone's own failure,
+     * an error counted in the day and the hour (YtDlp logs it), never against the video, however often. */
+    @Test fun aRunThePhoneCutOffIsCountedAgainstNoVideo() {
+        val phone = phone()
+        val dying = object : YtDlpProcess {
+            override fun run(argv: List<String>, timeoutS: Double, onLine: (String) -> Unit, waiting: () -> Unit): Ran =
+                throw IOException("yt-dlp stopped (the phone may have run out of memory)")
+        }
+        val jobs = (1..3).map { run(phone, runner(phone, dying)) }
+        for (job in jobs) {
+            assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
+            assertEquals(Job.FAILED, ends(job)["audio"]?.first, "${ends(job)["audio"]}")
+        }
+        phone.database.read { db ->
+            val record = Records.load(db, 1)
+            assertEquals(emptyMap(), record.failures.mapValues { it.value.content },
+                         "a run the phone cut off counted against the video")
+            assertNull(record.unusable, "the pasted video given up (${record.unusableReason})")
+            assertEquals(listOf("error", "error", "error"),
+                         db.query("SELECT decision FROM events WHERE provider = 'youtube'") { it.text(0) })
         }
     }
 

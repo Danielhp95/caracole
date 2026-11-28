@@ -220,7 +220,7 @@
    "ignorecase": true
   },
   "network": {
-   "pattern": "\\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable|Remote end closed|HTTP Error 5\\d\\d",
+   "pattern": "\\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable|Remote end closed|HTTP Error 5\\d\\d|Tunnel connection failed: 5\\d\\d",
    "ignorecase": true
   }
  },

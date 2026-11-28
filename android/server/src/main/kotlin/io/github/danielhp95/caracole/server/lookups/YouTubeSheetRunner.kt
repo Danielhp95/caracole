@@ -32,6 +32,7 @@ import io.github.danielhp95.caracole.core.youtube.Outdated
 import io.github.danielhp95.caracole.core.youtube.Ran
 import io.github.danielhp95.caracole.core.youtube.Record
 import io.github.danielhp95.caracole.core.youtube.Records
+import io.github.danielhp95.caracole.core.youtube.RunCutOff
 import io.github.danielhp95.caracole.core.youtube.RunHeldBack
 import io.github.danielhp95.caracole.core.youtube.Video
 import io.github.danielhp95.caracole.core.youtube.VideoUnavailable
@@ -398,6 +399,8 @@ class YouTubeSheetRunner(
             } catch (e: ExtractorOutdated) {  // a host's problem, not the video's (YtDlp's KDoc): not counted
                 throw e
             } catch (e: GateRefused) {
+                throw e
+            } catch (e: RunCutOff) {  // the phone's own (its :youtube process gone unasked), never the video's
                 throw e
             } catch (e: ProviderError) {
                 val (counted, givenUp) = counted(record, chosen, source, e)

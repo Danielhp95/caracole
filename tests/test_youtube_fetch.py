@@ -383,6 +383,22 @@ def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_
 
 
 @pytest.mark.slow
+def test_a_tunnel_the_proxy_couldnt_connect_never_counts_against_a_pasted_video(conn, ycfg, fake):
+    # The phone's gate (a proxy) answers a CONNECT it can't resolve or connect 502, a connect timeout 504: the
+    # network's failure, in the pinned yt-dlp's own words.
+    song = to_buy(conn)
+    fake.video(OTHER, stderr=f"ERROR: [youtube] {OTHER}: Unable to download API page: <urlopen error Tunnel "
+                             "connection failed: 502 Bad Gateway> (caused by ProxyError('<urlopen error Tunnel "
+                             "connection failed: 502 Bad Gateway>'))", exit=1)
+    o = Overrides(youtube={song.key: OTHER})
+    for night in range(yf.GIVE_UP_AFTER + 1):
+        run(conn, ycfg, o, now=NOW + timedelta(days=night))
+    record = kv_get_json(conn, f"youtube:{song.id}")
+    assert record["failures"] == {} and record["unusable"] is None
+    assert [s.id for s in yf.songs_for_youtube(conn, o, NOW)] == [song.id]
+
+
+@pytest.mark.slow
 def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
     failing = to_buy(conn, added_at="2026-10-02T00:00:00Z")  # the newest
     other = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
